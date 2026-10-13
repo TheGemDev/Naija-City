@@ -61,8 +61,9 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body: object = {}) => call<T>(path, { method: 'POST', body: JSON.stringify(body) });
 
 export async function loadGroups() {
-  const { groups } = await call<{ groups: GroupSummary[] }>('/api/groups');
-  useGroups.setState({ list: groups });
+  const { groups } = await call<{ groups?: GroupSummary[] }>('/api/groups');
+  // A 200 that isn't our JSON (a proxy's page, a stale cache) must not leave the list undefined: the unread badge reduces over it.
+  useGroups.setState({ list: Array.isArray(groups) ? groups : [] });
 }
 
 export async function loadGroup(id: number) {
