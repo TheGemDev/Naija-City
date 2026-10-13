@@ -1,0 +1,86 @@
+/* Same card, ink and shadow tokens as the HUD cards, so it follows light and dark on its own. */
+.update-notice {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 6px 6px 7px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  animation: update-notice-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.update-notice-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--green-fg) 16%, transparent);
+  color: var(--green-fg);
+}
+
+.update-notice-icon svg {
+  width: 18px;
+  height: 18px;
+  animation: update-notice-spin 0.9s 0.3s ease-out;
+}
+
+.update-notice-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: 4px;
+  line-height: 1.2;
+}
+
+.update-notice b {
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.update-notice small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.update-notice-refresh {
+  flex: 0 0 auto;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #15803d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.update-notice-refresh:active {
+  transform: scale(0.96);
+}
+
+@keyframes update-notice-in {
+  from { transform: translate(-50%, -140%); opacity: 0; }
+}
+
+@keyframes update-notice-spin {
+  from { transform: rotate(-270deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-notice, .update-notice-icon svg { animation: none; }
+}

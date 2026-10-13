@@ -1,0 +1,94 @@
+/* The iPhone Duo (game/phones.ts, DuoRail and Home in ui/Phone.tsx). On small screens it is folded shut: a squat cover
+   screen. On wide ones it is opened flat: a landscape screen with Today View on the left half. Either way iOS keeps
+   what you reach for in a rail down the right edge: the clock, the status circle, the dock and search. */
+
+.phone-rig.duo { --rail: 56px; }
+
+/* The body: a ring of polished titanium round a black bezel. Folded, the square left edge is the hinge. */
+.phone.duo { padding: 7px; border-radius: 16px 58px 58px 16px; background: #09090b; box-shadow: 0 0 0 2px var(--fa), 0 0 0 3.5px var(--fb), 0 40px 80px rgba(0, 0, 0, 0.4), 0 10px 20px rgba(0, 0, 0, 0.25); }
+.phone.duo::before { content: ''; position: absolute; left: -10px; top: 4px; bottom: 4px; width: 7px; border-radius: 7px 0 0 7px; background: linear-gradient(90deg, var(--fb), var(--fa) 45%, var(--fb)); }
+.phone.duo .screen { border-radius: 10px 51px 51px 10px; padding-right: var(--rail); }
+.phone.duo .btn-side { background: linear-gradient(180deg, var(--fa), var(--fb)); }
+.phone.duo .btn-side.power { right: -7px; top: 38%; height: 54px; }
+/* The volume buttons are on the top edge. */
+.phone.duo .btn-side.vol-up, .phone.duo .btn-side.vol-down { left: auto; top: -7px; width: 42px; height: 4px; }
+.phone.duo .btn-side.vol-up { right: 148px; }
+.phone.duo .btn-side.vol-down { right: 96px; }
+
+.wall-dunes svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* --- The rail --- */
+.duo-rail { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; width: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); pointer-events: none; }
+.duo-rail > * { flex-shrink: 0; pointer-events: auto; }
+.duo-rail.dark { color: var(--ink); text-shadow: none; background: var(--page); }
+/* The cover screen's camera. */
+.duo-cam { width: 22px; height: 22px; margin-bottom: 2px; border-radius: 50%; background: radial-gradient(circle, #1e293b 0 20%, #000 26%); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.07); }
+.duo-time { font-size: 12.5px; font-weight: 700; letter-spacing: -0.2px; }
+.duo-status { width: 36px; height: 34px; fill: currentColor; stroke: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); }
+.duo-rail.dark .duo-status { filter: none; }
+.duo-status.charging .ring { stroke: #22c55e; }
+.duo-dock { display: flex; flex-direction: column; gap: 9px; margin: auto 0; padding: 8px 6px; border-radius: 25px; background: rgba(255, 255, 255, 0.24); border: 1px solid rgba(255, 255, 255, 0.3); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+.duo-dock .app-icon { width: auto; }
+.duo-dock .app-icon span { width: 38px; height: 38px; aspect-ratio: auto; border-radius: 11px; }
+.duo-dock .app-icon span > * { transform: scale(0.7); }
+.duo-dock .app-icon em { display: none; }
+.duo-dock .app-badge { right: -4px; top: -4px; }
+.duo-btn { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border-radius: 50%; color: inherit; background: rgba(255, 255, 255, 0.24); border: 1px solid rgba(255, 255, 255, 0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); transition: transform 0.15s; }
+.duo-btn:active { transform: scale(0.9); }
+.duo-rail.dark .duo-btn { margin-top: 4px; background: rgba(var(--ink-rgb), 0.08); border-color: transparent; }
+
+/* --- Home: two widgets over the apps. No dock along the bottom, and no home bar: the page dots sit there. --- */
+.phone.duo .home.duo-home { flex-direction: row; padding: 0; gap: 0; }
+.duo-today { display: none; }
+.duo-page { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.phone.duo .home-scroll { padding: 18px 8px 14px 16px; gap: 16px; }
+.duo-widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.duo-widget { aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 12px 13px; border-radius: 24px; color: #fff; text-align: left; text-shadow: none; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18); overflow: hidden; }
+.duo-widget small { font-size: 14px; font-weight: 700; }
+.duo-widget b { font-size: 38px; font-weight: 300; line-height: 1; letter-spacing: -1.5px; }
+.duo-widget span { font-size: 11.5px; font-weight: 600; opacity: 0.92; white-space: nowrap; }
+.duo-widget.city { background: linear-gradient(180deg, #2c69ad, #5d9ad6); }
+.duo-widget.wallet { background: linear-gradient(160deg, #0f172a, #1f2937); transition: transform 0.15s; }
+.duo-widget.wallet:active { transform: scale(0.96); }
+.duo-widget.wallet b { font-size: 27px; font-weight: 800; letter-spacing: -0.8px; color: #86efac; }
+.phone.duo .app-grid { margin-top: 0; gap: 16px 2px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* The dots keep a strip of their own, so no app's name ever runs under them. */
+.duo-dots { flex-shrink: 0; height: 26px; display: flex; justify-content: center; align-items: flex-start; gap: 7px; padding-top: 6px; pointer-events: none; }
+.duo-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); }
+.duo-dots i.on { background: #fff; }
+.phone.duo .home-bar:not(.dark) { display: none; }
+.phone.duo .home-bar { left: calc((100% - var(--rail)) / 2); }
+
+/* --- In an app: the title starts the page, and the way back is in the rail. --- */
+.phone.duo .app { margin-top: 0; }
+.phone.duo .app-head { padding-top: 16px; }
+.phone.duo .app-head .app-back { display: none; }
+
+/* Folded shut. */
+@media (max-width: 899px) {
+  .phone-rig.duo { height: auto; aspect-ratio: 5 / 7; width: min(400px, calc(100vw - 28px), calc(var(--ph) * 5 / 7)); }
+}
+
+/* Opened flat. */
+@media (min-width: 900px) {
+  .phone-rig.duo { --rail: 64px; height: auto; max-height: none; aspect-ratio: 7 / 5; width: min(720px, 100%, calc((100dvh - 150px) * 7 / 5)); }
+  .phone.duo { border-radius: 48px; }
+  .phone.duo::before { display: none; }
+  .phone.duo .screen { border-radius: 41px; }
+  /* The inner screen's camera is under the display. */
+  .duo-cam { visibility: hidden; height: 4px; }
+  .duo-rail { padding: 20px 0; }
+  .duo-dock .app-icon span { width: 42px; height: 42px; border-radius: 12px; }
+  .duo-btn { width: 40px; height: 40px; }
+  /* Today View: the left half. */
+  .duo-today { display: flex; flex: 1 1 0; min-width: 0; padding: 26px 10px 26px 26px; }
+  .duo-photo { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; justify-content: center; border-radius: 28px; overflow: hidden; background: #e0f2fe; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); }
+  .duo-photo::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(transparent, rgba(15, 23, 42, 0.7)); }
+  /* The portrait fills the card's height and is cropped at the sides, like a photo. */
+  .duo-photo .convo-avatar.duo-face { flex-shrink: 0; width: auto; height: 100%; aspect-ratio: 1; border-radius: 0; background: none; font-size: 90px; }
+  .duo-photo .duo-face img { width: 100%; height: 100%; border-radius: 0; }
+  .duo-caption { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 1; display: flex; flex-direction: column; gap: 2px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+  .duo-caption b { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .duo-caption small { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.9; }
+  .phone.duo .home-scroll { padding: 26px 8px 14px 14px; }
+}

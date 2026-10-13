@@ -1,0 +1,103 @@
+/* What makes each phone look like itself (game/phones.ts): its camera cutout, bezels, buttons, shape, and the maker's
+   home screen. The frame colour, the Dynamic Island and the punch hole are in styles.css; the iPhone Duo is in duo.css. */
+
+/* --- Camera cutouts --- */
+/* The notch: iPhone 13's, and the wider one before it. */
+.phone .notch { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 116px; height: 27px; background: #000; border-radius: 0 0 17px 17px; }
+.phone .notch.wide { width: 150px; height: 29px; border-radius: 0 0 19px 19px; }
+/* The corners where the notch meets the top edge curve the other way. */
+.phone .notch::before, .phone .notch::after { content: ''; position: absolute; top: 0; width: 8px; height: 8px; background: radial-gradient(circle at 0 100%, transparent 7.5px, #000 8px); }
+.phone .notch::before { left: -8px; }
+.phone .notch::after { right: -8px; transform: scaleX(-1); }
+/* A waterdrop. */
+.phone .drop { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 30px; height: 21px; background: #000; border-radius: 0 0 50% 50% / 0 0 85% 85%; }
+/* iPhone 18 Pro: part of Face ID went under the screen, so the island is a third narrower. */
+.phone .island.small { width: 68px; height: 27px; top: 11px; }
+
+/* --- Bezels --- */
+.phone.bezel-chin .screen { border: solid #000; border-width: 4px 4px 13px; }
+.phone.bezel-thick .screen { border: 7px solid #000; }
+.phone.bezel-thick .island, .phone.bezel-thick .notch { top: 0; }
+/* Flagships: a thinner frame round a bigger screen. */
+.phone.tier-flagship:not(.duo) { padding: 7px; }
+.phone.tier-flagship.os-ios:not(.duo) .screen { border-radius: 44px; }
+.phone.tier-flagship.os-android .screen { border-radius: 34px; }
+/* Galaxy S Ultra: nearly square corners and a flat titanium frame. */
+.phone.m-galaxy_s26_ultra { border-radius: 30px; }
+.phone.m-galaxy_s26_ultra .screen { border-radius: 24px; }
+/* Pixels are rounder than other Androids. */
+.phone.brand-google { border-radius: 46px; }
+.phone.brand-google .screen { border-radius: 39px; }
+
+/* --- Buttons on the frame: Android keeps the volume rocker and power together on the right. --- */
+.phone.os-android .btn-side.vol-up { left: auto; right: -3px; top: 112px; height: 72px; }
+.phone.os-android .btn-side.vol-down { display: none; }
+.phone.os-android .btn-side.power { top: 202px; height: 40px; }
+
+/* --- Android's three buttons. They have a strip of their own, so nothing in an app ever sits under them. --- */
+.nav-buttons { flex-shrink: 0; position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-around; height: 32px; padding: 0 44px 3px; color: rgba(255, 255, 255, 0.92); }
+.nav-buttons.dark { color: rgba(var(--ink-rgb), 0.7); background: var(--page); }
+/* Tecno, Infinix and itel: Back on the left. Samsung: Recents on the left, Back on the right. */
+.nav-buttons.samsung { flex-direction: row-reverse; }
+.nav-buttons button, .nav-recents { display: grid; place-items: center; width: 44px; height: 30px; padding: 0; color: inherit; }
+.nav-buttons button:active { transform: scale(0.88); }
+.nav-home i { width: 15px; height: 15px; border: 2.2px solid currentColor; border-radius: 50%; }
+.nav-buttons.samsung .nav-home i { border-radius: 5px; }
+.nav-recents { grid-auto-flow: column; gap: 3px; }
+.nav-recents i { width: 13px; height: 13px; border: 2.2px solid currentColor; border-radius: 3px; }
+.nav-recents i + i { display: none; }
+/* Samsung's Recents is three upright lines. */
+.nav-buttons.samsung .nav-recents i { display: block; width: 0; height: 14px; border: 0; border-left: 2.2px solid currentColor; border-radius: 1px; }
+/* The dock no longer has to leave room for a swipe bar. */
+.phone:has(.nav-buttons) .dock { margin-bottom: 6px; }
+.phone:has(.nav-buttons) .app-body { padding-bottom: 16px; }
+
+/* --- Home screens --- */
+.phone-clock b i { font-style: normal; }
+/* Android docks have no tray: just the four apps. */
+.phone.os-android .dock { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding-top: 4px; padding-bottom: 4px; }
+/* Pixel: the clock stacked hours over minutes, and a search bar under the dock. */
+.phone.brand-google .phone-clock b { display: flex; flex-direction: column; align-items: flex-start; font-size: 78px; line-height: 0.86; letter-spacing: -3px; }
+.phone.brand-google .phone-clock b i { display: none; }
+.phone.brand-google .dock { margin-bottom: 8px; }
+.g-search { flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 44px; margin: 0 14px 26px; padding: 0 16px; border-radius: 99px; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.16); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); color: #fff; font-size: 14px; font-weight: 600; text-align: left; }
+.g-search b { font-size: 19px; font-weight: 900; background: linear-gradient(120deg, #4285f4 20%, #ea4335 45%, #fbbc05 65%, #34a853 90%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.g-search span { opacity: 0.85; }
+.g-search:active { transform: scale(0.97); }
+/* Nothing: the clock in dot matrix, and every app on a dark glass tile. */
+.phone.brand-nothing .phone-clock b { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-weight: 800; font-size: 70px; letter-spacing: -1px; color: transparent; text-shadow: none; background: radial-gradient(circle, #fff 52%, transparent 58%) 0 0 / 5px 5px; -webkit-background-clip: text; background-clip: text; }
+.phone.brand-nothing .phone-clock small { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 1.5px; text-transform: uppercase; font-size: 11px; }
+.phone.brand-nothing .app-icon span { background: rgba(24, 24, 27, 0.82) !important; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 50%; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3); }
+.phone.brand-nothing .app-icon span::after { display: none; }
+/* OnePlus: red where the others are white. */
+.phone.brand-oneplus .phone-clock b { font-weight: 500; }
+.phone.brand-oneplus .phone-clock b i { color: #ef4444; }
+
+/* --- Shapes --- */
+/* The flip: tall and narrow, creased across the middle. */
+.phone-rig.flip .screen::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); pointer-events: none; z-index: 5; }
+.phone-rig.flip .app-grid { gap: 16px 2px; }
+@media (max-width: 899px) {
+  .phone-rig.flip { width: min(340px, calc(100vw - 24px), calc(var(--ph) * 0.45)); }
+}
+@media (min-width: 900px) {
+  .phone-rig.flip { width: min(300px, 100%); }
+  /* A book fold opened flat is nearly square, and its camera is on the right half, clear of the crease. */
+  .phone-rig.fold:not(.duo) { width: min(600px, 100%); height: min(650px, 100%); }
+  .phone-rig.fold:not(.duo) .punch { left: 76%; }
+}
+
+/* --- The little phones in the shop --- */
+.mini-phone.cut-notch .mini-cam, .mini-phone.cut-notch-wide .mini-cam { top: 3px; height: 5px; border-radius: 0 0 4px 4px; }
+.mini-phone.cut-notch .mini-cam { width: 40%; }
+.mini-phone.cut-notch-wide .mini-cam { width: 54%; }
+.mini-phone.cut-island-small .mini-cam { width: 24%; }
+.mini-phone.cut-drop .mini-cam { top: 3px; width: 7px; height: 5px; border-radius: 0 0 50% 50%; }
+.mini-phone.flip { aspect-ratio: 9 / 21; }
+.mini-phone.flip .mini-screen::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0, 0, 0, 0.22); }
+.mini-phone.fold:not(.duo) .mini-cam { left: 76%; }
+/* The Duo, shut: squat, with its camera in the corner over the rail. */
+.mini-phone.duo { aspect-ratio: 5 / 7; border-radius: 4px 11px 11px 4px; }
+.mini-phone.duo .mini-screen { border-radius: 2px 8px 8px 2px; }
+.mini-phone.duo .mini-screen::after { display: none; }
+.mini-phone.duo .mini-cam { left: auto; right: 6px; top: 6px; transform: none; width: 5px; height: 5px; border-radius: 50%; }

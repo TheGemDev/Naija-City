@@ -1,0 +1,74 @@
+/* Civic app, Treasury tab (src/ui/Treasury.tsx): the vault, what fills it and what it is spent on. */
+
+.tr-spend { display: flex; align-items: flex-start; gap: 10px; padding: 12px; }
+.tr-spend.shady { background: var(--bg-fef2f2); }
+.tr-spend-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(22, 101, 52, 0.12); }
+.tr-spend.shady .tr-spend-icon { background: rgba(185, 28, 28, 0.14); }
+.tr-spend-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-spend-body > b { font-size: 13.5px; }
+.tr-spend-body > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.tr-spend-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.tr-spend-meta > * { padding: 2px 8px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 10.5px; font-style: normal; font-weight: 800; }
+.tr-spend-meta > .ready { background: var(--bg-f0fdf4); color: var(--fg-166534); }
+.tr-spend-body > .btn, .tr-spend-body > .road-form, .tr-spend-body > .row-btns, .tr-spend-body > .text-input { margin-top: 4px; }
+.tr-spend-body > .btn { align-self: flex-start; }
+.tr-spend-body > .road-form, .tr-spend-body > .row-btns { flex-wrap: wrap; }
+.tr-spend-body > .road-form .text-input { flex: 1 1 130px; min-width: 0; width: auto; }
+
+/* The president's budget: one stacked bar, then a row per department. */
+.tr-budget { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: var(--bg-ffffff); }
+.tr-bar { display: flex; height: 10px; overflow: hidden; border-radius: 99px; background: var(--bg-f1f5f9); }
+.tr-bar > i { transition: width 0.2s; }
+.dept-kaduna { background: #f59e0b; }
+.dept-abuja { background: #14b8a6; }
+.dept-lagos { background: #0ea5e9; }
+.dept-police { background: #2563eb; }
+.dept-efcc { background: #7c3aed; }
+.dept-welfare { background: #16a34a; }
+.tr-dept { display: flex; align-items: center; gap: 9px; }
+.tr-dept-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+/* The pay list: an office's badge where a department has its dot. */
+.tr-pay-icon { flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--bg-f1f5f9); }
+.tr-dept-body em.tr-pay-you { margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--bg-dcfce7); color: var(--fg-166534); }
+.tr-pay .tr-step > span { min-width: 90px; }
+.tr-free .tr-dept-dot { background: var(--bg-cbd5e1); }
+.tr-dept-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tr-dept-body > b { font-size: 13px; }
+.tr-dept-body em { margin-left: 2px; color: var(--muted); font-size: 10.5px; font-style: normal; font-weight: 700; }
+.tr-dept-body > small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.tr-share, .tr-step > span { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.tr-share b, .tr-step b { font-size: 14px; }
+.tr-share small, .tr-step small { color: var(--muted); font-size: 10.5px; }
+.tr-step { flex: none; display: flex; align-items: center; gap: 6px; }
+.tr-step > span { align-items: center; min-width: 58px; }
+.tr-step > button { width: 30px; height: 30px; border-radius: 10px; background: var(--bg-f1f5f9); font-size: 17px; font-weight: 800; line-height: 1; }
+.tr-step > button:disabled { opacity: 0.4; }
+
+/* The header card (TreasuryHero): tap it open for every government's budget. */
+/* Named with the phone shell too: its `.phone .app-body .hero` padding would otherwise win and pad the card twice. */
+.hero.tr-hero, .phone .app-body .hero.tr-hero { padding: 0; gap: 0; }
+.tr-hero-top { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 16px 46px 16px 16px; color: #fff; text-align: left; }
+.tr-hero-chev { position: absolute; right: 20px; top: 24px; width: 10px; height: 10px; border-right: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: rotate(45deg); transition: transform 0.2s; }
+.tr-hero.open .tr-hero-chev { top: 29px; transform: rotate(-135deg); }
+.tr-hero-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; padding: 0 10px 12px; }
+.tr-hero-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.13); }
+.tr-hero-row.mine { background: rgba(255, 255, 255, 0.28); }
+.tr-hero-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tr-hero .tr-hero-row b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.tr-hero .tr-hero-row small { font-size: 10.5px; opacity: 0.85; }
+.tr-hero-row b > i { padding: 1px 7px; border-radius: 99px; background: #fff; color: #065f46; font-size: 9.5px; font-style: normal; font-weight: 800; }
+.tr-hero-row b > i.low { background: #fee2e2; color: #b91c1c; }
+.tr-hero-row > em { flex: none; font-size: 13px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* The four chips the tab is split into. Danger is red whether or not it is the one open. */
+.tr-chips { display: flex; gap: 4px; overflow-x: auto; padding: 1px 1px 2px; scrollbar-width: none; }
+.tr-chips::-webkit-scrollbar { display: none; }
+.tr-chip { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; border-radius: 99px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px var(--bg-e2e8f0); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tr-chip.on { background: #15803d; box-shadow: none; color: #fff; }
+.tr-chip.danger { background: var(--bg-fef2f2); box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35); color: var(--fg-b91c1c); }
+.tr-chip.danger.on { background: #dc2626; box-shadow: none; color: #fff; }
+.tr-chip > i { min-width: 17px; padding: 1px 5px; border-radius: 99px; background: #f59e0b; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; text-align: center; }
+.tr-note { font-size: 11.5px; line-height: 1.4; }
+.tr-warn { padding: 8px 10px; border-radius: 12px; background: var(--bg-fef2f2); color: var(--fg-b91c1c); font-weight: 700; }
+.list-card.tr-danger { box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
+.tr-repairs { display: flex; flex-direction: column; gap: 10px; }

@@ -1,0 +1,27 @@
+/* Elections, your own campaign (src/ui/Election.tsx Campaign): a bar that opens onto one event at a time, and the way out of the race. */
+.ev-campaign .ev-camp-head { width: 100%; margin: 0; text-align: left; }
+.ev-campaign .ev-camp-head b { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ev-campaign .ev-camp-head small { font-weight: 700; }
+.ev-campaign .ev-camp-head svg { flex-shrink: 0; color: var(--fg-64748b); }
+.ev-camp-body { display: grid; gap: 8px; margin-top: 10px; }
+.ev-picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg-e2e8f0); }
+.ev-pick { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; line-height: 1.15; text-align: center; color: var(--fg-475569); }
+.ev-pick.on { background: var(--bg-ffffff); color: var(--ink); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14); }
+.ev-pick.shady.on { background: linear-gradient(160deg, #1c1917, #450a0a); color: #fecaca; }
+.ev-plan { display: grid; gap: 8px; padding: 10px 12px 12px; border-radius: 14px; background: var(--bg-ffffff); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); }
+.ev-plan p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-475569); }
+.ev-plan .ev-risk { margin: 0; font-size: 11px; }
+.ev-plan small { font-size: 11px; color: var(--fg-64748b); }
+.ev-go { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; font-size: 13px; font-weight: 800; text-align: left; }
+.ev-go span { display: flex; flex-direction: column; line-height: 1.2; }
+.ev-plan .ev-go small { font-size: 11px; font-weight: 700; color: inherit; opacity: 0.85; }
+.ev-go b { flex-shrink: 0; padding: 2px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.22); font-size: 12px; }
+.ev-go:disabled { opacity: 0.45; }
+.ev-plan.shady .ev-go { background: linear-gradient(160deg, #1c1917, #7f1d1d); }
+.ev-leave-ask { justify-self: center; padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--fg-64748b); text-decoration: underline; }
+.ev-leave { display: grid; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--bg-ffffff); box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.35); }
+.ev-leave p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-475569); }
+.ev-leave div { display: flex; gap: 8px; }
+.ev-leave button { flex: 1; padding: 9px 10px; border-radius: 99px; background: var(--bg-e2e8f0); font-size: 12px; font-weight: 800; }
+.ev-leave button.out { background: #dc2626; color: #fff; }
+.ev-leave button:disabled { opacity: 0.45; }

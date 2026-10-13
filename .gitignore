@@ -1,0 +1,18 @@
+node_modules
+dist
+.DS_Store
+*.log
+tsconfig.tsbuildinfo
+
+# Local config with real values: copy from the *.example files
+.env
+.env.*
+!.env.example
+/wrangler.jsonc
+.dev.vars
+
+# Cloudflare
+.wrangler
+
+# Claude Code local settings
+.claude/settings.local.json

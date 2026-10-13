@@ -1,0 +1,17 @@
+/* The first-time tour (ui/Guide.tsx): everything dark but the part being explained, and a card beside it. */
+.guide { position: fixed; inset: 0; z-index: 200; }
+/* The lit part. Its huge shadow is the dark sheet, so the hole is a real hole and moves smoothly from part to part. */
+.guide-hole { position: fixed; border-radius: 18px; box-shadow: 0 0 0 3px #22c55e, 0 0 0 9999px rgba(8, 15, 30, 0.72); transition: left 0.28s ease, top 0.28s ease, width 0.28s ease, height 0.28s ease; pointer-events: none; }
+.guide-hole.none { box-shadow: 0 0 0 9999px rgba(8, 15, 30, 0.72); }
+.guide-card { position: fixed; display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35); animation: guide-in 0.22s ease; }
+.guide-card.middle { left: 50%; top: 50%; transform: translate(-50%, -50%); animation: none; }
+@keyframes guide-in { from { opacity: 0; translate: 0 6px; } }
+.guide-head { display: flex; align-items: center; gap: 10px; }
+.guide-icon { flex: none; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: var(--bg-f0fdf4); }
+.guide-head b { font-size: 17px; letter-spacing: -0.01em; }
+.guide-head small { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
+.guide-card p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--fg-475569, var(--muted)); }
+.guide-btns { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.guide-btns .skip { margin-right: auto; padding: 8px 4px; background: none; color: var(--muted); font-size: 13px; font-weight: 700; }
+.guide-btns .btn { padding: 10px 16px; font-size: 14px; }
+.guide-btns .btn.back { background: var(--bg-f1f5f9); color: var(--ink); }

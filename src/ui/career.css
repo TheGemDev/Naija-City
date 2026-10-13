@@ -1,0 +1,46 @@
+/* Career app (src/ui/Career.tsx): the job you hold on a hero card, then skill cards and a rank ladder per job.
+   The hero keeps its colours in both themes; the cards follow the theme tokens. */
+
+/* ---------- Hero ---------- */
+.cr-hero { flex-direction: row; align-items: center; gap: 12px; background: radial-gradient(120% 90% at 100% 0%, rgba(125, 211, 252, 0.35), transparent 60%), linear-gradient(135deg, #2563eb, #1e3a8a); box-shadow: 0 10px 22px rgba(30, 58, 138, 0.28); }
+.cr-hero > div { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; z-index: 1; }
+.cr-hero-icon { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); flex-shrink: 0; z-index: 1; }
+.cr-hero small:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-hero b { letter-spacing: -0.3px; line-height: 1.15; }
+.cr-hero .hero-meter { margin-top: 6px; }
+.cr-hero .hero-meter .bar { height: 7px; }
+.cr-hero .hero-meter .bar i { background: #fff; }
+.cr-stats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.cr-stats span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.2); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+/* ---------- Cards ---------- */
+.cr-list { display: flex; flex-direction: column; gap: 8px; }
+.cr-card { --c: #2563eb; display: flex; flex-direction: column; gap: 9px; padding: 12px; border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+.cr-card.mine { box-shadow: 0 0 0 2px var(--c); }
+.cr-head { display: flex; align-items: center; gap: 10px; }
+.cr-icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; background: color-mix(in srgb, var(--c) 16%, var(--surface)); flex-shrink: 0; }
+.cr-head .tile-info b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-head .tile-info small { line-height: 1.3; }
+.cr-level { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 42px; padding: 4px 8px; border-radius: 12px; background: color-mix(in srgb, var(--c) 14%, var(--surface)); color: color-mix(in srgb, var(--c) 78%, var(--ink)); flex-shrink: 0; }
+.cr-level small { font-size: 9px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.8; }
+.cr-level b { font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; }
+.cr-card .bar { height: 8px; background: var(--surface-3); }
+.cr-card .bar i { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 65%, #fff), var(--c)); }
+.cr-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cr-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 99px; background: var(--surface-3); color: var(--muted); font-size: 11px; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.cr-chip.ready { background: color-mix(in srgb, var(--c) 14%, var(--surface)); color: color-mix(in srgb, var(--c) 78%, var(--ink)); }
+.cr-chip.max { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #422006; }
+
+/* ---------- Rank ladder ---------- */
+.cr-ladder { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.cr-ladder .bar { height: 7px; }
+.cr-ranks { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.cr-ranks b { color: var(--ink); }
+
+/* ---------- Notes and empty states ---------- */
+.cr-note { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px dashed var(--line); color: var(--muted); font-size: 12px; line-height: 1.35; }
+.cr-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 16px; border-radius: 18px; background: var(--surface); text-align: center; font-size: 14px; }
+.cr-empty small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.cr-skel { height: 96px; border-radius: 18px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-3) 50%, var(--surface) 75%); background-size: 200% 100%; animation: cr-shimmer 1.2s linear infinite; }
+@keyframes cr-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .cr-skel { animation: none; } }

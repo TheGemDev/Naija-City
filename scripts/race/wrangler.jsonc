@@ -1,0 +1,12 @@
+// Local-only harness for scripts/race/race.mjs. Never deployed: its database id is made up, so it can't reach the real one.
+{
+  "name": "kl-race-harness",
+  "main": "entry.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "rules": [{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": false }],
+  "vars": { "FIREBASE_PROJECT_ID": "test" },
+  "d1_databases": [{ "binding": "DB", "database_name": "kaduna-life-race", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../../migrations" }],
+  "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "Room" }, { "name": "LOBBY", "class_name": "Lobby" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Lobby"] }]
+}

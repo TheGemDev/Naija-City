@@ -1,0 +1,24 @@
+/* Snap (the phone app) and the police mugshot on Twitter. */
+.snap-capture { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border-radius: 18px; background: #fffc00; color: #0f172a; text-align: left; }
+.snap-capture i { flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px #0f172a, inset 0 0 0 3px #fffc00; }
+.snap-capture b { display: block; font-size: 17px; }
+.snap-capture small { display: block; line-height: 1.35; opacity: 0.8; }
+.snap-card { display: flex; flex-direction: column; gap: 8px; }
+.snap-card p { margin: 0; overflow-wrap: anywhere; }
+.snap-card .gist-replies { margin-top: 0; }
+.snap-meta { display: flex; align-items: center; gap: 5px; }
+.snap-meta small { color: var(--muted); }
+.snap-meta .snap-left { margin-left: auto; white-space: nowrap; }
+.snap-pic { display: block; width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; background: #0f172a; }
+
+.gist-post.kind-mugshot { border-left: 4px solid #1d4ed8; }
+.mugshot { display: block; width: min(100%, 300px); aspect-ratio: 1; margin-top: 6px; border-radius: 10px; border: 3px solid #0f172a; }
+
+/* Posting a snap from the camera: the message box sits under the picture. */
+.photo-caption-input.photo-snap { flex-shrink: 0; width: min(520px, 100%); }
+
+/* Whoever posted a snap, tweet or comment: tap the face or name for their profile. */
+.poster { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.gist-meta b:empty { display: none; }
+/* The snap or tweet a share link opened, pinned above the timeline. */
+.shared-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }

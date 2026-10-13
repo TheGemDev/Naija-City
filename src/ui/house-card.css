@@ -1,0 +1,6 @@
+/* Inside a house: whose it is, where it stands, when it was built. Sits where the hotel room card does, and lets taps through to the room. */
+.house-card { position: absolute; bottom: calc(96px + var(--safe-b)); left: 50%; transform: translateX(-50%); z-index: 24; width: max-content; max-width: min(360px, calc(100% - 24px)); display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px; background: var(--card); backdrop-filter: blur(10px); color: var(--ink); box-shadow: var(--shadow); pointer-events: none; }
+.house-card > svg { flex: none; }
+.house-facts { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.house-facts b { font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.house-facts small { font-size: 10.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

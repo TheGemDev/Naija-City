@@ -1,0 +1,39 @@
+/* The landing's city tour (Landing.tsx, game/tour.ts): the real map behind an info bar and a sign-up pill.
+   styles.css loads after this file, so every rule here that overrides it is more specific than the rule it beats. */
+
+/* City chips: floating above the landing card, and above the footer pill on the tour. */
+.city-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.city-chip { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ink); font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12); backdrop-filter: blur(10px); cursor: pointer; }
+.city-chip:active { transform: scale(0.96); }
+.city-chip.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.title-sheet > .city-chips { position: absolute; left: 0; right: 0; bottom: 100%; padding: 0 12px 10px; }
+/* Back, above the create-account / log-in card. */
+.landing .title-sheet > .auth-back { position: absolute; left: 12px; top: auto; bottom: 100%; margin-bottom: 10px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ink); font-size: 13px; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12); backdrop-filter: blur(10px); }
+/* The chips and Back hang outside the card, so the card itself must not clip: a long form scrolls inside it instead. */
+.landing.title-screen .title-sheet { overflow: visible; }
+.landing .auth-sheet > .auth-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* On the tour only the bars take taps: everything else goes to the map underneath. */
+.landing.touring:not(.authing) { display: block; padding: 0; background: none; pointer-events: none; }
+/* Signing up from the tour: the map stays behind the form, dimmed so the form reads. */
+.landing.touring.authing { background: rgba(var(--surface-rgb), 0.6); backdrop-filter: blur(8px); }
+
+/* Top bar, where the game's clock and money sit: which city (or the place you tapped) and who is online. */
+.tour-top { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.tour-top > * { pointer-events: auto; flex: none; }
+.tour-top .round-btn { font-size: 20px; font-weight: 800; color: var(--ink); }
+.tour-top .tour-info { flex: 0 1 auto; min-width: 0; }
+.tour-icon { flex: none; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(160deg, var(--bg-ecfdf5), var(--bg-ffffff)); }
+.tour-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.tour-text b { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tour-text small { color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tour-top .tour-live { margin-left: auto; gap: 6px; padding: 12px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+/* Footer: the city chips over one pill with the two buttons side by side. */
+.tour-foot { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); width: min(440px, calc(100% - 24px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.tour-foot > * { pointer-events: auto; }
+.tour-foot .city-chips { pointer-events: none; }
+.tour-foot .city-chip { pointer-events: auto; }
+.tour-pill { display: flex; gap: 6px; padding: 6px; }
+.tour-pill .btn.big { flex: 1; width: auto; margin: 0; padding: 12px; box-shadow: none; }
+.tour-pill .btn.big.alt { background: transparent; color: var(--ink); border: 1px solid var(--line); }

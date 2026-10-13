@@ -1,0 +1,57 @@
+/* Theme: light is the default; <html data-theme="dark"> switches every token below (src/game/theme.ts sets it).
+   Per-colour tokens (--bg-*, --fg-*, --bd-*) are generated: see scripts/theme-tokens.mjs. */
+@import './theme.tokens.css';
+
+:root {
+  color-scheme: light;
+  /* Surfaces, from the page behind cards up to raised insets. */
+  --page: #f2f4f7;
+  --surface: #fff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --surface-rgb: 255, 255, 255;
+  --ink-rgb: 15, 23, 42;
+  /* Text that sits on a colour which is the same in both themes (gold badges, yellow buttons). */
+  --ink-fixed: #0f172a;
+  --muted-fixed: #64748b;
+  /* Dark fills with white text on them: primary buttons, selected chips. */
+  --inverse: #0f172a;
+  /* The brand greens as text. */
+  --green-fg: #0f6b3a;
+  --green-2-fg: #16a34a;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0e1422;
+  --surface: #1c2333;
+  --surface-2: #20283b;
+  --surface-3: #232c42;
+  --surface-rgb: 28, 35, 51;
+  --ink-rgb: 226, 232, 240;
+  --inverse: #4a5a7d;
+  --green-fg: #4ade80;
+  --green-2-fg: #4ade80;
+  --ink: #e6ebf2;
+  --muted: #8fa0b8;
+  --card: rgba(24, 31, 48, 0.94);
+  --line: #323d55;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* Appearance switch (src/ui/ThemeSettings.tsx) */
+.theme-option { flex-wrap: wrap; }
+.theme-seg { display: flex; flex: 1 1 190px; gap: 3px; padding: 3px; border-radius: 12px; background: var(--surface-3); }
+.theme-seg button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 6px; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--muted); transition: background 0.15s, color 0.15s; }
+.theme-seg button i { font-style: normal; font-size: 13px; }
+.theme-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+:root[data-theme='dark'] .theme-seg { background: var(--page); }
+:root[data-theme='dark'] .theme-seg button.on { background: var(--inverse); color: #fff; }
+
+/* Switches: every on/off setting is a checkbox with role="switch". */
+input[type='checkbox'][role='switch'] { appearance: none; -webkit-appearance: none; position: relative; flex-shrink: 0; width: 44px; height: 26px; margin: 0; border-radius: 99px; background: rgba(var(--ink-rgb), 0.18); cursor: pointer; transition: background 0.2s; }
+input[type='checkbox'][role='switch']::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1); }
+input[type='checkbox'][role='switch']:checked { background: var(--green-2); }
+input[type='checkbox'][role='switch']:checked::after { transform: translateX(18px); }
+input[type='checkbox'][role='switch']:disabled { opacity: 0.5; cursor: not-allowed; }
+input[type='checkbox'][role='switch']:focus-visible { outline: 2px solid var(--green-2); outline-offset: 2px; }

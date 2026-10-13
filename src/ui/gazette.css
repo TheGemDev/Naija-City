@@ -1,0 +1,36 @@
+/* Government notices: the banner everyone sees, and Civic → News (ui/Gazette.tsx). */
+
+.gazette-banner {
+  position: fixed; left: 50%; top: calc(72px + env(safe-area-inset-top, 0px)); z-index: 61;
+  width: max-content; max-width: min(92vw, 400px); display: flex; gap: 10px; align-items: center; padding: 9px 16px 9px 12px;
+  border-radius: 16px; color: #fff; text-align: left; cursor: pointer;
+  background: linear-gradient(135deg, #052e16, #166534 60%, #a16207);
+  border: 1px solid rgba(253, 230, 138, 0.7); box-shadow: 0 10px 40px rgba(5, 46, 22, 0.55);
+  transform: translateX(-50%); animation: gazette-in 7s ease forwards;
+}
+.gazette-banner.kind-scandal { background: linear-gradient(135deg, #450a0a, #991b1b 60%, #b45309); box-shadow: 0 10px 40px rgba(127, 29, 29, 0.55); }
+.gazette-banner-icon { flex: none; display: grid; place-items: center; }
+.gazette-banner-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.gazette-banner-body small { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #fde68a; }
+.gazette-banner-body b { font-size: 13.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+@keyframes gazette-in {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+  6% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.03); }
+  10%, 92% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.96); }
+}
+@media (prefers-reduced-motion: reduce) { .gazette-banner { animation: none; } }
+
+.gazette { display: flex; flex-direction: column; gap: 8px; }
+.gazette-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.gazette-filters button { flex: none; padding: 6px 12px; border-radius: 999px; background: var(--bg-f1f5f9); font-size: 12px; font-weight: 700; color: inherit; }
+.gazette-filters button.on { background: #166534; color: #fff; }
+.gazette-list { list-style: none; margin: 0; padding: 0; }
+.gazette-list li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; }
+.gazette-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(22, 101, 52, 0.12); }
+.gazette-list li.kind-scandal .gazette-icon { background: rgba(185, 28, 28, 0.14); }
+.gazette-list li > div { min-width: 0; }
+.gazette-list p { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.gazette-list small { font-size: 11px; color: var(--muted); }
+.gazette-list em { font-style: normal; font-weight: 800; color: #166534; }
+.gazette-list li.kind-scandal em { color: #b91c1c; }

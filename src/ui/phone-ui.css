@@ -1,0 +1,75 @@
+/* Phone shell: home screen (clock, app grid, dock) and the frame every app opens in.
+   Loaded after styles.css (see main.tsx). Colours come from the theme tokens in src/theme.css. */
+
+/* ---------- Home screen ---------- */
+.phone .phone-status { height: 38px; padding-top: 0; padding-bottom: 0; }
+.phone .home { padding: 0; gap: 0; overflow: hidden; }
+.phone .home-scroll { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 6px 14px 16px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; mask-image: linear-gradient(#000 calc(100% - 18px), transparent); }
+.phone .home-scroll::-webkit-scrollbar { display: none; }
+.phone .home-scroll > * { flex-shrink: 0; }
+
+.phone .phone-clock { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 0; text-align: center; }
+.phone .phone-clock b { font-size: 64px; line-height: 0.95; letter-spacing: -2.5px; }
+.phone .phone-clock small { font-size: 13px; font-weight: 700; opacity: 0.8; }
+
+.phone .phone-pill { align-self: center; margin: 0; padding: 5px 10px; font-size: 11px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+.phone .app-grid { margin-top: 14px; gap: 18px 4px; }
+.phone .app-icon { gap: 6px; }
+.phone .app-icon span { box-shadow: 0 8px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -8px 12px rgba(0, 0, 0, 0.12); }
+.phone .app-icon em { max-width: 100%; padding: 0 2px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dock { flex-shrink: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: 0 12px 22px; padding: 10px 6px; border-radius: 28px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.18); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+.dock .app-icon em { display: none; }
+.dock .app-badge { right: 6px; }
+
+/* ---------- App frame ---------- */
+/* The app runs up under the status bar, so the header's colour wash reaches the top of the screen.
+   The bar stays on top of it: the header is positioned too and comes later, so it would cover the clock and the notch. */
+.phone .phone-status { z-index: 2; pointer-events: none; }
+.phone .phone-status.dark { background: transparent; }
+.phone .app { margin-top: -38px; background: var(--page); animation: app-open 0.32s cubic-bezier(0.2, 0.9, 0.25, 1); }
+@keyframes app-open { from { transform: translateY(26px) scale(0.94); opacity: 0; border-radius: 34px; } }
+.phone .app-head { position: relative; gap: 10px; padding: 46px 14px 12px; font-size: 20px; letter-spacing: -0.3px; background: radial-gradient(130% 150% at 100% 0%, color-mix(in srgb, var(--tint) 30%, transparent), transparent 62%), var(--surface); border-bottom: 1px solid rgba(var(--ink-rgb), 0.07); }
+.phone .app-head b { flex: 1; font-size: 20px; min-width: 0; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phone .app-head .app-back { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: var(--ink); background: rgba(var(--ink-rgb), 0.07); transition: transform 0.15s, background 0.15s; }
+.phone .app-head .app-back:active { transform: scale(0.9); background: rgba(var(--ink-rgb), 0.14); }
+.phone .app-head-icon { width: 34px; height: 34px; border-radius: 11px; box-shadow: 0 4px 10px color-mix(in srgb, var(--tint-2) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+.phone .app-body { padding: 14px 14px 40px; gap: 10px; }
+.phone .app-body h4 { margin: 10px 4px 0; font-size: 12px; letter-spacing: 0.9px; }
+.phone .home-bar.dark { background: rgba(var(--ink-rgb), 0.5); }
+
+/* Cards and rows share one look: soft corners and a hairline edge that also reads on dark. */
+.phone .app-body :is(.list-card, .tile, .inv-card, .post, .flow > div, .bank-services, .food, .flex-post) { border-radius: 18px; box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.06), 0 1px 2px rgba(15, 23, 42, 0.04); }
+.phone .app-body .tile.mine { box-shadow: 0 0 0 2px #22c55e; }
+.phone .app-body .tile.forbes-me { box-shadow: 0 0 0 2px #eab308, 0 4px 12px rgba(234, 179, 8, 0.2); }
+.phone .app-body .list-card > * + * { border-top-color: rgba(var(--ink-rgb), 0.06); }
+.phone .app-body :is(.need-row, .txn) { padding: 12px 14px; }
+.phone .app-body .tile { padding: 11px; gap: 11px; }
+.phone .app-body .tile-icon { border-radius: 14px; }
+.phone .app-body .hero { border-radius: 22px; padding: 18px; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16); }
+.phone .app-body .btn { transition: transform 0.12s, filter 0.12s; }
+.phone .app-body .btn:not(:disabled):active { transform: scale(0.95); filter: brightness(1.1); }
+.phone .app-body :is(.tabs, .store-tabs) { padding: 4px; border-radius: 14px; background: rgba(var(--ink-rgb), 0.07); }
+.phone .app-body :is(.tabs, .store-tabs) button { border-radius: 10px; padding: 8px 10px; transition: background 0.15s, color 0.15s; }
+.phone .app-body :is(.tabs, .store-tabs) button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); }
+
+/* ---------- Dark theme ---------- */
+:root[data-theme='dark'] .phone .app-body :is(.tabs, .store-tabs) button.on { background: var(--inverse); color: #fff; }
+:root[data-theme='dark'] .phone .app-head { background: radial-gradient(130% 150% at 100% 0%, color-mix(in srgb, var(--tint-2) 55%, transparent), transparent 62%), var(--surface); }
+:root[data-theme='dark'] .phone .app-body .hero { box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35); }
+
+@media (max-width: 899px) {
+  .phone .phone-status { padding-top: 0; }
+  .phone .app-icon span { width: min(58px, 100%); }
+  .dock .app-icon span { width: min(54px, 100%); }
+}
+
+/* Tiles: a wide button drops under the icon and text and fills the row, instead of squeezing the description. */
+.phone .app-body .tile:not(.action) { flex-wrap: wrap; }
+.phone .app-body .tile:not(.action) > .tile-info { flex: 9999 1 140px; }
+.phone .app-body .tile:not(.action) > .btn { flex: 1 0 auto; }
+/* Two actions on one tile share a full-width row under the text. */
+.phone .app-body .tile:not(.action) > .row-btns { flex: 1 0 100%; }
+.phone .app-body .tile:not(.action) > .row-btns > .btn { flex: 1 1 0; }
+.inv-actions .btn { flex: 1; }

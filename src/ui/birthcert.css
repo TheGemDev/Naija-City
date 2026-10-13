@@ -1,0 +1,14 @@
+/* The birth certificate at the end of the new-life wizard (BirthCert.tsx). */
+.cert-paper { align-self: center; flex: none; width: min(100%, 400px); height: auto; aspect-ratio: 4 / 5; border-radius: 10px; background: #fbf5e2; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.06); animation: pop 0.45s cubic-bezier(.2, 1.6, .4, 1); -webkit-touch-callout: default; }
+.cert-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cert-actions .btn { padding: 13px 14px; font-size: 14px; background: var(--bg-f1f5f9); color: var(--ink); }
+.cert-actions .btn.go { background: #16a34a; color: #fff; }
+.cert-actions .btn:disabled { opacity: 0.6; }
+
+@media (max-width: 560px) {
+  /* The paper needs the whole screen on a phone: the panel covers the model behind it. */
+  .welcome.wiz.on-cert .wiz-stage { display: none; }
+  .welcome.wiz.on-cert .wiz-panel { top: 0; max-height: none; border-radius: 0; box-shadow: none; padding-top: 20px; }
+  .welcome.wiz.on-cert .wiz-panel::before { display: none; }
+  .cert-paper { width: min(100%, 52vh); width: min(100%, 52dvh); }
+}

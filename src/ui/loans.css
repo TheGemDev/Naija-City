@@ -1,0 +1,51 @@
+/* Bank → Loans tab (src/ui/Loans.tsx): what you owe on top, paying back next, borrowing last. */
+.loans { display: flex; flex-direction: column; gap: 10px; }
+.loans h4 { margin-top: 6px; }
+
+/* What you owe, at a glance: green when clear, amber while a loan runs, red once one is overdue. */
+.loan-hero { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border: 1px solid var(--bd-bbf7d0); border-radius: 18px; background: var(--bg-f0fdf4); color: var(--fg-166534); }
+.loan-hero.owing { border-color: var(--bd-fed7aa); background: var(--bg-fff7ed); color: var(--fg-c2410c); }
+.loan-hero.overdue { border-color: var(--bd-fecaca); background: var(--bg-fee2e2); color: var(--fg-991b1b); }
+.loan-hero > small { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.85; }
+.loan-hero > strong { font-size: 26px; line-height: 1.15; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.loan-hero > p { margin: 2px 0 0; font-size: 12px; font-weight: 600; }
+.loan-credit { display: grid; gap: 5px; margin-top: 10px; font-size: 11px; font-weight: 700; }
+.loan-credit .bar { background: rgba(var(--ink-rgb), 0.12); }
+.loan-credit .bar i { background: currentColor; }
+.loan-credit > span { display: flex; justify-content: space-between; gap: 8px; }
+.loan-credit > span i { font-style: normal; }
+
+.loan-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: var(--bg-ffffff); }
+.loan-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.loan-card-top b { font-size: 14px; }
+.loan-pill { flex: none; padding: 4px 10px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.loan-pill.overdue { background: var(--bg-fee2e2); color: var(--fg-b91c1c); }
+.loan-card .bar i.late { background: var(--fg-dc2626); }
+
+/* Receipt rows: label left, money right. */
+.loan-rows { display: grid; gap: 5px; margin: 0; font-size: 12px; }
+.loan-rows div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.loan-rows dt { color: var(--muted); }
+.loan-rows dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.loan-rows .total { padding-top: 7px; border-top: 1px dashed var(--line); font-size: 13px; }
+.loan-rows .total dt { color: var(--ink); font-weight: 700; }
+.loan-rows .warn dd { color: var(--fg-b91c1c); }
+
+/* The amount: one big field, quick picks under it, one wide button to do it. */
+.loan-amount { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--bg-f8fafc); }
+.loan-amount:focus-within { border-color: var(--green-2); }
+.loan-amount span { color: var(--muted); font-size: 20px; font-weight: 800; }
+.loan-amount input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.loan-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.loan-chips button { padding: 8px 13px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.loan-chips button.on { background: var(--inverse); color: #fff; }
+.loan-range { width: 100%; margin: 0; accent-color: #15803d; }
+.loan-go { width: 100%; padding: 13px 14px; border-radius: 14px; background: #16a34a; color: #fff; font-size: 15px; font-weight: 800; }
+.loan-go:disabled { opacity: 0.45; cursor: default; }
+.loan-note { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+.loan-note.bad { color: var(--fg-b91c1c); font-weight: 700; }
+.loan-locked { display: flex; align-items: center; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 13px; font-weight: 600; }
+
+.loan-how { padding: 12px 14px; border-radius: 16px; background: var(--bg-ffffff); font-size: 12px; }
+.loan-how summary { cursor: pointer; font-weight: 800; }
+.loan-how ul { display: grid; gap: 5px; margin: 8px 0 0; padding-left: 18px; color: var(--muted); }

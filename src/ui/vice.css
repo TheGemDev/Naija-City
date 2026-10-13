@@ -1,0 +1,13 @@
+/* Fixer / Plug: keep everything inside the phone screen. */
+.fixer-tabs { flex-wrap: wrap; overflow-x: visible; }
+.fixer-tabs button { flex: 1 1 auto; }
+.app-body .list-card .row-btns,
+.app-body .tile + .row-btns { flex-wrap: wrap; }
+.app-body .row-btns > .btn { flex: 1 1 auto; min-width: 0; white-space: normal; }
+.app-body .row-btns > .text-input { flex: 1 1 80px; min-width: 0; width: auto; }
+.app-body .tile .btn { flex-shrink: 0; }
+.user-pick { display: grid; gap: 6px; min-width: 0; width: 100%; }
+.user-pick .at-input { width: 100%; box-sizing: border-box; }
+.user-pick .list-card { max-height: 190px; overflow-y: auto; border: 1px solid var(--line); }
+.user-pick .convo { width: 100%; text-align: left; padding: 9px 12px; }
+.row-btns > .user-pick { flex: 1 1 100%; }

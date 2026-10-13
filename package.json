@@ -1,0 +1,39 @@
+{
+  "name": "naija-city",
+  "private": true,
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "wrangler d1 migrations apply DB --local && wrangler dev --port 8787",
+    "build": "tsc -p . && tsc -p worker && vite build",
+    "preview": "vite preview",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run build && wrangler deploy",
+    "cf-typegen": "wrangler types worker/worker-configuration.d.ts"
+  },
+  "dependencies": {
+    "@iconify/react": "^6.0.2",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "@sentry/browser": "^11.6.0",
+    "@sentry/cloudflare": "^11.6.0",
+    "firebase": "^12.19.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1",
+    "workers-og": "^0.0.27",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@iconify-json/noto": "^1.2.9",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "wrangler": "^4.148.0"
+  }
+}

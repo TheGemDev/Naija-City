@@ -1,0 +1,526 @@
+import { useEffect, useState } from 'react';
+import { ItemThumb } from '../three/thumbnails';
+import { CATEGORIES, ITEMS, ITEM_LIST, JOBS, type ActionDef, type Category } from '../game/catalog';
+import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, useGame, type TravelMode } from '../game/store';
+import { cityMap, hoursLabel, isOpen, PLACE_BY_ID } from '../game/city';
+import { cityNameHere, regionPlaces } from '../game/regions';
+import { employment } from '../game/jobs';
+import { INTERIORS } from '../game/interiors';
+import { WALL_BUILD_COST, WALL_KNOCK_COST, edgeKey, houseLayout, placementError, wallBuildError } from '../game/grid';
+import { avatarCell } from '../game/avatar';
+import { kmBetween } from '../game/fares';
+import { useTravel } from './TravelPicker';
+import { WorkNote } from './WorkChip';
+import { PlaceHappening } from './LiveApps';
+import { PlaceShopsLine, PlaceShopsPanel } from './Market';
+import { usePlaceShops } from '../net/market';
+import { useHeldOffice } from '../net/office';
+import { TravelSheet, carDry, fareOf, tripCost } from './TravelSheet';
+import { ITEM_PAINT, PAINT_COLOURS, WALL_PARTS } from '../game/paint';
+import { placeLink, shareLink } from '../net/deeplink';
+import { Emoji, Icon } from './Icons';
+import { useApps } from '../game/apps';
+
+/** One row of the activities sheet. Shared with the visit bar so visiting a house looks the same as being home. */
+export function ActionRow({ action: a, sub, dim, onClick }: { action: ActionDef; sub: string; dim?: boolean; onClick: () => void }) {
+  return (
+    <button className={`action ${dim ? 'dim' : ''}`} onClick={onClick}>
+      <span className="ai">{a.icon}</span>
+      <span>
+        <b>{a.label}</b>
+        <small>{sub}</small>
+      </span>
+    </button>
+  );
+}
+
+/** Live mode: tap an item (at home) or a prop (inside a place) → choose what to do with it. */
+export function ActionSheet() {
+  const selectedId = useGame((s) => s.selectedId);
+  const items = useGame((s) => s.items);
+  const mode = useGame((s) => s.mode);
+  const view = useGame((s) => s.view);
+  const insideId = useGame((s) => s.insideId);
+  const powered = useGame(isPowered);
+  const jobId = useGame((s) => s.jobId);
+  const jobPlace = useGame((s) => employment(s)?.place.name);
+  const start = useGame((s) => s.startAction);
+  const select = useGame((s) => s.select);
+  const office = useHeldOffice();
+  if (mode !== 'live' || !selectedId) return null;
+
+  let title: string;
+  let actions: ActionDef[];
+  if (view === 'place' && insideId) {
+    const prop = INTERIORS[insideId]?.props.find((p) => p.id === selectedId);
+    if (!prop) return null;
+    title = prop.name ?? 'Here';
+    actions = prop.actions.map((a) => findAction(prop.id, a, items, insideId)).filter((a): a is ActionDef => !!a && (!a.office || a.office === office));
+  } else {
+    const item = items.find((i) => i.id === selectedId);
+    if (!item) return null;
+    const def = ITEMS[item.type];
+    title = `${def.icon} ${def.name}`;
+    actions = def.actions;
+  }
+  const job = JOBS.find((j) => j.id === jobId);
+  const placeJob = view === 'place' && insideId ? JOBS.find((j) => PLACE_BY_ID[insideId]?.jobs?.includes(j.id)) : undefined;
+  return (
+    <div className="sheet small">
+      <div className="sheet-head">
+        <h3>{title}</h3>
+        <button className="x" onClick={() => select(null)}>
+          ✕
+        </button>
+      </div>
+      {actions.length === 0 && <p className="muted">Nothing to do with this one. E fine sha ✨</p>}
+      <div className="actions">
+        {actions.map((a) => {
+          const noPower = a.needsPower && !powered;
+          const sub =
+            a.effect === 'work'
+              ? placeJob
+                ? `${placeJob.title} · ${placeJob.start}:00–${placeJob.end}:00`
+                : job
+                  ? `${job.title} at ${jobPlace} · ${job.start}:00–${job.end}:00`
+                  : 'Get a job from Phone → Jobs'
+              : a.effect === 'goCity'
+                ? 'Walk out to the town map'
+                : [a.minutes ? `${taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec` : null, a.cost ? naira(a.cost) : null, noPower ? 'needs light' : null].filter(Boolean).join(' · ');
+          return (
+            <ActionRow key={a.id} action={a} sub={sub} dim={!!noPower} onClick={() => start(selectedId, a.id)} />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Buy mode catalogue. */
+export function BuyPanel() {
+  const mode = useGame((s) => s.mode);
+  const placing = useGame((s) => s.placing);
+  const selectedId = useGame((s) => s.selectedId);
+  const money = useGame((s) => s.money);
+  const furnitureInventory = useGame((s) => s.furnitureInventory);
+  const startPlacing = useGame((s) => s.startPlacing);
+  const wallMode = useGame((s) => s.wallMode);
+  const setWallMode = useGame((s) => s.setWallMode);
+  const [cat, setCat] = useState<Category>('comfort');
+  const [hidden, setHidden] = useState(false);
+  const [picked, setPicked] = useState<HouseTab | null>(null);
+  if (mode !== 'buy' || placing || selectedId) return null;
+  // Wall edit mode follows the tab: tapping the house picks a wall edge only while Walls is open.
+  const stolen = furnitureInventory.length;
+  const tab: HouseTab | null = wallMode ? 'walls' : picked === 'stolen' && !stolen ? null : picked === 'walls' ? null : picked;
+  const back = () => {
+    setPicked(null);
+    setHidden(false);
+    if (wallMode) setWallMode(false);
+  };
+  const choose = (t: HouseTab) => {
+    setPicked(t);
+    setHidden(false);
+    if (wallMode !== (t === 'walls')) setWallMode(t === 'walls');
+  };
+  const list = ITEM_LIST.filter((i) => i.category === cat && !i.fixed);
+  const tabs: { key: HouseTab; icon: string; label: string; sub: string; count?: number }[] = [
+    { key: 'furniture', icon: '🛋️', label: 'Furniture', sub: 'Buy & place' },
+    ...(stolen ? [{ key: 'stolen' as const, icon: '🥷', label: 'Stolen', sub: 'Place loot free', count: stolen }] : []),
+    { key: 'walls', icon: '🧱', label: 'Walls', sub: 'Build & knock' },
+    { key: 'paint', icon: '🎨', label: 'Paint', sub: 'Pick colours' },
+  ];
+  return (
+    <div className={`sheet catalogue ${hidden ? 'collapsed' : ''}`}>
+      {/* Head and the furniture type filter stay put; only .cat-scroll moves. */}
+      <div className="cat-fixed">
+      <div className="sheet-head">
+        {tab && (
+          <button className="ghost-btn" onClick={back} aria-label="Back to decor options">
+            ← Back
+          </button>
+        )}
+        <h3>{tab ? tabs.find((t) => t.key === tab)?.label : 'Decorate your house'}</h3>
+        {tab && (
+          <div className="sheet-head-actions">
+            <button className="ghost-btn" onClick={() => setHidden(!hidden)}>
+              {hidden ? 'Show' : 'Hide'}
+            </button>
+          </div>
+        )}
+      </div>
+      {!hidden && tab === 'furniture' && (
+        <div className="house-section">
+          <span className="house-section-label">Browse by type</span>
+          <div className="cat-filter" role="group" aria-label="Furniture type">
+            {CATEGORIES.map((c) => (
+              <button key={c.key} type="button" className={c.key === cat ? 'on' : ''} aria-pressed={c.key === cat} onClick={() => setCat(c.key)}>
+                {c.icon} {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>
+      <div className="cat-scroll">
+      {!tab && <div className="house-section-label tools">What do you want to do?</div>}
+      {!tab && (
+      <div className="house-tabs" role="tablist" aria-label="House tools">
+        {tabs.map((t) => (
+          <button key={t.key} role="tab" aria-selected={false} className={`house-tab tab-${t.key}`} onClick={() => choose(t.key)}>
+            <span className="house-tab-icon">{t.icon}</span>
+            <span className="house-tab-text">
+              <b>{t.label}</b>
+              <em>{t.sub}</em>
+            </span>
+            {t.count ? <small>{t.count}</small> : null}
+          </button>
+        ))}
+      </div>
+      )}
+      {!hidden && tab === 'furniture' && (
+        <>
+          <div className="house-section-label items">{CATEGORIES.find((c) => c.key === cat)?.label ?? 'Items'}</div>
+          <div className="cards">
+            {list.map((i) => (
+              <button key={i.type} className={`card ${money < i.price ? 'dim' : ''} ${i.luxury ? 'lux' : ''}`} onClick={() => startPlacing(i.type)}>
+                <span className="dims">
+                  {i.w}×{i.d}
+                </span>
+                {i.luxury && <span className="lux-badge">💎 Luxury</span>}
+                <ItemThumb type={i.type} icon={i.icon} />
+                <b>{i.name}</b>
+                <span className="price">{naira(i.price)}</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted hint">Tip: tap something in your house to move or sell it.</p>
+        </>
+      )}
+      {!hidden && tab === 'stolen' && (
+        <>
+          <p className="muted house-note">Loot from break-ins. Placing it is free.</p>
+          <div className="cards">
+            {furnitureInventory.map((item) => {
+              const def = ITEMS[item.type];
+              return (
+                <button key={item.id} className="card stolen" onClick={() => startPlacing(item.type, item.id)}>
+                  <span className="lux-badge stolen-badge">🥷 Stolen</span>
+                  <ItemThumb type={item.type} icon={def.icon} />
+                  <b>{def.name}</b>
+                  <span className="price">Place in your house</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {!hidden && tab === 'walls' && <WallTools />}
+      {!hidden && tab === 'paint' && <PaintTools />}
+      </div>
+    </div>
+  );
+}
+
+type HouseTab = 'furniture' | 'stolen' | 'walls' | 'paint';
+
+/** Walls tab: pick an edge in the house, then confirm build / knock down. */
+function WallTools() {
+  const sel = useGame((s) => s.wallSel);
+  const money = useGame((s) => s.money);
+  const items = useGame((s) => s.items);
+  const toggleWall = useGame((s) => s.toggleWall);
+  const layout = useGame((s) => houseLayout(s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design, s.wallEdits[houseKeyOf(s)]));
+  const exists = !!sel && layout.edgeSet.has(edgeKey(sel));
+  const error = sel && !exists ? wallBuildError(layout, sel, items, avatarCell()) : null;
+  const cost = exists ? WALL_KNOCK_COST : WALL_BUILD_COST;
+  return (
+    <div className="house-pane">
+      {!sel ? (
+        <p>
+          Tap the line between two tiles inside your house. <span className="wl add">Build {naira(WALL_BUILD_COST)}</span>{' '}
+          <span className="wl knock">Knock down {naira(WALL_KNOCK_COST)}</span>
+        </p>
+      ) : error ? (
+        <div className="wallbar-row">
+          <span className="wallbar-err">⚠️ {error}</span>
+          <button onClick={() => useGame.setState({ wallSel: null })}>OK</button>
+        </div>
+      ) : (
+        <div className="wallbar-row">
+          <button className={exists ? 'danger' : 'go'} disabled={money < cost} onClick={() => toggleWall(sel)}>
+            {exists ? '🔨 Knock down' : '🧱 Build wall'} · {naira(cost)}
+          </button>
+          <button onClick={() => useGame.setState({ wallSel: null })}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Paint tab: repaint the outside and inside walls of the house you're in. */
+function PaintTools() {
+  const paint = useGame((s) => s.housePaint[houseKeyOf(s)]);
+  const paintWalls = useGame((s) => s.paintWalls);
+  return (
+    <div className="house-pane">
+      {WALL_PARTS.map((part) => (
+        <div key={part.key} className="paint-group">
+          <small>{part.icon} {part.label}</small>
+          <Swatches value={paint?.[part.key]} onPick={(id) => paintWalls(part.key, id)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Shown while dragging a new or moved item around. */
+export function PlaceBar() {
+  const placing = useGame((s) => s.placing);
+  const rotate = useGame((s) => s.rotatePlacing);
+  const cancel = useGame((s) => s.cancelPlacing);
+  const placeAt = useGame((s) => s.placeAt);
+  const hover = useGame((s) => s.hover);
+  const items = useGame((s) => s.items);
+  const design = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design);
+  const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
+  if (!placing) return null;
+  const layout = houseLayout(design, walls);
+  const def = ITEMS[placing.type];
+  // On touch screens a tap only moves the preview; this button puts it down.
+  const touch = !!window.matchMedia?.('(pointer: coarse)').matches;
+  const err = hover ? placementError({ type: placing.type, x: hover.x, z: hover.z, rot: placing.rot }, items, avatarCell(), placing.moveId, layout) : 'Tap a spot first';
+  return (
+    <div className="placebar">
+      <span>
+        {def.icon} Tap a spot to {touch ? 'preview' : placing.moveId ? 'move' : 'place'} <b>{def.name}</b>
+        {!placing.moveId && <> · {naira(def.price)}</>}
+      </span>
+      <div>
+        <button onClick={rotate}>⟳ Rotate</button>
+        {touch && (
+          <button className="go" disabled={!!err} title={err ?? undefined} onClick={() => hover && placeAt(hover)}>
+            ✓ {placing.moveId ? 'Move here' : 'Place'}
+          </button>
+        )}
+        <button onClick={cancel}>Done</button>
+      </div>
+    </div>
+  );
+}
+
+/** One row of the 8 palette colours plus a "original" swatch. */
+function Swatches({ value, onPick }: { value: string | null | undefined; onPick: (id: string | null) => void }) {
+  return (
+    <div className="paint-row">
+      <button className={`paint-swatch none ${!value ? 'on' : ''}`} title="Original" aria-label="Original colour" onClick={() => onPick(null)}>
+        ∅
+      </button>
+      {PAINT_COLOURS.map((c) => (
+        <button key={c.id} className={`paint-swatch ${value === c.id ? 'on' : ''}`} style={{ background: c.hex }} title={c.name} aria-label={c.name} onClick={() => onPick(c.id)} />
+      ))}
+    </div>
+  );
+}
+
+/** Buy mode: tap an owned item → move or sell. */
+export function OwnedSheet() {
+  const mode = useGame((s) => s.mode);
+  const selectedId = useGame((s) => s.selectedId);
+  const items = useGame((s) => s.items);
+  const select = useGame((s) => s.select);
+  const sell = useGame((s) => s.sell);
+  const move = useGame((s) => s.startMoving);
+  const rotateItem = useGame((s) => s.rotateItem);
+  const storeItem = useGame((s) => s.storeItem);
+  const paintItem = useGame((s) => s.paintItem);
+  const hasBlackMarket = useApps((s) => s.installed.includes('blackmarket'));
+  const item = items.find((i) => i.id === selectedId);
+  if (mode !== 'buy' || !item) return null;
+  const def = ITEMS[item.type];
+  const slots = ITEM_PAINT[item.type];
+  return (
+    <div className="sheet small">
+      <div className="sheet-head">
+        <h3>
+          {def.icon} {def.name}
+        </h3>
+        <button className="x" onClick={() => select(null)}>
+          ✕
+        </button>
+      </div>
+      {def.fixed ? (
+        <p className="muted">This one is part of the house.</p>
+      ) : (
+        <div className="actions">
+          {slots && (
+            <div className="paint-card">
+              <b>🎨 Colours</b>
+              {slots.map((slot, i) => (
+                <div key={slot.label} className="paint-group">
+                  {slots.length > 1 && <small>{slot.label}</small>}
+                  <Swatches value={item.paint?.[i]} onPick={(id) => paintItem(item.id, i, id)} />
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="owned-actions">
+            <button className="action tile" onClick={() => move(item.id)}>
+              <span className="ai">✋</span>
+              <b>Move</b>
+            </button>
+            <button className="action tile" onClick={() => rotateItem(item.id)}>
+              <span className="ai">⟳</span>
+              <b>Rotate</b>
+            </button>
+            <button className="action tile" onClick={() => storeItem(item.id)}>
+              <span className="ai">📦</span>
+              <b>Store</b>
+            </button>
+            {item.stolen ? (
+              <button className="action tile" onClick={() => {
+                select(null);
+                useGame.setState({ panel: 'phone', openApp: hasBlackMarket ? 'blackmarket' : 'store' });
+              }}>
+                <span className="ai">🕶️</span>
+                <b>{hasBlackMarket ? 'Fence' : 'Get App'}</b>
+                <small>{hasBlackMarket ? 'Black Market' : 'Install Black Market'}</small>
+              </button>
+            ) : (
+              <button className="action tile" onClick={() => window.confirm(`Sell your ${def.name} for ${naira(def.price * 0.5)}?`) && sell(item.id)}>
+                <span className="ai">💸</span>
+                <b>Sell</b>
+                <small>{naira(def.price * 0.5)}</small>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function StreetStorySheet() {
+  const story = useGame((s) => s.streetStory);
+  const money = useGame((s) => s.money);
+  const resolve = useGame((s) => s.resolveStreetStory);
+  if (!story) return null;
+  return (
+    <div className="story-overlay">
+      <section className="story-card" role="dialog" aria-modal="true" aria-labelledby="street-story-title">
+        <span className="story-icon">{story.icon}</span>
+        <small>ON THE STREETS OF {cityNameHere().toUpperCase()}</small>
+        <h2 id="street-story-title">{story.title}</h2>
+        <p>{story.scene}</p>
+        <div className="story-choices">
+          {story.choices.map((choice) => (
+            <button
+              key={choice.id}
+              disabled={choice.outcome.money !== undefined && choice.outcome.money < 0 && money < -choice.outcome.money}
+              onClick={() => resolve(choice.id)}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Town map: tap a building → this card. */
+export function PlaceSheet() {
+  const placeId = useGame((s) => s.placeId);
+  const view = useGame((s) => s.view);
+  const destinationId = useGame((s) => s.destinationId);
+  const money = useGame((s) => s.money);
+  const ownedCars = useGame((s) => s.ownedCars);
+  const carFuel = useGame((s) => s.carFuel);
+  const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
+  const go = useGame((s) => s.startPlace);
+  const close = useGame((s) => s.selectPlace);
+  const [travelMode, setTravelMode] = useState<TravelMode>('walk');
+  const [selectedCarId, setSelectedCarId] = useState<string | null>(null);
+  // The sheet flips between how to get there and what the player shops there sell.
+  const [shops, setShops] = useState(false);
+  const shopsOpen = usePlaceShops((s) => (placeId ? s.places[placeId]?.open : 0) ?? 0);
+  const place = placeId ? regionPlaces(destinationId).find((p) => p.id === placeId) ?? PLACE_BY_ID[placeId] : null;
+  // Tapping a place on the map is a new intent: dismiss the estates travel picker so this sheet isn't hidden behind it.
+  useEffect(() => {
+    if (placeId) useTravel.getState().close();
+    setShops(false);
+  }, [placeId]);
+  if (view !== 'city' || !place) return null;
+  const shopsButton = shopsOpen > 0 && (
+    <button
+      className={`travel-shops-btn ${shops ? 'on' : ''}`}
+      aria-pressed={shops}
+      aria-label={`Player shops here, ${shopsOpen} open`}
+      title="Player shops here"
+      onClick={() => setShops(!shops)}
+    >
+      <Emoji char="🏪" size="1em" /><i>{shopsOpen}</i>
+    </button>
+  );
+  if (shops) {
+    return (
+      <div className="sheet place-sheet travel-sheet" role="dialog" aria-label={`Player shops at ${place.name}`}>
+        <div className="travel-head">
+          <h3 className="travel-title"><Emoji char="🏪" size="1em" /> Shops at {place.name}</h3>
+          {shopsButton}
+        </div>
+        <div className="travel-body">
+          <PlaceShopsPanel placeId={place.id} onGo={() => setShops(false)} />
+        </div>
+        <div className="travel-actions">
+          <button type="button" className="travel-cancel" onClick={() => setShops(false)}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+  const open = place.id === 'home' || isOpen(place, hour);
+  const km = kmBetween(avatarCell(), place.door);
+  const travelFare = fareOf(travelMode, km);
+  const canAfford = money >= travelFare;
+  return (
+    <TravelSheet
+      title={<><Emoji char={place.icon} size="1em" /> {place.name}</>}
+      action={
+        <>
+          {place.id !== 'home' && (
+            <button
+              className="share-place-btn travel-share-btn"
+              aria-label="Share this location"
+              title="Share location"
+              onClick={() => void shareLink(placeLink(place.id, cityMap(destinationId).id), `${place.icon} ${place.name} — Naija City`)}
+            >
+              <Icon name="share" size={16} />
+            </button>
+          )}
+          {shopsButton}
+        </>
+      }
+      km={km}
+      top={
+        <>
+          <p className="muted place-meta">
+            <Emoji char="📍" size="1em" /> {place.area} · {place.id === 'home' ? 'Your compound' : <span className={open ? 'good' : 'bad'}>{open ? 'Open' : 'Closed'} · {hoursLabel(place)}</span>}
+          </p>
+          {place.blurb && <p className="place-blurb">{place.blurb}</p>}
+          <WorkNote city={cityMap(destinationId).id} placeId={place.id} />
+          <PlaceHappening placeId={place.id} />
+          <PlaceShopsLine placeId={place.id} onOpen={() => setShops(true)} />
+        </>
+      }
+      allowWalk
+      mode={travelMode}
+      setMode={setTravelMode}
+      carId={selectedCarId}
+      setCarId={setSelectedCarId}
+      goLabel={open ? <>Go · {tripCost(travelMode, selectedCarId, km)}</> : <><Emoji char="🔒" size="1em" /> Closed now</>}
+      goDisabled={!open || !canAfford || carDry(travelMode, selectedCarId, carFuel, km) || (travelMode === 'car' && (!selectedCarId || !ownedCars.includes(selectedCarId)))}
+      onGo={() => go(place.id, travelMode, travelMode === 'car' ? selectedCarId ?? undefined : undefined)}
+      onCancel={() => close(null)}
+    />
+  );
+}

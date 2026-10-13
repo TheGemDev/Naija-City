@@ -1,0 +1,89 @@
+/* Money in chat: the pay / request card in a thread and the sheet that sends one.
+   Colours come from theme tokens only, so both themes work without running scripts/theme-tokens.mjs. */
+
+.pay-card { --tone: var(--fg-15803d); --tone-bg: var(--bg-dcfce7); --tone-bd: var(--bd-bbf7d0); position: relative; width: min(82%, 280px); display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px 15px; border-radius: 18px; background: var(--bg-ffffff); border: 1px solid var(--tone-bd); overflow: hidden; cursor: pointer; transition: transform 0.12s, box-shadow 0.15s; }
+.pay-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone); }
+.pay-card.req { --tone: var(--fg-b45309); --tone-bg: var(--bg-fef3c7); --tone-bd: color-mix(in srgb, var(--fg-b45309) 35%, transparent); }
+.pay-card.declined { --tone: var(--muted); --tone-bg: var(--bg-f1f5f9); --tone-bd: var(--line); }
+.pay-card:active { transform: scale(0.98); }
+.pay-card.selected { box-shadow: 0 0 0 2px #38bdf8, 0 4px 12px rgba(15, 23, 42, 0.15); }
+
+.pay-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pay-card-icon { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--tone-bg); color: var(--tone); font-size: 14px; font-weight: 800; line-height: 1; }
+.pay-card-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pay-card-amount { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pay-card.declined .pay-card-amount { color: var(--muted); text-decoration: line-through; }
+.pay-card-note { margin: 0; padding: 6px 9px; border-radius: 10px; background: var(--bg-f1f5f9); font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; user-select: text; }
+.pay-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pay-card-foot small { font-size: 10px; color: var(--muted); font-weight: 600; }
+.pay-card-hint { font-size: 11px; font-weight: 700; color: var(--fg-dc2626); }
+
+.pay-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; white-space: nowrap; background: var(--bg-f1f5f9); color: var(--muted); }
+.pay-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pay-chip.ok { background: var(--bg-dcfce7); color: var(--fg-166534); }
+.pay-chip.wait { background: var(--bg-fef3c7); color: var(--fg-92400e); }
+.pay-chip.wait::before { animation: pay-pulse 1.4s ease-in-out infinite; }
+.pay-chip.bad { background: var(--bg-fee2e2); color: var(--fg-b91c1c); }
+@keyframes pay-pulse { 50% { opacity: 0.25; } }
+
+.pay-card-actions { display: flex; gap: 6px; margin-top: 2px; }
+.pay-card-actions .btn { padding: 9px 12px; font-size: 13px; }
+.pay-card-actions .btn.go { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pay-card-actions .btn.ghost { background: var(--bg-f1f5f9); color: var(--ink); }
+.pay-card-actions .btn:disabled { opacity: 0.5; }
+
+/* The sheet that replaces the composer while sending or asking. */
+.pay-sheet { --tone: var(--fg-15803d); --tone-bg: var(--bg-dcfce7); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 20px; background: var(--bg-ffffff); border: 1px solid var(--line); animation: pop 0.15s ease-out; }
+.pay-sheet.request { --tone: var(--fg-b45309); --tone-bg: var(--bg-fef3c7); }
+.pay-sheet-head { display: flex; align-items: center; gap: 8px; }
+.pay-seg { flex: 1; display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-f1f5f9); }
+.pay-seg button { flex: 1; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.pay-seg button.on { background: var(--tone-bg); color: var(--tone); }
+.pay-sheet-x { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-f1f5f9); color: var(--muted); font-size: 12px; }
+
+.pay-amount { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 2px; cursor: text; }
+.pay-amount small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.pay-amount-row { display: flex; align-items: baseline; justify-content: center; gap: 2px; max-width: 100%; font-size: 36px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.pay-amount-row span { color: var(--tone); }
+.pay-amount-row input { min-width: 1ch; max-width: 100%; border: 0; outline: none; padding: 0; font: inherit; letter-spacing: inherit; color: var(--ink); background: transparent; font-variant-numeric: tabular-nums; field-sizing: content; }
+.pay-amount-row input::placeholder { color: var(--muted); opacity: 0.5; }
+.pay-sheet.over .pay-amount-row input, .pay-sheet.over .pay-amount-row span { color: var(--fg-dc2626); }
+
+.pay-quick { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.pay-quick button { flex: 1 0 auto; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pay-quick button:active { background: var(--tone-bg); color: var(--tone); }
+.pay-sheet .note-input { color: var(--ink); background: transparent; }
+.pay-sheet-info { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pay-sheet-info.bad { color: var(--fg-dc2626); font-weight: 700; }
+.pay-submit { width: 100%; padding: 12px 14px; font-size: 15px; white-space: normal; overflow-wrap: anywhere; }
+.pay-sheet.request .pay-submit { background: var(--inverse); }
+.pay-submit:disabled { opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) { .pay-chip.wait::before, .pay-sheet { animation: none; } }
+
+/* A bail or ransom plea that is still open reads as urgent. */
+.pay-card.urgent { --tone: var(--fg-b91c1c); --tone-bg: var(--bg-fee2e2); --tone-bd: color-mix(in srgb, var(--fg-b91c1c) 35%, transparent); }
+.pay-card.urgent .pay-card-title { color: var(--fg-b91c1c); }
+.pay-card.urgent .pay-chip.wait { background: var(--bg-fee2e2); color: var(--fg-b91c1c); }
+
+/* Asking friends for bail or ransom, inside the jail / kidnap panel. */
+.ask-sheet { display: flex; flex-direction: column; gap: 8px; }
+.ask-head { display: flex; align-items: center; gap: 8px; }
+.ask-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.ask-head-text small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.ask-head-text b { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ask-x { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--ink-rgb), 0.07); color: var(--muted); font-size: 12px; }
+.ask-search { display: flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid rgba(var(--ink-rgb), 0.15); border-radius: 12px; background: var(--bg-ffffff); }
+.ask-search span { color: var(--muted); font-weight: 800; }
+.ask-search input { flex: 1; min-width: 0; padding: 9px 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 16px; }
+.ask-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.ask-person { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid rgba(var(--ink-rgb), 0.1); border-radius: 14px; background: rgba(var(--surface-rgb), 0.8); color: var(--ink); text-align: left; }
+.ask-person:active { transform: scale(0.98); }
+.ask-avatar { position: relative; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-e2e8f0); font-size: 13px; font-weight: 800; }
+.ask-avatar.on::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: #22c55e; border: 2px solid var(--bg-ffffff); }
+.ask-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.ask-name b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-name small { font-size: 10px; font-weight: 600; color: var(--muted); }
+.ask-person i { flex: 0 0 auto; padding: 5px 10px; border-radius: 999px; background: var(--inverse); color: #fff; font-style: normal; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.ask-person.done i { background: var(--bg-dcfce7); color: var(--fg-166534); }
+.ask-person:disabled:not(.done) { opacity: 0.55; }

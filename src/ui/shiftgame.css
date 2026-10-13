@@ -1,0 +1,152 @@
+.shift-game {
+  position: fixed;
+  left: 50%;
+  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(400px, calc(100vw - 24px));
+  padding: 12px 14px 14px;
+  transform: translateX(-50%);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(10px);
+  touch-action: manipulation;
+}
+
+.shift-game header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+}
+.shift-score { font-size: 13px; font-weight: 700; color: var(--green-2-fg, var(--green-2)); white-space: nowrap; }
+.shift-x { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-e2e8f0, #e2e8f0); color: var(--muted); font-size: 13px; }
+
+.shift-how { margin: 0; font-size: 14px; line-height: 1.35; }
+.shift-weak { padding: 8px 10px; border-radius: 12px; background: var(--bg-fef3c7, #fef3c7); color: var(--fg-92400e, #92400e); font-size: 12px; line-height: 1.35; }
+.shift-late { color: #dc2626; font-weight: 700; text-align: center; }
+.shift-detail {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font: 700 15px/1.5 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.shift-game .btn { padding: 12px 14px; font-size: 14px; white-space: normal; }
+
+/* Timing game */
+.shift-bar {
+  position: relative;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--bg-e2e8f0, #e2e8f0);
+  overflow: hidden;
+}
+.shift-zone { position: absolute; top: 0; bottom: 0; background: #86efac; border-inline: 2px solid #16a34a; }
+.shift-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: var(--ink);
+}
+.shift-bar.hit { background: var(--bg-bbf7d0, #bbf7d0); }
+.shift-bar.miss { background: #fecaca; }
+.shift-bar.miss .shift-marker { background: #dc2626; }
+.shift-tap { min-height: 52px; font-size: 16px !important; }
+
+/* Quiz game */
+.shift-clock { height: 6px; border-radius: 3px; background: var(--bg-e2e8f0, #e2e8f0); overflow: hidden; }
+.shift-clock i {
+  display: block;
+  height: 100%;
+  background: var(--green-2);
+  transform-origin: left;
+  animation: shift-clock linear forwards;
+}
+.shift-clock.stopped i { animation-play-state: paused; }
+@keyframes shift-clock {
+  from { transform: scaleX(1); }
+  70% { background: #f97316; }
+  to { transform: scaleX(0); background: #dc2626; }
+}
+.shift-options { display: flex; gap: 8px; }
+.shift-options .btn { flex: 1; min-height: 48px; }
+.shift-options .btn.right { background: #16a34a; }
+.shift-options .btn.wrong { background: #dc2626; }
+.shift-options .btn.dim { background: var(--bg-cbd5e1, #cbd5e1); }
+
+@media (max-width: 520px) {
+  .shift-game { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Your post (ui/ShiftGame.tsx): the shift, the jobs that turn up, the way out */
+.work-post { display: flex; flex-direction: column; min-width: 0; }
+.work-post small { color: var(--muted); font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-panel.over .shift-score { color: var(--green-2-fg, var(--green-2)); }
+.work-money { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.work-money small { color: var(--muted); }
+.work-quiet { color: var(--muted); }
+.work-foot { display: flex; gap: 8px; }
+.work-foot .btn { flex: 1; min-height: 46px; }
+.work-call {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px 14px 14px;
+  border-radius: 16px;
+  background: var(--bg-fef3c7, #fef3c7);
+  color: var(--fg-92400e, #92400e);
+  font-size: 14px;
+  text-align: left;
+  overflow: hidden;
+  animation: work-call 0.9s ease-in-out infinite alternate;
+}
+.work-call em { flex: none; padding: 7px 14px; border-radius: 999px; background: #16a34a; color: #fff; font-style: normal; font-weight: 800; font-size: 13px; }
+.work-call .shift-clock { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; border-radius: 0; background: transparent; }
+@keyframes work-call { from { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); } to { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } }
+.shift-options.stacked { flex-direction: column; }
+.shift-options.stacked .btn { min-height: 44px; text-align: left; }
+.shift-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.shift-tiles .btn { position: relative; min-height: 52px; font-size: 15px; }
+.shift-tiles .btn.right { background: #16a34a; }
+.shift-tiles .btn.wrong { background: #dc2626; }
+.shift-tiles .btn.dim { background: var(--bg-cbd5e1, #cbd5e1); }
+.shift-tiles .btn i { position: absolute; top: 5px; left: 8px; font-style: normal; font-size: 11px; opacity: 0.85; }
+
+/* Jobs app: the way to work from the hero */
+.hero .btn.job-go { align-self: flex-start; margin: 4px 0 2px; background: #fff; color: #065f46; }
+
+/* The call to work (ui/WorkChip.tsx) */
+.work-chip { display: flex; align-items: stretch; background: var(--card); border-radius: 18px; box-shadow: var(--shadow); border-left: 4px solid #16a34a; pointer-events: auto; overflow: hidden; }
+.work-chip.go, .work-chip.here { animation: work-chip 1.1s ease-in-out infinite alternate; }
+.work-chip.soon, .work-chip.early { border-left-color: #f59e0b; }
+.work-chip-go { display: flex; gap: 10px; align-items: center; padding: 8px 12px 8px 8px; text-align: left; cursor: pointer; }
+.work-chip-ico { flex: none; width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(145deg, #86efac, #16a34a); }
+.work-chip.soon .work-chip-ico, .work-chip.early .work-chip-ico { background: linear-gradient(145deg, #fde68a, #f59e0b); }
+.work-chip b { display: block; font-size: 13px; color: var(--fg-15803d, #15803d); }
+.work-chip.soon b, .work-chip.early b { color: var(--fg-92400e, #92400e); }
+.work-chip small { display: block; font-size: 11px; color: var(--muted); max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes work-chip { from { box-shadow: var(--shadow), 0 0 0 0 rgba(22, 163, 74, 0.55); } to { box-shadow: var(--shadow), 0 0 0 7px rgba(22, 163, 74, 0); } }
+/* It is a call, not a notice: folding the notices away leaves it showing. */
+.left-stack.collapsed > .work-chip { display: flex; }
+.work-note { margin: 4px 0; padding: 8px 10px; border-radius: 12px; background: var(--bg-dcfce7, #dcfce7); color: var(--fg-15803d, #15803d); font-size: 13px; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .work-chip.go, .work-chip.here, .work-call { animation: none; }
+}

@@ -1,0 +1,43 @@
+.robbed-card {
+  position: fixed;
+  top: calc(74px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(440px, calc(100vw - 24px));
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  border-radius: 16px;
+  background: #1e293b;
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.36);
+  animation: robbed-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes robbed-in {
+  from { opacity: 0; transform: translate(-50%, -16px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.robbed-card b { font-size: 14px; line-height: 1.3; }
+.robbed-card small { font-size: 12px; line-height: 1.35; opacity: 0.85; }
+
+.robbed-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.robbed-actions button {
+  flex: 1 1 auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.robbed-actions button.hot { background: #facc15; }
+.robbed-actions button.later { flex: 0 0 auto; background: rgba(255, 255, 255, 0.14); color: #fff; }
+.robbed-actions button:disabled { opacity: 0.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .robbed-card { animation: none; }
+}

@@ -1,0 +1,34 @@
+/* The airport's flight desk (ui/Airport.tsx). Cabin service reuses the hotel desk's cards (ui/hotel.css). */
+
+.venue-bet-launch.flight { --tint: #0284c7; }
+.flight-warn { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; background: rgba(220, 38, 38, 0.12); color: #dc2626; font-size: 13px; font-weight: 700; line-height: 1.35; }
+.flight-warn > :first-child { flex: none; }
+.flight-banner { position: absolute; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 24; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 999px; background: var(--card); backdrop-filter: blur(10px); color: var(--ink); box-shadow: var(--shadow); white-space: nowrap; pointer-events: none; }
+.flight-banner > span { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.flight-banner b, .flight-banner small { overflow: hidden; text-overflow: ellipsis; }
+.flight-banner b { font-size: 13px; font-weight: 800; }
+.flight-banner small { font-size: 11px; font-weight: 700; color: var(--muted); }
+/* Phones: the avatar and the chat button stand either side of it. */
+@media (max-width: 640px) { .flight-banner { max-width: calc(100% - 160px); } }
+.cabin-order { flex: none; min-width: 72px; }
+
+/* A flight is a boarding pass: the route, then past the tear line its price and the one button. */
+.sheet.flight-desk { width: min(400px, calc(100% - 24px)); padding: 14px 16px 16px; }
+.flight-desk .sheet-head h3 { font-size: 17px; }
+.tickets { display: flex; flex-direction: column; gap: 8px; }
+/* The notches at each end of the tear line are holes cut in the card, so any sheet colour shows through. */
+.ticket { --tint: 2, 132, 199; --stub: 96px; --notch: calc(100% - var(--stub) + 1px); display: flex; border-radius: 14px; background: rgba(var(--tint), 0.1); overflow: hidden; -webkit-mask: radial-gradient(circle 7px at var(--notch) 0, #0000 96%, #000), radial-gradient(circle 7px at var(--notch) 100%, #0000 96%, #000); -webkit-mask-composite: source-in; mask-composite: intersect; }
+.ticket.jet { --tint: 202, 138, 4; }
+.ticket-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; }
+.ticket-main > small { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticket-route { display: flex; align-items: center; gap: 8px; }
+.ticket-route span { display: flex; flex-direction: column; line-height: 1.1; }
+.ticket-route span:last-child { text-align: right; }
+.ticket-route b { font-size: 22px; font-weight: 800; letter-spacing: 0.04em; }
+.ticket-route small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.ticket-route i { flex: 1; display: flex; align-items: center; gap: 4px; }
+.ticket-route i::before, .ticket-route i::after { content: ''; flex: 1; border-top: 2px dashed rgba(var(--tint), 0.45); }
+.ticket-stub { flex: none; width: var(--stub); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 10px; border-left: 2px dashed rgba(var(--tint), 0.45); }
+.ticket-stub b { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticket-stub .btn { width: 100%; }
+.flight-jet { display: flex; align-items: center; gap: 6px; margin: 10px auto 0; }

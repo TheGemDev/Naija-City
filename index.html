@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" translate="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#bfe3f5" />
+    <meta name="kaduna-build" content="__KADUNA_BUILD_COMMIT__" />
+    <meta name="kaduna-version" content="__KADUNA_BUILD_VERSION__" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/kaduna-life.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Naija City" />
+    <title>Naija City — Nigerian life sim game. Live your Naija story</title>
+    <meta name="description" content="Naija City is a free online Nigerian life simulation game. Hustle for naira, build houses, open a business, run for governor and live your Naija story with other players in Kaduna, Kano, Lagos and Abuja. Play in your browser." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <link rel="canonical" href="https://naija.city/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Naija City" />
+    <meta property="og:title" content="Naija City — Nigerian life sim game" />
+    <meta property="og:description" content="Hustle for naira, build houses, open a business, run for governor and live your Naija story with other players. Free in your browser." />
+    <meta property="og:url" content="https://naija.city/" />
+    <meta property="og:image" content="https://naija.city/og.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Naija City: a 3D Nigerian city with the Hamdala Hotel, Lugard Hall and Gamji Park, and a player standing at the junction" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Naija City — Nigerian life sim game" />
+    <meta name="twitter:description" content="Hustle for naira, build houses, open a business, run for governor and live your Naija story with other players. Free in your browser." />
+    <meta name="twitter:image" content="https://naija.city/og.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "WebSite", "@id": "https://naija.city/#site", "url": "https://naija.city/", "name": "Naija City", "alternateName": ["Kaduna Life", "NaijaCity"] },
+          {
+            "@type": "VideoGame",
+            "name": "Naija City",
+            "url": "https://naija.city/",
+            "image": "https://naija.city/og.jpg",
+            "description": "A free online Nigerian life simulation game: hustle for naira, build houses, open a business, run for office and live your Naija story with other players.",
+            "genre": ["Life simulation", "Multiplayer"],
+            "gamePlatform": ["Web browser", "Android", "iOS"],
+            "applicationCategory": "Game",
+            "operatingSystem": "Any",
+            "inLanguage": "en",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "NGN" }
+          }
+        ]
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Loaded without holding up the first paint: on a slow line the loading screen shows in the phone's own font, then swaps. -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" /></noscript>
+    <script>
+      // Pick the saved theme before first paint so dark mode never flashes white.
+      try {
+        var t = localStorage.getItem('kl-theme');
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t === 'dark' ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
+    <script>
+      // Every update removes the old game files. If this page is an older copy and its game script is gone, load a new page: once a minute at most (src/net/freshPage.ts).
+      addEventListener('error', function (e) {
+        var el = e.target;
+        if (!el || el.tagName !== 'SCRIPT' || el.type !== 'module') return;
+        try {
+          if (Date.now() - Number(sessionStorage.getItem('kl-fresh') || 0) < 60000) return;
+          sessionStorage.setItem('kl-fresh', String(Date.now()));
+        } catch (err) { return; }
+        var url = new URL(location.href);
+        url.searchParams.set('_r', String(Date.now()));
+        location.replace(url);
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Shown until the game loads, and what search engines read. React replaces it. -->
+      <style>
+        .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; box-sizing: border-box; text-align: center; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #475569; background: radial-gradient(120% 70% at 50% 38%, #fff7d6 0%, rgba(255, 247, 214, 0) 60%), linear-gradient(180deg, #a9d8f2 0%, #d9eefb 50%, #f4f9f2 100%); }
+        .boot img { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 4px 14px rgba(15, 107, 58, 0.25); margin-bottom: 10px; }
+        .boot h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -1px; color: #0f6b3a; }
+        .boot h1 span { color: #f59e0b; }
+        .boot p { margin: 0; font-size: 14px; font-weight: 600; }
+        .boot i { width: 22px; height: 22px; margin-top: 18px; border-radius: 50%; border: 3px solid rgba(15, 107, 58, 0.18); border-top-color: #0f6b3a; animation: boot-spin 0.8s linear infinite; }
+        .boot nav { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 12px; opacity: 0.7; }
+        .boot a { color: inherit; }
+        .boot .seo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        @keyframes boot-spin { to { transform: rotate(360deg); } }
+      </style>
+      <main class="boot">
+        <img src="/icons/kaduna-life.svg" alt="" width="84" height="84" />
+        <h1>Naija<span>City</span></h1>
+        <p>Naija life. Real people. Zero chill.</p>
+        <i aria-hidden="true"></i>
+        <span class="seo">Naija City is the Nigerian life sim. Start with nothing and hustle for naira. Buy land and build your house, open a shop and sell to other players, buy cars, raise a family, go to owambe, and run for governor or president. Free to play in your browser with players across Kaduna, Lagos and other cities.</span>
+        <nav><a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></nav>
+      </main>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

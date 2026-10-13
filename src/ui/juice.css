@@ -1,0 +1,78 @@
+.juice-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow: hidden;
+  pointer-events: none !important;
+}
+
+.juice-pop {
+  position: absolute;
+  transform: translate(-50%, 0);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
+  animation: juice-pop 1.4s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.juice-pop.gain { background: #16a34a; }
+.juice-pop.loss { background: #dc2626; }
+
+@keyframes juice-pop {
+  0% { opacity: 0; transform: translate(-50%, -6px) scale(0.6); }
+  12% { opacity: 1; transform: translate(-50%, 8px) scale(1.15); }
+  22% { transform: translate(-50%, 8px) scale(1); }
+  70% { opacity: 1; transform: translate(-50%, 30px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, 46px) scale(0.95); }
+}
+
+.juice-confetti { position: absolute; inset: 0; }
+.juice-confetti i {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: juice-fall;
+  animation-timing-function: cubic-bezier(0.3, 0.2, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+.juice-confetti i.wide { width: 12px; height: 7px; }
+
+@keyframes juice-fall {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), 105vh) rotate(var(--spin)); }
+}
+
+.scene-wrap.juice-shake { animation: juice-shake 0.35s linear; }
+.scene-wrap.juice-shake-hard { animation: juice-shake-hard 0.55s linear; }
+
+@keyframes juice-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-5px, 3px); }
+  40% { transform: translate(5px, -3px); }
+  60% { transform: translate(-3px, -2px); }
+  80% { transform: translate(3px, 2px); }
+}
+@keyframes juice-shake-hard {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  10% { transform: translate(-10px, 6px) rotate(-0.6deg); }
+  25% { transform: translate(10px, -6px) rotate(0.6deg); }
+  40% { transform: translate(-8px, -4px) rotate(-0.4deg); }
+  55% { transform: translate(8px, 4px) rotate(0.4deg); }
+  70% { transform: translate(-4px, 2px); }
+  85% { transform: translate(4px, -2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .juice-pop { animation-duration: 1.4s; animation-name: juice-pop-calm; }
+  @keyframes juice-pop-calm {
+    0%, 100% { opacity: 0; transform: translate(-50%, 8px); }
+    15%, 80% { opacity: 1; transform: translate(-50%, 8px); }
+  }
+}

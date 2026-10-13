@@ -1,0 +1,21 @@
+# Worker secrets for local development (npm run dev:api). Copy to .dev.vars.
+# In production set each one with: npx wrangler secret put <NAME>
+# Every one is optional; the feature it powers switches off when it is missing.
+
+# Owner dashboard passphrase (worker/admin.ts)
+ADMIN_KEY=
+
+# Cloudflare API token with Account Analytics: Read, for visit counts (worker/cfTraffic.ts)
+CF_API_TOKEN=
+
+# Bachs card payments (worker/bachs.ts)
+BACHS_API_KEY=
+BACHS_WEBHOOK_SECRET=
+
+# Web push notifications. Generate a pair with: node scripts/generate-vapid-keys.mjs
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
+
+# Cloudflare Turnstile secret, pairs with VITE_TURNSTILE_SITE_KEY
+TURNSTILE_SECRET=

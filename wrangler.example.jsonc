@@ -1,0 +1,167 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "naija-city",
+	"account_id": "<your-cloudflare-account-id>",
+	"main": "worker/index.ts",
+	"workers_dev": true,
+	"preview_urls": false,
+	"compatibility_date": "2026-10-01",
+	// Sentry's Worker SDK needs Node compatibility.
+	"compatibility_flags": ["nodejs_compat"],
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
+	"observability": {
+		"enabled": true
+	},
+	"rules": [
+		{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": false }
+	],
+	// The built game. /api/* goes to the Worker first; everything else is static, with SPA fallback.
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/",
+			"/api/*",
+			"/u/*",
+			"/b/*",
+			"/p/*",
+			"/s/*",
+			"/shop/*",
+			"/t/*"
+		]
+	},
+	// Your own domains (each zone must be on this Cloudflare account). Leave this out to use the workers.dev URL only.
+	// The dashboard host must match ADMIN_HOST below.
+	"routes": [
+		{ "pattern": "example.com", "custom_domain": true },
+		{ "pattern": "dash.example.com", "custom_domain": true }
+	],
+	"vars": {
+		// Firebase project used for sign-in (the Worker checks its ID tokens).
+		"FIREBASE_PROJECT_ID": "<your-firebase-project-id>",
+		// Host that serves the owner dashboard (worker/admin.ts).
+		"ADMIN_HOST": "dash.example.com",
+		// Optional: Cloudflare Web Analytics visit counts (worker/cfTraffic.ts). Also needs the CF_API_TOKEN secret.
+		"CF_ACCOUNT_ID": "<your-cloudflare-account-id>",
+		"CF_RUM_SITE_TAGS": "",
+		"CF_COUNT_FROM": "2026-01-01",
+		// Optional: Sentry error reporting for the Worker.
+		"SENTRY_DSN": "",
+		// Optional: Bachs card payments. Sandbox: https://sandbox-api.bachs.io
+		"BACHS_BASE_URL": "https://sandbox-api.bachs.io"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "naija-city",
+			"database_id": "<your-d1-database-id>",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Smart Placement runs the Worker near D1 instead of near the player, which is faster for chatty routes.
+	"placement": {
+		"mode": "smart"
+	},
+	// ROOM: one live room per shard (worker/shards.ts). LOBBY: the single directory that knows how full each shard is.
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ROOM",
+				"class_name": "Room"
+			},
+			{
+				"name": "LOBBY",
+				"class_name": "Lobby"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"Room"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"Lobby"
+			]
+		}
+	],
+	// Background jobs (web push). Create first: npx wrangler queues create naija-jobs
+	"queues": {
+		"producers": [
+			{
+				"binding": "JOBS",
+				"queue": "naija-jobs"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "naija-jobs",
+				"max_batch_size": 25,
+				"max_batch_timeout": 5,
+				"max_retries": 3
+			}
+		]
+	},
+	// Settles rent, bets, elections, EFCC cases and manhunts even when nobody is looking, and samples online players.
+	"triggers": {
+		"crons": [
+			"*/5 * * * *"
+		]
+	},
+	// Per-player and per-IP limits. period is 10 or 60 seconds.
+	"ratelimits": [
+		{
+			"name": "RL_API",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 600,
+				"period": 60
+			}
+		},
+		{
+			"name": "RL_SENSITIVE",
+			"namespace_id": "1002",
+			"simple": {
+				"limit": 30,
+				"period": 60
+			}
+		},
+		{
+			"name": "RL_PUBLIC",
+			"namespace_id": "1003",
+			"simple": {
+				"limit": 600,
+				"period": 60
+			}
+		}
+	],
+	// Player uploads. Create first: npx wrangler r2 bucket create naija-media
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "naija-media"
+		}
+	],
+	"images": {
+		"binding": "IMAGES"
+	},
+	// Public stats snapshot (visits), refreshed by the cron so the stats page never reads D1 per request.
+	// Create first: npx wrangler kv namespace create STATS_KV
+	"kv_namespaces": [
+		{
+			"binding": "STATS_KV",
+			"id": "<your-kv-namespace-id>"
+		}
+	],
+	"analytics_engine_datasets": [
+		{
+			"binding": "METRICS",
+			"dataset": "naija_metrics"
+		}
+	]
+}

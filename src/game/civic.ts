@@ -1,0 +1,212 @@
+export type PoliticalOffice = 'president' | 'governor' | 'minister' | 'lagosgov' | 'kanogov' | 'igp' | 'efcc';
+/** The cities with a government of their own (the ids of game/regions.ts). */
+export type CivicCity = 'kaduna' | 'abuja' | 'lagos' | 'kano';
+export type CampaignEvent = 'rally' | 'townHall' | 'crowd' | 'posters' | 'buyVotes';
+
+/** The offices a local (guest) campaign can go for. Shared elections cover every office. */
+export const LOCAL_OFFICES: PoliticalOffice[] = ['governor', 'president'];
+
+// Politics runs on a real daily clock, the same for every office. Anyone can file to run at any time of day; nobody can
+// vote until the polls open, for one hour every evening in Nigeria. Whoever wins is in office until the polls next
+// close: 23 hours in office, and the 24th at the polls.
+const HOUR_MS = 3600_000;
+const DAY_MS = 24 * HOUR_MS;
+/** Nigeria is an hour ahead of UTC all year, so its days start an hour before UTC's. */
+const NIGERIA_MS = HOUR_MS;
+/** The hour the polls open every day, on a Nigerian clock: 8 in the evening, when the most players are on. */
+const POLLS_HOUR = 20;
+/** How long a winner holds any office (real time), and how long the polls stay open. */
+export const TERM_MS = DAY_MS;
+export const ELECTION_DURATION_MS = HOUR_MS;
+const clock = (hour: number) => `${hour % 12 || 12} ${hour % 24 < 12 ? 'am' : 'pm'}`;
+/** The polling hour in words, on a Nigerian clock: "8 pm" and "9 pm". */
+export const POLLS_OPEN_AT = clock(POLLS_HOUR);
+export const POLLS_CLOSE_AT = clock(POLLS_HOUR + ELECTION_DURATION_MS / HOUR_MS);
+
+/** When the polls open: today's opening until they have closed for the day, then tomorrow's. */
+export function electionDayStart(now: number): number {
+  const midnight = Math.floor((now + NIGERIA_MS) / DAY_MS) * DAY_MS - NIGERIA_MS;
+  const opens = midnight + POLLS_HOUR * HOUR_MS;
+  return now < opens + ELECTION_DURATION_MS ? opens : opens + DAY_MS;
+}
+/** Whether the polls are open right now. */
+export const isElectionDay = (now: number) => electionDayStart(now) <= now;
+/** When the polls close on the election someone filing at `now` stands in: the coming polls, or tomorrow's if they are open now (that ballot is already set). */
+export function nextElectionEnds(now: number): number {
+  const start = electionDayStart(now);
+  return (start <= now ? start + TERM_MS : start) + ELECTION_DURATION_MS;
+}
+/** When the polls that are open now, or the next to open, close. Every term in office runs until then. */
+export const pollsCloseAt = (now: number) => electionDayStart(now) + ELECTION_DURATION_MS;
+/** Whether a race whose polls close at `endsAt` can be voted in yet. Before that it only takes candidates. */
+export const pollsOpen = (endsAt: number, now: number) => now >= endsAt - ELECTION_DURATION_MS && now < endsAt;
+/** A candidate can hold one campaign event this often. */
+export const CAMPAIGN_COOLDOWN_MS = 10 * 60_000;
+/** A race shows its leading candidates only; you and the one you voted for are always among them. */
+export const BALLOT_SIZE = 20;
+
+/** Every office, in the order the Civic app lists them. */
+export const OFFICES: PoliticalOffice[] = ['president', 'governor', 'minister', 'lagosgov', 'kanogov', 'igp', 'efcc'];
+export const OFFICE_ICON: Record<PoliticalOffice, string> = { president: '🇳🇬', governor: '🏛️', minister: '🏙️', lagosgov: '🌊', kanogov: '🐎', igp: '👮🏾', efcc: '🕵🏾' };
+
+export const OFFICE_RULES: Record<PoliticalOffice, {
+  title: string;
+  /** The city this office governs. Federal offices have none. */
+  city?: CivicCity;
+  filingFee: number;
+  targetSupport: number;
+  /** How long a winner holds the office (real time). */
+  termMs: number;
+  powers: string;
+}> = {
+  governor: { title: 'Governor of Kaduna', city: 'kaduna', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kaduna: roads and potholes, contracts, okada bans, pardons.' },
+  minister: { title: 'FCT Minister', city: 'abuja', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Abuja: contracts, okada bans, road projects, pardons.' },
+  lagosgov: { title: 'Governor of Lagos', city: 'lagos', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Lagos: roads and potholes, contracts, okada bans, pardons.' },
+  kanogov: { title: 'Governor of Kano', city: 'kano', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kano: roads and potholes, contracts, okada bans, pardons.' },
+  president: { title: 'President', filingFee: 1_000_000, targetSupport: 75, termMs: TERM_MS, powers: 'Sets taxes, shares the treasury between departments, grants pardons.' },
+  igp: { title: 'IGP (Inspector-General of Police)', filingFee: 150_000, targetSupport: 50, termMs: TERM_MS, powers: 'Sets jail terms and street patrols.' },
+  efcc: { title: 'EFCC Chair', filingFee: 300_000, targetSupport: 60, termMs: TERM_MS, powers: 'Sets fines on thieves and the deadline to report a theft.' },
+};
+
+/** Who runs each city: the governor in Kaduna, the FCT Minister in Abuja, the Governor of Lagos in Lagos, the Governor of Kano in Kano. */
+export const CITY_HEAD: Record<CivicCity, PoliticalOffice> = { kaduna: 'governor', abuja: 'minister', lagos: 'lagosgov', kano: 'kanogov' };
+export const CIVIC_CITIES = Object.keys(CITY_HEAD) as CivicCity[];
+export const CITY_NAME: Record<CivicCity, string> = { kaduna: 'Kaduna', abuja: 'Abuja', lagos: 'Lagos', kano: 'Kano' };
+
+/** The okada ban, per city, as the laws name it (worker/civic.ts, worker/policy.ts). */
+export const OKADA_BAN_LAW = { kaduna: 'okadaBanKaduna', abuja: 'okadaBanAbuja', lagos: 'okadaBanLagos', kano: 'okadaBanKano' } as const satisfies Record<CivicCity, string>;
+
+export const CAMPAIGN_EVENTS: Record<CampaignEvent, { label: string; icon: string; cost: number; support: number; blurb: string }> = {
+  rally: { label: 'Rally', icon: '📣', cost: 1_500_000, support: 25, blurb: 'Speeches and music at Murtala Square.' },
+  townHall: { label: 'Town hall', icon: '🎤', cost: 2_500_000, support: 45, blurb: 'Answer questions from real voters.' },
+  crowd: { label: 'Hire a crowd', icon: '🚌', cost: 4_000_000, support: 35, blurb: 'Bus in a crowd with ₦2k and jollof each. 1 in 5 crowds run off when the money finishes.' },
+  posters: { label: 'Billboards', icon: '🪧', cost: 1_000_000, support: 12, blurb: 'Your face on billboards along the main roads until the election ends.' },
+  buyVotes: { label: 'Buy votes', icon: '🧧', cost: 6_000_000, support: 50, blurb: 'Stomach infrastructure. Huge boost, but the EFCC is watching: get caught and you are disqualified, fined and jailed.' },
+};
+/** How many roadside billboards one candidate's campaign puts up in a city, and the most a city shows at once. */
+export const CAMPAIGN_BOARDS = { each: 2, max: 8 };
+
+/** Pulling out of a race before the polls open costs this, on top of the filing fee already paid. The state keeps both. */
+export const withdrawalFee = (office: PoliticalOffice) => Math.round(OFFICE_RULES[office].filingFee / 4);
+
+/** Campaign chaos, decided by the server (worker/civic.ts). */
+export const CHAOS = {
+  /** A hired crowd that runs off when the money finishes only adds this much. */
+  crowdFleeChance: 0.2,
+  crowdFledSupport: 8,
+  /** Vote buying: base EFCC sting chance, plus the EFCC chair's fine % / 1000. */
+  stingChance: 0.3,
+  stingFine: 100_000,
+};
+
+/** What elected officials can do with the treasury (filled by income tax, see worker/wallet.ts). */
+export const TREASURY = {
+  /** Governor or FCT Minister: dig up a rival's street. Their travel is slowed and fares doubled while it lasts. */
+  roadProject: { cost: 50_000, hours: 2 },
+  /** Governor or FCT Minister: award a public works contract to a player, paid out of their city's budget. */
+  contract: { sizes: [50_000, 100_000, 250_000], cooldownHours: 3 },
+  /** President, governor or FCT Minister: let somebody out of their cell. */
+  pardon: { cooldownHours: 6 },
+  /** President, governor or FCT Minister: hand out palliatives to everyone active today: the president out of the palliatives budget, a city's government out of its own. Whoever shares picks how much each person gets. */
+  palliative: { sizes: [5_000, 25_000, 100_000, 500_000, 1_000_000], cooldownHours: 6, maxPlayers: 100 },
+  /** Any office holder: a "snake" swallows part of the treasury. */
+  embezzle: { share: 0.2, cap: 500_000, cooldownHours: 12, catchChance: 0.35, fine: 50_000 },
+};
+
+/** How an office is named in a list: shorter than its title. */
+export const OFFICE_SHORT: Record<PoliticalOffice, string> = { president: 'President', governor: 'Kaduna Governor', minister: 'FCT Minister', lagosgov: 'Lagos Governor', kanogov: 'Kano Governor', igp: 'IGP', efcc: 'EFCC Chair' };
+
+/** What each office is paid a game day. */
+export type Salaries = Record<PoliticalOffice, number>;
+/**
+ * Officials' pay. The President signs the pay list, their own line included, and the treasury pays whoever is in
+ * each office once a game day (worker/civic.ts paySalaries). When it cannot cover the whole bill, nobody is paid.
+ * Everybody can read the list, and VDM does (worker/news.ts): a President who pays themselves fat, or cuts
+ * somebody else to nothing, hears about it.
+ */
+export const SALARY = {
+  /** Naira a game day. Nobody is paid until a President says so. */
+  options: [0, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000],
+  /** A pay round goes out this often: a game day is an hour of real time. */
+  everyMs: HOUR_MS,
+  /** From this much a day, a salary is fat. */
+  fat: 50_000,
+};
+export const NO_SALARIES = Object.fromEntries(OFFICES.map((o) => [o, 0])) as Salaries;
+/** What one pay round costs the treasury: only an office somebody holds is paid. */
+export const wageBill = (salaries: Salaries, held: (office: PoliticalOffice) => boolean) => OFFICES.reduce((n, o) => n + (held(o) ? salaries[o] : 0), 0);
+
+/** The offices that travel at the state's expense: the president, and whoever runs a city. */
+export type ExecutiveOffice = 'president' | 'governor' | 'minister' | 'lagosgov' | 'kanogov';
+/** What the state keeps for each of them. A ride in one costs the holder nothing: the treasury pays the usual fare. */
+export type StateVehicle = 'helicopter' | 'cab' | 'jet';
+export const STATE_FLEET: Record<ExecutiveOffice, Record<StateVehicle, string>> = {
+  president: { helicopter: 'Presidential helicopter', cab: 'Presidential convoy', jet: 'Presidential jet' },
+  governor: { helicopter: 'Governor’s helicopter', cab: 'Governor’s convoy', jet: 'Governor’s jet' },
+  minister: { helicopter: 'Minister’s helicopter', cab: 'Minister’s convoy', jet: 'Minister’s jet' },
+  lagosgov: { helicopter: 'Lagos Governor’s helicopter', cab: 'Lagos Governor’s convoy', jet: 'Lagos Governor’s jet' },
+  kanogov: { helicopter: 'Kano Governor’s helicopter', cab: 'Kano Governor’s convoy', jet: 'Kano Governor’s jet' },
+};
+/** The most one official trip can cost the treasury (the server refuses anything dearer). */
+export const STATE_TRIP_MAX = 10_000_000;
+
+/** The departments the president shares the treasury between. */
+export type Department = CivicCity | 'police' | 'efcc' | 'welfare';
+export type Allocation = Record<Department, number>;
+
+/**
+ * The president's budget: what percent of the treasury each city's government and each federal department may use.
+ * The rest stays unallocated. What a city does with its share (roads, contracts, palliatives) is up to whoever runs it.
+ */
+export const ALLOCATION = {
+  departments: ['kaduna', 'abuja', 'lagos', 'kano', 'police', 'efcc', 'welfare'] as Department[],
+  /** The president moves a share by this many percent at a time. */
+  step: 5,
+  defaults: { kaduna: 20, abuja: 10, lagos: 10, kano: 10, police: 25, efcc: 15, welfare: 10 } as Allocation,
+  info: {
+    kaduna: { label: 'Kaduna State', icon: '🏛️', runBy: 'Governor', blurb: 'Roads, contracts, palliatives.' },
+    abuja: { label: 'FCT Abuja', icon: '🏙️', runBy: 'FCT Minister', blurb: 'Roads, contracts, palliatives.' },
+    lagos: { label: 'Lagos State', icon: '🌊', runBy: 'Governor of Lagos', blurb: 'Roads, contracts, palliatives.' },
+    kano: { label: 'Kano State', icon: '🐎', runBy: 'Governor of Kano', blurb: 'Roads, contracts, palliatives.' },
+    police: { label: 'Police', icon: '🚔', runBy: 'IGP', blurb: 'Catches more thieves.' },
+    efcc: { label: 'EFCC', icon: '🕵🏾', runBy: 'EFCC Chair', blurb: 'Catches vote buyers and looters.' },
+    welfare: { label: 'Federal palliatives', icon: '🍚', runBy: 'President', blurb: 'Cap on each palliative round.' },
+  } as Record<Department, { label: string; icon: string; runBy: string; blurb: string }>,
+  /** How much of the treasury a department may spend right now. */
+  budget: (treasury: number, share: number) => Math.floor((treasury * share) / 100),
+  /** The police share as the 0 to 100 funding the crime rules use (src/game/crime.ts): half the treasury is full funding. */
+  policeFunding: (share: number) => Math.min(100, share * 2),
+  /** What the EFCC share adds to (or takes off) the chance of catching a vote buyer or a treasury snake. */
+  efccEdge: (share: number) => (share - 15) / 100,
+};
+/** The department whose share of the treasury each office spends from. */
+export const OFFICE_DEPARTMENT: Record<PoliticalOffice, Department> = { president: 'welfare', governor: 'kaduna', minister: 'abuja', lagosgov: 'lagos', kanogov: 'kano', igp: 'police', efcc: 'efcc' };
+
+/** Nobody locked up in the last 12 hours (or still in a cell) may file to run for office. */
+export const ARREST_BAN_MS = 12 * 60 * 60_000;
+/** Caught buying votes: out of that race, and barred from filing for any office for this long. Nobody is barred for life. */
+export const VOTE_BUYING_BAN_MS = 3 * DAY_MS;
+/** How much of a ban is left, in words: "3 days", "5 hours". */
+export function banLeft(ms: number): string {
+  const hours = Math.max(1, Math.ceil(ms / HOUR_MS));
+  const n = hours > 24 ? Math.ceil(hours / 24) : hours;
+  return `${n} ${hours > 24 ? 'day' : 'hour'}${n === 1 ? '' : 's'}`;
+}
+
+
+/** The powers with a waiting time, and when I last used each (worker/civic.ts). */
+export type CivicCooldown = 'contract' | 'pardon';
+
+/** What kind of government notice a line of the gazette is (worker/gazette.ts). */
+export type GazetteKind = 'law' | 'project' | 'palliative' | 'scandal' | 'elected';
+/** One thing an office holder did, as everyone was told about it. */
+export interface CivicNews {
+  id: number;
+  office: PoliticalOffice | null;
+  kind: GazetteKind;
+  icon: string;
+  text: string;
+  at: number;
+}
+/** How many lines the Civic app's News tab shows. */
+export const GAZETTE_SHOWN = 40;

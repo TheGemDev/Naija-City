@@ -1,0 +1,87 @@
+/* Photo mode (ui/PhotoMode.tsx). The camera chrome is always dark glass over the scene, whatever the theme. */
+
+/* Everything else on screen steps aside: the picture is the scene, not the HUD. */
+body.photo-mode .ui > :not(.photo-ui) { display: none !important; }
+/* Name tags, speech bubbles, map pins and place signs drawn over the 3D scene: none of them end up in the picture. */
+body.photo-mode .nametag,
+body.photo-mode .scene-wrap canvas ~ div { display: none !important; }
+
+.photo-ui { position: absolute; inset: 0; pointer-events: none; color: #fff; font-family: inherit; -webkit-user-select: none; user-select: none; }
+.ui > .photo-ui { pointer-events: none; }
+.photo-ui button { pointer-events: auto; border: 0; cursor: pointer; font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+
+/* The picture's shape, drawn as a window on the scene with everything outside it dimmed. */
+.photo-guide { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; container-type: size; }
+.photo-guide i { width: min(100cqw, calc(100cqh * var(--shape))); aspect-ratio: var(--shape); box-shadow: 0 0 0 100vmax rgba(2, 6, 23, 0.62); outline: 1.5px solid rgba(255, 255, 255, 0.75); outline-offset: -1.5px; }
+
+.photo-top { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.photo-round { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(10px); }
+.photo-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 7px 12px; border-radius: 999px; background: rgba(15, 23, 42, 0.5); font-size: 12px; font-weight: 600; white-space: nowrap; animation: photo-hint 5s ease-out forwards; }
+.photo-pill { min-height: 44px; padding: 0 14px; border-radius: 999px; background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(10px); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.photo-pill.on { background: #fff; color: #0f172a; }
+
+.photo-bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 12px calc(18px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, rgba(2, 6, 23, 0.72), rgba(2, 6, 23, 0)); }
+.photo-tabs { display: flex; gap: 18px; }
+.photo-tabs button { padding: 6px 2px; background: none; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; border-bottom: 2px solid transparent; }
+.photo-tabs button.on { opacity: 1; border-bottom-color: #facc15; }
+
+.photo-chips { display: flex; gap: 8px; max-width: 100%; padding: 2px 4px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
+.photo-chips::-webkit-scrollbar { display: none; }
+.photo-chips button { flex-shrink: 0; min-height: 40px; padding: 0 16px; border-radius: 999px; background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(10px); font-size: 14px; font-weight: 700; white-space: nowrap; }
+.photo-chips button.on { background: #facc15; color: #0f172a; }
+
+.photo-shutter { display: grid; place-items: center; width: 72px; height: 72px; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.28); box-shadow: 0 0 0 3px #fff inset; }
+.photo-shutter i { width: 56px; height: 56px; border-radius: 50%; background: #fff; transition: transform 0.12s ease; }
+.photo-shutter:active i { transform: scale(0.86); }
+
+.photo-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: photo-flash 0.32s ease-out; }
+
+.photo-result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: max(18px, env(safe-area-inset-top, 0px)) 18px calc(18px + env(safe-area-inset-bottom, 0px)); background: rgba(2, 6, 23, 0.82); pointer-events: auto; animation: photo-in 0.2s ease-out; }
+.photo-result { gap: 12px; }
+.photo-stage { position: relative; flex: 1 1 0; min-height: 0; width: 100%; display: grid; place-items: center; overflow: hidden; }
+/* Sticker, word, logo and caption toggles, stacked down the right edge over the picture. */
+.photo-rail { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+.photo-rail button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(10px); }
+.photo-rail button.on { background: #facc15; color: #0f172a; }
+/* The picture being dressed up: fingers move the stickers on it, so the page must not scroll or zoom under them. */
+.photo-canvas { display: block; border-radius: 10px; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5); touch-action: none; cursor: grab; }
+/* Empty until a toggle is pressed or something on the picture is picked. */
+.photo-edit:empty { display: none; }
+.photo-edit { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(520px, 100%); justify-content: flex-end; }
+.photo-tray button { background: rgba(255, 255, 255, 0.14); }
+.photo-tray.stickers button { min-width: 48px; min-height: 48px; padding: 0; font-size: 26px; border-radius: 14px; }
+.photo-tray.words button { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
+.photo-tray.mark button.on { background: #facc15; color: #0f172a; }
+/* The logo's corner arrows sit as a two-by-two pad beside the styles and do not scroll away with them. */
+.photo-tray-row { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; }
+.photo-tray-row .photo-chips { flex: 0 1 auto; min-width: 0; }
+.photo-corners { flex-shrink: 0; display: grid; grid-template-columns: repeat(2, 34px); gap: 4px; pointer-events: auto; }
+.photo-corners button { display: grid; place-items: center; height: 34px; padding: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.14); }
+.photo-corners button.on { background: #facc15; color: #0f172a; }
+.photo-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.photo-tools button { min-width: 44px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); font-size: 14px; font-weight: 800; }
+.photo-tools .photo-tool-del { color: #fca5a5; }
+.photo-tools .photo-tool-done { background: #facc15; color: #0f172a; }
+.photo-caption-input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: #fff; color: #0f172a; font: inherit; font-size: 16px; font-weight: 700; outline: none; -webkit-user-select: text; user-select: text; }
+.photo-result-actions button:disabled { opacity: 0.6; }
+.photo-result-actions { display: flex; gap: 10px; width: min(420px, 100%); }
+.photo-result-actions button { flex: 1; min-height: 48px; border-radius: 999px; font-size: 15px; font-weight: 800; }
+.photo-ghost { background: rgba(255, 255, 255, 0.16); }
+/* Retake and save are icons, so the two worded buttons get the room. */
+.photo-result-actions .photo-icon { flex: 0 0 48px; display: grid; place-items: center; padding: 0; }
+.photo-primary { background: #facc15; color: #0f172a !important; }
+
+@keyframes photo-flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+@keyframes photo-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes photo-hint { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-flash, .photo-result, .photo-hint { animation: none; }
+}
+@media (max-height: 520px) {
+  .photo-rail { gap: 6px; }
+  .photo-rail button { width: 38px; height: 38px; }
+  .photo-bottom { flex-direction: row; justify-content: center; flex-wrap: wrap; padding-top: 16px; }
+  .photo-shutter { width: 60px; height: 60px; }
+  .photo-shutter i { width: 46px; height: 46px; }
+}

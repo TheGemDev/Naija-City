@@ -1,0 +1,44 @@
+/* Family app (src/ui/Family.tsx): lovers, date nights and the cheaters list. */
+.fam-hero { flex-direction: row; align-items: center; gap: 12px; }
+.fam-hero > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; z-index: 1; }
+.fam-hero-icon { width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.18); flex-shrink: 0; z-index: 1; }
+.fam-stats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+.fam-stats span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.2); font-size: 11px; font-weight: 700; }
+
+.fam-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: var(--bg-ffffff); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+.fam-card.incoming { box-shadow: 0 0 0 2px var(--fg-e11d48); }
+.fam-head { display: flex; align-items: center; gap: 10px; }
+.fam-head .tile-info b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fam-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 99px; background: var(--bg-fff1f2); color: var(--fg-be123c); font-size: 11px; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.fam-chip.gold { background: var(--bg-fefce8, #fefce8); color: var(--fg-a16207, #a16207); }
+
+.fam-bond { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.fam-bond .bar { flex: 1; height: 8px; background: var(--bg-ffe4e6); }
+.fam-bond .bar i { background: linear-gradient(90deg, #fb7185, #e11d48); }
+
+.fam-ask { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 14px; background: var(--bg-fff1f2); color: var(--fg-be123c); font-size: 13px; font-weight: 700; }
+.fam-row { display: flex; gap: 6px; }
+.fam-row > * { flex: 1; }
+
+.fam-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.fam-act { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 10px; border-radius: 12px; background: var(--bg-f8fafc); border: 1px solid var(--line); color: var(--ink); font-size: 12px; font-weight: 700; text-align: left; }
+.fam-act:hover:not(:disabled) { border-color: var(--bd-fecdd3); background: var(--bg-fff1f2); }
+.fam-act:disabled { opacity: 0.55; cursor: not-allowed; }
+.fam-note { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.fam-propose { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px; border-radius: 12px; background: linear-gradient(135deg, #fb7185, #be123c); color: #fff; font-size: 13px; font-weight: 800; }
+.fam-propose:disabled { background: var(--bg-cbd5e1); cursor: not-allowed; }
+.fam-end { align-self: center; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; color: var(--fg-b91c1c); font-size: 12px; font-weight: 700; }
+.fam-end:disabled { opacity: 0.5; }
+
+.fam-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 14px; border-radius: 18px; background: var(--bg-ffffff); text-align: center; }
+.fam-empty b { font-size: 14px; }
+.fam-empty small { color: var(--muted); font-size: 12px; }
+
+.fam-search { display: flex; gap: 6px; }
+.fam-search .text-input { flex: 1; min-width: 0; }
+.fam-search .btn { display: inline-flex; align-items: center; gap: 5px; }
+.fam-verdict { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 13px; }
+.fam-verdict.bad { background: var(--bg-fef2f2); color: var(--fg-b91c1c); }
+.fam-verdict.ok { background: var(--bg-f0fdf4); color: var(--fg-15803d); }
+.fam-list .tile { border-radius: 0; box-shadow: none; }
+.fam-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
