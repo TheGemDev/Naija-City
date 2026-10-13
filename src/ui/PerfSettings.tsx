@@ -8,15 +8,14 @@ export function PerfSettings() {
   const setSaver = useQuality((s) => s.setBatterySaver);
   const batteryLow = useQuality((s) => s.batteryLow);
   const low = useLowPerf();
-  const manualLow = quality === 'low' || (quality === 'auto' && low && !(saver && batteryLow));
   return (
     <>
       <label className="settings-option">
         <span>
           <b>Low performance mode</b>
-          <small>{saver && batteryLow ? 'On while your battery is low' : 'No shadows, lower resolution. Smoother on older phones.'}</small>
+          <small>{quality === 'auto' && saver && batteryLow ? 'On while your battery is low' : 'No shadows, lower resolution. Smoother on older phones.'}</small>
         </span>
-        <input type="checkbox" role="switch" aria-label="Low performance mode" checked={low} onChange={(e) => setQuality(e.target.checked ? 'low' : 'high')} disabled={!manualLow && saver && batteryLow} />
+        <input type="checkbox" role="switch" aria-label="Low performance mode" checked={low} onChange={(e) => setQuality(e.target.checked ? 'low' : 'high')} />
       </label>
       <label className="settings-option">
         <span>

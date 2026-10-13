@@ -66,7 +66,7 @@ if (getBattery) {
   }).catch(() => { /* blocked */ });
 }
 
-/** True when the game should render with the cheap settings. */
+/** True when the game should render with the cheap settings. The battery saver only steps in on Auto: an explicit choice (the HUD button, Settings) wins. */
 export function useLowPerf() {
-  return useQuality((s) => (s.batterySaver && s.batteryLow) || (s.quality === 'auto' ? weakDevice() : s.quality === 'low'));
+  return useQuality((s) => (s.quality === 'auto' ? (s.batterySaver && s.batteryLow) || weakDevice() : s.quality === 'low'));
 }
