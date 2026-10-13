@@ -91,7 +91,8 @@ export async function handleOwambe(req: Request, env: Env, ctx: ExecutionContext
   const now = Date.now();
 
   if (path === '/api/owambe' && req.method === 'GET') {
-    await wrapUp(db, now);
+    // Housekeeping: a D1 blip here must not fail the read. Unwrapped parties are picked up on the next look.
+    await wrapUp(db, now).catch(() => {});
     const [row, last] = await Promise.all([
       live(db, now, cityOf(new URL(req.url).searchParams.get('city'))),
       db.prepare('SELECT MAX(starts_at) AS at FROM owambes WHERE host_uid = ?').bind(me).first<{ at: number | null }>(),
