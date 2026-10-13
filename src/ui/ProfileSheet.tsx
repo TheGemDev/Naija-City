@@ -17,6 +17,7 @@ import { useSession } from '../net/session';
 import { Emoji } from './Icons';
 import { PersonPreview } from './Closet';
 import { PushNotifications, needColor } from './Hud';
+import { OpenSourceSettings } from './OpenSource';
 
 type Tab = 'profile' | 'stats' | 'settings';
 const TABS: { id: Tab; label: string }[] = [
@@ -237,6 +238,7 @@ function SettingsTab() {
       <div className="list-card">
         <GuideSettings onPlay={() => (useGame.getState().setPanel(null), startGuide())} />
       </div>
+      <OpenSourceSettings />
       <h4>Notifications</h4>
       <PushNotifications onPermissionChange={() => {}} enableRef={enableRef} />
       <h4>Account</h4>

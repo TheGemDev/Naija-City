@@ -9,6 +9,7 @@ import { AuthSheet, useAuthUi } from './Auth';
 import { Emoji } from './Icons';
 import { TownStrip } from './TownStrip';
 import './landing-tour.css';
+import { OpenSourceChip } from './OpenSource';
 
 /** Players-online count on the front page. Switched off for now; set true to show it again. */
 const SHOW_ONLINE = false;
@@ -136,6 +137,7 @@ export function Landing() {
           <div className="landing-chips">
             {SHOW_ONLINE && stats && stats.online > 0 && <span className="lchip"><i className="live-dot" />{stats.online} online now</span>}
             {stats && <span className="lchip" title="Visits"><Emoji char="👁️" size={15} />{stats.visitsTotal.toLocaleString('en-NG')}</span>}
+            <OpenSourceChip />
           </div>
         )}
       </div>

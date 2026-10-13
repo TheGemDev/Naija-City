@@ -63,6 +63,7 @@ import './duo.css';
 import './phones.css';
 import { Face } from './Face';
 import { openCamera } from './PhotoMode';
+import { OpenSourceSettings } from './OpenSource';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
   | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
@@ -1314,6 +1315,7 @@ function Settings() {
       <div className="list-card">
         <GuideSettings onPlay={() => (useGame.getState().setPanel(null), startGuide())} />
       </div>
+      <OpenSourceSettings />
       <AboutPhone />
       </>
       ) : (
