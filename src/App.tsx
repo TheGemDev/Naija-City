@@ -54,7 +54,6 @@ import { LifeSummary, PlaceEvents } from './ui/LiveApps';
 import { clearLocal } from './game/save';
 import { resetWallet } from './net/wallet';
 import { VenueBetLauncher, VenueBetting } from './ui/VenueBetting';
-import { TitleScreen, useTitle } from './ui/TitleScreen';
 import { audio } from './game/audio';
 import { UpdateNotice } from './ui/UpdateNotice';
 import { PhotoMode } from './ui/PhotoMode';
@@ -74,15 +73,12 @@ export default function App() {
   const ready = useSession((s) => s.status === 'ready');
   // Account opened in another tab/device: unmount the whole game so this tab renders and polls nothing.
   const replaced = useNet((s) => s.replaced);
-  const title = useTitle((s) => s.open);
   const [pendingChatUid, setPendingChatUid] = useState<string | null>(null);
   const [pendingLink, setPendingLink] = useState<DeepLink | null>(() => takeDeepLink());
-  // Every sign-in starts at the title screen.
+  // Signing in drops straight into the world; signing out goes quiet.
   useEffect(() => {
-    if (!ready) {
-      useTitle.setState({ open: true });
-      audio.leaveGame();
-    }
+    if (ready) audio.enterGame();
+    else audio.leaveGame();
   }, [ready]);
   useEffect(() => {
     // Loaded ahead of its first use. A page from before the last update asks for a file that is gone: get today's page.
@@ -124,17 +120,17 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
   }, []);
   useEffect(() => {
-    if (!pendingChatUid || !ready || title) return;
+    if (!pendingChatUid || !ready) return;
     useSocial.setState({ openWith: pendingChatUid });
     useGame.setState({ panel: 'phone' });
     setPendingChatUid(null);
-  }, [pendingChatUid, ready, title]);
+  }, [pendingChatUid, ready]);
 
   useEffect(() => {
-    if (!pendingLink || !ready || title) return;
+    if (!pendingLink || !ready) return;
     setPendingLink(null);
     void followDeepLink(pendingLink);
-  }, [pendingLink, ready, title]);
+  }, [pendingLink, ready]);
 
   // Keyboard shortcuts for desktop
   useEffect(() => {
@@ -160,8 +156,7 @@ export default function App() {
         {!replaced && <Scene />}
       </div>
       <div className={`ui ${panel === 'phone' ? 'phone-open' : ''}`}>
-        {ready && title && !replaced && <TitleScreen />}
-        {ready && !title && !replaced && (
+        {ready && !replaced && (
           <>
             <Hud />
             <ActionSheet />

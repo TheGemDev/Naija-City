@@ -24,7 +24,6 @@ import { useNet } from '../net/multiplayer';
 import { useSession } from '../net/session';
 import { homeTransform } from '../game/origins';
 import { useVisit } from '../game/visits';
-import { useTitle } from '../ui/TitleScreen';
 import { useTour } from '../game/tour';
 import { useLowPerf } from '../game/quality';
 import { photoHour, usePhoto } from '../game/photo';
@@ -43,7 +42,7 @@ function GameLoop() {
     const s = useGame.getState();
     // Online-only: the game stands still until signed in and connected (see ConnectionGate).
     const net = useNet.getState();
-    if (!useSession.getState().user || !net.connected || net.moving || useTitle.getState().open) return;
+    if (!useSession.getState().user || !net.connected || net.moving) return;
     owed.current += Math.min(dt, 0.1);
     if (owed.current < TICK_STEP) return;
     // Always real time: this is the server's clock. Long tasks speed up their own progress inside tick().
