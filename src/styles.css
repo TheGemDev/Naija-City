@@ -1853,11 +1853,9 @@ body.map-far .river-name { opacity: 0.9; }
 .title-btns .btn.go { box-shadow: none; }
 .title-btns .btn.alt { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 /* The tour's logo, in place of a back arrow: the mark a little small on its own green, so the round cut takes none of it. */
-.tour-top .tour-logo { background: #0f6b3a url('/icons/kaduna-life.svg') center / 88% no-repeat; }
 /* The tour's low power switch, lit amber while it is on like the one in the game's top bar. */
 .tour-top .tour-power.on { background: var(--bg-fef3c7); box-shadow: var(--shadow), inset 0 0 0 2px #f59e0b; }
 /* The way in is always on the right: log in on the left of it wherever the two sit side by side. */
-.tour-pill { flex-direction: row-reverse; }
 /* The front page's tagline changes every few seconds: each line fades up into place. */
 .landing-sub.tagline { animation: tagline-in 0.45s ease; }
 @keyframes tagline-in { from { opacity: 0; transform: translateY(4px); } }

@@ -18,6 +18,7 @@ import { Emoji } from './Icons';
 import { PersonPreview } from './Closet';
 import { PushNotifications, needColor } from './Hud';
 import { OpenSourceSettings } from './OpenSource';
+import { LinkAccount } from './Auth';
 
 type Tab = 'profile' | 'stats' | 'settings';
 const TABS: { id: Tab; label: string }[] = [
@@ -241,6 +242,7 @@ function SettingsTab() {
       <OpenSourceSettings />
       <h4>Notifications</h4>
       <PushNotifications onPermissionChange={() => {}} enableRef={enableRef} />
+      <LinkAccount />
       <h4>Account</h4>
       <div className="row-btns">
         {signedIn && (

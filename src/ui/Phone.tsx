@@ -64,6 +64,7 @@ import './phones.css';
 import { Face } from './Face';
 import { openCamera } from './PhotoMode';
 import { OpenSourceSettings } from './OpenSource';
+import { LinkAccount } from './Auth';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
   | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
@@ -1320,6 +1321,7 @@ function Settings() {
       </>
       ) : (
       <>
+      <LinkAccount />
       <h4>Account</h4>
       <div className="list-card">
         <div className="need-row">

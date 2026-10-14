@@ -18,22 +18,46 @@
 /* Signing up from the tour: the map stays behind the form, dimmed so the form reads. */
 .landing.touring.authing { background: rgba(var(--surface-rgb), 0.6); backdrop-filter: blur(8px); }
 
-/* Top bar, where the game's clock and money sit: which city (or the place you tapped) and who is online. */
-.tour-top { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; }
-.tour-top > * { pointer-events: auto; flex: none; }
-.tour-top .round-btn { font-size: 20px; font-weight: 800; color: var(--ink); }
-.tour-top .tour-info { flex: 0 1 auto; min-width: 0; }
-.tour-icon { flex: none; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(160deg, var(--bg-ecfdf5), var(--bg-ffffff)); }
+/* Top bar: the game's brand on the left, where you are looking beside it, low power on the right. */
+.landing.touring .tour-top { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
+.landing.touring .tour-top > * { pointer-events: auto; flex: none; }
+.tour-brand { display: flex; align-items: center; gap: 9px; height: 52px; padding: 0 16px 0 7px; border-radius: 26px; background: var(--card); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
+.tour-mark { width: 38px; height: 38px; border-radius: 50%; background: #0f6b3a url('/icons/kaduna-life.svg') center / 88% no-repeat; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
+.tour-brand b { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; color: var(--green-fg); line-height: 1; }
+.tour-brand b i { font-style: normal; color: #f59e0b; }
+.tour-where { display: flex; align-items: center; gap: 9px; height: 52px; min-width: 0; padding: 0 16px 0 7px; border-radius: 26px; background: var(--card); box-shadow: var(--shadow); backdrop-filter: blur(12px); animation: tour-swap 0.25s ease-out; }
+.tour-pin { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(160deg, var(--bg-ecfdf5), var(--bg-ffffff)); box-shadow: inset 0 0 0 1px var(--line); }
 .tour-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
-.tour-text b { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tour-text b { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tour-text small { color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tour-top .tour-live { margin-left: auto; gap: 6px; padding: 12px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.landing.touring .tour-top .tour-where { flex: 0 1 auto; }
+.landing.touring .tour-top .tour-power { margin-left: auto; }
+.landing.touring .tour-top .tour-live { gap: 6px; padding: 12px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+@keyframes tour-swap { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* Narrow phones: brand and low power share the first row, the location drops under them. */
+@media (max-width: 560px) {
+  .landing.touring .tour-top { flex-wrap: wrap; }
+  .landing.touring .tour-top .tour-where { order: 3; flex: 1 1 100%; }
+}
 
-/* Footer: the city chips over one pill with the two buttons side by side. */
-.tour-foot { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); width: min(440px, calc(100% - 24px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-.tour-foot > * { pointer-events: auto; }
-.tour-foot .city-chips { pointer-events: none; }
-.tour-foot .city-chip { pointer-events: auto; }
-.tour-pill { display: flex; gap: 6px; padding: 6px; }
-.tour-pill .btn.big { flex: 1; width: auto; margin: 0; padding: 12px; box-shadow: none; }
-.tour-pill .btn.big.alt { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+/* Footer: the city tabs over a call-to-action card. */
+.landing.touring .tour-foot { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); width: min(440px, calc(100% - 24px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
+.landing.touring .tour-foot > * { pointer-events: auto; }
+.tour-cta { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 16px 12px; border-radius: 26px; background: var(--card); box-shadow: var(--shadow); backdrop-filter: blur(14px); text-align: center; }
+.tour-cta strong { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.tour-cta p { margin: 0 0 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.tour-cta .auth-msg { text-align: left; }
+.tour-play { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border: 0; border-radius: 18px; background: linear-gradient(180deg, #22c55e, #15803d); color: #fff; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 8px 20px rgba(21, 128, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3); cursor: pointer; animation: tour-glow 2.4s ease-in-out infinite; }
+.tour-play span { display: inline-block; transition: transform 0.2s; }
+.tour-play:hover span { transform: translateX(4px); }
+.tour-play:active { transform: scale(0.98); }
+.tour-play:disabled { animation: none; opacity: 0.85; cursor: default; }
+@keyframes tour-glow { 50% { box-shadow: 0 8px 28px rgba(34, 197, 94, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3); } }
+.tour-login { background: none; border: 0; padding: 6px; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.tour-login u { color: var(--ink); font-weight: 800; text-underline-offset: 3px; }
+.tour-fine { color: var(--muted); font-size: 11px; font-weight: 600; }
+.tour-fine a { color: inherit; text-underline-offset: 2px; }
+/* Tapping Play Now: the bars slip away and the map is left on its own while the game loads. */
+.landing.entering .tour-top { opacity: 0; transform: translateY(-12px); pointer-events: none; }
+.landing.entering .tour-foot { opacity: 0.0; transform: translate(-50%, 16px); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .tour-play, .tour-where { animation: none; } }

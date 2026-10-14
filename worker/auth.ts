@@ -7,6 +7,8 @@ export interface FirebaseUser {
   uid: string;
   email?: string;
   name?: string;
+  /** Signed in with no email or Google yet (Firebase anonymous sign-in). */
+  guest?: boolean;
 }
 
 interface Jwk extends JsonWebKey {
@@ -59,7 +61,7 @@ export async function verifyIdToken(token: string, projectId: string): Promise<F
     if (!key) return null;
     const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
     const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64url(parts[2]), data);
-    return ok ? { uid: p.sub, email: p.email, name: p.name } : null;
+    return ok ? { uid: p.sub, email: p.email, name: p.name, guest: p.firebase?.sign_in_provider === 'anonymous' } : null;
   } catch {
     return null;
   }

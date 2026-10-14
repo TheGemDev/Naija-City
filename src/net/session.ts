@@ -16,7 +16,7 @@ type Cloud = 'off' | 'saving' | 'saved' | 'error';
 
 interface Session {
   status: Status;
-  user: { uid: string; email: string | null; name: string | null; username: string | null; /** Real age in years, for the age-group rich lists. */ age?: number | null; /** Their own date of birth (YYYY-MM-DD), for their birth certificate. */ birthdate?: string | null } | null;
+  user: { uid: string; email: string | null; name: string | null; username: string | null; /** Playing as a guest: no email or Google attached yet, so logging out would lose this life. */ guest?: boolean; /** Real age in years, for the age-group rich lists. */ age?: number | null; /** Their own date of birth (YYYY-MM-DD), for their birth certificate. */ birthdate?: string | null } | null;
   cloud: Cloud;
   cloudAt: number | null;
   /** Signed in but the server can't be reached; the game waits (it's online-only) and keeps retrying. */
@@ -34,6 +34,8 @@ export const useSession = create<Session>((set) => ({
   offline: false,
   elsewhere: false,
   async logOut() {
+    // A guest has no way back in once they leave: say so first.
+    if (useSession.getState().user?.guest && !window.confirm('You are playing as a guest. If you log out, this life is gone for good. Save your progress first with Google or email in Settings → Account.\n\nLog out anyway?')) return;
     await flushWallet();
     await pushSave();
     try {
@@ -315,7 +317,7 @@ export async function claimUsername(username: string): Promise<string | null> {
 
 /** After sign-in: the cloud save wins; if there is none, this device's progress is uploaded. */
 async function syncOnSignIn(u: User) {
-  useSession.setState({ status: 'syncing', user: { uid: u.uid, email: u.email, name: u.displayName, username: null }, cloud: 'saving', offline: false });
+  useSession.setState({ status: 'syncing', user: { uid: u.uid, email: u.email, name: u.displayName, username: null, guest: u.isAnonymous }, cloud: 'saving', offline: false });
   try {
     const [res, meRes] = await Promise.all([api('/api/save'), api('/api/me')]);
     if (!meRes.ok) throw new Error(`${meRes.status}`);
@@ -360,6 +362,8 @@ export function startSession() {
     const s = useSession.getState();
     if (u) {
       if (s.user?.uid !== u.uid) syncOnSignIn(u);
+      // Same player, new details: a guest who just saved their progress with Google or an email.
+      else if (s.user.guest !== u.isAnonymous || s.user.email !== u.email) useSession.setState({ user: { ...s.user, guest: u.isAnonymous, email: u.email, name: u.displayName ?? s.user.name } });
     } else {
       lastPushed = '';
       baseSavedAt = 0;

@@ -2,48 +2,22 @@ import { useEffect, useState } from 'react';
 import { useLowPerf, useQuality } from '../game/quality';
 import { REGION_IDS, regionOf, regionPlace, type RegionId } from '../game/regions';
 import { useGame } from '../game/store';
-import { endTour, startTour, useTour } from '../game/tour';
+import { startTour, useTour } from '../game/tour';
 import { useCityStats, watchCityStats } from '../net/cityStats';
+import { authMessage, signInGuest } from '../net/firebase';
 import { useSession } from '../net/session';
 import { AuthSheet, useAuthUi } from './Auth';
 import { Emoji } from './Icons';
-import { TownStrip } from './TownStrip';
 import './landing-tour.css';
-import { OpenSourceChip } from './OpenSource';
+import { REPO_URL } from './OpenSource';
 
 /** Players-online count on the front page. Switched off for now; set true to show it again. */
 const SHOW_ONLINE = false;
 
-const SPOTS = ['✈️ Airport', '🚌 Motor park', '🏛️ Secretariat', '🎖️ NDA', '⛪ Church', '⚽ Stadium', '🪩 Club', '🍲 Mama put', '🏨 Hotel', '🏠 Your own house'];
-
-/** What the game is, said a few ways. The first is the line the boot screen shows, so the page opens on it; the rest follow in a new order each visit. */
-const TAGLINES = [
-  'Naija life. Real people. Zero chill.',
-  'Lagos life, with full Naija craziness.',
-  'Kano to Lagos. One Naija, zero chill.',
-  'Hustle. Gbese. Owambe. With real people.',
-  'Sapa today, Dangote tomorrow. Real people.',
-  'Naija no dey carry last. Come live am.',
-  'Real people. Real wahala. Zero chill.',
-];
-const TAGLINE_MS = 3500;
-
-function Tagline() {
-  const [order] = useState(() => [TAGLINES[0], ...TAGLINES.slice(1).sort(() => Math.random() - 0.5)]);
-  const [at, setAt] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setAt((n) => (n + 1) % order.length), TAGLINE_MS);
-    return () => clearInterval(timer);
-  }, [order]);
-  // Keyed by line, so each one fades in afresh.
-  return <span key={at} className="landing-sub tagline">{order[at]}</span>;
-}
-
 /**
- * The cities on the front page as a row of tabs, the capital first. Tapping one shows that city's real map, and it stays
- * the one picked. Only these are shown: Lagos is in the game, but the front page leads with the north.
+ * The cities as a row of tabs. Tapping one shows that city's real map, and it stays the one picked.
  */
-const TAB_ORDER: RegionId[] = ['abuja', 'kaduna', 'kano'];
+const TAB_ORDER: RegionId[] = ['lagos', 'abuja', 'kaduna', 'kano'];
 function CityTabs({ picked, onPick }: { picked: RegionId; onPick: (id: RegionId) => void }) {
   const ids = TAB_ORDER.filter((id) => REGION_IDS.includes(id));
   return (
@@ -69,18 +43,34 @@ function Tour({ city, onPick }: { city: RegionId; onPick: (id: RegionId) => void
   const place = placeId ? regionPlace(city, placeId) : undefined;
   // The same low power switch as the game's own top bar: a big map is heavy on a weak phone.
   const low = useLowPerf();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // One tap in: a guest account with no form. Saving progress with Google or an email comes later, in Settings.
+  const play = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await signInGuest();
+    } catch (e) {
+      setError(authMessage(e));
+      setBusy(false);
+    }
+  };
   const setQuality = useQuality((s) => s.setQuality);
   return (
-    <div className="title-screen landing touring">
-      <div className="tour-top">
-        {/* The game's own mark, cut round to the height of the bar. It is also the way back to the front page. */}
-        <button type="button" className="round-btn tour-logo" aria-label="Back to Naija City" title="Back to Naija City" onClick={endTour} />
-        <div className="hud-card tour-info">
-          <span className="tour-icon"><Emoji char={place?.icon ?? '🗺️'} size={24} /></span>
-          <div className="tour-text">
+    <div className={`title-screen landing touring ${busy ? 'entering' : ''}`}>
+      <header className="tour-top">
+        <div className="tour-brand" role="img" aria-label="Naija City">
+          <span className="tour-mark" aria-hidden="true" />
+          <b>Naija<i>City</i></b>
+        </div>
+        {/* Where you are looking: the city, or the place you tapped on its map. */}
+        <div className="tour-where" key={placeId ?? city}>
+          <span className="tour-pin" aria-hidden="true"><Emoji char={place?.icon ?? '📍'} size={20} /></span>
+          <span className="tour-text">
             <b>{place?.name ?? region.name}</b>
             <small>{place?.blurb ?? region.tagline}</small>
-          </div>
+          </span>
         </div>
         <button
           type="button"
@@ -93,80 +83,62 @@ function Tour({ city, onPick }: { city: RegionId; onPick: (id: RegionId) => void
           <Emoji char={low ? '🪫' : '🔋'} size={20} />
         </button>
         {SHOW_ONLINE && online > 0 && <div className="hud-card tour-live"><i className="live-dot" />{online} online</div>}
-      </div>
-      <div className="tour-foot">
+      </header>
+      <footer className="tour-foot">
         <CityTabs picked={city} onPick={onPick} />
-        <div className="tour-pill pill">
-          <button className="btn big go" onClick={() => show('up')}>Play Now</button>
-          <button className="btn big alt" onClick={() => show('in')}>Log in</button>
+        <div className="tour-cta">
+          <strong>Your Naija story starts here</strong>
+          <p>Hustle, build your house and live alongside real people.</p>
+          {error && <p className="auth-msg">{error}</p>}
+          <button type="button" className="tour-play" disabled={busy} onClick={() => void play()}>
+            {busy ? `Entering ${region.name}…` : <>Play Now <span aria-hidden="true">→</span></>}
+          </button>
+          <button type="button" className="tour-login" disabled={busy} onClick={() => show('in')}>
+            Already have an account? <u>Log in</u>
+          </button>
+          <small className="tour-fine">Free to play · 18+ · <a href={REPO_URL} target="_blank" rel="noopener noreferrer">Open source</a></small>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
 
-/** What a visitor sees before signing in: the live town behind a few real numbers and two buttons. */
+/** What a visitor sees before signing in: the game's own map of a city behind two buttons, and the sign-up form over it. */
 export function Landing() {
   const status = useSession((s) => s.status);
   const authOpen = useAuthUi((s) => s.open);
-  const show = useAuthUi((s) => s.show);
   const hide = useAuthUi((s) => s.hide);
-  const stats = useCityStats((s) => s.stats);
   const tour = useTour((s) => s.city);
   const visible = status === 'signedOut';
-  const [city, setCity] = useState<RegionId>('abuja');
+  const [city, setCity] = useState<RegionId>('lagos');
   const pick = (id: RegionId) => (setCity(id), startTour(id));
 
   useEffect(() => {
     if (status === 'signedOut') return watchCityStats();
   }, [status]);
 
+  // The map is the front page: it opens on the last city picked, and again after signing out (signing in closes it).
+  useEffect(() => {
+    if (visible && !tour) startTour(city);
+  }, [visible, tour, city]);
+
   if (!visible) return null;
-  // The same tabs in the same order as the front page's, on the city being shown; whichever is picked there is the one picked back here.
   if (tour && !authOpen) return <Tour city={tour} onPick={pick} />;
 
+  // Signing up keeps that city's map behind the form.
   return (
-    <div className={`title-screen landing ${authOpen ? 'authing' : ''} ${tour ? 'touring' : ''}`}>
+    <div className="title-screen landing authing touring">
       <div className="title-top">
         <div className="logo">
           Naija<span>City</span>
-          {authOpen && <em className="age-badge"> 18+</em>}
+          <em className="age-badge"> 18+</em>
         </div>
-        {authOpen ? <span className="landing-sub">Live your Naija story with real people</span> : <Tagline />}
-        {!authOpen && (
-          <div className="landing-chips">
-            {SHOW_ONLINE && stats && stats.online > 0 && <span className="lchip"><i className="live-dot" />{stats.online} online now</span>}
-            {stats && <span className="lchip" title="Visits"><Emoji char="👁️" size={15} />{stats.visitsTotal.toLocaleString('en-NG')}</span>}
-            <OpenSourceChip />
-          </div>
-        )}
+        <span className="landing-sub">Live your Naija story with real people</span>
       </div>
-
-      {/* Signing up from the tour keeps that city's map behind the form, so the island only fills its space. */}
-      {tour ? <div className="town-strip" /> : <TownStrip />}
-
-      <div className={`title-sheet ${authOpen ? 'auth-sheet' : ''}`}>
-        {authOpen ? (
-          <>
-            <button type="button" className="auth-back" onClick={hide}>← Back</button>
-            <AuthSheet />
-          </>
-        ) : (
-          <>
-            <CityTabs picked={city} onPick={pick} />
-            <div className="landing-ticker" aria-hidden="true">
-              <div>
-                {[...SPOTS, ...SPOTS].map((s, i) => (
-                  <span key={i}>{s}</span>
-                ))}
-              </div>
-            </div>
-            <div className="title-btns">
-              <button className="btn big go" onClick={() => show('up')}>Sign up</button>
-              <button className="btn big alt" onClick={() => show('in')}>Log in</button>
-            </div>
-          </>
-        )}
+      <div className="town-strip" />
+      <div className="title-sheet auth-sheet">
+        <button type="button" className="auth-back" onClick={hide}>← Back</button>
+        <AuthSheet />
       </div>
     </div>
   );

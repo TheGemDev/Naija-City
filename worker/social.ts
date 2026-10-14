@@ -374,6 +374,7 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
     const b = await body<{ to?: string; amount?: number; note?: string; ref?: number }>(req);
     if (!b?.to || !validAmount(b.amount)) return err(400, 'Enter an amount between ₦1 and ₦10,000,000,000');
     if (b.to === me) return err(400, 'You can’t send money to yourself');
+    if (user.guest) return err(403, 'Save your progress with Google or email to send money');
     const amount = b.amount;
     const [recipient, sender] = await Promise.all([playerByUid(env, b.to), playerByUid(env, me)]);
     if (!recipient?.username) return err(404, 'No such player');

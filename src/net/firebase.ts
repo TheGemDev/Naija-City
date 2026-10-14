@@ -2,6 +2,7 @@
 
 import { initializeApp } from 'firebase/app';
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   browserLocalPersistence,
   browserPopupRedirectResolver,
@@ -10,8 +11,11 @@ import {
   getAuth,
   indexedDBLocalPersistence,
   initializeAuth,
+  linkWithCredential,
+  linkWithPopup,
   onIdTokenChanged,
   sendPasswordResetEmail,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -87,6 +91,27 @@ export async function signUpEmail(email: string, password: string, name: string)
   if (name) await updateProfile(user, { displayName: name });
 }
 
+/** One tap in: a real account with no email or password, which the player can attach to Google or an email later (linkGoogle, linkEmail). */
+export async function signInGuest() {
+  await signInAnonymously(auth);
+}
+
+/** Attach Google to the guest account in place: the same uid, so the house, money and progress carry over. */
+export async function linkGoogle() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in');
+  await linkWithPopup(user, new GoogleAuthProvider(), browserPopupRedirectResolver);
+  await user.getIdToken(true);
+}
+
+/** Attach an email and password to the guest account in place. */
+export async function linkEmail(email: string, password: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in');
+  await linkWithCredential(user, EmailAuthProvider.credential(email, password));
+  await user.getIdToken(true);
+}
+
 export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 export const signOut = () => fbSignOut(auth);
 
@@ -105,6 +130,8 @@ export function authMessage(e: unknown): string {
     'auth/network-request-failed': 'No network. Check your data and try again.',
     'auth/too-many-requests': 'Too many tries. Wait a bit and try again.',
     'auth/operation-not-allowed': 'This sign-in method isn’t switched on yet.',
+    'auth/credential-already-in-use': 'That account already exists. Log out, then log in with it. This guest progress would be left behind.',
+    'auth/provider-already-linked': 'This account is already saved.',
     'auth/unauthorized-domain': 'This site isn’t allowed to sign in yet.',
   };
   return map[code] ?? 'Something went wrong. Try again.';

@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { create } from 'zustand';
-import { authMessage, resetPassword, signInEmail, signInGoogle, signUpEmail } from '../net/firebase';
+import { authMessage, linkEmail, linkGoogle, resetPassword, signInEmail, signInGoogle, signUpEmail } from '../net/firebase';
 import { claimUsername, submitBirthdate, useSession } from '../net/session';
 import { signOut } from '../net/firebase';
 import { randomUsername } from '../game/usernames';
+import { useGame } from '../game/store';
 import { Emoji } from './Icons';
 import { BootScreen } from './BootScreen';
 
@@ -305,6 +306,25 @@ function PickUsername() {
     setBusy(false);
   };
 
+  const guest = useSession((s) => !!s.user?.guest);
+  /** A guest is handed a random handle so nothing stands between them and the game; they can change it later. */
+  const [auto, setAuto] = useState(guest);
+  useEffect(() => {
+    if (!guest) return;
+    let live = true;
+    (async () => {
+      for (let i = 0; i < 6 && live; i++) {
+        const err = await claimUsername(randomUsername());
+        if (!err) return;
+        if (!/taken/i.test(err)) break;
+      }
+      if (live) setAuto(false);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [guest]);
+
   // They already picked one on the sign-up form: claim it without asking again (only falls back to this screen if it's taken).
   useEffect(() => {
     const pending = useAuthUi.getState().pendingUsername;
@@ -317,6 +337,8 @@ function PickUsername() {
       setBusy(false);
     });
   }, []);
+
+  if (auto) return <BootScreen status="Getting your player ready…" />;
 
   return (
     <div className="welcome">
@@ -354,6 +376,68 @@ function PickUsername() {
         </button>
       </form>
     </div>
+  );
+}
+
+/** Settings card for a guest: attach Google or an email to this same player so the life survives logging out or changing phone. */
+export function LinkAccount() {
+  const guest = useSession((s) => !!s.user?.guest);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!guest) return null;
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+      useGame.getState().toast('✅ Progress saved to your account');
+    } catch (e) {
+      setMsg(authMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (password.length < 8) return setMsg('Use at least 8 characters for your password.');
+    void run(() => linkEmail(email.trim(), password));
+  };
+
+  return (
+    <>
+      <h4>Save your progress</h4>
+      <div className="list-card">
+        <p className="muted small" style={{ padding: '4px 12px' }}>You are playing as a guest. Add Google or an email so you never lose this life, even on a new phone.</p>
+        <div className="row-btns" style={{ padding: '0 12px 12px' }}>
+          <button type="button" className="btn google" disabled={busy} onClick={() => void run(linkGoogle)}>
+            <GoogleMark /> Save with Google
+          </button>
+          {!open && (
+            <button type="button" className="btn" onClick={() => setOpen(true)}>
+              Use email
+            </button>
+          )}
+        </div>
+        {open && (
+          <form className="auth-card" onSubmit={submit}>
+            <label>
+              Email
+              <input type="email" required value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label>
+              Password
+              <input type="password" required minLength={8} value={password} autoComplete="new-password" onChange={(e) => setPassword(e.target.value)} />
+            </label>
+            <button className="btn big" disabled={busy}>{busy ? 'One moment…' : 'Save progress'}</button>
+          </form>
+        )}
+        {msg && <p className="auth-msg" style={{ padding: '0 12px 12px' }}>{msg}</p>}
+      </div>
+    </>
   );
 }
 
