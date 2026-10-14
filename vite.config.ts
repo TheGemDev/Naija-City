@@ -34,6 +34,15 @@ export default defineConfig({
   plugins: [
     react(),
     {
+      // A build with no Firebase config boots to an "invalid-api-key" error page. Fail the build instead, so the last good deploy stays live.
+      name: 'naija-require-firebase',
+      configResolved(config) {
+        if (config.command !== 'build') return;
+        const missing = ['API_KEY', 'AUTH_DOMAIN', 'PROJECT_ID', 'APP_ID'].filter((k) => !config.env[`VITE_FIREBASE_${k}`]);
+        if (missing.length) throw new Error(`Missing build variables: ${missing.map((k) => `VITE_FIREBASE_${k}`).join(', ')}. Set them in .env or the build environment.`);
+      },
+    },
+    {
       name: 'kaduna-build-commit',
       transformIndexHtml(html) {
         return html.replace('__KADUNA_BUILD_COMMIT__', buildId).replace('__KADUNA_BUILD_VERSION__', buildVersion);
