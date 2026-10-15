@@ -1,8 +1,11 @@
 // Aircraft seen from outside on the ground: the airliner on the stand and the business jet beside it
-// (AirportApron.tsx), and the same airliner shrunk onto the town map's airport (cityModels.tsx).
+// (AirportApron.tsx), the same airliner shrunk onto the town map's airport (cityModels.tsx), and the helicopter
+// you ride across the town map (City.tsx).
 // Built from the same kit as the plane you fly in (planeKit.tsx): lofted hulls, swept wings, real nacelles.
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { DoubleSide, type Group, type MeshStandardMaterial } from 'three';
 import { ALL_ROUND, Cap, Engine, Fin, Gear, Lamp, ringsBetween, Skin, smoothRings, Wing, type Ring } from './planeKit';
 
 const WHITE = '#f8fafc';
@@ -185,6 +188,156 @@ export function PrivateJet() {
       </group>
       <Gear at={[0, 0.7, -0.85]} ground={0} wheel={0.12} pair={0.07} />
       {[-0.75, 0.75].map((x) => <Gear key={x} at={[x, 0.78, -3.3]} ground={0} wheel={0.16} pair={0.1} />)}
+    </group>
+  );
+}
+
+const HELI_AXIS = 0.78;
+/** Tail tip to nose: a fat cabin pod that tapers straight into a thin boom, the boom riding up a little. */
+const HELI_RINGS: Ring[] = smoothRings([
+  [-2.55, 0, 0.2], [-2.5, 0.06, 0.2], [-1.9, 0.08, 0.18], [-1.2, 0.11, 0.15], [-0.85, 0.2, 0.1], [-0.55, 0.36, 0.05],
+  [-0.2, 0.47, 0.02], [0.2, 0.5, 0], [0.55, 0.46, -0.04], [0.85, 0.34, -0.1], [1.05, 0.16, -0.15], [1.12, 0, -0.17],
+], 4);
+/** The pod, the canopy and the cabin windows' share of the rings (fixed, so the lofts are built once). */
+const HELI_POD = ringsBetween(HELI_RINGS, -1.0, 1.12);
+const HELI_CANOPY = ringsBetween(HELI_RINGS, 0.15, 1.12);
+const HELI_CABIN = ringsBetween(HELI_RINGS, -0.5, 0.1);
+const HELI_STRIPE = ringsBetween(HELI_RINGS, -2.4, 0.95);
+const BELLY_ARC: [number, number] = [-0.9, 0.9];
+const CANOPY_ARC: [number, number] = [Math.PI - 1.6, Math.PI + 1.6];
+const POST_ARC: [number, number] = [Math.PI - 0.035, Math.PI + 0.035];
+const CABIN_ARCS: [number, number][] = [[1.6, 2.35], [-2.35, -1.6]];
+const STRIPE_ARCS: [number, number][] = [[at(-0.3), at(-0.14)], [-at(-0.14), -at(-0.3)]];
+/** Main rotor: radius, height of the hub off the ground, and full-speed turn in radians a second. */
+const ROTOR_R = 1.5;
+const ROTOR_Y = HELI_AXIS + 0.8;
+const ROTOR_SPEED = 24;
+
+/** Skid legs: where along the skid, and how high the belly is above it there. */
+const STRUTS: [z: number, top: number][] = [[0.4, 0.3], [-0.2, 0.36]];
+
+/**
+ * Light helicopter, nose towards +z, skids on y=0, about 3.7 long with a 3-wide rotor. A bubble canopy, a tapered
+ * boom with a stabiliser, fin and tail rotor, skids on swept legs. White with a red stripe for hire; `official` is
+ * the state's, green belly and stripe and a green-white-green fin. The rotors turn at `power.rpm` (0 still, 1 flying),
+ * or flat out when it isn't given; a blur disc fills in as they wind up.
+ */
+export function Helicopter({ official, power }: { official?: boolean; power?: { rpm: number } }) {
+  const trim = official ? GREEN : '#dc2626';
+  const belly = official ? GREEN : '#1f2937';
+  const rotor = useRef<Group>(null!);
+  const tail = useRef<Group>(null!);
+  const blur = useRef<MeshStandardMaterial>(null!);
+  useFrame((_, dt) => {
+    const rpm = power ? power.rpm : 1;
+    const step = Math.min(dt, 0.1) * rpm * ROTOR_SPEED;
+    rotor.current.rotation.y += step;
+    tail.current.rotation.x += step * 2.4;
+    blur.current.opacity = rpm * rpm * 0.18;
+  });
+  return (
+    <group>
+      <group position-y={HELI_AXIS}>
+        {/* Hull a touch narrower than it is tall, like a real cabin */}
+        <group scale-x={0.92}>
+          <Skin rings={HELI_RINGS} arc={ALL_ROUND} colour={WHITE} cast />
+          <Skin rings={HELI_POD} arc={BELLY_ARC} colour={belly} grow={0.006} />
+          {STRIPE_ARCS.map((arc, i) => <Skin key={i} rings={HELI_STRIPE} arc={arc} colour={trim} grow={0.01} />)}
+          <Skin rings={HELI_CANOPY} arc={CANOPY_ARC} colour="#1e3a5f" grow={0.008} glass={0.88} />
+          <Skin rings={HELI_CANOPY} arc={POST_ARC} colour={WHITE} grow={0.014} />
+          {CABIN_ARCS.map((arc, i) => <Skin key={i} rings={HELI_CABIN} arc={arc} colour={GLASS} grow={0.008} />)}
+        </group>
+        {/* Engine cowling over the cabin, the exhaust out the back */}
+        <mesh position={[0, 0.44, -0.3]} scale={[0.28, 0.18, 0.6]} castShadow>
+          <sphereGeometry args={[1, 16, 10]} />
+          <meshStandardMaterial color={WHITE} />
+        </mesh>
+        <mesh position={[0, 0.47, -0.88]} rotation-x={Math.PI / 2}>
+          <cylinderGeometry args={[0.07, 0.09, 0.18, 12]} />
+          <meshStandardMaterial color="#334155" metalness={0.6} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.66, -0.15]}>
+          <cylinderGeometry args={[0.045, 0.06, 0.22, 10]} />
+          <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.35} />
+        </mesh>
+        {/* Tail: a swept fin above the boom and a short skeg below, the stabiliser with end plates ahead of it */}
+        <Fin outline={[[-2.2, 0.22], [-2.48, 0.8], [-2.62, 0.8], [-2.56, 0.16]]} thick={0.05} colour={trim} />
+        {official && <Fin outline={[[-2.3, 0.42], [-2.39, 0.6], [-2.6, 0.6], [-2.58, 0.42]]} thick={0.07} colour={WHITE} />}
+        <Fin outline={[[-2.32, 0.16], [-2.48, -0.14], [-2.56, -0.14], [-2.56, 0.16]]} thick={0.04} colour={belly} />
+        <mesh position={[0, 0.17, -1.95]}>
+          <boxGeometry args={[0.9, 0.03, 0.2]} />
+          <meshStandardMaterial color={WHITE} />
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.45, 0.2, -1.97]}>
+            <boxGeometry args={[0.03, 0.2, 0.18]} />
+            <meshStandardMaterial color={trim} />
+          </mesh>
+        ))}
+        <Lamp at={[0, 0.82, -2.56]} colour="#ef4444" every={1.2} r={0.04} />
+        {/* Tail rotor on the left of the fin, turning across the boom */}
+        <group position={[0.09, 0.6, -2.5]}>
+          <group ref={tail}>
+            <mesh rotation-z={Math.PI / 2}>
+              <cylinderGeometry args={[0.04, 0.04, 0.08, 10]} />
+              <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.35} />
+            </mesh>
+            {[0, Math.PI / 2].map((a) => (
+              <mesh key={a} rotation-x={a}>
+                <boxGeometry args={[0.02, 0.56, 0.06]} />
+                <meshStandardMaterial color="#334155" />
+              </mesh>
+            ))}
+          </group>
+        </group>
+      </group>
+      {/* Main rotor: hub and two long blades crossed into four, with a faint disc when they're up to speed */}
+      <group position-y={ROTOR_Y}>
+        <group ref={rotor}>
+          <mesh>
+            <cylinderGeometry args={[0.1, 0.12, 0.08, 12]} />
+            <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.35} />
+          </mesh>
+          {[0, Math.PI / 2].map((a) => (
+            <mesh key={a} rotation-y={a} position-y={0.02} castShadow>
+              <boxGeometry args={[ROTOR_R * 2, 0.025, 0.13]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+          ))}
+        </group>
+        <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+          <circleGeometry args={[ROTOR_R, 32]} />
+          <meshStandardMaterial ref={blur} color="#1f2937" transparent opacity={0} depthWrite={false} side={DoubleSide} />
+        </mesh>
+      </group>
+      {/* Skids: a tube each side, turned up at the toe, on two swept legs from under the belly */}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <mesh position={[s * 0.42, 0.04, 0.05]} rotation-x={Math.PI / 2}>
+            <cylinderGeometry args={[0.03, 0.03, 1.25, 8]} />
+            <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+          </mesh>
+          <mesh position={[s * 0.42, 0.103, 0.765]} rotation-x={0.96}>
+            <cylinderGeometry args={[0.03, 0.03, 0.22, 8]} />
+            <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+          </mesh>
+          {STRUTS.map(([z, top]) => {
+            const rise = top - 0.04;
+            return (
+              <mesh key={z} position={[s * 0.32, 0.04 + rise / 2, z]} rotation-z={s * Math.atan2(0.2, rise)}>
+                <cylinderGeometry args={[0.025, 0.025, Math.hypot(0.2, rise), 8]} />
+                <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+              </mesh>
+            );
+          })}
+        </group>
+      ))}
+      {STRUTS.map(([z, top]) => (
+        <mesh key={z} position={[0, top, z]} rotation-z={Math.PI / 2}>
+          <cylinderGeometry args={[0.025, 0.025, 0.44, 8]} />
+          <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+        </mesh>
+      ))}
     </group>
   );
 }

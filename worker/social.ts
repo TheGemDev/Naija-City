@@ -356,7 +356,7 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
   const reactMsg = path.match(/^\/api\/messages\/(\d+)\/react$/);
   if (reactMsg && req.method === 'POST') {
     const b = await body<{ emoji?: string | null }>(req);
-    const emoji = b.emoji ?? null;
+    const emoji = b?.emoji ?? null;
     if (emoji !== null && !isReaction(emoji)) return err(400, 'Pick one of the reactions');
     const row = await db
       .prepare(
