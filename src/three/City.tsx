@@ -494,9 +494,12 @@ const KANO_KINDS: Vehicle['kind'][] = ['keke', 'car', 'keke', 'bus', 'keke', 'ca
 const KANO_COLOURS = ['#f8fafc', '#111827', '#a16207', '#1e3a8a', '#f8fafc', '#15803d'];
 const BASE_SPEED: Record<Vehicle['kind'], number> = { car: 3, bus: 2, keke: 2.1, bike: 3.8 };
 
-/** Kaduna's traffic is laid out by hand above. Any other city gets two vehicles on each main road: no keke in the capital, danfo in Lagos, keke everywhere in Kano. */
+/** Most vehicles a city has on its roads at once, so the streets stay busy without jamming. */
+const MAX_TRAFFIC = 10;
+
+/** Kaduna's traffic is laid out by hand above. Any other city gets one vehicle on each main road: no keke in the capital, danfo in Lagos, keke everywhere in Kano. */
 function trafficOf(map: CityMap): Vehicle[] {
-  if (map.id === 'kaduna') return VEHICLES;
+  if (map.id === 'kaduna') return VEHICLES.filter((_, i) => i % 3 !== 2).slice(0, MAX_TRAFFIC);
   const lagos = map.id === 'lagos';
   const kinds = lagos ? LAGOS_KINDS : map.id === 'kano' ? KANO_KINDS : ABUJA_KINDS;
   const colours = lagos ? LAGOS_COLOURS : map.id === 'kano' ? KANO_COLOURS : ABUJA_COLOURS;
@@ -505,14 +508,14 @@ function trafficOf(map: CityMap): Vehicle[] {
     // The stretch of the road that is on the island.
     const cells = Array.from({ length: horiz ? r.w : r.d }, (_, k) => (horiz ? r.x : r.z) + k).filter((a) => (horiz ? map.isRoad(a, r.z) : map.isRoad(r.x, a)));
     if (cells.length < 8) return [];
-    return [0, 1].map((k): Vehicle => {
+    return [i % 2].map((k): Vehicle => {
       const kind = kinds[(i * 2 + k) % kinds.length];
       return {
         kind, colour: kind === 'bus' ? (lagos ? DANFO : '') : colours[(i + k * 3) % colours.length], axis: horiz ? 'x' : 'z', line: (horiz ? r.z : r.x) + 1,
         from: cells[0] + 0.5, to: cells[cells.length - 1] + 0.5, speed: BASE_SPEED[kind] + ((i * 7 + k * 5) % 5) / 10, offset: i * 23 + k * 61,
       };
     });
-  });
+  }).slice(0, MAX_TRAFFIC);
 }
 
 /** Sized against the people on the map (0.85 tall): a saloon reaches their shoulder, a bus stands over them. Lanes are one tile wide. */
@@ -530,9 +533,9 @@ interface Drive {
   p: [number, number, number, number, number, number];
   t: number; len: number;
   x: number; z: number; yaw: number;
-  mode: 'road' | 'off' | 'fade';
-  /** Tiles left before it leaves the road (off the edge, or fading out where no road reaches the edge). */
-  left: number;
+  mode: 'road' | 'fade';
+  /** Tiles left before it fades away (at the edge of the map, or wherever it gave up looking for it), and how many it fades over. */
+  left: number; span: number;
   leaving: boolean;
   trips: number;
   limit: number;
@@ -540,8 +543,10 @@ interface Drive {
   speed: number;
   roll: number;
   turn: number;
-  /** 0 → 1 while one that appeared mid-map (a city with no road off the edge) fades in. */
+  /** 0 → 1 while it fades in where it appeared. */
   grow: number;
+  /** Seconds spent held up behind another vehicle; past a few it squeezes through (negative, counting back up) rather than jam. */
+  stuck: number;
 }
 
 const STEPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -579,9 +584,15 @@ function Traffic({ map }: { map: CityMap }) {
       for (let z = 0; z < map.h; z++) {
         if (!open(x, z)) continue;
         cells.push([x, z]);
-        for (const [dx, dz] of STEPS) if (!inBounds(x + dx, z + dz)) exits.push({ x, z, dx, dz });
+        // Only a road that runs off the edge is a way in or out: one running along the edge isn't.
+        for (const [dx, dz] of STEPS) {
+          if (!inBounds(x + dx, z + dz) && open(x - dx, z - dz) && open(x - dx * 2, z - dz * 2) && open(x - dx * 3, z - dz * 3)) exits.push({ x, z, dx, dz });
+        }
       }
     }
+    /** Nothing else is on or about to roll onto tile (x, z). */
+    const clear = (v: Drive, x: number, z: number, others: Drive[]) => others.every((o) => o === v || o.x === undefined || Math.hypot(o.x - (x + 0.5), o.z - (z + 0.5)) > 1.8);
+    const fadeOut = (v: Drive, tiles: number) => { v.mode = 'fade'; v.left = v.span = tiles; v.ex = v.dx; v.ez = v.dz; };
 
     /** Arrived in tile (cx, cz) heading (dx, dz): choose the way out of it. */
     const choose = (v: Drive) => {
@@ -589,14 +600,15 @@ function Traffic({ map }: { map: CityMap }) {
       v.trips++;
       if (!v.leaving && v.trips > v.limit) v.leaving = true;
       if (v.leaving) {
-        if (!exits.length || v.trips > v.limit + 90) { v.mode = 'fade'; v.left = 3; v.ex = v.dx; v.ez = v.dz; return; }
+        if (!exits.length || v.trips > v.limit + 90) { fadeOut(v, 3); return; }
         if (!v.exit) v.exit = exits[Math.floor(Math.random() * exits.length)];
-        if (v.cx === v.exit.x && v.cz === v.exit.z) { v.mode = 'off'; v.left = 10; v.ex = v.exit.dx; v.ez = v.exit.dz; return; }
+        // Fades away across the last tile of road, never out over the edge.
+        if (v.cx === v.exit.x && v.cz === v.exit.z) { fadeOut(v, 1); v.ex = v.exit.dx; v.ez = v.exit.dz; return; }
       }
       const ways = STEPS.filter(([x, z]) => !(x === -v.dx && z === -v.dz) && open(v.cx + x, v.cz + z));
       if (!ways.length) {
-        // End of the road: off the edge of the map, or round and back.
-        if (!inBounds(v.cx + v.dx, v.cz + v.dz)) { v.mode = 'off'; v.left = 10; v.ex = v.dx; v.ez = v.dz; return; }
+        // End of the road: fade away at the edge of the map, or round and back.
+        if (!inBounds(v.cx + v.dx, v.cz + v.dz)) { fadeOut(v, 1); return; }
         v.ex = -v.dx; v.ez = -v.dz;
         return;
       }
@@ -612,18 +624,22 @@ function Traffic({ map }: { map: CityMap }) {
       v.ex = best[0]; v.ez = best[1];
     };
 
-    const spawn = (v: Drive, fresh: boolean) => {
-      v.mode = 'road'; v.leaving = false; v.trips = 0; v.grow = fresh || exits.length ? 1 : 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0;
-      if (!fresh && exits.length) {
-        // Rolls in from beyond the edge of the map.
-        const e = exits[Math.floor(Math.random() * exits.length)];
-        // Further back or nearer, so ones arriving together don't stack on one spot.
-        const back = 5 + Math.floor(Math.random() * 6);
-        v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x + e.dx * back; v.cz = e.z + e.dz * back;
-      } else {
-        let placed = false;
+    const spawn = (v: Drive, fresh: boolean, others: Drive[]) => {
+      v.mode = 'road'; v.leaving = false; v.trips = 0; v.grow = fresh ? 1 : 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0; v.span = 1; v.stuck = 0;
+      let placed = false;
+      if (!fresh) {
+        // Comes in on a road at the edge of the map, fading in on the edge tile, wherever that is free.
+        for (let tries = 0; tries < 12 && exits.length && !placed; tries++) {
+          const e = exits[Math.floor(Math.random() * exits.length)];
+          if (!clear(v, e.x, e.z, others)) continue;
+          v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x; v.cz = e.z;
+          placed = true;
+        }
+      }
+      if (!placed) {
         for (let tries = 0; tries < 40 && cells.length && !placed; tries++) {
           const [x, z] = cells[Math.floor(Math.random() * cells.length)];
+          if (!clear(v, x, z, others)) continue;
           const ways = STEPS.filter(([dx, dz]) => open(x - dx, z - dz) || open(x + dx, z + dz));
           if (!ways.length) continue;
           [v.dx, v.dz] = ways[Math.floor(Math.random() * ways.length)];
@@ -635,16 +651,22 @@ function Traffic({ map }: { map: CityMap }) {
       choose(v);
       laneCurve(v);
       if (fresh) v.t = Math.random();
+      const [ax, az] = v.p;
+      v.x = ax; v.z = az;
     };
     return { inBounds, open, cells, exits, choose, spawn };
   }, [map]);
 
-  const drives = useMemo(() => vehicles.map((veh) => {
-    const v = { speed: veh.speed, p: [0, 0, 0, 0, 0, 0] } as unknown as Drive;
-    world.spawn(v, true);
-    v.speed = veh.speed;
-    return v;
-  }), [vehicles, world]);
+  const drives = useMemo(() => {
+    const out: Drive[] = [];
+    for (const veh of vehicles) {
+      const v = { speed: veh.speed, p: [0, 0, 0, 0, 0, 0] } as unknown as Drive;
+      world.spawn(v, true, out);
+      v.speed = veh.speed;
+      out.push(v);
+    }
+    return out;
+  }, [vehicles, world]);
 
   useFrame(({ clock }, delta) => {
     const dt = Math.min(delta, 0.1);
@@ -660,20 +682,26 @@ function Traffic({ map }: { map: CityMap }) {
       const bend = v.ex === v.dx && v.ez === v.dz ? 1 : v.ex === -v.dx && v.ez === -v.dz ? 0.4 : 0.6;
       let want = veh.speed * bend;
       const sy = Math.sin(v.yaw), cy = Math.cos(v.yaw);
-      for (let j = 0; j < drives.length; j++) {
-        if (j === i) continue;
-        const o = drives[j];
-        const ox = o.x - v.x, oz = o.z - v.z;
-        const ahead = ox * sy + oz * cy;
-        const side = ox * cy - oz * sy;
-        if (ahead > 0 && ahead < 1.3 && Math.abs(side) < 0.3 && Math.cos(o.yaw - v.yaw) > 0) want *= Math.max(0, (ahead - 0.55) / 0.75);
+      // Ones fading in or out don't hold anyone up, and nobody waits forever.
+      if (v.stuck >= 0) {
+        for (let j = 0; j < drives.length; j++) {
+          if (j === i) continue;
+          const o = drives[j];
+          if (o.mode === 'fade' || o.grow < 1) continue;
+          const ox = o.x - v.x, oz = o.z - v.z;
+          const ahead = ox * sy + oz * cy;
+          const side = ox * cy - oz * sy;
+          if (ahead > 0 && ahead < 1.3 && Math.abs(side) < 0.3 && Math.cos(o.yaw - v.yaw) > 0) want *= Math.max(0, (ahead - 0.55) / 0.75);
+        }
       }
+      v.stuck = v.stuck < 0 ? Math.min(0, v.stuck + dt) : want < veh.speed * 0.15 ? v.stuck + dt : Math.max(0, v.stuck - dt * 2);
+      if (v.stuck >= 3) v.stuck = -2;
       v.speed += (want - v.speed) * Math.min(1, dt * 3);
 
       v.t += (v.speed * dt) / v.len;
       while (v.t >= 1) {
         const over = (v.t - 1) * v.len;
-        if (v.mode !== 'road' && --v.left <= 0) { world.spawn(v, false); break; }
+        if (v.mode !== 'road' && --v.left <= 0) { world.spawn(v, false, drives); break; }
         v.cx += v.ex; v.cz += v.ez; v.dx = v.ex; v.dz = v.ez;
         world.choose(v);
         laneCurve(v);
@@ -697,7 +725,7 @@ function Traffic({ map }: { map: CityMap }) {
       const lean = Math.max(-0.4, Math.min(0.4, -v.turn * (veh.kind === 'bike' ? 0.12 : 0.02)));
       v.roll += (lean - v.roll) * Math.min(1, dt * 6);
       if (v.grow < 1) v.grow = Math.min(1, v.grow + dt);
-      const fade = (v.mode === 'fade' ? Math.max(0.01, Math.min(1, (v.left - 1 + (1 - v.t)) / 2)) : 1) * Math.max(0.01, v.grow);
+      const fade = (v.mode === 'fade' ? Math.max(0.01, Math.min(1, (v.left - 1 + (1 - v.t)) / v.span)) : 1) * Math.max(0.01, v.grow);
       g.scale.setScalar(TRAFFIC_SCALE[veh.kind] * fade);
       const ground = world.inBounds(Math.floor(v.x), Math.floor(v.z)) ? map.groundY(v.x, v.z) : 0;
       g.position.set(v.x, ground + bumpY, v.z);
