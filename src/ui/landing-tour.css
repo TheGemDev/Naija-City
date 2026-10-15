@@ -47,12 +47,12 @@
 .tour-cta strong { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
 .tour-cta p { margin: 0 0 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .tour-cta .auth-msg { text-align: left; }
-.tour-play { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border: 0; border-radius: 18px; background: linear-gradient(180deg, #22c55e, #15803d); color: #fff; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 8px 20px rgba(21, 128, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3); cursor: pointer; animation: tour-glow 2.4s ease-in-out infinite; }
+.tour-play { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border: 0; border-radius: 16px; background: #16a34a; color: #fff; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 4px 12px rgba(21, 128, 61, 0.25); cursor: pointer; transition: background 0.15s, transform 0.1s; }
 .tour-play span { display: inline-block; transition: transform 0.2s; }
+.tour-play:hover { background: #15803d; }
 .tour-play:hover span { transform: translateX(4px); }
 .tour-play:active { transform: scale(0.98); }
-.tour-play:disabled { animation: none; opacity: 0.85; cursor: default; }
-@keyframes tour-glow { 50% { box-shadow: 0 8px 28px rgba(34, 197, 94, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3); } }
+.tour-play:disabled { opacity: 0.85; cursor: default; }
 .tour-login { background: none; border: 0; padding: 6px; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
 .tour-login u { color: var(--ink); font-weight: 800; text-underline-offset: 3px; }
 .tour-fine { color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -60,4 +60,4 @@
 /* Tapping Play Now: the bars slip away and the map is left on its own while the game loads. */
 .landing.entering .tour-top { opacity: 0; transform: translateY(-12px); pointer-events: none; }
 .landing.entering .tour-foot { opacity: 0.0; transform: translate(-50%, 16px); pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .tour-play, .tour-where { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tour-where { animation: none; } }
