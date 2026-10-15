@@ -540,6 +540,8 @@ interface Drive {
   speed: number;
   roll: number;
   turn: number;
+  /** 0 → 1 while one that appeared mid-map (a city with no road off the edge) fades in. */
+  grow: number;
 }
 
 const STEPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -611,11 +613,13 @@ function Traffic({ map }: { map: CityMap }) {
     };
 
     const spawn = (v: Drive, fresh: boolean) => {
-      v.mode = 'road'; v.leaving = false; v.trips = 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0;
-      if (!fresh && exits.length && Math.random() < 0.75) {
+      v.mode = 'road'; v.leaving = false; v.trips = 0; v.grow = fresh || exits.length ? 1 : 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0;
+      if (!fresh && exits.length) {
         // Rolls in from beyond the edge of the map.
         const e = exits[Math.floor(Math.random() * exits.length)];
-        v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x + e.dx * 6; v.cz = e.z + e.dz * 6;
+        // Further back or nearer, so ones arriving together don't stack on one spot.
+        const back = 5 + Math.floor(Math.random() * 6);
+        v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x + e.dx * back; v.cz = e.z + e.dz * back;
       } else {
         let placed = false;
         for (let tries = 0; tries < 40 && cells.length && !placed; tries++) {
@@ -692,7 +696,8 @@ function Traffic({ map }: { map: CityMap }) {
       const bumpRoll = hit ? Math.sin(clock.elapsedTime * 24) * 0.06 : 0;
       const lean = Math.max(-0.4, Math.min(0.4, -v.turn * (veh.kind === 'bike' ? 0.12 : 0.02)));
       v.roll += (lean - v.roll) * Math.min(1, dt * 6);
-      const fade = v.mode === 'fade' ? Math.max(0.01, Math.min(1, (v.left - 1 + (1 - v.t)) / 2)) : 1;
+      if (v.grow < 1) v.grow = Math.min(1, v.grow + dt);
+      const fade = (v.mode === 'fade' ? Math.max(0.01, Math.min(1, (v.left - 1 + (1 - v.t)) / 2)) : 1) * Math.max(0.01, v.grow);
       g.scale.setScalar(TRAFFIC_SCALE[veh.kind] * fade);
       const ground = world.inBounds(Math.floor(v.x), Math.floor(v.z)) ? map.groundY(v.x, v.z) : 0;
       g.position.set(v.x, ground + bumpY, v.z);
