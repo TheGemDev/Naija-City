@@ -13,6 +13,7 @@ import { runCron } from './cron';
 import { MEDIA_KEY, readMedia, uploadMedia } from './media';
 import { SNAP_KEY, handleSnaps, readSnap } from './snaps';
 import { track } from './metrics';
+import { cityNow } from './state';
 import { applyEvents, ensureWallet, handleWallet } from './wallet';
 import { advance, loadState, saveStateStmts, unitsOf, verifyKnowledge } from './clock';
 import { forbesAssets, ownedCounts, ownsCar, trimItems } from './progress';
@@ -314,7 +315,7 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
     // before the save is held against what the player owns, or the purchases it shows would be undone as unpaid.
     const walletEvents = save?.walletEvents;
     if (save && typeof save === 'object') delete save.walletEvents;
-    if (Array.isArray(walletEvents) && walletEvents.length) await applyEvents(env.DB, user.uid, walletEvents);
+    if (Array.isArray(walletEvents) && walletEvents.length) await applyEvents(env.DB, user.uid, walletEvents, await cityNow(env, user.uid));
     // Two devices: the client says which cloud save it built on. If another device has saved since,
     // refuse and hand back the newer save rather than letting this one overwrite it.
     const base = Number(req.headers.get('X-Base-Saved-At'));

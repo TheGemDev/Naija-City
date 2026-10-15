@@ -60,7 +60,7 @@ function restore(): GameEvent[] {
 function reconcile() {
   if (serverBalance === null) return;
   // The server takes income tax off wages and hustles when it accepts them (worker/wallet.ts).
-  const rate = useGame.getState().taxRate;
+  const rate = useGame.getState().taxRate + useGame.getState().stateTax;
   const taxed = (e: GameEvent) => ((e.kind === 'work' || e.kind === 'gig') && e.amount > 0 ? Math.floor((e.amount * rate) / 100) : 0);
   const money = serverBalance + pending.reduce((a, e) => a + (e.kind === 'debt' ? 0 : e.amount - taxed(e)), 0);
   if (useGame.getState().money !== money) useGame.setState({ money });
@@ -89,8 +89,9 @@ export async function flushWalletNow(): Promise<void> {
     const batch = pending.slice(0, 100);
     const res = await api('/api/wallet/events', { method: 'POST', body: JSON.stringify({ events: batch }) });
     if (!res.ok) throw new Error(`${res.status}`);
-    const { balance, debt, rejected, taxRate, okadaBan } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; okadaBan?: string[] };
+    const { balance, debt, rejected, taxRate, stateTax, okadaBan } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; stateTax?: number; okadaBan?: string[] };
     if (taxRate !== undefined && taxRate !== useGame.getState().taxRate) useGame.setState({ taxRate });
+    if (stateTax !== undefined && stateTax !== useGame.getState().stateTax) useGame.setState({ stateTax });
     if (okadaBan) setOkadaBan(okadaBan);
     const done = new Set(batch.map((e) => e.id));
     pending = pending.filter((e) => !done.has(e.id));

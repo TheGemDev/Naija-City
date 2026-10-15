@@ -122,6 +122,10 @@ type ServerMsg =
   | GameEvent
   | FunEvent;
 
+/** When each player was last seen, so a quick reconnect (a server update drops everybody's connection) is not announced as someone arriving. */
+const lastSeen = new Map<string, number>();
+const REJOIN_QUIET_MS = 3 * 60_000;
+
 function addPlayer(p: RemoteInfo & Partial<{ area: Area; x: number; y: number; z: number; yaw: number; pose: NetPose }>) {
   useNet.setState((s) => ({ players: { ...s.players, [p.id]: { id: p.id, username: p.username, name: p.name, look: p.look } } }));
   if (p.x !== undefined && !remotePos.has(p.id)) remotePos.set(p.id, { area: p.area ?? 'home', x: p.x, y: p.y ?? 0, z: p.z ?? 0, yaw: p.yaw ?? 0, pose: p.pose ?? 'stand' });
@@ -133,6 +137,7 @@ function onMessage(m: ServerMsg) {
     useNet.setState({ myId: m.you, players: {}, bubbles: {} });
     syncGameClock(m.minutes);
     m.players.forEach(addPlayer);
+    for (const p of m.players) lastSeen.set(p.id, Date.now());
     if (m.replacedOther) {
       useNet.setState({ moving: true });
       setTimeout(() => void takeOver().finally(() => useNet.setState({ moving: false })), HANDOFF_WAIT);
@@ -141,9 +146,11 @@ function onMessage(m: ServerMsg) {
     syncGameClock(m.minutes);
   } else if (m.t === 'join') {
     addPlayer(m);
-    useGame.getState().toast(`👋🏾 @${m.username} is online`);
+    if (Date.now() - (lastSeen.get(m.id) ?? 0) > REJOIN_QUIET_MS) useGame.getState().toast(`👋🏾 @${m.username} is online`);
+    lastSeen.set(m.id, Date.now());
   } else if (m.t === 'move') {
     remotePos.set(m.id, { area: m.area, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pose: m.pose });
+    lastSeen.set(m.id, Date.now());
   } else if (m.t === 'lobby') {
     myLobby = { area: m.area, lobby: m.lobby };
   } else if (m.t === 'here') {

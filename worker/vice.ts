@@ -3,6 +3,8 @@
 //
 // Money never moves on the client's say-so here: every payment goes through the wallet ledger.
 
+import { conditionOf, homeCity, lawsOf } from './state';
+import { hospitalFactor } from '../src/game/treasury';
 import type { FirebaseUser } from './auth';
 import { MAX_RANSOM_PLEDGE } from './limits';
 import { applyStmts, ensureWallet, getBalance } from './wallet';
@@ -21,6 +23,13 @@ import {
   type GoodId, type OpDef,
 } from '../src/game/vice';
 import { notifyPlayer, whereIs } from './shards';
+
+/** A hospital bill, dearer when the state the patient lives in has let its hospital run down. */
+const hospitalPrice = async (db: D1Database, uid: string, bill: number) => {
+  const city = await homeCity(db, uid);
+  // Dearer when the hospital has run down, and by whatever fee the state sets.
+  return Math.round(bill * hospitalFactor(await conditionOf(db, city, 'hospital')) * ((await lawsOf(db, city)).hospitalFee / 100));
+};
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -535,7 +544,7 @@ export async function handleVice(req: Request, env: Env, ctx: ExecutionContext, 
     const until = before + GOOD_BY_ID[good].highMin * 60_000;
     await db.prepare('UPDATE players SET high_until = ? WHERE uid = ?').bind(until, me).run();
     if ((before - now) / 60_000 > PLUG.overdoseAtMin && rand() < PLUG.overdoseChance) {
-      const bill = await transfer(db, me, null, PLUG.hospitalBill, 'hospital', '', `od:${me}:${now}`);
+      const bill = await transfer(db, me, null, await hospitalPrice(db, me, PLUG.hospitalBill), 'hospital', '', `od:${me}:${now}`);
       await db.prepare('UPDATE players SET high_until = NULL WHERE uid = ?').bind(me).run();
       const who = (await usernames(db, [me])).get(me);
       await postFeed(db, me, 'vice', '🚑', `${handle(who)} passed out on the street and was rushed to hospital. Too much of a good thing. 🚑`);
@@ -901,7 +910,7 @@ export async function handleVice(req: Request, env: Env, ctx: ExecutionContext, 
     const pay = row.reward - cut;
     if (row.kind === 'hit') {
       await db.prepare(`UPDATE contracts SET status = 'done' WHERE id = ? AND status = 'taken'`).bind(row.id).run();
-      const bill = Math.min(CONTRACT.hospitalCap, Math.round((await getBalance(db, row.target_uid)) * CONTRACT.hospitalPct));
+      const bill = await hospitalPrice(db, row.target_uid, Math.min(CONTRACT.hospitalCap, Math.round((await getBalance(db, row.target_uid)) * CONTRACT.hospitalPct)));
       const paid = bill > 0 ? await transfer(db, row.target_uid, null, bill, 'hospital', '', `hit:${row.id}`) : 0;
       await Promise.all([credit(db, me, `contract-pay:${row.id}`, 'contract', String(row.id), pay), bumpVice(db, me, 2).run()]);
       tell(env, ctx, row.target_uid, 'hurt', `🤕 You were jumped by thugs and beaten badly. Hospital bill: ${naira(paid)}.`, { bill: paid });

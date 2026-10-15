@@ -1,7 +1,7 @@
 // The airport's flight desk: a pill while you are in the terminal, and the sheet it opens, where you pick
 // a ticketed flight or your own jet (game/cars.ts) to another city.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { findAction, flightOf, naira, useGame } from '../game/store';
 import { CABIN_MENU, useCabin } from '../game/cabin';
 import { JET_BY_ID, jetFlightsLeft, jetFuelLeft, jetRefuelCost, jetServiceCost, jetToFly } from '../game/cars';
@@ -115,6 +115,8 @@ export function FlightDesk() {
   const service = useGame((s) => (jetId ? jetServiceCost(s.jetWear, jetId) : 0));
   // Redraw when the treasury changes: an office holder flies the state's jet while the budget covers it.
   useCivic((s) => s.data);
+  // The destination being looked at: one tab per city you can fly to.
+  const [dest, setDest] = useState<string | null>(null);
   const wraps = useVice((s) => Object.values(s.plug?.stash ?? {}).reduce((a, n) => a + n, 0));
   if (!open) return null;
   const g = useGame.getState();
@@ -125,6 +127,36 @@ export function FlightDesk() {
     .filter((a) => a.effect === 'travel' && a.destination)
     .map((f) => ({ f, office: f.jet ? stateRide(f.cost ?? 0) : null }));
   const tickets = flights.filter(({ f, office }) => !f.jet || jet || office);
+  const cities = [...new Set(flights.map(({ f }) => f.destination as string))];
+  const shownCity = cities.find((c) => c === dest) ?? cities[0];
+  const here = tickets.filter(({ f }) => f.destination === shownCity);
+  const seats = here.filter(({ f }) => !f.jet);
+  const privateJets = here.filter(({ f }) => f.jet);
+  const renderTicket = ({ f, office }: (typeof tickets)[number]) => {
+    const to = regionOf(f.destination);
+    const fly = () => { close(); g.startPlaceAction(AIRPORT_ID, f.id); };
+    // One price and one button: the trip, or what your jet needs before it can make it.
+    const step = office ? { price: 0, label: 'Fly', go: fly }
+      : f.jet && jetId && fuel < 1 ? { price: refuel, label: 'Refuel', go: () => g.refuelJet(jetId) }
+      : f.jet && jetId && flightsLeft < 1 ? { price: service, label: 'Service', go: () => g.serviceJet(jetId) }
+      : { price: f.cost ?? 0, label: f.jet ? 'Fly' : 'Buy', go: fly };
+    return (
+      <div key={f.id} className={`ticket ${f.jet ? 'jet' : ''}`}>
+        <div className="ticket-main">
+          <div className="ticket-route">
+            <span><b>{AIRPORT_CODE[from.id]}</b><small>{from.name}</small></span>
+            <i><Emoji char={f.jet ? '🛩️' : '✈️'} size={16} /></i>
+            <span><b>{AIRPORT_CODE[to.id]}</b><small>{to.name}</small></span>
+          </div>
+          <small>{flightTime(f.minutes)} · {office ? STATE_FLEET[office].jet : f.jet && jet ? `⛽ ${fuel} · ${jet.name}` : 'One-way'}</small>
+        </div>
+        <div className="ticket-stub">
+          <b>{office ? 'State pays' : naira(step.price)}</b>
+          <button type="button" className="btn sm go" disabled={money < step.price} onClick={step.go}>{step.label}</button>
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="sheet place-sheet flight-desk" role="dialog" aria-label="Flight desk">
       <div className="sheet-head">
@@ -136,32 +168,23 @@ export function FlightDesk() {
           <Emoji char="🚨" size={18} /> NDLEA searches ticketed flights. You have {wraps} wrap{wraps === 1 ? '' : 's'} on you.
         </p>
       )}
+      {cities.length > 1 && (
+        <div className="flight-tabs" role="tablist" aria-label="Where to">
+          {cities.map((c) => (
+            <button key={c} type="button" role="tab" aria-selected={c === shownCity} className={c === shownCity ? 'on' : ''} onClick={() => setDest(c)}>
+              <b>{AIRPORT_CODE[regionOf(c).id]}</b> {regionOf(c).name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="tickets">
-        {tickets.map(({ f, office }) => {
-          const to = regionOf(f.destination);
-          const fly = () => { close(); g.startPlaceAction(AIRPORT_ID, f.id); };
-          // One price and one button: the trip, or what your jet needs before it can make it.
-          const step = office ? { price: 0, label: 'Fly', go: fly }
-            : f.jet && jetId && fuel < 1 ? { price: refuel, label: 'Refuel', go: () => g.refuelJet(jetId) }
-            : f.jet && jetId && flightsLeft < 1 ? { price: service, label: 'Service', go: () => g.serviceJet(jetId) }
-            : { price: f.cost ?? 0, label: f.jet ? 'Fly' : 'Buy', go: fly };
-          return (
-            <div key={f.id} className={`ticket ${f.jet ? 'jet' : ''}`}>
-              <div className="ticket-main">
-                <div className="ticket-route">
-                  <span><b>{AIRPORT_CODE[from.id]}</b><small>{from.name}</small></span>
-                  <i><Emoji char={f.jet ? '🛩️' : '✈️'} size={16} /></i>
-                  <span><b>{AIRPORT_CODE[to.id]}</b><small>{to.name}</small></span>
-                </div>
-                <small>{flightTime(f.minutes)} · {office ? STATE_FLEET[office].jet : f.jet && jet ? `⛽ ${fuel} · ${jet.name}` : 'One-way'}</small>
-              </div>
-              <div className="ticket-stub">
-                <b>{office ? 'State pays' : naira(step.price)}</b>
-                <button type="button" className="btn sm go" disabled={money < step.price} onClick={step.go}>{step.label}</button>
-              </div>
-            </div>
-          );
-        })}
+        {seats.map(renderTicket)}
+        {privateJets.length > 0 && (
+          <>
+            <div className="flight-divider"><span>Private jet</span></div>
+            {privateJets.map(renderTicket)}
+          </>
+        )}
       </div>
       {tickets.length < flights.length && (
         <button type="button" className="ghost-btn flight-jet" onClick={() => { close(); useGame.setState({ panel: 'phone', openApp: 'cars' }); }}>

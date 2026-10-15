@@ -15,6 +15,8 @@
 // A burglary nobody saw is unsolved: the owner isn't told who did it. They can accuse up to three players
 // (once per case); if the thief is one of them, the item goes back to the owner and the thief is arrested.
 
+import { POLICE_KEEP_MS } from './prune';
+import { stateRevenue } from './state';
 import type { FirebaseUser } from './auth';
 import { handle, naira, postFeed } from './feed';
 import { searchPhone } from './phoneSearch';
@@ -331,7 +333,7 @@ export async function transfer(db: D1Database, from: string, to: string | null, 
   ]);
   const paid = results[7].results[0]?.amount ?? 0;
   // Fines, bail and the like are paid to nobody: that nobody is the state, so the treasury keeps them.
-  if (!to && paid > 0 && STATE_KINDS.has(kindOut)) await db.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(paid).run();
+  if (!to && paid > 0 && STATE_KINDS.has(kindOut)) await stateRevenue(db, from, paid).run();
   return paid;
 }
 
@@ -822,9 +824,9 @@ export async function handleCrime(req: Request, env: Env, ctx: ExecutionContext,
       .prepare(
         `SELECT c.*, t.username AS thief, v.username AS victim, o.username AS officer FROM crimes c
          LEFT JOIN players t ON t.uid = c.thief_uid LEFT JOIN players v ON v.uid = c.victim_uid LEFT JOIN players o ON o.uid = c.officer_uid
-         WHERE c.victim_uid = ?1 OR c.thief_uid = ?1 ORDER BY c.id DESC LIMIT 60`,
+         WHERE (c.victim_uid = ?1 OR c.thief_uid = ?1) AND (c.created_at > ?2 OR c.status = 'wanted') ORDER BY c.id DESC LIMIT 60`,
       )
-      .bind(me)
+      .bind(me, Date.now() - POLICE_KEEP_MS)
       .all<NamedRow>();
     const [wanted, custody, officer, protection] = await Promise.all([loadWanted(env, me), loadCustody(db), isOfficer(db, me), loadProtection(db, me)]);
     return json({

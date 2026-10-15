@@ -239,7 +239,10 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
   if (path === '/api/invite' && req.method === 'POST') {
     const b = await body<{ to?: string }>(req);
     if (!b?.to) return err(400, 'Choose a player to invite');
-    return send(env, ctx, me, b.to, { kind: 'invite', text: 'Invited you to visit their house', status: 'open' });
+    // Where the house is goes on the card, so the guest sees the state before they set off (src/game/visits.ts inviteSpot).
+    const mine = await houseOf(db, me);
+    const spot = 'home' in mine ? `home:${mine.home.city ?? 'kaduna'}|${mine.home.region ?? ''}|${mine.home.slot ?? ''}` : 'Invited you to visit their house';
+    return send(env, ctx, me, b.to, { kind: 'invite', text: spot, status: 'open' });
   }
 
   if (path === '/api/visit/request' && req.method === 'POST') {
@@ -596,6 +599,22 @@ export async function sendGameChallenge(env: Env, ctx: ExecutionContext, from: s
     .first<MessageRow>();
   notify(env, ctx, to, { t: 'dm', message: toMessage(row!), from: { uid: from, username: sender.username, name: sender.name } });
   sendPush(env, ctx, to, { title: `@${sender.username} challenges you`, body: 'Open Games on your phone to answer.', tag: `message-${from}`, category: 'invites', chatUid: from });
+}
+
+/** A plain message from one player that the game wrote for them (the looting case in worker/loot.ts). Never throws. */
+export async function sendCaseNote(env: Env, ctx: ExecutionContext | undefined, from: string, to: string, text: string) {
+  try {
+    const sender = await playerByUid(env, from);
+    if (!sender?.username) return;
+    const row = await env.DB.prepare(`INSERT INTO messages (from_uid, to_uid, kind, text, created_at) VALUES (?, ?, 'text', ?, ?) RETURNING *`)
+      .bind(from, to, text.slice(0, 280), Date.now())
+      .first<MessageRow>();
+    if (!ctx) return;
+    notify(env, ctx, to, { t: 'dm', message: toMessage(row!), from: { uid: from, username: sender.username, name: sender.name } });
+    sendPush(env, ctx, to, { title: `Message from @${sender.username}`, body: 'Tap to open your chat.', tag: `message-${from}`, category: 'messages', chatUid: from });
+  } catch (error) {
+    console.error('case note failed', error);
+  }
 }
 
 /** Asking someone out, or proposing (worker/hangout.ts), lands in their chat as a card they can answer. `text` says which. */

@@ -22,6 +22,8 @@ const UNPAID_KEEP_MS = 7 * DAY_MS;
 /** Closed EFCC cases, old elections, quest claims, shard assignments. */
 const RECORD_KEEP_MS = 30 * DAY_MS;
 const POTHOLE_FIXES_KEEP = 50;
+/** The Police app shows three days of reports and arrests, then they are gone (a warrant still out, or loot a thief still holds, is kept). */
+export const POLICE_KEEP_MS = 3 * DAY_MS;
 
 export async function pruneOldData(db: D1Database, now: number) {
   const done = now - DONE_KEEP_MS;
@@ -75,6 +77,12 @@ export async function pruneOldData(db: D1Database, now: number) {
     /* ----- Checkouts nobody paid for ----- */
     db.prepare(`DELETE FROM orders WHERE status = 'pending' AND created_at < ?`).bind(unpaid),
     db.prepare(`DELETE FROM ads WHERE status IN ('awaiting_payment', 'removed') AND paid_at IS NULL AND created_at < ?`).bind(unpaid),
+
+    /* ----- Police history. Wanted rows are live warrants; a burglar's unrecovered loot is how the black market knows what is in hand. ----- */
+    db.prepare(
+      `DELETE FROM crimes WHERE created_at < ? AND status != 'wanted'
+         AND NOT (kind = 'burglary' AND success = 1 AND item IS NOT NULL AND held = 1 AND COALESCE(recovered, 0) = 0)`,
+    ).bind(now - POLICE_KEEP_MS),
 
     /* ----- Records. A conviction stays while its seized property can still be bought back. ----- */
     db.prepare(

@@ -4,7 +4,7 @@
 
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFrame, type ThreeElements } from '@react-three/fiber';
-import { CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, LatheGeometry, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
+import { CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, LatheGeometry, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TubeGeometry, Vector2, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
 import { decodeLook, GARMENT_BY_ID, HAIR_COLORS, isFullOutfit, SKINS, type Appearance, type Body, type Garment, type Pattern } from '../game/wardrobe';
 import type { ActivityAnimation } from '../game/catalog';
 
@@ -105,34 +105,38 @@ function geo(key: string, make: () => BufferGeometry) {
   if (!g) geoms.set(key, (g = make()));
   return g;
 }
-const capsule = (r: number, len: number) => geo(`cap:${r}:${len}`, () => new CapsuleGeometry(r, len, 4, 10));
+const capsule = (r: number, len: number) => geo(`cap:${r}:${len}`, () => new CapsuleGeometry(r, len, 8, 20));
 /** A limb: rounded at both ends, thicker at the top. `len` is the straight part between the ends. */
 const taper = (rTop: number, rBot: number, len: number) =>
   geo(`taper:${rTop}:${rBot}:${len}`, () => {
     const pts: Vector2[] = [];
-    for (let i = 0; i <= 4; i++) {
-      const a = -Math.PI / 2 + (i / 4) * (Math.PI / 2);
+    for (let i = 0; i <= 8; i++) {
+      const a = -Math.PI / 2 + (i / 8) * (Math.PI / 2);
       pts.push(new Vector2(Math.max(0.0001, rBot * Math.cos(a)), -len / 2 + rBot * Math.sin(a)));
     }
-    for (let i = 0; i <= 4; i++) {
-      const a = (i / 4) * (Math.PI / 2);
+    for (let i = 0; i <= 8; i++) {
+      const a = (i / 8) * (Math.PI / 2);
       pts.push(new Vector2(Math.max(0.0001, rTop * Math.cos(a)), len / 2 + rTop * Math.sin(a)));
     }
-    return new LatheGeometry(pts, 12);
+    return new LatheGeometry(pts, 24);
   });
-const sphere = (r: number) => geo(`sph:${r}`, () => new SphereGeometry(r, 14, 10));
+const sphere = (r: number) => geo(`sph:${r}`, () => new SphereGeometry(r, 28, 20));
 /** Lathe outlines are written top-down or bottom-up; faces only point outwards when they go bottom-up. */
-const lathe = (key: string, pts: [number, number][], seg = 14) =>
+const lathe = (key: string, pts: [number, number][], seg = 32) =>
   geo(`lathe:${key}`, () => {
     const up = pts[0][1] <= pts[pts.length - 1][1] ? pts : [...pts].reverse();
     return new LatheGeometry(up.map(([r, y]) => new Vector2(r, y)), seg);
   });
 
 // Torso outlines as (radius, height) from the hips up; flattened front-to-back when drawn.
-const TORSO: Record<Body, [number, number][]> = {
+/** Resamples an outline through a spline so a lathe of it reads round instead of ringed. */
+const smoothOutline = (pts: [number, number][], per = 4): [number, number][] =>
+  new SplineCurve(pts.map(([r, y]) => new Vector2(r, y))).getPoints((pts.length - 1) * per).map((v) => [Math.max(0, v.x), v.y]);
+const TORSO_RAW: Record<Body, [number, number][]> = {
   m: [[0, -0.04], [0.15, -0.035], [0.16, 0.04], [0.148, 0.17], [0.162, 0.3], [0.182, 0.4], [0.19, 0.45], [0.165, 0.5], [0.09, 0.545], [0, 0.55]],
   f: [[0, -0.04], [0.165, -0.035], [0.172, 0.04], [0.124, 0.19], [0.142, 0.29], [0.152, 0.36], [0.148, 0.43], [0.152, 0.46], [0.12, 0.51], [0.07, 0.54], [0, 0.545]],
 };
+const TORSO: Record<Body, [number, number][]> = { m: smoothOutline(TORSO_RAW.m), f: smoothOutline(TORSO_RAW.f) };
 const TORSO_DEPTH = 0.66;
 /** A strip of the torso's own surface down the front, beside one arm (s = -1 left, 1 right), a hair proud of it. */
 const sidePanel = (body: Body, s: number) =>
@@ -877,7 +881,7 @@ function Torso({ a, top, color, skin, bag }: { a: Appearance; top?: Garment; col
       {shape === 'agbada' && (
         // The big flowing outer robe draped from the shoulders, open at the front.
         <>
-          <M color={color} double geometry={lathe('agbada', [[0.26, -0.4], [0.25, -0.1], [0.24, 0.3], [0.24, 0.43], [0.13, 0.52]], 16)} scale={[1.12, 1, 0.72]} position={[0, 0, -0.005]} />
+          <M color={color} double geometry={lathe('agbada', [[0.26, -0.4], [0.25, -0.1], [0.24, 0.3], [0.24, 0.43], [0.13, 0.52]], 32)} scale={[1.12, 1, 0.72]} position={[0, 0, -0.005]} />
           {/* Embroidered chest panel */}
           <M color={accent} position={[0, 0.36, 0.175]}>
             <boxGeometry args={[0.13, 0.2, 0.006]} />
@@ -1009,10 +1013,10 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
 }
 
 /** Upper half of a sphere, for scalps and caps. */
-const dome = (r: number, cut = 0.5) => geo(`dome:${r}:${cut}`, () => new SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI * cut));
+const dome = (r: number, cut = 0.5) => geo(`dome:${r}:${cut}`, () => new SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI * cut));
 
 /** A cap of hair over the skull. `cut` is how far down it comes; it is tipped back so the hairline is high on the forehead and low on the nape. */
-const scalp = (r: number, cut: number) => geo(`scalp:${r}:${cut}`, () => new SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI * cut));
+const scalp = (r: number, cut: number) => geo(`scalp:${r}:${cut}`, () => new SphereGeometry(r, 36, 20, 0, Math.PI * 2, 0, Math.PI * cut));
 const HAIRLINE = 0.6;
 
 function Hair({ style, color, skin, capped }: { style: Appearance['hair']; color: string; skin: string; capped: boolean }) {
@@ -1150,17 +1154,17 @@ function HeadWear({ g }: { g: Garment }) {
       return (
         <>
           <M color={g.color} position={[0, 0.115, -0.005]}>
-            <cylinderGeometry args={[0.128, 0.142, 0.12, 16]} />
+            <cylinderGeometry args={[0.128, 0.142, 0.12, 32]} />
           </M>
           <M color={accent} position={[0, 0.09, -0.005]}>
-            <cylinderGeometry args={[0.144, 0.144, 0.025, 16]} />
+            <cylinderGeometry args={[0.144, 0.144, 0.025, 32]} />
           </M>
         </>
       );
     case 'fila':
       return (
         <M color={g.color} position={[0.03, 0.12, -0.01]} rotation={[0, 0, -0.35]}>
-          <cylinderGeometry args={[0.1, 0.145, 0.14, 16]} />
+          <cylinderGeometry args={[0.1, 0.145, 0.14, 32]} />
         </M>
       );
     case 'beanie':
@@ -1181,7 +1185,7 @@ function HeadWear({ g }: { g: Garment }) {
       return (
         <>
           {/* Wraps the head and frames the face (open at the front). */}
-          <M color={g.color} double geometry={geo('hijab', () => new SphereGeometry(0.16, 18, 12, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5))} position={[0, 0.0, -0.01]} scale={[0.95, 1.08, 1]} />
+          <M color={g.color} double geometry={geo('hijab', () => new SphereGeometry(0.16, 32, 20, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5))} position={[0, 0.0, -0.01]} scale={[0.95, 1.08, 1]} />
           <M color={g.color} geometry={lathe('hijab-drape', [[0.09, 0.02], [0.13, -0.08], [0.22, -0.2], [0.001, -0.2]])} position={[0, -0.09, -0.01]} scale={[1, 1, 0.8]} />
         </>
       );
@@ -1189,7 +1193,7 @@ function HeadWear({ g }: { g: Garment }) {
       return (
         <>
           <M color={g.color} position={[0, 0.07, -0.005]}>
-            <cylinderGeometry args={[0.155, 0.15, 0.13, 16]} />
+            <cylinderGeometry args={[0.155, 0.15, 0.13, 32]} />
           </M>
           <M color={g.color} geometry={dome(0.14)} position={[0, 0.13, -0.005]} />
           {/* The veil wrapped under the chin */}
@@ -1211,7 +1215,7 @@ function HeadWear({ g }: { g: Garment }) {
       return (
         <>
           <M color={g.color} pat={patOf(g)} position={[0, 0.09, -0.005]}>
-            <cylinderGeometry args={[0.13, 0.15, 0.1, 16]} />
+            <cylinderGeometry args={[0.13, 0.15, 0.1, 32]} />
           </M>
           <M color={g.color} pat={patOf(g)} position={[0, 0.045, -0.005]}>
             <cylinderGeometry args={[0.215, 0.215, 0.012, 20]} />
@@ -1366,7 +1370,7 @@ function CargoPockets({ color, f }: { color: string; f: boolean }) {
   );
 }
 
-const disc = (r: number) => geo(`disc:${r}`, () => new CylinderGeometry(r, r, 0.005, 16).rotateX(Math.PI / 2));
+const disc = (r: number) => geo(`disc:${r}`, () => new CylinderGeometry(r, r, 0.005, 32).rotateX(Math.PI / 2));
 const TINTED = new Set(['shades', 'aviator', 'sport']);
 
 function Eyes({ g }: { g?: Garment }) {

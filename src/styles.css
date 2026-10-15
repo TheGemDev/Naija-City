@@ -638,6 +638,9 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .place-label b { font-weight: 700; color: var(--ink); display: inline; line-height: 1; pointer-events: none; }
 .place-label:hover, .place-label.on { transform: scale(1.12); background: #facc15; }
 .place-label.closed { opacity: 0.6; }
+.place-broken { margin: 0; padding: 8px 10px; border-radius: 12px; background: #fee2e2; color: #b91c1c; font-size: 12px; font-weight: 700; }
+.place-label .place-fix { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 99px; background: #fee2e2; color: #b91c1c; font-size: 10px; font-style: normal; font-weight: 800; pointer-events: none; }
+.place-label .place-fix.gov { background: #f59e0b; color: #fff; }
 .place-label.home { z-index: 2; background: #16a34a; display: inline-flex !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; gap: 5px; padding: 3px 8px 3px 5px; border-radius: 99px; }
 .place-label.home span { font-size: 15px; }
 .place-label.home b { color: #fff; display: inline !important; }
@@ -2139,61 +2142,6 @@ body.high .scene-wrap { animation: high-sway 6s ease-in-out infinite; }
 
 
 /* Elections: office cards, candidates, campaign tiles (src/ui/Election.tsx) */
-.ev-board { display: grid; gap: 14px; margin: 8px 0; text-align: left; }
-.ev-card { --c1: #16a34a; --c2: #166534; background: var(--bg-ffffff); border-radius: 20px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); overflow: hidden; }
-.ev-president { --c1: #22c55e; --c2: #166534; }
-.ev-governor { --c1: #3b82f6; --c2: #1e3a8a; }
-.ev-minister { --c1: #14b8a6; --c2: #134e4a; }
-.ev-lagosgov { --c1: #0ea5e9; --c2: #0c4a6e; }
-.ev-igp { --c1: #6366f1; --c2: #1e1b4b; }
-.ev-efcc { --c1: #f43f5e; --c2: #881337; }
-.ev-head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; }
-.ev-icon { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3)); }
-.ev-title { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.ev-title b { font-size: 15px; }
-.ev-title small { font-size: 11px; opacity: 0.85; }
-.ev-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
-.ev-chip { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.22); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.ev-chip.live { background: var(--bg-ffffff); color: var(--c2); animation: ev-pulse 2s ease-in-out infinite; }
-@keyframes ev-pulse { 50% { box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.35); } }
-.ev-holder { display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 12px; color: var(--fg-475569); border-bottom: 1px solid var(--bd-eef2f7); }
-.ev-holder small { color: #94a3b8; }
-.ev-avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; font-weight: 800; font-size: 14px; }
-.ev-avatar.sm { width: 24px; height: 24px; font-size: 11px; }
-.ev-avatar { overflow: hidden; }
-.ev-avatar .convo-avatar { background: none; }
-.ev-race { display: grid; gap: 8px; padding: 12px 14px 4px; }
-.ev-cand { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 14px; background: var(--bg-f8fafc); }
-.ev-cand.me { box-shadow: inset 0 0 0 2px var(--c1); background: var(--bg-ffffff); }
-.ev-cand.lead { background: linear-gradient(90deg, var(--bg-fffbeb), var(--bg-f8fafc)); }
-.ev-rank { width: 20px; text-align: center; font-size: 14px; font-weight: 800; color: #94a3b8; }
-.ev-cinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ev-cinfo b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev-cinfo small { color: var(--fg-64748b); font-size: 11px; }
-.ev-bar, .ev-meter { display: block; height: 7px; border-radius: 99px; background: var(--bg-e2e8f0); overflow: hidden; }
-.ev-bar i, .ev-meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--c1), var(--c2)); transition: width 0.5s ease; }
-.ev-vote { padding: 8px 14px; border-radius: 99px; background: var(--c2); color: #fff; font-size: 12px; font-weight: 800; }
-.ev-vote.done { background: var(--bg-dcfce7); color: var(--fg-166534); }
-.ev-vote:disabled { cursor: default; }
-.ev-cta { display: flex; justify-content: space-between; align-items: center; width: calc(100% - 28px); margin: 10px 14px 14px; padding: 13px 16px; border-radius: 16px; background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; font-size: 14px; font-weight: 800; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25); }
-.ev-cta b { background: rgba(255, 255, 255, 0.22); padding: 3px 10px; border-radius: 99px; font-size: 12px; }
-.ev-cta:disabled { opacity: 0.45; box-shadow: none; }
-.ev-note { margin: 0; padding: 10px 14px 14px; font-size: 12px; color: var(--fg-64748b); }
-.ev-campaign { margin: 8px 14px 14px; padding: 12px; border-radius: 16px; background: var(--bg-f1f5f9); }
-.ev-camp-head { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
-.ev-camp-head .ev-meter { flex: 1; }
-.ev-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.ev-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px 10px; border-radius: 16px; background: var(--bg-ffffff); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); text-align: center; transition: transform 0.12s; }
-.ev-tile:active:not(:disabled) { transform: scale(0.95); }
-.ev-tile:disabled { opacity: 0.45; }
-.ev-tile-icon { font-size: 26px; }
-.ev-tile b { font-size: 12px; }
-.ev-tile small { color: var(--fg-16a34a); font-weight: 700; font-size: 11px; }
-.ev-price { margin-top: 3px; padding: 2px 9px; border-radius: 99px; background: var(--bg-e2e8f0); font-size: 11px; font-weight: 700; }
-.ev-tile.shady { background: linear-gradient(160deg, #1c1917, #450a0a); color: #fecaca; }
-.ev-tile.shady small { color: #fca5a5; }
-.ev-tile.shady .ev-price { background: rgba(255, 255, 255, 0.15); color: #fff; }
-.ev-risk { margin-top: 2px; font-size: 10px; font-weight: 700; color: #fb7185; }
 .ev-sheet { width: min(540px, 94vw); max-height: 88vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: left; position: relative; }
 /* The header stays put; only the posts (or the laws) scroll beneath it. */
 .ev-sheet-head { flex-shrink: 0; padding: 18px 22px 10px; border-bottom: 1px solid var(--line); background: var(--bg-ffffff); }
@@ -3016,3 +2964,35 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
   .bk-place-map .bk-map-wrap { height: auto; flex: 1 1 0; min-height: 0; }
   .bk-place-main { min-height: 0; overflow-y: auto; }
 }
+
+/* Picking which of your businesses to share in a chat. */
+.biz-share-pick { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 2px; }
+
+
+/* Money sheet: send and request side by side, nothing else to tap. */
+.pay-sheet .pay-sheet-head { align-items: flex-start; }
+.pay-sheet .pay-sheet-head .pay-amount { flex: 1; min-width: 0; }
+.pay-actions { display: flex; gap: 8px; }
+.pay-actions .pay-submit { flex: 1; }
+.pay-actions .pay-submit.request { background: var(--inverse); color: #fff; }
+
+/* The game-invite link is a pill of its own, beside the message box and not inside it. */
+.composer-line { display: flex; align-items: center; gap: 6px; }
+.composer-line .composer { flex: 1; min-width: 0; }
+.composer-link-pill { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 22px; background: var(--bg-ffffff); }
+.composer-wrap:has(.composer-reply) .composer-link-pill { border-top-left-radius: 0; }
+
+/* Flight desk: one tab per city you can fly to, and the private jet under a divider. */
+.flight-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
+.flight-tabs::-webkit-scrollbar { display: none; }
+.flight-tabs button { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 12px; border-radius: 99px; background: var(--bg-f1f5f9); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.flight-tabs button.on { background: #334155; color: #fff; }
+.flight-divider { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+.flight-divider::before, .flight-divider::after { content: ''; flex: 1; height: 1px; background: var(--bg-e2e8f0); }
+
+/* The flight and hotel desks open above the Activities list, not behind it; closing one drops back to the pill above the list. */
+.sheet.place-sheet.flight-desk, .sheet.place-sheet.hotel-desk { z-index: 40; }
+
+/* The map's state card: what the state makes, and its treasury. */
+.region-map-badge .region-fact { font-size: 11px; font-weight: 600; color: var(--fg-475569); }
+.region-map-badge .region-fact i { font-style: normal; color: var(--ink); font-weight: 800; }

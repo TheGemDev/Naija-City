@@ -59,7 +59,7 @@ import { UpdateNotice } from './ui/UpdateNotice';
 import { PhotoMode } from './ui/PhotoMode';
 import { useSocial } from './net/social';
 import { followDeepLink, takeDeepLink, type DeepLink } from './net/deeplink';
-import { freshPage, isMissingFile } from './net/freshPage';
+import { freshPage, isMissingFile, whyReloaded } from './net/freshPage';
 
 // The phone and its apps are a large share of the game's code and nobody needs them on the first frame, so they
 // load on their own, right after the game is on screen.
@@ -79,6 +79,12 @@ export default function App() {
   useEffect(() => {
     if (ready) audio.enterGame();
     else audio.leaveGame();
+  }, [ready]);
+  // A reload nobody asked for says why it happened.
+  useEffect(() => {
+    if (!ready) return;
+    const why = whyReloaded();
+    if (why) useGame.getState().toast(`🔄 The game reloaded. ${why}`);
   }, [ready]);
   useEffect(() => {
     // Loaded ahead of its first use. A page from before the last update asks for a file that is gone: get today's page.

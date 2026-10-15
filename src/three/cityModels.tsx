@@ -742,14 +742,39 @@ function Bus({ c = '#f8fafc', stripe = '#15803d' }: { c?: string; stripe?: strin
 export function Car({ c = '#2563eb' }: { c?: string }) {
   return (
     <group>
-      <B p={[0, 0.3, 0]} s={[0.7, 0.3, 1.4]} c={c} />
-      <B p={[0, 0.55, -0.05]} s={[0.6, 0.25, 0.75]} c={c} />
-      <Win p={[0, 0.56, -0.05]} s={[0.62, 0.18, 0.65]} />
-      {[[-0.35, -0.45], [0.35, -0.45], [-0.35, 0.45], [0.35, 0.45]].map(([x, z], i) => (
-        <mesh key={i} position={[x, 0.14, z]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.14, 0.14, 0.08, 8]} />
-          <meshStandardMaterial color="#111" />
-        </mesh>
+      {/* Body: a long lower shell, a lower bonnet and boot, and a roomier cabin on top */}
+      <B p={[0, 0.27, 0]} s={[0.74, 0.24, 1.46]} c={c} />
+      <B p={[0, 0.4, 0.5]} s={[0.7, 0.06, 0.42]} c={c} />
+      <B p={[0, 0.4, -0.58]} s={[0.7, 0.06, 0.3]} c={c} />
+      <B p={[0, 0.52, -0.08]} s={[0.64, 0.22, 0.7]} c={c} />
+      <B p={[0, 0.65, -0.08]} s={[0.58, 0.04, 0.6]} c="#e2e8f0" />
+      {/* Glass: side windows, a raked windscreen and a rear screen */}
+      <Win p={[0, 0.54, -0.08]} s={[0.66, 0.14, 0.62]} />
+      <group position={[0, 0.54, 0.3]} rotation={[-0.5, 0, 0]}><Win p={[0, 0, 0]} s={[0.56, 0.16, 0.03]} /></group>
+      <group position={[0, 0.54, -0.46]} rotation={[0.5, 0, 0]}><Win p={[0, 0, 0]} s={[0.56, 0.16, 0.03]} /></group>
+      {/* Lights and bumpers */}
+      {[-0.26, 0.26].map((x) => (
+        <group key={x}>
+          <B p={[x, 0.31, 0.74]} s={[0.14, 0.07, 0.03]} c="#fef9c3" e="#fde68a" />
+          <B p={[x, 0.31, -0.74]} s={[0.14, 0.07, 0.03]} c="#fecaca" e="#dc2626" />
+          <B p={[x * 1.45, 0.45, 0.2]} s={[0.1, 0.06, 0.06]} c={c} />
+        </group>
+      ))}
+      <B p={[0, 0.17, 0.74]} s={[0.76, 0.08, 0.06]} c="#374151" />
+      <B p={[0, 0.17, -0.74]} s={[0.76, 0.08, 0.06]} c="#374151" />
+      <B p={[0, 0.3, 0]} s={[0.76, 0.03, 1.2]} c="#0f172a" o={0.55} />
+      {/* Wheels with hubcaps, tucked under dark arches */}
+      {[[-0.37, -0.46], [0.37, -0.46], [-0.37, 0.46], [0.37, 0.46]].map(([x, z], i) => (
+        <group key={i} position={[x, 0.15, z]}>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.15, 0.15, 0.1, 10]} />
+            <meshStandardMaterial color="#0b0b0c" />
+          </mesh>
+          <mesh position={[Math.sign(x) * 0.055, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.08, 0.08, 0.02, 8]} />
+            <meshStandardMaterial color="#cbd5e1" />
+          </mesh>
+        </group>
       ))}
     </group>
   );

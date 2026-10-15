@@ -238,13 +238,14 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
 
   /**
    * Twitter's News tab: national news only (src/game/news.ts). Tweets and news about one player are for their friends.
-   * ?city= narrows it to one state's news.
+   * ?city= narrows it to one state's news (and the national stories).
    */
   if (path === '/api/feed' && req.method === 'GET') {
     const before = Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
     const city = CIVIC_CITIES.find((c) => c === url.searchParams.get('city')) ?? null;
     // Only the latest FEED_WINDOW news posts (of that state, when one is picked) are visible; paging walks back through that window.
-    const news = city ? `${NEWS_SQL} AND f.city = ?6` : NEWS_SQL;
+    // A state's news is its own plus the national stories (no city), so the tab is never empty for want of local stories.
+    const news = city ? `${NEWS_SQL} AND (f.city = ?6 OR f.city IS NULL)` : NEWS_SQL;
     const { results } = await db
       .prepare(
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,

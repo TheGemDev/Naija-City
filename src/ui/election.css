@@ -1,27 +1,64 @@
-/* Elections, your own campaign (src/ui/Election.tsx Campaign): a bar that opens onto one event at a time, and the way out of the race. */
-.ev-campaign .ev-camp-head { width: 100%; margin: 0; text-align: left; }
-.ev-campaign .ev-camp-head b { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.ev-campaign .ev-camp-head small { font-weight: 700; }
-.ev-campaign .ev-camp-head svg { flex-shrink: 0; color: var(--fg-64748b); }
-.ev-camp-body { display: grid; gap: 8px; margin-top: 10px; }
-.ev-picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg-e2e8f0); }
-.ev-pick { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; line-height: 1.15; text-align: center; color: var(--fg-475569); }
-.ev-pick.on { background: var(--bg-ffffff); color: var(--ink); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14); }
-.ev-pick.shady.on { background: linear-gradient(160deg, #1c1917, #450a0a); color: #fecaca; }
-.ev-plan { display: grid; gap: 8px; padding: 10px 12px 12px; border-radius: 14px; background: var(--bg-ffffff); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); }
-.ev-plan p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-475569); }
-.ev-plan .ev-risk { margin: 0; font-size: 11px; }
-.ev-plan small { font-size: 11px; color: var(--fg-64748b); }
-.ev-go { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; font-size: 13px; font-weight: 800; text-align: left; }
-.ev-go span { display: flex; flex-direction: column; line-height: 1.2; }
-.ev-plan .ev-go small { font-size: 11px; font-weight: 700; color: inherit; opacity: 0.85; }
-.ev-go b { flex-shrink: 0; padding: 2px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.22); font-size: 12px; }
-.ev-go:disabled { opacity: 0.45; }
-.ev-plan.shady .ev-go { background: linear-gradient(160deg, #1c1917, #7f1d1d); }
+/* Elections (src/ui/Election.tsx): one calm card per post. Neutral greys and ink; colour only where it means something
+   (a live race, the one you voted for). */
+.ev-board { display: grid; gap: 10px; margin: 8px 0; text-align: left; }
+.ev-card { display: grid; gap: 8px; padding: 12px; border-radius: 16px; background: var(--bg-ffffff); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); }
+.ev-head { display: flex; align-items: center; gap: 8px; }
+.ev-head > b { flex: 1; min-width: 0; font-size: 14px; }
+.ev-status { padding: 3px 9px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.ev-status.live { background: #334155; color: #fff; }
+.ev-holder { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-475569); }
+.ev-holder small { color: var(--fg-64748b); }
+.ev-avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; overflow: hidden; background: var(--bg-e2e8f0); color: var(--fg-64748b); font-weight: 800; }
+.ev-avatar.sm { width: 22px; height: 22px; font-size: 11px; }
+.ev-avatar .convo-avatar { background: none; }
+.ev-cand { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: var(--bg-f8fafc); }
+.ev-cand.me { box-shadow: inset 0 0 0 1.5px #64748b; }
+.ev-rank { width: 18px; text-align: center; font-size: 13px; font-weight: 800; color: var(--fg-64748b); }
+.ev-cinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ev-cinfo b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-votes { flex: none; min-width: 18px; text-align: right; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ev-bar { display: block; height: 5px; border-radius: 99px; background: var(--bg-e2e8f0); overflow: hidden; }
+.ev-bar i { display: block; height: 100%; border-radius: 99px; background: #64748b; transition: width 0.5s ease; }
+.ev-vote { flex: none; padding: 7px 14px; border-radius: 99px; background: #334155; color: #fff; font-size: 12px; font-weight: 800; }
+.ev-vote.done { background: var(--bg-dcfce7); color: var(--fg-166534); }
+.ev-vote:disabled { cursor: default; }
+.ev-more, .ev-note, .ev-foot, .ev-wait { color: var(--fg-64748b); font-size: 11.5px; }
+.ev-foot { text-align: center; }
+.ev-cta { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-radius: 12px; background: #334155; color: #fff; font-size: 13px; font-weight: 800; }
+.ev-cta b { padding: 2px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.2); font-size: 12px; }
+.ev-cta:disabled { opacity: 0.4; }
+
+/* Your own campaign: your support, five one-tap events and the way out. */
+.ev-campaign { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--bd-eef2f7); }
+.ev-support { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.ev-support .ev-bar { flex: 1; }
+.ev-support small { font-weight: 800; }
+.ev-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.ev-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px 7px; border-radius: 12px; background: var(--bg-f1f5f9); text-align: center; }
+.ev-tile b { font-size: 10px; line-height: 1.15; }
+.ev-tile small { color: var(--fg-64748b); font-size: 10px; font-weight: 700; }
+.ev-tile:active:not(:disabled) { transform: scale(0.95); }
+.ev-tile:disabled { opacity: 0.4; }
+.ev-tile.risky small { color: #dc2626; }
 .ev-leave-ask { justify-self: center; padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--fg-64748b); text-decoration: underline; }
-.ev-leave { display: grid; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--bg-ffffff); box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.35); }
-.ev-leave p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-475569); }
-.ev-leave div { display: flex; gap: 8px; }
-.ev-leave button { flex: 1; padding: 9px 10px; border-radius: 99px; background: var(--bg-e2e8f0); font-size: 12px; font-weight: 800; }
+.ev-leave { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ev-leave small { flex: 1 1 100%; color: var(--fg-64748b); font-size: 11.5px; }
+.ev-leave button { flex: 1; padding: 8px 10px; border-radius: 99px; background: var(--bg-e2e8f0); font-size: 12px; font-weight: 800; }
 .ev-leave button.out { background: #dc2626; color: #fff; }
 .ev-leave button:disabled { opacity: 0.45; }
+
+/* A crowded race: just the faces and a +N, until you open it. */
+.ev-faces { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 12px; background: var(--bg-f8fafc); text-align: left; }
+.ev-face-row { display: flex; align-items: center; }
+.ev-face-row .ev-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--bg-f8fafc); }
+.ev-face-row .ev-avatar:first-child { margin-left: 0; }
+.ev-face-row .ev-avatar.me { box-shadow: 0 0 0 2px #64748b; }
+.ev-plus { margin-left: 6px; font-size: 12px; color: var(--fg-475569); }
+.ev-faces small { color: var(--fg-64748b); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+
+/* What the post controls, at the right of the holder row. */
+.ev-pot { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.ev-pot b { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ev-pot small { color: var(--fg-64748b); font-size: 10.5px; }
+
+.ev-makes { color: var(--fg-475569); font-size: 11.5px; font-weight: 700; }

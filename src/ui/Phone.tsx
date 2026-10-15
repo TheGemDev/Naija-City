@@ -4,7 +4,7 @@ import { CAMPAIGN_EVENTS, dayOf, homeLoad, hourOf, inOwnHouse, INVERTER, inverte
 import { INVESTMENTS, LIQUIDATION_FACTOR, MAX_TRADE_UNITS, paidFor, priceOf, USD_NGN } from '../game/investments';
 import { useStocks, watchMarket } from '../net/stocks';
 import { useCityStats, watchCityStats } from '../net/cityStats';
-import { CARS, CAR_BY_ID, JETS, JET_BY_ID, JET_FUEL, JET_SERVICE, JET_TRIP, jetFlightsLeft, jetFuelLeft, jetRefuelCost, jetResale, jetServiceCost } from '../game/cars';
+import { CARS, CAR_BY_ID, JETS, JET_BY_ID, JET_FUEL, JET_SERVICE, jetFlightsLeft, jetFuelLeft, jetRefuelCost, jetResale, jetServiceCost } from '../game/cars';
 import { CAR_FUEL, fuelLeft } from '../game/carFuel';
 import { cameraCount, drainScale, genBurn, generatorOf, GENERATORS, houseLoad, modeOf, onGrid, POWER, STANDBY_KW } from '../game/power';
 import { blockerOf, CAR_CARE, conditionOf, healthOf, PART_IDS, PARTS, repairAllCost, repairCost, resaleOf, valueOf } from '../game/carCare';
@@ -32,7 +32,7 @@ import { radioOff, tuneRadio } from '../game/radio';
 import { sfx } from '../game/sfx';
 import { PoliceApp } from './Police';
 import { EfccApp } from './Efcc';
-import { cityMap, isOpen, potholeCity, potholeOf, type Place } from '../game/city';
+import { cityMap, isOpen, jetFare, potholeCity, potholeOf, type Place } from '../game/city';
 import { placeNameIn, regionPlaces, regionOf } from '../game/regions';
 import { employment, JOB_CITIES, jobsIn, shiftClock, shiftHours, workplaceOf } from '../game/jobs';
 import { goToWork, workKey } from '../game/work';
@@ -674,7 +674,7 @@ function Cars() {
                 <b>{JET_BY_ID[id]?.name}</b>
                 <span className="pill-tag">{JET_BY_ID[id]?.tag}</span>
               </div>
-              <small>Parked at the airport. Fly it from the flight desk: {naira(JET_TRIP.cost)} a trip, plus fuel.</small>
+              <small>Parked at the airport. Fly it from the flight desk: a trip costs {naira(jetFare('kaduna', 'abuja'))} to {naira(jetFare('kano', 'lagos'))} by route, plus fuel.</small>
             </div>
           </div>
           <div className="garage-meters">
@@ -1498,7 +1498,7 @@ function RoadsCard({ city, isGovernor, governor }: { city: CivicCity; isGovernor
   const shown = showAll ? open : open.slice(0, 4);
   const hoursToNext = Math.max(0, Math.ceil(((data.cities?.[city]?.nextAt ?? data.nextAt) - Date.now()) / 3600_000));
   const last = data.recent.find((f) => potholeCity(f.site) === city);
-  // The city's share of the treasury (the president's allocation) is all its government can spend from it.
+  // The city's own treasury is all its government can spend on repairs.
   const budget = data.cities?.[city]?.budget ?? data.budget ?? data.treasury;
   return (
     <div className="roads-card">

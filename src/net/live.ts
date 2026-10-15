@@ -74,6 +74,8 @@ interface LiveState {
   sharedPost: FeedPost | null;
   /** The state the News tab is showing (null: all of them). */
   feedCity: CivicCity | null;
+  /** The News tab follows the state I am in until I pick one myself. */
+  feedAuto: boolean;
   feedLoading: boolean;
   feedEnd: boolean;
   /** Twitter's VDM tab. */
@@ -92,7 +94,7 @@ interface LiveState {
   busy: boolean;
 }
 
-export const useLive = create<LiveState>(() => ({ feed: [], sharedPost: null, feedCity: null, feedLoading: false, feedEnd: false, vdmFeed: [], friendsFeed: [], friendsEnd: false, replies: {}, bets: [], results: [], underworld: null, scams: [], perks: [], phoneSearch: null, busy: false }));
+export const useLive = create<LiveState>(() => ({ feed: [], sharedPost: null, feedCity: null, feedAuto: true, feedLoading: false, feedEnd: false, vdmFeed: [], friendsFeed: [], friendsEnd: false, replies: {}, bets: [], results: [], underworld: null, scams: [], perks: [], phoneSearch: null, busy: false }));
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await api(path, init);

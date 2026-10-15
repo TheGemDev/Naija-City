@@ -2,11 +2,14 @@
 // opens a create page (kind, place, name and badge, fees), and tapping a business opens its manage page. A second
 // tab browses every other player's shop. Rules in src/game/career.ts, server side in worker/career.ts.
 
+import { ORIGIN_OF, restockPrice } from '../game/trade';
+import { scaledFee } from '../game/treasury';
+import { useStateCaps, useStateLaws } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { naira, useGame } from '../game/store';
 import {
   BIZ, BIZ_COLOURS, BIZ_ICONS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESSES, BUSINESS_BY_ID, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, SKILL_BY_ID, STALLS,
-  openCost, registrationFee, resizeCost, type BizSize, type BusinessDef, type BusinessType,
+  openTotal, registrationFee, resizeCost, type BizSize, type BusinessDef, type BusinessType,
 } from '../game/career';
 import { cityMap, placeHere } from '../game/city';
 import { regionOf } from '../game/regions';
@@ -114,8 +117,11 @@ function CreatePage({ back, done }: { back(): void; done(type: BusinessType): vo
   }
 
   const place = placeIn(city, placeId);
-  const cost = def ? openCost(def, size) : 0;
-  const registration = def ? registrationFee(def, size) : 0;
+  // The state the business opens in sets the registration fee.
+  const laws = useStateLaws(city);
+  const caps = useStateCaps();
+  const cost = def ? openTotal(def, size, laws.bizFee) : 0;
+  const registration = def ? scaledFee(registrationFee(def, size), laws.bizFee) : 0;
   const full = !!def && (!place || freeStalls(placeId, summary) <= 0);
   const short = Math.max(0, cost - money);
 
@@ -176,7 +182,7 @@ function CreatePage({ back, done }: { back(): void; done(type: BusinessType): vo
               <button key={s} className={`biz-type ${size === s ? 'on' : ''}`} aria-pressed={size === s} onClick={() => setSize(s)}>
                 <span>{BIZ_SIZES[s].icon}</span>
                 <b>{BIZ_SIZES[s].label}</b>
-                <small>{naira(openCost(def, s))}</small>
+                <small>{naira(openTotal(def, s, laws.bizFee))}</small>
                 <small>Holds {BIZ_SIZES[s].shelf} each</small>
               </button>
             ))}
@@ -188,7 +194,7 @@ function CreatePage({ back, done }: { back(): void; done(type: BusinessType): vo
           <div className="biz-step"><i>5</i> What it costs</div>
           <div className="biz-fees">
             <div><span>Stall fit-out<small>Equipment, signboard and first paint</small></span><b>{naira(cost - registration)}</b></div>
-            <div><span>CAC registration<small className="biz-gov">🏛️ Paid into the treasury</small></span><b>{naira(registration)}</b></div>
+            <div><span>CAC registration<small className="biz-gov">🏛️ {regionOf(city).name}: {laws.bizFee}% of standard · max {caps.bizFee}%</small></span><b>{naira(registration)}</b></div>
             <div className="total"><span>To open today</span><b>{naira(cost)}</b></div>
           </div>
           <small className="muted">No guaranteed income: you buy stock at wholesale, set your price and earn when other players buy from your shop. Stock only leaves the shelf when someone buys, and the shop is open for as long as there is something on it.</small>
@@ -215,7 +221,12 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
   const [quantity, setQuantity] = useState(0);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setPrice(listing?.price ?? item?.price ?? 0); }, [listing?.price, item?.price]);
+  // Goods made in the shop's own state are cheaper; goods from another carry that state's export levy. The server charges the same.
+  const origin = ORIGIN_OF[productId];
+  const originLaws = useStateLaws(origin ?? b.city);
   if (!item) return null;
+  const stock = restockPrice(item.wholesale, productId, b.city, originLaws.exportLevy);
+  const tag = stock.origin ? (stock.local ? 'local' : `from ${regionOf(stock.origin).name}`) : '';
   const room = Math.min(BIZ.maxRestock, b.shelf - (listing?.stock ?? 0));
   const top = item.wholesale * BIZ.maxMarketPriceMultiple;
   const priceOk = price >= item.wholesale && price <= top;
@@ -245,7 +256,7 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
       {open && (
         <div className="biz-product-body">
           <label>
-            <small>Your price (you buy it at {naira(item.wholesale)})</small>
+            <small>Your price (you buy it at {naira(stock.unit)}{tag ? ` · ${tag}` : ''})</small>
             <input className="text-input" type="number" inputMode="numeric" min={item.wholesale} max={top} step={100} value={price} disabled={busy} onChange={(e) => setPrice(Number(e.target.value))} />
           </label>
           {!priceOk && <small className="biz-warn">Price must be between {naira(item.wholesale)} and {naira(top)}.</small>}
@@ -259,7 +270,7 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
             )}
           </div>
           <button className="btn go" disabled={busy || !priceOk || !changed || (!listing && quantity < 1)} onClick={() => void save()}>
-            {busy ? 'Saving…' : quantity > 0 ? `Buy ${quantity} · ${naira(item.wholesale * quantity)}` : 'Save price'}
+            {busy ? 'Saving…' : quantity > 0 ? `Buy ${quantity} · ${naira(stock.unit * quantity)}` : 'Save price'}
           </button>
         </div>
       )}
@@ -270,6 +281,8 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
 type ManageTab = 'overview' | 'products' | 'grow';
 
 function ManagePage({ b, back }: { b: BizInfo; back(): void }) {
+  const stateLaws = useStateLaws(b.city);
+  const permit = scaledFee(BIZ.moveFee, stateLaws.moveFee);
   const def = BUSINESS_BY_ID[b.type];
   const place = placeIn(b.city, b.place);
   // A stall moves within its own city, and the stalls listed are those of the city you are in.
@@ -369,22 +382,24 @@ function ManagePage({ b, back }: { b: BizInfo; back(): void }) {
             })}
           </div>
 
+          <small className="muted">{regionOf(b.city).name} takes {stateLaws.bizTax}% business tax on what you collect and {stateLaws.salesTax}% sales tax on your marketplace sales.</small>
+
           <h4>Location</h4>
           {away ? (
             <small className="muted">This stall is in {regionOf(b.city).name}. Travel there to move it to another place.</small>
           ) : moving ? (
             <>
-              <small className="muted">Busier places have more players walking in. A move permit costs {naira(BIZ.moveFee)}, paid into the treasury.</small>
+              <small className="muted">Busier places have more players walking in. A move permit costs {naira(permit)}, paid to {regionOf(b.city).name}.</small>
               <PlacePicker def={def} value={moveTo} onChange={setMoveTo} keep={b.hasStall ? b.place : undefined} />
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn" style={{ flex: 1 }} onClick={() => setMoving(false)}>Cancel</button>
                 <button className="btn go" style={{ flex: 2 }} disabled={moveTo === b.place && b.hasStall} onClick={() => void moveBusiness(b.id, moveTo).then((ok) => { void loadPlaceShops(0); if (ok) setMoving(false); })}>
-                  Move here · {naira(BIZ.moveFee)}
+                  Move here · {naira(permit)}
                 </button>
               </div>
             </>
           ) : (
-            <button className="btn" onClick={() => setMoving(true)}>🚚 Move to another place · {naira(BIZ.moveFee)}</button>
+            <button className="btn" onClick={() => setMoving(true)}>🚚 Move to another place · {naira(permit)}</button>
           )}
 
           <h4>Name and badge</h4>

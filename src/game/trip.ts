@@ -12,10 +12,12 @@ export interface CityTrip {
   /** The city the place is in: the cities share place ids. */
   city: string;
   place: Place;
+  /** Stop once you have landed: the trip is only getting you to the city (a house visit goes on from there). */
+  stop?: boolean;
 }
 
 /** A trip under way: to a place, or home to the house `home` names (its id, 'lease' or 'gov', as goHome takes it). */
-type Going = { city: string; place?: Place; home?: string; mode: TravelMode; at: number };
+type Going = { city: string; place?: Place; home?: string; stop?: boolean; mode: TravelMode; at: number };
 
 /** `offer`: the trip the sheet is asking about. `going`: the one under way, until you land and ride on. */
 export const useTrip = create<{ offer: CityTrip | null; going: Going | null }>(() => ({ offer: null, going: null }));
@@ -68,6 +70,7 @@ useGame.subscribe((s) => {
     landed = undefined;
     if (useTrip.getState().going !== trip) return;
     useTrip.setState({ going: null });
+    if (trip.stop) return;
     const g = useGame.getState();
     if (g.view !== 'city' || g.task) return;
     if (!trip.place) return g.goHome(trip.mode, undefined, trip.home);

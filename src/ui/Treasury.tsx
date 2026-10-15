@@ -1,20 +1,22 @@
-// Civic app, Treasury tab: how the president shares the treasury between the cities and the federal departments,
-// and what each government can spend its share on. Citizens read; only the holder of an office gets the buttons.
-// It is split into four chips: the allocation, the money going out, the repairs (whoever runs a city gets every open
-// pothole and dark street light there, each with its fix) and, in red, the ways to abuse the office.
-// The balance itself is on the Civic app's header card (TreasuryHero), which opens to show every budget.
+// Civic app, Treasury tab. Four chips: State (a state's money, its bills and how its property is holding up), Federal
+// (the federal treasury, grants, the federal departments and the pay list), Spend (what an office can pay for) and Danger
+// (abuse of office, in red). Citizens read; only the holder of an office gets the buttons.
+// The header card (TreasuryHero) shows the federal balance and, tapped open, every state's.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, NO_SALARIES, OFFICE_ICON, OFFICE_SHORT, OFFICES, SALARY, TREASURY, wageBill, type Allocation, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
+import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, NO_SALARIES, OFFICE_ICON, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
-import { naira, nairaShort } from '../game/store';
-import { useCivic, type CivicHolder } from '../net/civic';
+import { naira, nairaShort, useGame } from '../game/store';
+import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
+import { useCivic, type CivicHolder, type StateInfo } from '../net/civic';
 import { useOfficeBudget } from '../net/office';
 import { useRoads } from '../net/roads';
 import { potholeCity } from '../game/city';
 import { left, useNow } from './Career';
 import { Emoji } from './Icons';
+import { LootCases } from './LootCases';
 import './treasury.css';
+import './laws.css';
 
 const HOUR = 3_600_000;
 const FIX_COSTS = Object.values(ROADWORK.fixCost);
@@ -42,6 +44,9 @@ function Spend({ icon, title, blurb, who, status, ready, shady, children }: {
     </div>
   );
 }
+
+/** A governor's pay is a maximum: each takes a share of it from their own state. */
+const isGov = (o: PoliticalOffice) => CIVIC_CITIES.some((c) => CITY_HEAD[c] === o);
 
 const sum = (a: Allocation) => ALLOCATION.departments.reduce((n, d) => n + a[d], 0);
 
@@ -117,7 +122,8 @@ function PayList({ treasury, saved, paidAt, holders, uid, canEdit, busy, onSave 
   useEffect(() => setDraft(saved), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = canEdit ? draft : saved;
   const dirty = OFFICES.some((o) => draft[o] !== saved[o]);
-  const bill = wageBill(shown, (o) => !!holders[o]);
+  // Governors are paid by their states, out of a maximum: only the federal offices come out of this treasury.
+  const bill = wageBill(shown, (o) => !!holders[o] && !isGov(o));
   const { options } = SALARY;
   const step = (o: PoliticalOffice, by: number) => setDraft({ ...draft, [o]: options[Math.max(0, Math.min(options.length - 1, options.indexOf(draft[o]) + by))] });
   return (
@@ -135,11 +141,11 @@ function PayList({ treasury, saved, paidAt, holders, uid, canEdit, busy, onSave 
             {canEdit ? (
               <div className="tr-step" role="group" aria-label={`${name} pay`}>
                 <button type="button" aria-label={`Less for the ${name}`} disabled={busy || draft[o] <= options[0]} onClick={() => step(o, -1)}>−</button>
-                <span><b>{naira(draft[o])}</b><small>a day</small></span>
+                <span><b>{naira(draft[o])}</b><small>{isGov(o) ? 'max a day' : 'a day'}</small></span>
                 <button type="button" aria-label={`More for the ${name}`} disabled={busy || draft[o] >= options[options.length - 1]} onClick={() => step(o, 1)}>+</button>
               </div>
             ) : (
-              <span className="tr-share"><b>{naira(saved[o])}</b><small>a day</small></span>
+              <span className="tr-share"><b>{naira(saved[o])}</b><small>{isGov(o) ? 'max a day' : 'a day'}</small></span>
             )}
           </div>
         );
@@ -165,11 +171,14 @@ function PayList({ treasury, saved, paidAt, holders, uid, canEdit, busy, onSave 
   );
 }
 
-/** The Civic app's header card: what the federation has. Tap it open for what each government and department may spend of it. */
+/** The Civic app's header card: the federal treasury. Tap it open for every state's. */
 export function TreasuryHero() {
   const data = useCivic((s) => s.data);
   const mine = useOfficeBudget();
+  const home = useGame((s) => s.homeState);
   const [open, setOpen] = useState(false);
+  // The state whose money matters to you: the one you run, or the one you live in.
+  const ownState = mine?.city ?? CIVIC_CITIES.find((c) => c === home);
   if (!data) {
     return (
       <div className="hero hero-green">
@@ -179,37 +188,163 @@ export function TreasuryHero() {
       </div>
     );
   }
-  const allocation = { ...ALLOCATION.defaults, ...data.allocation };
-  const free = 100 - sum(allocation);
   return (
     <div className={`hero hero-green tr-hero ${open ? 'open' : ''}`}>
       <button type="button" className="tr-hero-top" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <small>Federation Treasury · Kaduna, Abuja, Lagos and Kano</small>
+        <small>Federal treasury</small>
         <b>{naira(data.treasury)}</b>
-        <small>{open ? 'What each government may spend of it right now.' : 'Tap to see every budget.'}</small>
+        {ownState && <small className="tr-hero-own">{CITY_NAME[ownState]} treasury · {naira(data.states?.[ownState]?.balance ?? 0)}</small>}
+        <small>{open ? 'Each state keeps its own money.' : 'Tap to see the states.'}</small>
         <i className="tr-hero-chev" aria-hidden />
       </button>
       {open && (
         <div className="tr-hero-list">
-          {ALLOCATION.departments.map((d) => {
-            const info = ALLOCATION.info[d];
-            const isMine = mine?.department === d;
+          {CIVIC_CITIES.map((city) => {
+            const state = data.states?.[city];
+            const isMine = mine?.city === city;
             return (
-              <div key={d} className={`tr-hero-row ${isMine ? 'mine' : ''}`}>
-                <Emoji char={info.icon} size={18} />
+              <div key={city} className={`tr-hero-row ${isMine ? 'mine' : ''}`}>
+                <Emoji char="🏛️" size={18} />
                 <span className="tr-hero-what">
-                  <b>{info.label}{isMine && <i>Yours</i>}{isMine && mine.low && <i className="low">Empty</i>}</b>
-                  <small>{info.runBy} · {allocation[d]}%</small>
+                  <b>{CITY_NAME[city]}{isMine && <i>Yours</i>}{!!state?.arrears && <i className="low">In arrears</i>}</b>
+                  <small>{OFFICE_SHORT[CITY_HEAD[city]]}</small>
                 </span>
-                <em>{naira(ALLOCATION.budget(data.treasury, allocation[d]))}</em>
+                <em>{naira(state?.balance ?? 0)}</em>
               </div>
             );
           })}
-          {free > 0 && (
-            <div className="tr-hero-row">
-              <Emoji char="🏦" size={18} />
-              <span className="tr-hero-what"><b>Unallocated</b><small>Stays in the treasury · {free}%</small></span>
-              <em>{naira(ALLOCATION.budget(data.treasury, free))}</em>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const conditionTone = (n: number) => (n >= 60 ? 'good' : n >= 30 ? 'fair' : 'bad');
+
+/** One thing a state owns: how it is holding up, and for the governor what it costs and the buttons to change that. */
+function AssetRow({ city, asset, condition, level, canEdit, busy, balance, onLevel, onRepair }: {
+  city: CivicCity;
+  asset: StateAsset;
+  condition: number;
+  level: number;
+  canEdit: boolean;
+  busy: boolean;
+  balance: number;
+  onLevel(level: number): void;
+  onRepair(): void;
+}) {
+  const info = ASSET_INFO[asset];
+  const at = UPKEEP_LEVELS.indexOf(level as (typeof UPKEEP_LEVELS)[number]);
+  const cost = repairCost(asset, city);
+  return (
+    <div className="tr-asset">
+      <span className="tr-asset-icon"><Emoji char={info.icon} size={20} /></span>
+      <div className="tr-asset-body">
+        <b>{info.label}<em className={conditionTone(condition)}>{condition}%</em></b>
+        <i className={`tr-cond ${conditionTone(condition)}`}><u style={{ width: `${condition}%` }} /></i>
+        <small>{info.effect}</small>
+        {canEdit && (
+          <div className="tr-asset-controls">
+            <div className="tr-step" role="group" aria-label={`${info.label} upkeep`}>
+              <button type="button" aria-label={`Spend less on ${info.label}`} disabled={busy || at <= 0} onClick={() => onLevel(UPKEEP_LEVELS[at - 1])}>−</button>
+              <span><b>{nairaShort(upkeepOf(asset, city, level))}</b><small>an hour</small></span>
+              <button type="button" aria-label={`Spend more on ${info.label}`} disabled={busy || at >= UPKEEP_LEVELS.length - 1} onClick={() => onLevel(UPKEEP_LEVELS[at + 1])}>+</button>
+            </div>
+            <button className="btn sm" disabled={busy || condition >= 100 || balance < cost} onClick={onRepair}>Repair +{REPAIR.condition} · {nairaShort(cost)}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A state's money and property. The governor of the state gets the controls. */
+function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAsk, onLaw, onPay }: {
+  city: CivicCity;
+  state: StateInfo | undefined;
+  canEdit: boolean;
+  /** The governor of this state themselves (not the president standing in). */
+  isHead: boolean;
+  busy: boolean;
+  onLevel(asset: StateAsset, level: number): void;
+  onRepair(asset: StateAsset): void;
+  onAsk(amount: number): void;
+  onLaw(key: StateLawKey, step: number): void;
+  onPay(step: number): void;
+}) {
+  const data = useCivic((s) => s.data);
+  const caps = data?.caps ?? DEFAULT_STATE_CAPS;
+  const cut = data?.policies.federalCut ?? 0;
+  if (!state) return <small className="muted tr-note">No state books yet.</small>;
+  const bill = STATE_ASSETS.reduce((n, a) => n + upkeepOf(a, city, state.assets[a]?.level ?? 50), 0);
+  return (
+    <div className="tr-state">
+      <div className="tr-state-money">
+        <small>{CITY_NAME[city]} treasury · {OFFICE_SHORT[CITY_HEAD[city]]}</small>
+        <b>{naira(state.balance)}</b>
+      </div>
+      {state.arrears > 0 && (
+        <small className="tr-note tr-warn"><Emoji char="📉" size={12} /> {naira(state.arrears)} in arrears. {canEdit ? 'Spending is frozen until it is paid.' : 'The governor can’t spend.'}</small>
+      )}
+      <div className="tr-state-facts">
+        <span><b>{nairaShort(bill)}</b><small>bills an hour</small></span>
+        <span><b>{nairaShort(state.incoming)}</b><small>came in this hour</small></span>
+        <span><b>{cut}%</b><small>goes federal</small></span>
+      </div>
+      {isHead && (() => {
+        // What the governor is paid: their share of the president's maximum, held to a slice of the state's money.
+        const max = data?.salaries?.[CITY_HEAD[city]] ?? 0;
+        const share = state.payShare ?? 100;
+        const wanted = Math.floor((max * share) / 100);
+        const paid = governorPay(max, share, state.balance);
+        return (
+          <div className="tr-laws">
+            <b>Your pay</b>
+            <div className="law-control">
+              <span><b>{naira(paid)} a day</b><small>{max ? `The president’s maximum is ${naira(max)}.` : 'The president has set no pay.'}{paid < wanted ? ` The state can only spare ${naira(paid)} a round.` : ''}</small></span>
+              <div className="law-options" role="group" aria-label="Your share of the maximum pay">
+                {GOV_STEPS.map((step) => (
+                  <button key={step} className={share === step ? 'on' : ''} aria-pressed={share === step} disabled={busy || share === step} onClick={() => onPay(step)}>{step}%</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      <div className="tr-laws">
+        <b>Taxes and fees</b>
+        {STATE_LAW_KEYS.map((key) => {
+          const law = STATE_LAWS[key];
+          const value = state.laws?.[key] ?? DEFAULT_STATE_LAWS[key];
+          const cap = caps[key];
+          return canEdit ? (
+            <div className="law-control" key={key}>
+              <span><b>{law.title}</b><small>{law.hint} The president’s maximum is {cap}{law.unit}.</small></span>
+              <div className="law-options" role="group" aria-label={law.title}>
+                {lawChoices(cap).map(({ step, value: option }) => (
+                  <button key={step} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onLaw(key, step)}>{option}{law.unit}</button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="tr-law-line" key={key}><span>{law.title}</span><b>{value}{law.unit}<em> / max {cap}{law.unit}</em></b></div>
+          );
+        })}
+      </div>
+      {STATE_ASSETS.map((asset) => {
+        const row = state.assets[asset];
+        return row ? (
+          <AssetRow key={asset} city={city} asset={asset} condition={row.condition} level={row.level} canEdit={canEdit} busy={busy} balance={state.balance} onLevel={(level) => onLevel(asset, level)} onRepair={() => onRepair(asset)} />
+        ) : null;
+      })}
+      {canEdit && (
+        <div className="tr-ask">
+          <b>Ask the president for money</b>
+          {state.ask ? (
+            <small className="muted">Waiting for an answer: {naira(state.ask.amount)}.</small>
+          ) : (
+            <div className="row-btns">
+              {GRANT_SIZES.map((size) => <button key={size} className="btn sm" disabled={busy} onClick={() => onAsk(size)}>{nairaShort(size)}</button>)}
             </div>
           )}
         </div>
@@ -218,15 +353,39 @@ export function TreasuryHero() {
   );
 }
 
-type Section = 'allocation' | 'pay' | 'out' | 'repairs' | 'danger';
-/** Words only, so they all fit across a phone: just Danger carries a sign. */
-const SECTIONS: { id: Section; icon?: string; label: string }[] = [
-  { id: 'allocation', label: 'Allocation' },
-  { id: 'pay', label: 'Pay' },
-  { id: 'out', label: 'Money out' },
-  { id: 'repairs', label: 'Repairs' },
-  { id: 'danger', icon: '⚠️', label: 'Danger' },
-];
+/** The president's grants: every state's money, what it has asked for and the amounts to send. */
+function Grants({ canEdit, busy }: { canEdit: boolean; busy: boolean }) {
+  const data = useCivic((s) => s.data);
+  const grant = useCivic((s) => s.grant);
+  const decline = useCivic((s) => s.declineGrant);
+  if (!data) return null;
+  return (
+    <div className="tr-budget">
+      {CIVIC_CITIES.map((city) => {
+        const state = data.states?.[city];
+        return (
+          <div key={city} className="tr-grant">
+            <div className="tr-dept">
+              <div className="tr-dept-body">
+                <b>{CITY_NAME[city]}</b>
+                <small>{state?.ask ? `Asks for ${naira(state.ask.amount)}` : state?.arrears ? `${naira(state.arrears)} in arrears` : 'Holds'}</small>
+              </div>
+              <span className="tr-share"><b>{naira(state?.balance ?? 0)}</b></span>
+            </div>
+            {canEdit && (
+              <div className="row-btns">
+                {GRANT_SIZES.map((size) => (
+                  <button key={size} className="btn sm" disabled={busy || data.treasury < size} onClick={() => void grant(city, size)}>{nairaShort(size)}</button>
+                ))}
+                {state?.ask && <button className="ghost-btn" disabled={busy} onClick={() => void decline(city)}>Refuse</button>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /** `repairs` is the pothole and street light lists of the city this player runs (src/ui/Phone.tsx). */
 export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode }) {
@@ -237,6 +396,11 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const embezzle = useCivic((s) => s.embezzle);
   const allocate = useCivic((s) => s.allocate);
   const setSalaries = useCivic((s) => s.setSalaries);
+  const upkeep = useCivic((s) => s.upkeep);
+  const repairAsset = useCivic((s) => s.repairAsset);
+  const askGrant = useCivic((s) => s.askGrant);
+  const stateLaw = useCivic((s) => s.stateLaw);
+  const payShare = useCivic((s) => s.payShare);
   const openSites = useRoads((s) => s.data?.open);
   const lampsOut = useRoads((s) => s.data?.lamps);
   const now = useNow(30_000);
@@ -246,7 +410,8 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const [contractor, setContractor] = useState('');
   const [prisoner, setPrisoner] = useState('');
   const [sure, setSure] = useState(false);
-  const [section, setSection] = useState<Section>('allocation');
+  // Which treasury the money strip is showing: the federal one or a state's.
+  const [sel, setSel] = useState<'federal' | CivicCity | null>(null);
   const repairsAt = useRef<HTMLDivElement>(null);
   const toRepairs = () => repairsAt.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   useEffect(() => void useRoads.getState().refresh(), []);
@@ -254,22 +419,26 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
 
   const p = data.policies;
   const { treasury } = data;
-  // Everything a city's government does is open to whoever runs a city: the governor in Kaduna, the FCT
-  // Minister in Abuja. Each fixes their own city's potholes.
+  // Whoever runs a city spends that state's money: the governor in Kaduna, the FCT Minister in Abuja, and so on.
   const isPres = p.president?.uid === uid;
   const myCity = CIVIC_CITIES.find((city) => p[CITY_HEAD[city]]?.uid === uid);
+  const selected: 'federal' | CivicCity = sel ?? (myCity ?? (isPres ? 'federal' : 'kaduna'));
+  const shown: CivicCity = selected === 'federal' ? (myCity ?? 'kaduna') : selected;
+  // A state without a government is managed by the president: its seat is empty and the president is looking at it.
+  const actCity = myCity ?? (isPres && selected !== 'federal' && !p[CITY_HEAD[shown]] ? shown : undefined);
+  /** Sent with an action when the president is standing in for an empty seat. */
+  const standIn = !myCity ? actCity : undefined;
   const isExec = isPres || !!myCity;
   const office = OFFICES.find((o) => p[o]?.uid === uid);
   const allocation = { ...ALLOCATION.defaults, ...data.allocation };
-  // Each city's government spends its own share; the president's palliatives have a share of their own.
-  // The potholes of the city you run; anybody else is shown the count for the whole country.
-  const potholes = openSites?.filter((site) => (myCity ? potholeCity(site) === myCity : !!potholeCity(site))).length;
-  const darkLamps = lampsOut?.filter((site) => (myCity ? lampCity(site) === myCity : !!lampCity(site))).length;
-  const cityBudget = myCity ? ALLOCATION.budget(treasury, allocation[myCity]) : 0;
-  const palFrom = isPres || !myCity ? 'welfare' : myCity;
-  const palBudget = ALLOCATION.budget(treasury, allocation[palFrom]);
+  const potholes = openSites?.filter((site) => (actCity ? potholeCity(site) === actCity : !!potholeCity(site))).length;
+  const darkLamps = lampsOut?.filter((site) => (actCity ? lampCity(site) === actCity : !!lampCity(site))).length;
+  const cityBudget = actCity ? data.states?.[actCity]?.balance ?? 0 : 0;
+  const frozen = !!actCity && (data.states?.[actCity]?.arrears ?? 0) > 0;
+  const houseShut = !!actCity && (data.states?.[actCity]?.assets.govhouse?.condition ?? 100) < GOVHOUSE_SHUT;
+  const palBudget = actCity ? cityBudget : ALLOCATION.budget(treasury, allocation.welfare);
   /** What whoever runs a city has left to spend, said once per row. Nobody else is shown a figure. */
-  const cityLeft = myCity ? ` Budget: ${naira(cityBudget)}.` : '';
+  const cityLeft = actCity ? ` Treasury: ${naira(cityBudget)}.` : '';
 
   const { palliative: pal, roadProject: project, embezzle: snake, contract: deal, pardon: mercy } = TREASURY;
   const dealWait = (data.cooldowns?.contract ?? 0) + deal.cooldownHours * HOUR - now;
@@ -277,9 +446,12 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const palWait = data.palliativeAt ? data.palliativeAt + pal.cooldownHours * HOUR - now : 0;
   // The server shares at most this much; under ₦500 each it refuses.
   const palLow = palBudget < 500;
-  const projectLow = !!myCity && cityBudget < project.cost;
+  const locked = frozen || houseShut;
+  const lockWhy = houseShut ? 'Government House is in ruins' : 'State in arrears';
+  const projectLow = !!actCity && (cityBudget < project.cost || locked);
+  const snakePot = myCity ? (data.states?.[myCity]?.balance ?? 0) : treasury;
   const snakeWait = data.embezzledAt ? data.embezzledAt + snake.cooldownHours * HOUR - now : 0;
-  const snakeTake = Math.min(snake.cap, Math.floor(treasury * snake.share));
+  const snakeTake = Math.min(snake.cap, Math.floor(snakePot * snake.share));
   const blockLeft = data.roadBlockUntil ? data.roadBlockUntil - now : 0;
 
   return (
@@ -290,128 +462,153 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
         </div>
       )}
 
-      <div className="tr-chips" role="tablist" aria-label="Treasury">
-        {SECTIONS.filter((s) => s.id !== 'pay' || data.salariesOpen).map((s) => {
-          const count = s.id === 'repairs' ? (potholes ?? 0) + (darkLamps ?? 0) : 0;
-          return (
-            <button key={s.id} type="button" role="tab" aria-selected={section === s.id} className={`tr-chip ${s.id === 'danger' ? 'danger' : ''} ${section === s.id ? 'on' : ''}`} onClick={() => setSection(s.id)}>
-              {s.icon && <Emoji char={s.icon} size={13} />}{s.label}{count > 0 && <i>{count}</i>}
-            </button>
-          );
-        })}
+      <LootCases uid={uid} />
+
+      <div className="tr-strip" role="group" aria-label="Treasuries">
+        <button type="button" className={selected === 'federal' ? 'on' : ''} aria-pressed={selected === 'federal'} onClick={() => setSel('federal')}>
+          <Emoji char="🇳🇬" size={18} /><b>Federal</b>
+        </button>
+        {CIVIC_CITIES.map((city) => (
+          <button key={city} type="button" className={selected === city ? 'on' : ''} aria-pressed={selected === city} onClick={() => setSel(city)}>
+            <Emoji char="🏛️" size={18} /><b>{CITY_NAME[city]}</b>
+            {!!data.states?.[city]?.arrears && <i className="tr-strip-dot" aria-label="In arrears" />}
+          </button>
+        ))}
       </div>
 
-      {section === 'allocation' && (
-        <>
-          <small className="muted tr-note">Set by the President: each government’s share of the treasury.</small>
+      {selected === 'federal' ? (
+        <div className="tr-panel">
+          <div className="tr-state">
+            <div className="tr-state-money">
+              <small>Federal treasury</small>
+              <b>{naira(treasury)}</b>
+            </div>
+          </div>
+          <small className="muted tr-note">{p.federalCut}% of every state’s revenue comes here, plus fees and loans.</small>
+          <b className="tr-sub">Grants</b>
+          <Grants canEdit={isPres} busy={busy} />
+          <b className="tr-sub">Departments</b>
           <Budget treasury={treasury} saved={allocation} canEdit={isPres} busy={busy} onSave={(next) => void allocate(next)} />
-        </>
-      )}
-
-      {section === 'pay' && (
-        <>
-          <small className="muted tr-note">Set by the President, their own pay included. The treasury pays whoever is in office once a game day.</small>
-          <PayList treasury={treasury} saved={{ ...NO_SALARIES, ...data.salaries }} paidAt={data.salariesPaidAt ?? null} holders={p} uid={uid} canEdit={isPres} busy={busy} onSave={(next) => void setSalaries(next)} />
-        </>
-      )}
-
-      {section === 'out' && (
-        <div className="list-card">
-          <Spend
-            icon="🍚"
-            title="Palliatives"
-            blurb={`Cash for everyone active today: you pick how much each. Budget: ${naira(palBudget)}.`}
-            who="President · Governors · Minister"
-            status={palWait > 0 ? `Next round in ${left(palWait)}` : palLow ? 'Budget too low' : 'Ready to share'}
-            ready={palWait <= 0 && !palLow}
-          >
-            {isExec && (
-              <div className="row-btns" role="group" aria-label="How much each person gets">
-                {pal.sizes.map((size) => (
-                  <button key={size} className="btn sm" disabled={busy || palWait > 0 || palBudget < size} onClick={() => void palliative(size)}>{nairaShort(size)}</button>
-                ))}
-              </div>
-            )}
-          </Spend>
-          <Spend
-            icon="📝"
-            title="Award a contract"
-            blurb={`Pay a player from the city’s budget. Everybody sees who got it.${cityLeft}`}
-            who="Governors · Minister"
-            status={myCity && dealWait > 0 ? `Next contract in ${left(dealWait)}` : myCity && cityBudget < deal.sizes[0] ? 'City budget too low' : `${naira(deal.sizes[0])} to ${naira(deal.sizes[deal.sizes.length - 1])}`}
-            ready={!!myCity && cityBudget >= deal.sizes[0] && dealWait <= 0}
-          >
-            {myCity && (
-              <>
-                <input className="text-input" aria-label="Contractor's username" value={contractor} placeholder={`@contractor in ${CITY_NAME[myCity]}`} onChange={(e) => setContractor(e.target.value)} />
-                <div className="row-btns">
-                  {deal.sizes.map((size) => (
-                    <button key={size} className="btn sm" disabled={busy || dealWait > 0 || cityBudget < size || !contractor.trim()} onClick={() => void contract(contractor.trim(), size)}>{naira(size)}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </Spend>
-          <Spend
-            icon="🕊️"
-            title="Grant a pardon"
-            blurb="Free somebody from their cell. Everybody is told."
-            who="President · Governors · Minister"
-            status={isExec && mercyWait > 0 ? `Next pardon in ${left(mercyWait)}` : 'Prerogative of mercy'}
-            ready={!(isExec && mercyWait > 0)}
-          >
-            {isExec && (
-              <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (prisoner.trim()) void pardon(prisoner.trim()); }}>
-                <input className="text-input" aria-label="Prisoner's username" value={prisoner} placeholder="@prisoner's username" onChange={(e) => setPrisoner(e.target.value)} />
-                <button className="btn sm" disabled={busy || mercyWait > 0 || !prisoner.trim()}>Pardon</button>
-              </form>
-            )}
-          </Spend>
+          {data.salariesOpen && (
+            <>
+              <b className="tr-sub">Pay</b>
+              <PayList treasury={treasury} saved={{ ...NO_SALARIES, ...data.salaries }} paidAt={data.salariesPaidAt ?? null} holders={p} uid={uid} canEdit={isPres} busy={busy} onSave={(next) => void setSalaries(next)} />
+            </>
+          )}
         </div>
+      ) : (
+        <StateCard
+          city={shown}
+          state={data.states?.[shown]}
+          canEdit={actCity === shown}
+          isHead={myCity === shown}
+          busy={busy}
+          onLevel={(asset, level) => void upkeep(asset, level, standIn)}
+          onRepair={(asset) => void repairAsset(asset, standIn)}
+          onAsk={(amount) => void askGrant(amount)}
+          onLaw={(key, value) => void stateLaw(key, value, standIn)}
+          onPay={(step) => void payShare(step)}
+        />
       )}
 
-      {section === 'repairs' && (
-        <>
+      {isExec && (
+      <section className="tr-block">
+        <h4>Spend</h4>
           <div className="list-card">
             <Spend
-              icon="🕳️"
-              title="Pothole repairs"
-              blurb={`${naira(Math.min(...FIX_COSTS))} to ${naira(Math.max(...FIX_COSTS))} each.${cityLeft}`}
-              who="Governors · Minister"
-              status={potholes === undefined ? 'Counting…' : potholes ? `${potholes} open` : 'Roads are smooth'}
-              ready={potholes === 0}
+              icon="🍚"
+              title="Palliatives"
+              blurb={`Cash for everyone active today. ${isPres || !actCity ? 'Federal' : CITY_NAME[actCity]} budget: ${naira(palBudget)}.`}
+              who="President · Governors"
+              status={palWait > 0 ? `Next in ${left(palWait)}` : locked && actCity ? lockWhy : palLow ? 'Budget too low' : 'Ready'}
+              ready={palWait <= 0 && !palLow && !(locked && !!actCity)}
             >
-              {!!myCity && !!potholes && <button className="btn sm" onClick={toRepairs}>Fix potholes ↓</button>}
+              {isExec && (
+                <div className="row-btns" role="group" aria-label="How much each person gets">
+                  {pal.sizes.map((size) => (
+                    <button key={size} className="btn sm" disabled={busy || palWait > 0 || palBudget < size || (locked && !!actCity)} onClick={() => void palliative(size, standIn)}>{nairaShort(size)}</button>
+                  ))}
+                </div>
+              )}
             </Spend>
             <Spend
-              icon="💡"
-              title="Street light repairs"
-              blurb={`${naira(LAMPS.fixCost)} each.${cityLeft}`}
-              who="Governors · Minister"
-              status={darkLamps === undefined ? 'Counting…' : darkLamps ? `${darkLamps} out` : 'All lights working'}
-              ready={darkLamps === 0}
+              icon="📝"
+              title="Award a contract"
+              blurb={`Pay a player from the state treasury.${cityLeft}`}
+              who="Governors"
+              status={actCity && locked ? lockWhy : actCity && dealWait > 0 ? `Next in ${left(dealWait)}` : actCity && cityBudget < deal.sizes[0] ? 'Treasury too low' : `${nairaShort(deal.sizes[0])} to ${nairaShort(deal.sizes[deal.sizes.length - 1])}`}
+              ready={!!actCity && !locked && cityBudget >= deal.sizes[0] && dealWait <= 0}
             >
-              {!!myCity && !!darkLamps && <button className="btn sm" onClick={toRepairs}>Fix lights ↓</button>}
+              {actCity && (
+                <>
+                  <input className="text-input" aria-label="Contractor's username" value={contractor} placeholder={`@contractor in ${CITY_NAME[actCity]}`} onChange={(e) => setContractor(e.target.value)} />
+                  <div className="row-btns">
+                    {deal.sizes.map((size) => (
+                      <button key={size} className="btn sm" disabled={busy || locked || dealWait > 0 || cityBudget < size || !contractor.trim()} onClick={() => void contract(contractor.trim(), size, standIn)}>{naira(size)}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </Spend>
+            <Spend
+              icon="🕊️"
+              title="Grant a pardon"
+              blurb="Free somebody from their cell. Everybody is told."
+              who="President · Governors"
+              status={actCity && houseShut ? lockWhy : isExec && mercyWait > 0 ? `Next in ${left(mercyWait)}` : 'Ready'}
+              ready={!(isExec && mercyWait > 0) && !(actCity && houseShut)}
+            >
+              {isExec && (
+                <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (prisoner.trim()) void pardon(prisoner.trim()); }}>
+                  <input className="text-input" aria-label="Prisoner's username" value={prisoner} placeholder="@prisoner's username" onChange={(e) => setPrisoner(e.target.value)} />
+                  <button className="btn sm" disabled={busy || mercyWait > 0 || !prisoner.trim() || (!!actCity && houseShut)}>Pardon</button>
+                </form>
+              )}
             </Spend>
           </div>
+          {!!actCity && (
+            <div className="list-card">
+              <Spend
+                icon="🕳️"
+                title="Potholes"
+                blurb={`${nairaShort(Math.min(...FIX_COSTS))} to ${nairaShort(Math.max(...FIX_COSTS))} each.${cityLeft}`}
+                who="Governors"
+                status={potholes === undefined ? 'Counting…' : potholes ? `${potholes} open` : 'Smooth'}
+                ready={potholes === 0}
+              >
+                {!!potholes && <button className="btn sm" onClick={toRepairs}>Fix potholes ↓</button>}
+              </Spend>
+              <Spend
+                icon="💡"
+                title="Street lights"
+                blurb={`${nairaShort(LAMPS.fixCost)} each.${cityLeft}`}
+                who="Governors"
+                status={darkLamps === undefined ? 'Counting…' : darkLamps ? `${darkLamps} out` : 'All working'}
+                ready={darkLamps === 0}
+              >
+                {!!darkLamps && <button className="btn sm" onClick={toRepairs}>Fix lights ↓</button>}
+              </Spend>
+            </div>
+          )}
           {repairs && <div ref={repairsAt} className="tr-repairs">{repairs}</div>}
-        </>
+      </section>
       )}
 
-      {section === 'danger' && (
-        <>
-          <small className="tr-note tr-warn">Abuse of office. Everybody hears about it, and the EFCC is watching.</small>
+      {(!!office || !!actCity) && (
+      <section className="tr-block danger">
+        <h4>Danger</h4>
+          <small className="tr-note tr-warn">Everybody hears about it. The EFCC is watching.</small>
           <div className="list-card tr-danger">
             <Spend
               shady
               icon="🚧"
               title="Road project"
               blurb={`Dig up a rival’s street: slow travel and double fares for ${project.hours} hours.`}
-              who="Governors · Minister"
-              status={projectLow ? 'City budget too low' : `${naira(project.cost)} a street`}
+              who="Governors"
+              status={projectLow ? (locked ? lockWhy : 'Treasury too low') : `${naira(project.cost)} a street`}
             >
-              {myCity && (
-                <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (target.trim()) void roadProject(target.trim()); }}>
+              {actCity && (
+                <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (target.trim()) void roadProject(target.trim(), standIn); }}>
                   <input className="text-input" aria-label="Rival's username" value={target} placeholder="@rival's username" onChange={(e) => setTarget(e.target.value)} />
                   <button className="btn sm" disabled={busy || projectLow || !target.trim()}>Dig · {naira(project.cost)}</button>
                 </form>
@@ -423,7 +620,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
                 shady
                 icon="🐍"
                 title="Let a snake swallow some money"
-                blurb={`Take ${naira(snakeTake)} quietly. If caught: out of office, ${naira(snake.fine)} fine and jail.`}
+                blurb={`Take ${naira(snakeTake)} from ${myCity ? 'your state’s' : 'the federal'} treasury. The EFCC chair decides: refuse and you are out of office, with a ${naira(snake.fine)} fine and jail.`}
                 who="Office holders only"
                 status={snakeWait > 0 ? `Lie low for ${left(snakeWait)}` : snakeTake < 1_000 ? 'Nothing to take' : 'Nobody is looking'}
               >
@@ -438,7 +635,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
               </Spend>
             )}
           </div>
-        </>
+      </section>
       )}
     </>
   );

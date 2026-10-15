@@ -6,6 +6,8 @@
 // that clock: pay for time actually worked, sales of things actually owned.
 // The client shows `balance + its not-yet-acknowledged events`, which converges on the server's number.
 
+import { cityNow, homeLaws, stateRevenueSql } from './state';
+import type { CivicCity } from '../src/game/civic';
 import { ITEMS, JOBS } from '../src/game/catalog';
 import { CAR_BY_ID, CAR_RESALE_FACTOR, JET_BY_ID, jetResale } from '../src/game/cars';
 import { PHONE_BY_ID, PHONE_RESALE_FACTOR } from '../src/game/phones';
@@ -303,14 +305,16 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
 export const taxOf = (amount: number, rate: number) => Math.floor((amount * rate) / 100);
 
 /** A charge the state keeps (fees, permits, levies): debits the player like applyStmts and credits the treasury with it. */
-export function treasuryStmts(db: D1Database, uid: string, clientId: string, kind: string, ref: string | null, amount: number, gate: string | null = null) {
+export function treasuryStmts(db: D1Database, uid: string, clientId: string, kind: string, ref: string | null, amount: number, gate: string | null = null, scope: 'state' | 'federal' = 'state', city?: CivicCity) {
   const [insert, debit, done] = applyStmts(db, uid, clientId, kind, ref, -amount, gate);
+  const fresh = 'EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)';
   return [
     insert,
     debit,
-    db
-      .prepare('UPDATE civic_policies SET treasury = treasury + ?3 WHERE id = 1 AND EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)')
-      .bind(uid, clientId, amount),
+    // What is paid lands in the state the player lives in; federal charges (election fees) go to the federal treasury.
+    scope === 'federal'
+      ? db.prepare(`UPDATE civic_policies SET treasury = treasury + ?3 WHERE id = 1 AND ${fresh}`).bind(uid, clientId, amount)
+      : db.prepare(stateRevenueSql('?3', '?1', fresh, city)).bind(uid, clientId, amount),
     done,
   ];
 }
@@ -328,20 +332,20 @@ function stateCut(kind: string, ref: unknown, paid: number) {
 }
 
 /** applyStmts, with `cut` of the money credited to the treasury while the ledger row is still fresh (so a retry never pays twice). */
-function spendStmts(db: D1Database, uid: string, clientId: string, kind: string, ref: string | null, amount: number, cut: number, gate: string) {
+function spendStmts(db: D1Database, uid: string, clientId: string, kind: string, ref: string | null, amount: number, cut: number, gate: string, city?: CivicCity) {
   const stmts = applyStmts(db, uid, clientId, kind, ref, amount, gate);
   if (cut <= 0 || kind === 'debt') return stmts;
   const done = stmts.pop()!;
   return [
     ...stmts,
     db
-      .prepare('UPDATE civic_policies SET treasury = treasury + ?3 WHERE id = 1 AND EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)')
+      .prepare(stateRevenueSql('?3', '?1', 'EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)', city))
       .bind(uid, clientId, cut),
     done,
   ];
 }
 
-const taxStmts = (db: D1Database, uid: string, eventId: string, tax: number, gate: string) => treasuryStmts(db, uid, `tax:${eventId}`, 'tax', 'state', tax, gate);
+const taxStmts = (db: D1Database, uid: string, eventId: string, tax: number, gate: string, city?: CivicCity) => treasuryStmts(db, uid, `tax:${eventId}`, 'tax', 'state', tax, gate, 'state', city);
 
 /** Rent and sale payouts must come from a property the player actually paid for. */
 function checkProperty(books: Map<string, PropertyBook>, ref: string, amount: number, now: number): string | null {
@@ -372,7 +376,7 @@ const birthState = (db: D1Database, uid: string) =>
  * Requests that overlap would otherwise each sell the same car. A sync that loses starts over; null means it kept
  * losing, and the client should send again.
  */
-export async function applyEvents(db: D1Database, uid: string, list: unknown) {
+export async function applyEvents(db: D1Database, uid: string, list: unknown, here?: CivicCity) {
   const events = (Array.isArray(list) ? (list as GameEvent[]) : []).filter((e) => e && typeof e === 'object').slice(0, MAX_EVENTS);
   for (let attempt = 0; attempt < SYNC_TRIES; attempt++) {
     const { origin, balance } = await getWallet(db, uid);
@@ -390,7 +394,10 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown) {
     }
     const fresh = events.filter((e) => !seen.has(String(e.id)));
     const policy = await loadPolicy(db);
-    const taxRate = policy?.taxRate ?? 0;
+    const presidentRate = policy?.taxRate ?? 0;
+    // The state they live in adds its own wage tax to the president's.
+    const stateTax = (await homeLaws(db, uid)).incomeTax;
+    const taxRate = presidentRate + stateTax;
     const { rejected, extra, paid } = await process(db, uid, state, fresh, originOf(origin).pay, balance, taxRate, fresh.some((e) => e.kind === 'work') ? await careerPayMults(db, uid) : {});
     const accepted = fresh.filter((e) => !rejected.has(String(e.id)));
     // The version this sync leaves behind: always past the one it read, even when no time has gone by.
@@ -398,7 +405,7 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown) {
     const gate = `sync:${crypto.randomUUID()}`;
     const taxes = accepted.flatMap((e) => {
       const tax = (e.kind === 'work' || e.kind === 'gig') && (e.amount ?? 0) > 0 ? taxOf(e.amount!, taxRate) : 0;
-      return tax > 0 ? taxStmts(db, uid, String(e.id), tax, gate) : [];
+      return tax > 0 ? taxStmts(db, uid, String(e.id), tax, gate, here) : [];
     });
     const [claim] = await db.batch([
       db
@@ -409,7 +416,7 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown) {
         )
         .bind(uid, gate, Date.now(), state.rev, balance),
       // Task events go in the ledger too (amount 0) so retries are recognised.
-      ...accepted.flatMap((e) => spendStmts(db, uid, `ev:${e.id}`, e.kind, typeof e.ref === 'string' ? e.ref.slice(0, 40) : (e.action ?? null), e.amount ?? 0, stateCut(e.kind, e.ref, paid.get(String(e.id)) ?? 0), gate)),
+      ...accepted.flatMap((e) => spendStmts(db, uid, `ev:${e.id}`, e.kind, typeof e.ref === 'string' ? e.ref.slice(0, 40) : (e.action ?? null), e.amount ?? 0, stateCut(e.kind, e.ref, paid.get(String(e.id)) ?? 0), gate, here)),
       ...taxes,
       ...extra.map((make) => make(gate)),
       ...saveStateStmts(db, uid, state, gate),
@@ -417,7 +424,7 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown) {
     ]);
     if (!claim.meta.changes) continue;
     const wallet = await getWallet(db, uid);
-    return { balance: wallet.balance, debt: wallet.debt, taxRate, okadaBan: policy?.okadaBan ?? [], accepted: [...seen, ...accepted.map((e) => e.id)], rejected: Object.fromEntries(rejected) };
+    return { balance: wallet.balance, debt: wallet.debt, taxRate: presidentRate, stateTax, okadaBan: policy?.okadaBan ?? [], accepted: [...seen, ...accepted.map((e) => e.id)], rejected: Object.fromEntries(rejected) };
   }
   return null;
 }
@@ -432,7 +439,9 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
 
   if (path === '/api/wallet/events' && req.method === 'POST') {
     const body = (await req.json().catch(() => null)) as { events?: unknown } | null;
-    const result = await applyEvents(db, uid, body?.events);
+    // Only asked when there is something to settle: where you stand decides which state is paid.
+    const here = Array.isArray(body?.events) && body.events.length ? await cityNow(env, uid) : undefined;
+    const result = await applyEvents(db, uid, body?.events, here);
     // The client keeps its events and sends them again (src/net/wallet.ts).
     return result ? json(result) : json({ error: 'Busy. Try again' }, 503);
   }

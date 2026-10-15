@@ -20,23 +20,34 @@ import {
   type Message,
   type PlayerRef,
 } from '../net/social';
-import { enterHouseVisit } from '../net/visit';
 import { askOut, loadLove, loveAction, useHangouts } from '../net/hangout';
 import { loadGroups, useGroups } from '../net/groups';
 import { GroupThread, NewGroup } from './GroupChat';
-import { useVisit } from '../game/visits';
+import { inviteSpot, useVisit } from '../game/visits';
+import { planVisit } from './visitTrip';
+import { REGION_BY_ID } from '../game/property';
 import { placeToShare, sharedPlace, type SharedPlace } from '../game/placeShare';
 import { cityMap } from '../game/city';
 import { regionOf } from '../game/regions';
 import { roomParent } from '../game/villa';
-import { copyLink, followDeepLink, inviteLink, placeLink } from '../net/deeplink';
+import { copyAndShare, followDeepLink, inviteLink, placeLink, shopIdOf, shopLink } from '../net/deeplink';
+import { loadCareer, useCareer, type BizInfo } from '../net/career';
+import type { SharedShop } from '../net/market';
 import { FriendsTab } from './Community';
+import { LootCases } from './LootCases';
 import { Emoji } from './Icons';
 import { ReactionOr, ReactionToggle, ReactionTray, useReactions } from './Reactions';
 import { useNet } from '../net/multiplayer';
 import { PlayerLabel, PlayerName } from './PlayerName';
 import { Face } from './Face';
 import './chat-money.css';
+
+/** Where an invited house is, for the card: its estate and state. */
+const spotName = (spot: { city: string; region: string | null }) => {
+  const city = regionOf(spot.city).name;
+  const estate = spot.region ? REGION_BY_ID[spot.region]?.name : null;
+  return estate ? `${estate}, ${city}` : city;
+};
 
 type InboxTab = 'chats' | 'friends' | 'groups';
 
@@ -102,10 +113,51 @@ function preview(m: Message, mine: boolean) {
   if (m.kind === 'love') return m.text === 'marry' ? (mine ? 'You proposed 💍' : 'Proposed to you 💍') : (mine ? 'You asked them out 💌' : 'Asked you out 💌');
   const shared = sharedPlace(m.text);
   if (shared) return `${mine ? 'You shared' : 'Shared'} 📍 ${shared.place.name}`;
+  if (shopIdOf(m.text)) return `${mine ? 'You shared' : 'Shared'} 🏪 a business`;
   return (mine ? 'You: ' : '') + m.text;
 }
 
 /** Out to the map with the shared place picked, so you choose how to get there. */
+/** Shops already looked up for chat cards, so a thread doesn't ask again for each render. */
+const shopCache = new Map<number, Promise<SharedShop | null>>();
+const lookUpShop = (id: number) => {
+  let found = shopCache.get(id);
+  if (!found) {
+    found = fetch(`/api/shop/${id}`).then((r) => (r.ok ? (r.json() as Promise<SharedShop>) : null)).catch(() => null);
+    shopCache.set(id, found);
+  }
+  return found;
+};
+
+/** A business someone shared in the chat: its badge and name, and a button that opens its shelf. */
+function ShopCard({ id, mine, who, at }: { id: number; mine: boolean; who: string; at: number }) {
+  const [shop, setShop] = useState<SharedShop | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void lookUpShop(id).then((s) => live && setShop(s));
+    return () => { live = false; };
+  }, [id]);
+  return (
+    <div className={`bub-wrap ${mine ? 'mine' : ''}`}>
+      <div className={`money-card ${mine ? 'mine' : ''} invite-card place-card`} onClick={() => void followDeepLink({ kind: 'shop', id })}>
+        <small><Emoji char="🏪" size={14} /> {mine ? `You shared a business with @${who}` : `@${who} shared a business`}</small>
+        {shop === undefined && <p className="muted">Loading…</p>}
+        {shop === null && <p className="muted">This shop is gone.</p>}
+        {shop && (
+          <>
+            <p><Emoji char={shop.icon} size={18} /> <b>{shop.name}</b></p>
+            <small>{shop.where}{shop.owner ? ` · @${shop.owner}` : ''}{shop.open ? ' · Open' : ''}</small>
+          </>
+        )}
+        <div className="row-btns">
+          <button className="btn sm go">See the shop</button>
+        </div>
+        <small>{timeAgo(at)}</small>
+      </div>
+    </div>
+  );
+}
+
 function goToShared({ city, place }: SharedPlace) {
   const g = useGame.getState();
   if (g.view === 'place' && cityMap(g.destinationId).id === city && roomParent(g.insideId) === place.id) return g.toast(`${place.icon} You are already at ${place.name}`);
@@ -252,6 +304,8 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
   const online = useNet((s) => s.players);
   const [text, setText] = useState('');
   const [money, setMoney] = useState<null | 'pay' | 'request'>(null);
+  // Invite them to my house, or ask to visit theirs: one sheet, like the money one.
+  const [house, setHouse] = useState<null | 'invite' | 'visit'>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -318,6 +372,20 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
   });
 
   // Sends where you are as a card they can tap to come and meet you.
+  // ...or one of your businesses, as a card that opens its shelf.
+  const businesses = useCareer((s) => s.businesses);
+  const [pickBiz, setPickBiz] = useState(false);
+  const shareBusiness = async () => {
+    if (!useCareer.getState().loaded) await loadCareer();
+    const mine = useCareer.getState().businesses.filter((b) => b.hasStall);
+    if (!mine.length) throw new Error('You have no business to share yet. Open one in the Business app.');
+    if (mine.length === 1) return sendBusiness(mine[0]);
+    setPickBiz(true);
+  };
+  const sendBusiness = async (b: BizInfo) => {
+    setPickBiz(false);
+    await sendText(uid, shopLink(b.id));
+  };
   const shareLocation = async () => {
     const here = placeToShare();
     if (!here) throw new Error('Step out to a place in town to share it. At home, 🏠 Invite brings them to you.');
@@ -352,23 +420,27 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
         </button>
         <Face uid={uid} username={player?.username} look={player?.look} />
         <b>{player ? <PlayerName uid={uid} username={player.username} name={player.name} /> : '@…'}{online[uid] && <span className="online-label"> · Online</span>}</b>
-        {me && (
-          <button className="btn sm" title="Copy your invite link" onClick={() => void copyLink(inviteLink(me), 'Play Naija City with me', '🔗 Invite link copied. Send it to a friend')}>
-            <Emoji char="🎁" size={14} /> Invite
-          </button>
-        )}
       </div>
       <div className="thread-actions" aria-label="Chat actions">
         <button className="thread-action-pill send" onClick={() => setMoney('pay')}><i><b>₦</b></i> Money</button>
-        <button className="thread-action-pill invite" onClick={() => void houseAction(() => sendHomeInvite(uid))}><i><Emoji char="🏠" size={15} /></i> Invite</button>
-        <button className="thread-action-pill visit" onClick={() => void houseAction(() => requestHomeVisit(uid))}><i><Emoji char="🚪" size={15} /></i> Visit</button>
         <LovePill lover={lover} busy={loveBusy} onAct={async (fn) => {
           setLoveBusy(true);
           // The love card is only pushed to the other person, so fetch our own copy.
           try { await fn(); await load(); } finally { setLoveBusy(false); }
         }} username={player?.username} uid={uid} />
+        <button className="thread-action-pill invite" onClick={() => setHouse('invite')}><i><Emoji char="🏠" size={15} /></i> House</button>
         <button className="thread-action-pill place" onClick={() => void houseAction(shareLocation)}><i><Emoji char="📍" size={15} /></i> Location</button>
+        <button className="thread-action-pill place" onClick={() => void houseAction(shareBusiness)}><i><Emoji char="🏪" size={15} /></i> Business</button>
       </div>
+      {pickBiz && (
+        <div className="biz-share-pick" role="group" aria-label="Which business">
+          {businesses.filter((b) => b.hasStall).map((b) => (
+            <button key={b.id} className="btn sm" onClick={() => void houseAction(() => sendBusiness(b))}><Emoji char={b.icon} size={14} /> {b.name}</button>
+          ))}
+          <button className="ghost-btn" onClick={() => setPickBiz(false)}>Cancel</button>
+        </div>
+      )}
+      <LootCases uid={myUid ?? ''} only={uid} />
       <div
         className="thread-list"
         onClick={(e) => {
@@ -398,7 +470,17 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
       </div>
       {error && <p className="auth-msg">{error}</p>}
       {money ? (
-        <MoneyForm kind={money} uid={uid} who={player?.username ?? 'player'} onDone={() => setMoney(null)} />
+        <MoneyForm uid={uid} who={player?.username ?? 'player'} onDone={() => setMoney(null)} />
+      ) : house ? (
+        <HouseForm
+          kind={house}
+          who={player?.username ?? 'player'}
+          onDone={() => setHouse(null)}
+          onSend={async (kind) => {
+            if (kind === 'invite') await sendHomeInvite(uid);
+            else await requestHomeVisit(uid);
+          }}
+        />
       ) : (
         <form className="composer-wrap" onSubmit={submit}>
           {replyTo && (
@@ -418,6 +500,18 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
             </div>
           )}
           {reactions.open && <ReactionTray onPick={reactions.pick} />}
+          <div className="composer-line">
+          {me && (
+            <button
+              type="button"
+              className="composer-link-pill"
+              title="Share your invite link"
+              aria-label="Copy and share your game invite link"
+              onClick={() => void copyAndShare(inviteLink(me), 'Play Naija City with me', '🔗 Invite link copied')}
+            >
+              <Emoji char="🎁" size={20} />
+            </button>
+          )}
           <div className="composer">
             <ReactionToggle open={reactions.open} onToggle={reactions.toggle} />
             <input
@@ -430,6 +524,7 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
             <button className="btn sm go" disabled={!text.trim()}>
               Send
             </button>
+          </div>
           </div>
         </form>
       )}
@@ -538,6 +633,10 @@ function Bubble({
     </div>
   );
 
+  // A shop link on its own is a shared business.
+  const shopId = m.kind === 'text' ? shopIdOf(m.text) : null;
+  if (shopId) return <ShopCard id={shopId} mine={mine} who={who} at={m.at} />;
+
   // A place link on its own is a shared location: a card that opens the place's travel sheet.
   const shared = m.kind === 'text' ? sharedPlace(m.text) : null;
   if (shared) {
@@ -579,17 +678,24 @@ function Bubble({
   }
 
   if (m.kind === 'invite') {
+    const spot = inviteSpot(m.text);
     const actOnInvite = (fn: () => Promise<void>) => act(fn);
     return (
       <div className={`bub-wrap ${mine ? 'mine' : ''}`}>
         <div className={`money-card ${mine ? 'mine' : ''} invite-card`}>
           <small><Emoji char="🏠" size={14} /> {mine ? `House invite to @${who}` : `@${who} invited you home`}</small>
+          {spot && <small className="invite-where"><Emoji char="📍" size={12} /> {spotName(spot)}</small>}
           {!mine && m.status === 'open' && (
             <div className="row-btns">
               <button className="btn sm go" disabled={busy || visiting} onClick={() => actOnInvite(async () => {
-                const result = await acceptHomeInvite(m.id);
-                enterHouseVisit(result.home);
-              })}>{visiting ? 'Already visiting' : 'Visit'}</button>
+                // You travel there like anywhere else; the door opens only when you arrive.
+                if (spot) {
+                  planVisit({ ...spot, owner: who, finish: async () => (await acceptHomeInvite(m.id)).home });
+                } else {
+                  const { home } = await acceptHomeInvite(m.id);
+                  planVisit({ city: home.city ?? 'kaduna', region: home.region ?? null, slot: home.slot ?? null, owner: who, finish: async () => home });
+                }
+              })}>{visiting ? 'Already visiting' : 'Go there'}</button>
               <button className="btn sm" disabled={busy} onClick={() => actOnInvite(async () => { await declineHomeInvite(m.id); })}>Decline</button>
             </div>
           )}
@@ -616,8 +722,8 @@ function Bubble({
             <div className="row-btns">
               <button className="btn sm go" disabled={busy || visiting} onClick={() => act(async () => {
                 const { home } = await enterAcceptedVisit(m.id);
-                enterHouseVisit(home);
-              })}>{visiting ? 'Already visiting' : 'Go in'}</button>
+                planVisit({ city: home.city ?? 'kaduna', region: home.region ?? null, slot: home.slot ?? null, owner: who, finish: async () => home });
+              })}>{visiting ? 'Already visiting' : 'Go there'}</button>
             </div>
           )}
           {m.status === 'open' && mine && <span className="money-status">Waiting</span>}
@@ -709,22 +815,49 @@ function Bubble({
   );
 }
 
-/** Amounts the quick buttons add on top of what is typed. */
-const QUICK_AMOUNTS = [1_000, 5_000, 20_000, 100_000];
-
-function MoneyForm({ kind: initialKind, uid, who, onDone }: { kind: 'pay' | 'request'; uid: string; who: string; onDone: () => void }) {
-  const money = useGame((s) => s.money);
+/** One sheet for both house moves: ask them over to yours, or ask to go to theirs. */
+function HouseForm({ kind: initialKind, who, onDone, onSend }: { kind: 'invite' | 'visit'; who: string; onDone: () => void; onSend: (kind: 'invite' | 'visit') => Promise<void> }) {
   const [kind, setKind] = useState(initialKind);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await onSend(kind);
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <form className={`pay-sheet ${kind === 'invite' ? 'pay' : 'request'}`} onSubmit={submit}>
+      <div className="pay-sheet-head">
+        <div className="pay-seg">
+          <button type="button" className={kind === 'invite' ? 'on' : ''} onClick={() => setKind('invite')}>🏠 Invite</button>
+          <button type="button" className={kind === 'visit' ? 'on' : ''} onClick={() => setKind('visit')}>🚪 Visit</button>
+        </div>
+        <button type="button" className="pay-sheet-x" onClick={onDone} aria-label="Cancel">✕</button>
+      </div>
+      <p className="muted small">{kind === 'invite' ? `Invite @${who} to your house. They travel there to come in.` : `Ask to visit @${who}’s house. They can let you in or decline.`}</p>
+      {error && <p className="auth-msg">{error}</p>}
+      <button className="btn go pay-submit" disabled={busy}>{busy ? '…' : kind === 'invite' ? `Invite @${who}` : `Ask to visit @${who}`}</button>
+    </form>
+  );
+}
+
+function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () => void }) {
+  const money = useGame((s) => s.money);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const n = Math.floor(Number(amount.replace(/[^\d]/g, '')) || 0);
-  const tooMuch = kind === 'pay' && n > money;
+  const tooMuch = n > money;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (n < 1 || tooMuch) return;
+  const go = async (kind: 'pay' | 'request') => {
+    if (n < 1 || (kind === 'pay' && tooMuch)) return;
     setBusy(true);
     try {
       if (kind === 'pay') await sendMoney(uid, n, note.trim());
@@ -737,64 +870,33 @@ function MoneyForm({ kind: initialKind, uid, who, onDone }: { kind: 'pay' | 'req
   };
 
   const shown = n ? n.toLocaleString() : '';
-  const set = (v: number) => (setAmount(String(Math.max(0, Math.floor(v)))), setError(null));
-
   return (
-    <form className={`pay-sheet ${kind} ${tooMuch ? 'over' : ''}`} onSubmit={submit}>
+    <form className={`pay-sheet ${tooMuch ? 'over' : ''}`} onSubmit={(e: FormEvent) => { e.preventDefault(); void go('pay'); }}>
       <div className="pay-sheet-head">
-        <div className="pay-seg">
-          <button type="button" className={kind === 'pay' ? 'on' : ''} onClick={() => setKind('pay')}>
-            ↗ Send
-          </button>
-          <button type="button" className={kind === 'request' ? 'on' : ''} onClick={() => setKind('request')}>
-            ↙ Request
-          </button>
-        </div>
+        <label className="pay-amount">
+          <small>@{who}</small>
+          <div className="pay-amount-row">
+            <span>₦</span>
+            <input
+              autoFocus
+              inputMode="numeric"
+              placeholder="0"
+              size={Math.max(1, shown.length)}
+              value={shown}
+              onChange={(e) => (setAmount(e.target.value), setError(null))}
+            />
+          </div>
+        </label>
         <button type="button" className="pay-sheet-x" onClick={onDone} aria-label="Cancel">
           ✕
         </button>
       </div>
-      <label className="pay-amount">
-        <small>{kind === 'pay' ? `To @${who}` : `From @${who}`}</small>
-        <div className="pay-amount-row">
-          <span>₦</span>
-          <input
-            autoFocus
-            inputMode="numeric"
-            placeholder="0"
-            size={Math.max(1, shown.length)}
-            value={shown}
-            onChange={(e) => (setAmount(e.target.value), setError(null))}
-          />
-        </div>
-      </label>
-      <div className="pay-quick">
-        {QUICK_AMOUNTS.map((q) => (
-          <button key={q} type="button" onClick={() => set(n + q)}>
-            +{q / 1000}k
-          </button>
-        ))}
-        {kind === 'pay' && money >= 1 && (
-          <button type="button" onClick={() => set(money)}>
-            All
-          </button>
-        )}
+      <input className="note-input" value={note} maxLength={140} placeholder="Note (optional)" onChange={(e) => setNote(e.target.value)} />
+      {(error || (tooMuch && n > 0)) && <p className="auth-msg">{error ?? `You are ${naira(n - money)} short to send this`}</p>}
+      <div className="pay-actions">
+        <button type="button" className="btn go pay-submit" disabled={busy || n < 1 || tooMuch} onClick={() => void go('pay')}>↗ Send</button>
+        <button type="button" className="btn pay-submit request" disabled={busy || n < 1} onClick={() => void go('request')}>↙ Request</button>
       </div>
-      <input className="note-input" value={note} maxLength={140} placeholder={kind === 'pay' ? 'What for? (optional)' : 'Reason (optional)'} onChange={(e) => setNote(e.target.value)} />
-      {kind === 'pay' ? (
-        <div className={`pay-sheet-info ${tooMuch ? 'bad' : ''}`}>
-          <span>Balance {naira(money)}</span>
-          {n > 0 && <span>{tooMuch ? `${naira(n - money)} short` : `${naira(money - n)} left after`}</span>}
-        </div>
-      ) : (
-        <div className="pay-sheet-info">
-          <span>@{who} can pay or decline it</span>
-        </div>
-      )}
-      {error && <p className="auth-msg">{error}</p>}
-      <button className="btn go pay-submit" disabled={busy || n < 1 || tooMuch}>
-        {busy ? '…' : `${kind === 'pay' ? 'Send' : 'Request'}${n ? ` ${naira(n)}` : ''}`}
-      </button>
     </form>
   );
 }

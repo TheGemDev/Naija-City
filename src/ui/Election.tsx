@@ -5,13 +5,13 @@
 
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, ELECTION_DURATION_MS, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
+import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { useCivic, type CivicCandidate } from '../net/civic';
 import { useSession } from '../net/session';
 import { Face } from './Face';
-import { Chevron, Emoji } from './Icons';
+import { Emoji } from './Icons';
 import { LawsTab } from './Laws';
 import './election.css';
 
@@ -35,70 +35,54 @@ function useTick(ms = 30_000) {
   }, [ms]);
 }
 
-/** Whether your campaign is folded away, kept while the board is closed and reopened. */
-const useCampaignFold = create<{ open: boolean }>(() => ({ open: true }));
 const EVENTS = Object.keys(CAMPAIGN_EVENTS) as CampaignEvent[];
+/** How many candidates a race shows before "+n more": the board stays short. */
+const SHOWN = 3;
+/** A crowded race (more than two) starts folded to this many faces and a +N. */
+const FACES = 6;
 
-/**
- * Your own campaign in a race. A bar with your support that folds the rest away; under it the events as tabs, one shown at
- * a time with what it does and what it costs, and (until the polls open) the way out of the race.
- */
+/** Your own campaign in a race: your support, the five things you can do (one tap each, cost under it) and the way out. */
 function Campaign({ office, me, voting }: { office: PoliticalOffice; me: CivicCandidate; voting: boolean }) {
   const money = useGame((s) => s.money);
   const busy = useCivic((s) => s.busy);
   const campaign = useCivic((s) => s.campaign);
   const withdraw = useCivic((s) => s.withdraw);
-  const open = useCampaignFold((s) => s.open);
-  const [pick, setPick] = useState<CampaignEvent>('rally');
   const [leaving, setLeaving] = useState(false);
-  const def = CAMPAIGN_EVENTS[pick];
-  const shady = pick === 'buyVotes';
   const cooldown = Math.max(0, me.lastActionAt + CAMPAIGN_COOLDOWN_MS - Date.now());
   const fee = withdrawalFee(office);
   return (
     <div className="ev-campaign">
-      <button className="ev-camp-head" aria-expanded={open} onClick={() => useCampaignFold.setState({ open: !open })}>
-        <b><Emoji char="📣" size={16} /> Your campaign</b>
-        <span className="ev-meter" aria-label={`${me.support}% support`}><i style={{ width: `${me.support}%` }} /></span>
+      <div className="ev-support">
+        <b>Your support</b>
+        <span className="ev-bar" aria-label={`${me.support}% support`}><i style={{ width: `${me.support}%` }} /></span>
         <small>{me.support}%</small>
-        <Chevron dir={open ? 'up' : 'down'} size={14} />
-      </button>
-      {open && (
-        <div className="ev-camp-body">
-          <div className="ev-picks" role="tablist">
-            {EVENTS.map((ev) => (
-              <button key={ev} role="tab" aria-selected={ev === pick} className={`ev-pick ${ev === pick ? 'on' : ''} ${ev === 'buyVotes' ? 'shady' : ''}`} onClick={() => setPick(ev)}>
-                <Emoji char={CAMPAIGN_EVENTS[ev].icon} size={20} />
-                <span>{CAMPAIGN_EVENTS[ev].label}</span>
-              </button>
-            ))}
-          </div>
-          <div className={`ev-plan ${shady ? 'shady' : ''}`}>
-            <p>{def.blurb}</p>
-            {shady && <span className="ev-risk"><Emoji char="🚨" size={12} /> {Math.round(CHAOS.stingChance * 100)}%+ chance of an EFCC sting</span>}
-            <button className="ev-go" disabled={busy || cooldown > 0 || money < def.cost} onClick={() => void campaign(office, pick)}>
-              <span>{def.label}<small>+{def.support} support</small></span>
-              <b>{nairaShort(def.cost)}</b>
+      </div>
+      <div className="ev-tiles">
+        {EVENTS.map((ev) => {
+          const def = CAMPAIGN_EVENTS[ev];
+          return (
+            <button key={ev} className={`ev-tile ${ev === 'buyVotes' ? 'risky' : ''}`} title={`${def.blurb}${ev === 'buyVotes' ? ` ${Math.round(CHAOS.stingChance * 100)}%+ chance of an EFCC sting.` : ''}`} disabled={busy || cooldown > 0 || money < def.cost} onClick={() => void campaign(office, ev)}>
+              <Emoji char={def.icon} size={20} />
+              <b>{def.label}</b>
+              <small>{nairaShort(def.cost)}</small>
             </button>
-            {cooldown > 0 && <small><Emoji char="⏱️" size={12} /> Next campaign event in {left(cooldown)}.</small>}
-          </div>
-          {!voting && !leaving && <button className="ev-leave-ask" onClick={() => setLeaving(true)}>Withdraw from the race</button>}
-          {!voting && leaving && (
-            <div className="ev-leave">
-              <p>Withdrawing costs {naira(fee)}. Your filing fee is not refunded, and your support and billboards go.</p>
-              <div>
-                <button className="out" disabled={busy || money < fee} onClick={() => void withdraw(office)}>Withdraw</button>
-                <button onClick={() => setLeaving(false)}>Stay in the race</button>
-              </div>
-            </div>
-          )}
+          );
+        })}
+      </div>
+      {cooldown > 0 && <small className="ev-wait">Next in {left(cooldown)}</small>}
+      {!voting && !leaving && <button className="ev-leave-ask" onClick={() => setLeaving(true)}>Withdraw</button>}
+      {!voting && leaving && (
+        <div className="ev-leave">
+          <small>Costs {naira(fee)}. Your filing fee is not refunded.</small>
+          <button className="out" disabled={busy || money < fee} onClick={() => void withdraw(office)}>Withdraw</button>
+          <button onClick={() => setLeaving(false)}>Stay</button>
         </div>
       )}
     </div>
   );
 }
 
-/** One post: who holds it, the race, the candidates and (for you) the campaign. */
+/** One post: who holds it, the race and the way to run or vote. */
 function OfficeCard({ office }: { office: PoliticalOffice }) {
   const uid = useSession((s) => s.user?.uid ?? '');
   const money = useGame((s) => s.money);
@@ -107,6 +91,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
   const run = useCivic((s) => s.run);
   const vote = useCivic((s) => s.vote);
   useTick();
+  const [open, setOpen] = useState(false);
   const rules = OFFICE_RULES[office];
   const race = data?.races[office];
   const holder = data?.policies[office] ?? null;
@@ -118,65 +103,79 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
   const voting = !!race && pollsOpen(race.endsAt, Date.now());
   const totalVotes = race?.totalVotes ?? 0;
   const topVotes = race ? Math.max(0, ...race.candidates.map((c) => c.votes)) : 0;
+  // The leaders, and you, even when you trail.
+  const total = race ? Math.max(race.running, race.candidates.length) : 0;
+  const crowded = total > 2;
+  // More than two in a race starts folded to faces; tapping them opens the whole ballot.
+  const shown = !race || (crowded && !open)
+    ? []
+    : open ? race.candidates : [...race.candidates.slice(0, SHOWN), ...race.candidates.slice(SHOWN).filter((c) => c.uid === uid)];
+  const hidden = race && !(crowded && !open) ? total - shown.length : 0;
+  // The money the post controls: a state's treasury, the federal one, or a federal department's share of it.
+  const budget = { ...ALLOCATION.defaults, ...data?.allocation };
+  const pot: { label: string; amount: number } | null = !data ? null
+    : rules.city ? { label: 'treasury', amount: data.states?.[rules.city]?.balance ?? 0 }
+    : office === 'president' ? { label: 'federal treasury', amount: data.treasury }
+    : office === 'igp' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.police) }
+    : office === 'efcc' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.efcc) }
+    : null;
+  const status = voting ? `Vote · ${left(race.endsAt - Date.now())} left` : race ? `Polls ${POLLS_OPEN_AT}` : 'No race';
+  const blocked = banned ? `Barred for ${banLeft(bannedFor)}` : elsewhere ? `Running for ${OFFICE_SHORT[elsewhere]}` : !me && voting ? 'Ballot closed' : null;
   return (
-    <section className={`ev-card ev-${office}`}>
+    <section className="ev-card" title={rules.powers}>
       <header className="ev-head">
-        <span className="ev-icon"><Emoji char={ICON[office]} size={26} /></span>
-        <span className="ev-title">
-          <b>{rules.title}</b>
-          <small>{rules.powers}</small>
-          {/* Under the description, not beside it: next to it the chip squeezes the text into a narrow column. */}
-          <span className="ev-chips">
-            {voting && <span className="ev-chip live"><Emoji char="⏳" size={12} /> {left(race.endsAt - Date.now())} left to vote</span>}
-            {race && !voting && <span className="ev-chip"><Emoji char="🗳️" size={12} /> Polls open in {left(race.endsAt - ELECTION_DURATION_MS - Date.now())}</span>}
-            {!race && <span className="ev-chip">Election every day · polls {POLLS_OPEN_AT}</span>}
-          </span>
-        </span>
+        <Emoji char={ICON[office]} size={20} />
+        <b>{OFFICE_SHORT[office]}</b>
+        <span className={`ev-status ${voting ? 'live' : ''}`}>{status}</span>
       </header>
 
       <div className="ev-holder">
         <span className="ev-avatar sm">{holder ? <Face uid={holder.uid} username={holder.username ?? holder.name} size="fill" /> : '—'}</span>
         <span>
-          {holder ? <>In office: <b>{nameOf(holder)}{holder.uid === uid ? ' (you)' : ''}</b></> : <>No one in office</>}
+          {holder ? <b>{nameOf(holder)}{holder.uid === uid ? ' (you)' : ''}</b> : <span className="muted">Vacant</span>}
           {holder?.termEnds ? <small> · {left(holder.termEnds - Date.now())} left</small> : null}
         </span>
+        {pot && <span className="ev-pot"><b>{nairaShort(pot.amount)}</b><small>{pot.label}</small></span>}
       </div>
 
-      {race && (
-        <div className="ev-race">
-          {race.candidates.length === 0 && <p className="muted small">No candidates yet. Be the first.</p>}
-          {race.candidates.map((c, i) => {
-            const share = totalVotes ? Math.round((c.votes / totalVotes) * 100) : 0;
-            const leading = c.votes > 0 && c.votes === topVotes;
-            return (
-              <div key={c.uid} className={`ev-cand ${c.uid === uid ? 'me' : ''} ${leading ? 'lead' : ''}`}>
-                <span className="ev-rank">{leading ? <Emoji char="👑" size={16} /> : i < BALLOT_SIZE ? i + 1 : '·'}</span>
-                <span className="ev-avatar"><Face uid={c.uid} username={c.username ?? c.name} size="fill" /></span>
-                <span className="ev-cinfo">
-                  <b>{nameOf(c)}{c.uid === uid ? ' · You' : ''}</b>
-                  <span className="ev-bar" aria-label={`${share}% of votes`}><i style={{ width: `${share}%` }} /></span>
-                  <small>{c.votes} vote{c.votes === 1 ? '' : 's'} · <Emoji char="📣" size={12} /> {c.support}% support</small>
-                </span>
-                {c.uid !== uid && voting && (
-                  <button className={`ev-vote ${race.myVote === c.uid ? 'done' : ''}`} disabled={busy || race.myVote === c.uid} onClick={() => void vote(office, c.uid)}>
-                    {race.myVote === c.uid ? '✓ Voted' : 'Vote'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {race.running > race.candidates.length && <p className="muted small">+{race.running - race.candidates.length} more in the race</p>}
-        </div>
+      {race && crowded && (
+        <button type="button" className="ev-faces" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <span className="ev-face-row">
+            {race.candidates.slice(0, FACES).map((c) => (
+              <span key={c.uid} className={`ev-avatar sm ${c.uid === uid ? 'me' : ''}`}><Face uid={c.uid} username={c.username ?? c.name} size="fill" /></span>
+            ))}
+            {total > FACES && <b className="ev-plus">+{total - FACES}</b>}
+          </span>
+          <small>{open ? 'Hide' : voting ? 'Tap to vote' : `${total} running`}</small>
+        </button>
       )}
+      {shown.map((c, i) => {
+        const share = totalVotes ? Math.round((c.votes / totalVotes) * 100) : 0;
+        const leading = c.votes > 0 && c.votes === topVotes;
+        return (
+          <div key={c.uid} className={`ev-cand ${c.uid === uid ? 'me' : ''}`}>
+            <span className="ev-rank">{leading ? '👑' : i + 1}</span>
+            <span className="ev-avatar"><Face uid={c.uid} username={c.username ?? c.name} size="fill" /></span>
+            <span className="ev-cinfo">
+              <b>{nameOf(c)}{c.uid === uid ? ' · You' : ''}</b>
+              <span className="ev-bar" aria-label={`${share}% of votes`}><i style={{ width: `${share}%` }} /></span>
+            </span>
+            <small className="ev-votes">{c.votes}</small>
+            {c.uid !== uid && voting && (
+              <button className={`ev-vote ${race?.myVote === c.uid ? 'done' : ''}`} disabled={busy || race?.myVote === c.uid} onClick={() => void vote(office, c.uid)}>
+                {race?.myVote === c.uid ? '✓' : 'Vote'}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {hidden > 0 && <small className="ev-more">+{hidden} more</small>}
 
-      {!me && banned && <p className="ev-note"><Emoji char="🚫" size={14} /> You were caught buying votes. You can run again in {banLeft(bannedFor)}.</p>}
-      {!me && !banned && elsewhere && <p className="ev-note">You’re already running for {OFFICE_RULES[elsewhere].title}. One post per election.</p>}
-      {race && !voting && <p className="ev-note"><Emoji char="🗳️" size={14} /> Voting is from {POLLS_OPEN_AT} to {POLLS_CLOSE_AT}, Nigerian time. Until then anyone can file, and candidates campaign.</p>}
-      {!me && voting && !banned && <p className="ev-note"><Emoji char="🔒" size={14} /> The ballot is closed. File after the result to run tomorrow.</p>}
-      {!me && !voting && !banned && !elsewhere && (
+      {!me && blocked && <small className="ev-note">{blocked}</small>}
+      {!me && !blocked && (
         <button className="ev-cta" disabled={busy || money < rules.filingFee} onClick={() => void run(office)}>
-          <span>{race ? 'Join the race' : `Run for ${rules.title}`}</span>
-          <b>{naira(rules.filingFee)}</b>
+          <span>{race ? 'Join the race' : 'Run'}</span>
+          <b>{nairaShort(rules.filingFee)}</b>
         </button>
       )}
 
@@ -195,6 +194,7 @@ export function ElectionBoard() {
       {error && <div className="civic-notice civic-error" role="alert">{error}</div>}
       {loading && !data && <p className="muted">Loading the election board…</p>}
       {data && OFFICES.map((office) => <OfficeCard key={office} office={office} />)}
+      {data && <small className="ev-foot">Anyone can file. Voting is {POLLS_OPEN_AT} to {POLLS_CLOSE_AT}.</small>}
     </div>
   );
 }
@@ -294,7 +294,6 @@ export function ElectionSheet() {
           {tab === 'posts' && (
             <>
               <ElectionBoard />
-              <small className="muted">Anyone arrested in the last 12 hours can’t run.</small>
             </>
           )}
           {tab === 'laws' && (

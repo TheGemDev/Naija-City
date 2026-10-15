@@ -23,6 +23,12 @@ export interface HouseVisit {
   burglary?: boolean;
 }
 
+/** Where an invited house stands, as the invite carries it (worker/social.ts): the city, and the estate plot if it is in one. Null for an older invite. */
+export function inviteSpot(text: string): { city: string; region: string | null; slot: number | null } | null {
+  const m = /^home:([a-z]+)\|([a-z0-9_]*)\|(\d*)$/.exec(text);
+  return m ? { city: m[1], region: m[2] || null, slot: m[3] === '' ? null : Number(m[3]) } : null;
+}
+
 interface VisitState {
   current: HouseVisit | null;
   returnSave: SaveData | null;

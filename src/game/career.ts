@@ -184,6 +184,12 @@ export const shelfOf = (size: BizSize) => BIZ_SIZES[size].shelf;
 /** The share of the opening cost that is CAC registration, paid into the treasury. The rest fits out the building. */
 export const registrationFee = (def: BusinessDef, size: BizSize = 'small') => Math.round(openCost(def, size) * BIZ.registrationShare);
 
+/** What opening costs in a state whose registration fee is `bizPct` percent of the standard: the fit-out, plus the fee the state sets. */
+export const openTotal = (def: BusinessDef, size: BizSize, bizPct: number) => {
+  const base = registrationFee(def, size);
+  return openCost(def, size) - base + Math.round((base * bizPct) / 100);
+};
+
 /** Business types a place rents stalls to. */
 export const typesAt = (placeId: string) => BUSINESSES.filter((b) => b.places.includes(placeId));
 

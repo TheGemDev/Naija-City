@@ -131,7 +131,11 @@ export const SALARY = {
   everyMs: HOUR_MS,
   /** From this much a day, a salary is fat. */
   fat: 50_000,
+  /** One round never takes more than this share of what a state holds for its governor's pay, so a poor state can't be drained. */
+  stateLimit: 0.02,
 };
+/** What a governor is paid a round: their share of the president's maximum, held to the share of the state's money one round may take. */
+export const governorPay = (max: number, share: number, balance: number) => Math.min(Math.floor((max * share) / 100), Math.floor(balance * SALARY.stateLimit));
 export const NO_SALARIES = Object.fromEntries(OFFICES.map((o) => [o, 0])) as Salaries;
 /** What one pay round costs the treasury: only an office somebody holds is paid. */
 export const wageBill = (salaries: Salaries, held: (office: PoliticalOffice) => boolean) => OFFICES.reduce((n, o) => n + (held(o) ? salaries[o] : 0), 0);
@@ -150,37 +154,64 @@ export const STATE_FLEET: Record<ExecutiveOffice, Record<StateVehicle, string>> 
 /** The most one official trip can cost the treasury (the server refuses anything dearer). */
 export const STATE_TRIP_MAX = 10_000_000;
 
-/** The departments the president shares the treasury between. */
-export type Department = CivicCity | 'police' | 'efcc' | 'welfare';
+/** The federal departments the president shares the federal treasury between. The states have treasuries of their own. */
+export type Department = 'police' | 'efcc' | 'welfare';
 export type Allocation = Record<Department, number>;
 
 /**
- * The president's budget: what percent of the treasury each city's government and each federal department may use.
- * The rest stays unallocated. What a city does with its share (roads, contracts, palliatives) is up to whoever runs it.
+ * The president's budget: what percent of the federal treasury each federal department may use. The rest stays
+ * unallocated. States are paid for by their own treasuries (worker/state.ts), topped up by the president's grants.
  */
 export const ALLOCATION = {
-  departments: ['kaduna', 'abuja', 'lagos', 'kano', 'police', 'efcc', 'welfare'] as Department[],
+  departments: ['police', 'efcc', 'welfare'] as Department[],
   /** The president moves a share by this many percent at a time. */
   step: 5,
-  defaults: { kaduna: 20, abuja: 10, lagos: 10, kano: 10, police: 25, efcc: 15, welfare: 10 } as Allocation,
+  defaults: { police: 25, efcc: 15, welfare: 10 } as Allocation,
   info: {
-    kaduna: { label: 'Kaduna State', icon: '🏛️', runBy: 'Governor', blurb: 'Roads, contracts, palliatives.' },
-    abuja: { label: 'FCT Abuja', icon: '🏙️', runBy: 'FCT Minister', blurb: 'Roads, contracts, palliatives.' },
-    lagos: { label: 'Lagos State', icon: '🌊', runBy: 'Governor of Lagos', blurb: 'Roads, contracts, palliatives.' },
-    kano: { label: 'Kano State', icon: '🐎', runBy: 'Governor of Kano', blurb: 'Roads, contracts, palliatives.' },
     police: { label: 'Police', icon: '🚔', runBy: 'IGP', blurb: 'Catches more thieves.' },
     efcc: { label: 'EFCC', icon: '🕵🏾', runBy: 'EFCC Chair', blurb: 'Catches vote buyers and looters.' },
     welfare: { label: 'Federal palliatives', icon: '🍚', runBy: 'President', blurb: 'Cap on each palliative round.' },
   } as Record<Department, { label: string; icon: string; runBy: string; blurb: string }>,
-  /** How much of the treasury a department may spend right now. */
+  /** How much of the federal treasury a department may spend right now. */
   budget: (treasury: number, share: number) => Math.floor((treasury * share) / 100),
   /** The police share as the 0 to 100 funding the crime rules use (src/game/crime.ts): half the treasury is full funding. */
   policeFunding: (share: number) => Math.min(100, share * 2),
   /** What the EFCC share adds to (or takes off) the chance of catching a vote buyer or a treasury snake. */
   efccEdge: (share: number) => (share - 15) / 100,
 };
-/** The department whose share of the treasury each office spends from. */
-export const OFFICE_DEPARTMENT: Record<PoliticalOffice, Department> = { president: 'welfare', governor: 'kaduna', minister: 'abuja', lagosgov: 'lagos', kanogov: 'kano', igp: 'police', efcc: 'efcc' };
+/** The federal department whose share of the treasury each federal office spends from. A city's government spends its own state's treasury. */
+export const OFFICE_DEPARTMENT: Partial<Record<PoliticalOffice, Department>> = { president: 'welfare', igp: 'police', efcc: 'efcc' };
+
+/**
+ * Looting a treasury opens a case with the EFCC chair. The looter can offer the chair a share of the loot; the chair
+ * decides whether the looter goes down for it. A chair who takes the money may be found out and lose the job.
+ */
+export const LOOT = {
+  /** How long the chair has to decide. After that the old odds of being caught decide. */
+  windowMs: 30 * 60_000,
+  /** The shares of the loot a looter can offer, in percent. */
+  shares: [10, 25, 50, 75],
+  /** The chance a chair who takes a bribe is caught and removed. */
+  chairCaught: 0.3,
+};
+export const lootBribe = (amount: number, pct: number) => Math.round((amount * pct) / 100);
+
+/** A looting case, as the looter and the chair see it. */
+export interface LootCase {
+  id: number;
+  looterUid: string;
+  looter: string | null;
+  chairUid: string;
+  chair: string | null;
+  office: PoliticalOffice;
+  /** The state looted; null for the federal treasury. */
+  city: CivicCity | null;
+  amount: number;
+  offer: number | null;
+  status: 'open' | 'accepted' | 'refused' | 'expired';
+  expiresAt: number;
+  decidedAt: number | null;
+}
 
 /** Nobody locked up in the last 12 hours (or still in a cell) may file to run for office. */
 export const ARREST_BAN_MS = 12 * 60 * 60_000;

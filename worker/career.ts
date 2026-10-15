@@ -13,6 +13,10 @@ import type { FirebaseUser } from './auth';
 import { handle, naira, postFeed } from './feed';
 import { sendPush } from './push';
 import { usernames } from './crime';
+import { conditionOf, homeCity, lawsOf, stateRevenue, stateRevenueSql } from './state';
+import { ORIGIN_OF, restockPrice } from '../src/game/trade';
+import { scaledFee, schoolFactor } from '../src/game/treasury';
+import { CIVIC_CITIES, type CivicCity } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { JOBS } from '../src/game/catalog';
 import '../src/game/abuja';
@@ -76,7 +80,7 @@ interface BizRow {
   shelf_at: number; stocked: number;
 }
 
-const toTreasury = (db: D1Database, amount: number) => db.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(amount);
+const toTreasury = (db: D1Database, uid: string, amount: number) => stateRevenue(db, uid, amount);
 const cleanName = (name: string | undefined, fallback: string) => (name ?? '').trim().replace(/\s+/g, ' ').slice(0, BIZ.maxNameLen) || fallback;
 
 interface ProductRow {
@@ -94,6 +98,8 @@ const today = (now: number) => Math.floor(now / DAY);
 
 /** The city a request names, if there is such a city. A request that names none means Kaduna, as every request did before there was a second one. */
 const HOME = 'kaduna';
+/** A city that has a government of its own, or undefined (the fee then goes to the payer's home state). */
+const civicCity = (id: string | null | undefined): CivicCity | undefined => CIVIC_CITIES.find((c) => c === id);
 const cityOf = (id: string | null | undefined): string | null => (id == null || id === '' ? HOME : Object.hasOwn(CITY_MAPS, id) ? id : null);
 /** A place as it stands in one city: the airport is a different place in each. */
 const placeIn = (city: string, id: string | null | undefined): Place | undefined =>
@@ -312,10 +318,11 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     const trained = await db.prepare('SELECT skill, trained_at FROM skills WHERE uid = ?').bind(me).all<{ skill: string; trained_at: number }>();
     const visitors = await visitorsAt(db, rows, now);
     const last = new Map(trained.results.map((t) => [t.skill, t.trained_at]));
+    const courses = schoolFactor(await conditionOf(db, await homeCity(db, me), 'schools'));
     return json({
       skills: SKILLS.map((s) => ({
         id: s.id, xp: xp[s.id], level: skillLevel(xp[s.id]), next: nextSkillXp(xp[s.id]),
-        fee: trainFee(xp[s.id]), readyAt: (last.get(s.id) ?? 0) + TRAIN.cooldownMs,
+        fee: Math.round(trainFee(xp[s.id]) * courses), readyAt: (last.get(s.id) ?? 0) + TRAIN.cooldownMs,
       })),
       jobs: JOBS.filter((j) => shifts[j.id]).map((j) => {
         const n = shifts[j.id];
@@ -338,7 +345,7 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     if (skillLevel(xp) >= 10) return err(409, 'You have mastered this');
     const row = await db.prepare('SELECT trained_at FROM skills WHERE uid = ? AND skill = ?').bind(me, skill).first<{ trained_at: number }>();
     if (row && row.trained_at + TRAIN.cooldownMs > now) return err(429, 'Rest a little before the next course');
-    const fee = trainFee(xp);
+    const fee = Math.round(trainFee(xp) * schoolFactor(await conditionOf(db, await homeCity(db, me), 'schools')));
     if ((await getBalance(db, me)) < fee) return err(402, `The course costs ${naira(fee)}`);
     await db.batch([ensureWallet(db, me), ...applyStmts(db, me, `train:${skill}:${now}`, 'spend', `train:${skill}`, -fee), addXp(db, me, skill, TRAIN.xp, now)]);
     return json({ ok: true, xp: xp + TRAIN.xp, level: skillLevel(xp + TRAIN.xp), balance: await getBalance(db, me) });
@@ -358,7 +365,11 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     const xp = await skillXp(db, me);
     if (skillLevel(xp[def.skill]) < def.minSkill) return err(403, `Needs ${SKILL_BY_ID[def.skill].label} level ${def.minSkill}`);
     const size = sizeOf(b?.size);
-    const cost = openCost(def, size);
+    // The state sets the registration fee: the fit-out costs what it always did, and the fee moves with the state's law.
+    const base = registrationFee(def, size);
+    const registration = scaledFee(base, (await lawsOf(db, city)).bizFee);
+    const fitOut = openCost(def, size) - base;
+    const cost = fitOut + registration;
     if ((await getBalance(db, me)) < cost) return err(402, `That costs ${naira(cost)}`);
     if (await db.prepare('SELECT 1 FROM businesses WHERE uid = ? AND type = ?').bind(me, def.id).first()) return err(409, `You already run a ${def.name}`);
     const name = cleanName(b?.name, def.name);
@@ -373,12 +384,11 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       .bind(now - BIZ.stallHoldMs, me, def.id, name, now, place.id, place.area, stall.slots, icon, color, size, city)
       .first<{ id: number }>();
     if (!made) return err(409, `Every stall at ${place.name} is taken. Try another place`);
-    // Fitting out the building is spent; the registration share is the state's.
-    const registration = registrationFee(def, size);
+    // Fitting out the building is spent; the registration is the state's, the one the stall is in.
     await db.batch([
       ensureWallet(db, me),
-      ...applyStmts(db, me, `biz-buy:${made.id}`, 'buy', `biz:${def.id}`, -(cost - registration)),
-      ...treasuryStmts(db, me, `biz-reg:${made.id}`, 'fee', `biz-reg:${def.id}`, registration),
+      ...applyStmts(db, me, `biz-buy:${made.id}`, 'buy', `biz:${def.id}`, -fitOut),
+      ...treasuryStmts(db, me, `biz-reg:${made.id}`, 'fee', `biz-reg:${def.id}`, registration, null, 'state', city as CivicCity),
     ]);
     await postFeed(db, me, 'business', def.icon, `${handle((await usernames(db, [me])).get(me))} opened "${name}" (${def.name}) at ${place.name}.`);
     return json({ ok: true, id: made.id, balance: await getBalance(db, me) });
@@ -425,9 +435,13 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
 
     const prior = await db.prepare('SELECT business_id, uid, product, quantity, cost, status FROM business_restock_requests WHERE id = ?')
       .bind(b.requestId).first<{ business_id: number; uid: string; product: string; quantity: number; cost: number; status: string }>();
-    const cost = b.quantity! * product.wholesale;
+    // Goods made in the shop's own state are a little cheaper; goods from another state carry that state's export levy.
+    const origin = ORIGIN_OF[product.id];
+    const price = restockPrice(product.wholesale, product.id, row.city, origin && origin !== row.city ? (await lawsOf(db, origin)).exportLevy : 0);
+    const cost = b.quantity! * price.unit;
+    const levy = b.quantity! * price.levy;
     if (prior) {
-      if (prior.business_id !== row.id || prior.uid !== me || prior.product !== product.id || prior.quantity !== b.quantity || prior.cost !== cost) {
+      if (prior.business_id !== row.id || prior.uid !== me || prior.product !== product.id || prior.quantity !== b.quantity) {
         return err(409, 'This restock request was already used');
       }
       if (prior.status !== 'paid') return err(409, 'That restock request could not be completed');
@@ -460,6 +474,9 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       ).bind(me, `market-stock:${b.requestId}`, `market-stock:${product.id}`, -cost, now, b.requestId),
       db.prepare("UPDATE business_restock_requests SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
         .bind(b.requestId),
+      // The levy goes to the state the goods come from, only when this very batch marked the request paid.
+      // With the state named the shop owner isn't in the statement at all: binding them anyway makes D1 refuse the whole batch.
+      ...(levy > 0 && origin ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', origin)).bind(levy)] : []),
       db.prepare("UPDATE business_restock_requests SET status = 'failed' WHERE id = ? AND status = 'pending'")
         .bind(b.requestId),
       db.prepare("UPDATE businesses SET shelf_at = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?3 AND status = 'paid')")
@@ -499,15 +516,17 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     if (!product) return err(404, 'That listing is no longer available');
     const total = listing.price * b.quantity!;
     // Walk in and you pay the shelf price; order from anywhere else and delivery is added. The seller gets the shelf price either way.
-    const fee = b.at && b.at === listing.place_id && cityOf(b.city) === listing.city ? 0 : deliveryFee(total);
+    const fee = b.at && b.at === listing.place_id && cityOf(b.city) === listing.city ? 0 : scaledFee(deliveryFee(total), (await lawsOf(db, listing.city)).deliveryFee);
     const charge = total + fee;
+    // The shop's state takes its sales tax from the seller.
+    const salesTax = scaledFee(total, (await lawsOf(db, listing.city)).salesTax);
     await db.batch([
       ensureWallet(db, me),
       ensureWallet(db, listing.seller_uid),
       db.prepare(
-        `INSERT OR IGNORE INTO marketplace_orders (id, buyer_uid, seller_uid, product_id, product, quantity, unit_price, total, fee, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      ).bind(b.requestId, me, listing.seller_uid, listing.id, product.id, b.quantity, listing.price, total, fee, now),
+        `INSERT OR IGNORE INTO marketplace_orders (id, buyer_uid, seller_uid, product_id, product, quantity, unit_price, total, fee, status, created_at, tax)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      ).bind(b.requestId, me, listing.seller_uid, listing.id, product.id, b.quantity, listing.price, total, fee, now, salesTax),
       db.prepare(
         `UPDATE wallets SET balance = balance - ?9, updated_at = ?4
          WHERE uid = ?1 AND balance >= ?9
@@ -520,13 +539,14 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
            AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?3 AND product_id = ?1 AND quantity = ?2 AND status = 'pending')`,
       ).bind(listing.id, b.quantity, b.requestId),
       db.prepare(
-        `UPDATE wallets SET balance = balance + ?2, updated_at = ?3 WHERE uid = ?1 AND changes() = 1
+        `UPDATE wallets SET balance = balance + ?2 - (SELECT tax FROM marketplace_orders WHERE id = ?4), updated_at = ?3 WHERE uid = ?1 AND changes() = 1
            AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?4 AND seller_uid = ?1 AND total = ?2 AND status = 'pending')`,
       ).bind(listing.seller_uid, total, now, b.requestId),
       db.prepare("UPDATE marketplace_orders SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
         .bind(b.requestId),
-      // The delivery levy is the state's. Only when this very batch marked the order paid.
-      ...(fee > 0 ? [db.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1 AND changes() = 1').bind(fee)] : []),
+      // The delivery levy and the sales tax are the state's. Only when this very batch marked the order paid.
+      // With the shop's own state named, the buyer isn't in the statement at all: binding them anyway makes D1 refuse the whole order.
+      ...(fee + salesTax > 0 ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', civicCity(listing.city))).bind(...(civicCity(listing.city) ? [fee + salesTax] : [fee + salesTax, me]))] : []),
       db.prepare(
         `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
          SELECT buyer_uid, 'market-buy:' || id, 'market_buy', product, -(total + fee), 1, ?2
@@ -534,7 +554,7 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       ).bind(b.requestId, now),
       db.prepare(
         `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
-         SELECT seller_uid, 'market-sale:' || id, 'market_sale', product, total, 1, ?2
+         SELECT seller_uid, 'market-sale:' || id, 'market_sale', product, total - tax, 1, ?2
          FROM marketplace_orders WHERE id = ?1 AND status = 'paid'`,
       ).bind(b.requestId, now),
       // The shelf held stock up to this sale: if that was the last unit, the hold on the stall runs from here.
@@ -555,7 +575,7 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     const buyer = (await usernames(db, [me])).get(me);
     sendPush(env, ctx, listing.seller_uid, {
       title: `🛍️ Sale at ${listing.business_name}`,
-      body: `${handle(buyer)} bought ${b.quantity} × ${product.name}. ${naira(total)} is in your wallet.`,
+      body: `${handle(buyer)} bought ${b.quantity} × ${product.name}. ${naira(total - salesTax)} is in your wallet${salesTax ? ` after ${naira(salesTax)} sales tax` : ''}.`,
       tag: `shop-sale-${listing.business_id}`,
       category: 'money',
     });
@@ -581,13 +601,16 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     const rent = Math.min(after.pending_rent, Math.max(0, after.pending_net + after.pending_rent));
     const res = await saveSettled(db, row, after, { pending_net: 0, pending_ms: 0, pending_rent: 0 }).run();
     if (!res.meta.changes) return clash();
+    // The state the stall is in takes its business tax out of the income.
+    const bizTax = pay > 0 ? scaledFee(pay, (await lawsOf(db, row.city)).bizTax) : 0;
     await db.batch([
       ensureWallet(db, me),
-      ...(rent > 0 ? [toTreasury(db, rent)] : []),
-      ...(pay > 0 ? applyStmts(db, me, `biz-collect:${id}:${after.last_settle}`, 'biz_income', `biz:${row.type}`, pay) : []),
+      ...(rent > 0 ? [toTreasury(db, me, rent)] : []),
+      ...(bizTax > 0 ? [stateRevenue(db, me, bizTax, civicCity(row.city))] : []),
+      ...(pay > 0 ? applyStmts(db, me, `biz-collect:${id}:${after.last_settle}`, 'biz_income', `biz:${row.type}`, pay - bizTax) : []),
       ...(xp > 0 ? [addXp(db, me, def.skill, xp)] : []),
     ]);
-    return json({ ok: true, paid: pay, xp, rent, balance: await balance() });
+    return json({ ok: true, paid: pay - bizTax, tax: bizTax, xp, rent, balance: await balance() });
   }
 
   if (path === '/api/business/move') {
@@ -598,14 +621,15 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
     if (!place || !stall) return err(400, `A ${def.name} can't open there`);
     if (place.id === row.place_id && holdsStall(row, now)) return err(409, `Already at ${place.name}`);
     if ((await stallsTaken(db, row.city, place.id, now, id)) >= stall.slots) return err(409, `Every stall at ${place.name} is taken`);
-    if ((await balance()) < BIZ.moveFee) return err(402, `Moving costs ${naira(BIZ.moveFee)}`);
+    const permit = scaledFee(BIZ.moveFee, (await lawsOf(db, row.city)).moveFee);
+    if ((await balance()) < permit) return err(402, `Moving costs ${naira(permit)}`);
     // A fresh created_at restarts the hold on the new stall.
     const res = await saveSettled(db, row, after, { place_id: place.id, area: place.area }).run();
     if (!res.meta.changes) return clash();
     await db.batch([
       db.prepare('UPDATE businesses SET created_at = ? WHERE id = ? AND uid = ?').bind(now, id, me),
       ensureWallet(db, me),
-      ...treasuryStmts(db, me, `biz-move:${id}:${after.last_settle}`, 'fee', `biz-move:${row.type}`, BIZ.moveFee),
+      ...treasuryStmts(db, me, `biz-move:${id}:${after.last_settle}`, 'fee', `biz-move:${row.type}`, permit, null, 'state', civicCity(row.city)),
     ]);
     return json({ ok: true, place: place.id, balance: await balance() });
   }

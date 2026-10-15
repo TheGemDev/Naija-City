@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, governorPay, banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -9,7 +9,10 @@ import { jail } from './fun';
 import { searchPhone } from './phoneSearch';
 import { feedStmt, handle, naira, postFeed } from './feed';
 import { refreshPolicy } from './policy';
+import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
+import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
+import { lootAction, lootBoard, openLootCase, settleLoot, type LootAction } from './loot';
 import { gazette, OFFICE_NAME, official, recentNews, type Notice } from './gazette';
 import { syncForum } from './groups';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
@@ -124,10 +127,7 @@ const GAZETTE_LAWS = {
   taxRate: { column: 'tax_rate', office: 'president', icon: '💰', label: 'income tax', unit: '%' },
   loanRate: { column: 'loan_rate', office: 'president', icon: '🏦', label: 'bank loan interest', unit: '%' },
   transferFee: { column: 'transfer_fee', office: 'president', icon: '💸', label: 'the bank transfer fee', unit: '%' },
-  roadsFunding: { column: 'roads_funding', office: 'governor', icon: '🛣️', label: 'road funding', unit: '%' },
-  roadsFundingAbuja: { column: 'roads_funding_abuja', office: 'minister', icon: '🛣️', label: 'Abuja’s road funding', unit: '%' },
-  roadsFundingLagos: { column: 'roads_funding_lagos', office: 'lagosgov', icon: '🛣️', label: 'Lagos’s road funding', unit: '%' },
-  roadsFundingKano: { column: 'roads_funding_kano', office: 'kanogov', icon: '🛣️', label: 'Kano’s road funding', unit: '%' },
+  federalCut: { column: 'federal_cut', office: 'president', icon: '🏛️', label: 'the federal cut of state revenue', unit: '%' },
   patrols: { column: 'patrols', office: 'igp', icon: '🚓', label: 'street patrols', unit: '%' },
   jailMinutes: { column: 'jail_minutes', office: 'igp', icon: '⛓️', label: 'jail terms', unit: ' min' },
   finePct: { column: 'fine_pct', office: 'efcc', icon: '⚖️', label: 'fines on thieves', unit: '%' },
@@ -139,6 +139,18 @@ const OKADA_BANS = CIVIC_CITIES.map((city) => ({ city, key: OKADA_BAN_LAW[city],
 
 /** The city this player runs, as governor or FCT Minister. */
 const cityOf = (policy: PolicyRow | null | undefined, uid: string): CivicCity | undefined => CIVIC_CITIES.find((city) => policy?.[`${CITY_HEAD[city]}_uid`] === uid);
+/**
+ * The state this player runs: as its governor, or as the president while the seat is empty (`wanted` picks which empty
+ * seat; a state without a government is managed by the president).
+ */
+const runsCity = (policy: PolicyRow | null | undefined, uid: string, wanted?: string): CivicCity | undefined => {
+  const own = cityOf(policy, uid);
+  if (own) return own;
+  if (policy?.president_uid !== uid) return undefined;
+  return CIVIC_CITIES.find((c) => c === wanted && !policy[`${CITY_HEAD[c]}_uid`]);
+};
+/** The office a player acts as in a state: its governor, or the president standing in. */
+const actingAs = (policy: PolicyRow | null | undefined, uid: string, city: CivicCity): PoliticalOffice => (policy?.[`${CITY_HEAD[city]}_uid`] === uid ? CITY_HEAD[city] : 'president');
 /** The offices that can grant a pardon or share palliatives: the president and whoever runs a city. */
 const EXECUTIVES: PoliticalOffice[] = ['president', ...CIVIC_CITIES.map((city) => CITY_HEAD[city])];
 const executiveOf = (policy: PolicyRow | null | undefined, uid: string) => EXECUTIVES.find((o) => policy?.[`${o}_uid`] === uid);
@@ -192,17 +204,57 @@ export async function paySalaries(db: D1Database, now: number): Promise<void> {
     const uid = round[`${office}_uid`] as string | null;
     return uid && pay[office] > 0 ? [{ office, uid, amount: pay[office] }] : [];
   });
-  const bill = due.reduce((n, d) => n + d.amount, 0);
-  if (!bill) return;
-  const paid = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(bill).first();
-  if (!paid) {
-    const president = round.president_uid as string | null;
-    const who = president ? official('president', (await usernames(db, [president])).get(president)) : 'Aso Rock';
-    const rant = vdmGov(db, president, 'unpaid', { who, amount: naira(bill) });
-    if (rant.length) await db.batch(rant).catch(() => {});
-    return;
+  // A governor is paid by their own state, everyone else by the federal treasury. Each bill is paid whole or not at all.
+  const stateOf = (office: PoliticalOffice) => CIVIC_CITIES.find((c) => CITY_HEAD[c] === office);
+  const federal = due.filter((d) => !stateOf(d.office));
+  const fedBill = federal.reduce((n, d) => n + d.amount, 0);
+  const paid: typeof due = [];
+  if (fedBill) {
+    const ok = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(fedBill).first();
+    if (ok) paid.push(...federal);
+    else {
+      const president = round.president_uid as string | null;
+      const who = president ? official('president', (await usernames(db, [president])).get(president)) : 'Aso Rock';
+      const rant = vdmGov(db, president, 'unpaid', { who, amount: naira(fedBill) });
+      if (rant.length) await db.batch(rant).catch(() => {});
+    }
   }
-  await db.batch(due.flatMap((d) => [ensureWallet(db, d.uid), ...applyStmts(db, d.uid, `salary:${d.office}:${now}`, 'salary', d.office, d.amount)]));
+  // A governor takes their share of the president's maximum, and one round never takes more than a slice of the state's money.
+  const { states } = await loadStates(db);
+  for (const city of CIVIC_CITIES) {
+    const head = due.find((d) => d.office === CITY_HEAD[city]);
+    const state = states.find((s) => s.city === city);
+    if (!head || !state) continue;
+    const amount = governorPay(head.amount, state.payShare, state.balance);
+    if (amount <= 0 || (await spendState(db, city, amount, { allowArrears: true })) === null) continue;
+    paid.push({ ...head, amount });
+    // A governor drawing the full maximum while the state can't pay its bills gets noticed.
+    if (state.payShare === 100 && state.arrears > 0) {
+      const who = official(head.office, (await usernames(db, [head.uid])).get(head.uid));
+      const rant = vdmGov(db, head.uid, 'ownPay', { who, amount: naira(amount) }, city);
+      if (rant.length) await db.batch(rant).catch(() => {});
+    }
+  }
+  if (!paid.length) return;
+  await db.batch(paid.flatMap((d) => [ensureWallet(db, d.uid), ...applyStmts(db, d.uid, `salary:${d.office}:${now}`, 'salary', d.office, d.amount)]));
+}
+
+/** Every state's treasury, its bills and how its assets are holding up. Empty until migration 0085 has run. */
+async function stateBoard(db: D1Database) {
+  try {
+    const { states, assets } = await loadStates(db);
+    return Object.fromEntries(states.map((s) => [s.city, {
+      balance: s.balance,
+      incoming: s.incoming,
+      arrears: s.arrears,
+      ask: s.askAmount ? { amount: s.askAmount, at: s.askAt } : null,
+      payShare: s.payShare,
+      laws: Object.fromEntries(STATE_LAW_KEYS.map((k) => [k, s[k]])),
+      assets: Object.fromEntries(assets.filter((a) => a.city === s.city).map((a) => [a.asset, { condition: a.condition, level: a.level }])),
+    }]));
+  } catch {
+    return {};
+  }
 }
 
 async function snapshot(db: D1Database, uid: string) {
@@ -270,8 +322,15 @@ async function snapshot(db: D1Database, uid: string) {
     .bind(uid)
     .first<{ office: PoliticalOffice }>();
   const used = await db.prepare('SELECT action, at FROM civic_cooldowns WHERE uid = ?').bind(uid).all<{ action: CivicCooldown; at: number }>();
+  const caps = await capsOf(db);
   return {
+    /** The federal treasury. Each state's own is in `states`. */
     treasury: (policies?.treasury as number) ?? 0,
+    states: await stateBoard(db),
+    /** The president's maximum for each state tax and fee. */
+    caps,
+    /** Looting cases I am the looter or the EFCC chair in. */
+    loot: await lootBoard(db, uid, Date.now()),
     allocation: allocationOf(policies),
     palliativeAt: (policies?.palliative_at as number | null) ?? null,
     /** The pay list the President signed, when its last round went out, and whether there is a pay list at all yet. */
@@ -291,16 +350,14 @@ async function snapshot(db: D1Database, uid: string) {
     policies: {
       taxRate: (policies?.tax_rate as number) ?? 10,
       policeFunding: (policies?.police_funding as number) ?? 50,
-      roadsFunding: (policies?.roads_funding as number) ?? 50,
-      roadsFundingAbuja: (policies?.roads_funding_abuja as number) ?? 50,
-      roadsFundingLagos: (policies?.roads_funding_lagos as number) ?? 50,
-      roadsFundingKano: (policies?.roads_funding_kano as number) ?? 50,
       patrols: (policies?.patrols as number) ?? 50,
       jailMinutes: (policies?.jail_minutes as number) ?? 20,
       finePct: (policies?.fine_pct as number) ?? 25,
       reportHours: (policies?.report_hours as number) ?? 48,
       loanRate: (policies?.loan_rate as number) ?? LOAN.defaultRate,
       transferFee: (policies?.transfer_fee as number) ?? 0,
+      federalCut: (policies?.federal_cut as number | undefined) ?? FEDERAL_CUT.default,
+      ...Object.fromEntries(STATE_LAW_KEYS.map((k) => [STATE_LAWS[k].capField, caps[k]])),
       ...Object.fromEntries(OKADA_BANS.map((b) => [b.key, (policies?.[b.column] as number) ?? 0])),
       ...Object.fromEntries(OFFICE_LIST.map((o) => [o, holder(o)])),
     },
@@ -308,19 +365,39 @@ async function snapshot(db: D1Database, uid: string) {
   };
 }
 
+/** The civic policy row exists once it has been made: no need to ask on every request. */
+let policyReady = false;
+
+/** D1 now and then answers "internal error" for no fault of ours. A read is safe to ask again; a write may already have happened. */
 export async function handleCivic(req: Request, env: Env, user: { uid: string; email?: string; name?: string }, ctx?: ExecutionContext): Promise<Response> {
+  try {
+    return await handleCivicOnce(req, env, user, ctx);
+  } catch (error) {
+    if (req.method === 'GET' && /D1_ERROR: internal error/.test(String(error))) return handleCivicOnce(req, env, user, ctx);
+    throw error;
+  }
+}
+
+async function handleCivicOnce(req: Request, env: Env, user: { uid: string; email?: string; name?: string }, ctx?: ExecutionContext): Promise<Response> {
   const db = env.DB;
   const now = Date.now();
-  await db.batch([
-    db
+  // This runs every few seconds for every open Civic app: write only when something has to change.
+  const seen = await db.prepare('SELECT last_seen FROM players WHERE uid = ?').bind(user.uid).first<{ last_seen: number }>();
+  if (!seen || now - seen.last_seen > 5 * 60_000) {
+    await db
       .prepare(
         `INSERT INTO players (uid, email, name, created_at, last_seen) VALUES (?1, ?2, ?3, ?4, ?4)
          ON CONFLICT(uid) DO UPDATE SET last_seen = ?4`,
       )
-      .bind(user.uid, user.email ?? null, user.name ?? null, now),
-    db.prepare('INSERT OR IGNORE INTO civic_policies (id, updated_at) VALUES (1, ?)').bind(now),
-  ]);
+      .bind(user.uid, user.email ?? null, user.name ?? null, now)
+      .run();
+  }
+  if (!policyReady) {
+    await db.prepare('INSERT OR IGNORE INTO civic_policies (id, updated_at) VALUES (1, ?)').bind(now).run();
+    policyReady = true;
+  }
   await settleElections(env, now, ctx);
+  await settleLoot(env, ctx, now);
 
   if (req.method === 'GET') return json({ snapshot: await snapshot(db, user.uid) });
   if (req.method !== 'POST') return err(405, 'Method not allowed');
@@ -334,10 +411,15 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     allocation?: Partial<Allocation>;
     salaries?: Partial<Salaries>;
     taxRate?: number;
-    roadsFunding?: number;
-    roadsFundingAbuja?: number;
-    roadsFundingLagos?: number;
-    roadsFundingKano?: number;
+    federalCut?: number;
+    caseId?: number;
+    pct?: number;
+    accept?: boolean;
+    city?: string;
+    key?: string;
+    value?: number;
+    asset?: string;
+    level?: number;
     patrols?: number;
     jailMinutes?: number;
     finePct?: number;
@@ -403,7 +485,7 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     if (!mine.running) {
       await db.batch([
         // The nomination fee is the state's money.
-        ...treasuryStmts(db, user.uid, `civic-run:${race.id}:${user.uid}:${mine.withdrawals}`, 'civic', `run-${office}`, fee),
+        ...treasuryStmts(db, user.uid, `civic-run:${race.id}:${user.uid}:${mine.withdrawals}`, 'civic', `run-${office}`, fee, null, 'federal'),
         db.prepare('INSERT OR IGNORE INTO civic_candidates (election_id, uid) VALUES (?, ?)').bind(race.id, user.uid),
       ]);
       // A new race is news; the polls opening on election day is what gets the announcement (settleElections).
@@ -429,7 +511,7 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     const fee = withdrawalFee(office);
     if ((await getBalance(db, user.uid)) < fee) return err(402, `You need ${naira(fee)} to withdraw from the race`);
     const clientId = `civic-withdraw:${race.id}:${mine.withdrawals}`;
-    const [charge, debit, credit, done] = treasuryStmts(db, user.uid, clientId, 'civic', `withdraw-${office}`, fee);
+    const [charge, debit, credit, done] = treasuryStmts(db, user.uid, clientId, 'civic', `withdraw-${office}`, fee, null, 'federal');
     // Each of these happens only with the fee, so two taps at once pay once and leave once.
     const paid = 'EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)';
     const out = await db.batch([
@@ -539,17 +621,18 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
 
   if (body.action === 'roadProject') {
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
-    const city = cityOf(policy, user.uid);
+    const city = runsCity(policy, user.uid, body.city);
     if (!city) return err(403, 'Only the governor or the FCT Minister can commission road projects');
-    const office = CITY_HEAD[city];
+    const office = actingAs(policy, user.uid, city);
     if (typeof body.target !== 'string') return err(400, 'Pick a street to dig up');
     const target = await findPlayer(db, body.target);
     if (!target?.username) return err(404, 'No such player');
     if (target.uid === user.uid) return err(400, 'You can’t dig up your own street (well, you can, but why?)');
     const { cost, hours } = TREASURY.roadProject;
-    // A city's government spends only its own share of the treasury (the president's allocation).
-    const done = await db.prepare(`UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury * alloc_${city} / 100 >= ?1 RETURNING treasury`).bind(cost).first();
-    if (!done) return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} for a road project`);
+    if (!(await houseOpen(db, city))) return err(403, 'Government House is in ruins. Repair it before you can work');
+    // A city's government spends only its own state's treasury, and nothing while the state is in arrears.
+    const done = await spendState(db, city, cost);
+    if (done === null) return err(402, `${CITY_NAME[city]}’s treasury needs ${naira(cost)} free of arrears for a road project`);
     const until = now + hours * 3600_000;
     const who = (await usernames(db, [user.uid])).get(user.uid);
     await db.batch([
@@ -562,7 +645,7 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
   }
 
   // An office holder rode in the state's helicopter, convoy or jet (src/game/fares.ts): the treasury pays the fare.
-  // The president draws on the whole treasury, a city's government on its own share of it.
+  // The president draws on the federal treasury, a city's government on its own state's.
   if (body.action === 'officialTrip') {
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
     const office = executiveOf(policy, user.uid);
@@ -570,8 +653,9 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     const amount = Math.floor(Number(body.amount));
     if (!(amount > 0) || amount > STATE_TRIP_MAX) return err(400, 'Invalid trip cost');
     const city = cityOf(policy, user.uid);
-    const within = office === 'president' || !city ? 'treasury >= ?1' : `treasury * alloc_${city} / 100 >= ?1`;
-    const paid = await db.prepare(`UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND ${within} RETURNING treasury`).bind(amount).first();
+    const paid = office === 'president' || !city
+      ? await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first()
+      : await spendState(db, city, amount);
     if (!paid) return err(402, 'The budget can’t cover that trip right now');
     // The blogs follow the state's fleet: where the jet is going, and how many trips that makes today.
     const vehicle: StateVehicle = body.vehicle === 'jet' || body.vehicle === 'helicopter' ? body.vehicle : 'cab';
@@ -595,12 +679,19 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
       .all<{ uid: string }>();
     // One round can share out the budget it comes from and no more: the president's palliatives budget, or the
     // city's own share when its government is the one sharing.
-    const from = sharedAs === 'president' ? 'welfare' : cityOf(policy, user.uid)!;
-    const each = Math.min(size, Math.floor(ALLOCATION.budget(policy.treasury, allocationOf(policy)[from]) / Math.max(1, people.length)));
-    if (each < 500) return err(402, `${from === 'welfare' ? 'The palliatives budget' : `${CITY_NAME[from]}’s budget`} is too small to share anything`);
+    const city = sharedAs === 'president' ? runsCity(policy, user.uid, body.city) : cityOf(policy, user.uid)!;
+    if (city && !(await houseOpen(db, city))) return err(403, 'Government House is in ruins. Repair it before you can work');
+    const budget = city
+      ? ((await db.prepare('SELECT balance FROM state_treasuries WHERE city = ? AND arrears = 0').bind(city).first<{ balance: number }>())?.balance ?? 0)
+      : ALLOCATION.budget(policy.treasury, allocationOf(policy).welfare);
+    const each = Math.min(size, Math.floor(budget / Math.max(1, people.length)));
+    if (each < 500) return err(402, `${city ? `${CITY_NAME[city]}’s treasury` : 'The palliatives budget'} is too small to share anything`);
     const total = each * people.length;
-    const locked = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1, palliative_at = ?2 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(total, now).first();
+    const locked = city
+      ? await spendState(db, city, total)
+      : await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1, palliative_at = ?2 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(total, now).first();
     if (!locked) return err(409, 'The treasury changed. Try again');
+    if (city) await db.prepare('UPDATE civic_policies SET palliative_at = ? WHERE id = 1').bind(now).run();
     const who = (await usernames(db, [user.uid])).get(user.uid);
     await db.batch([
       ...people.flatMap((x) => applyStmts(db, x.uid, `palliative:${now}`, 'palliative', 'state', each)),
@@ -613,9 +704,9 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
 
   if (body.action === 'contract') {
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
-    const city = cityOf(policy, user.uid);
+    const city = runsCity(policy, user.uid, body.city);
     if (!city) return err(403, 'Only the governor or the FCT Minister can award contracts');
-    const office = CITY_HEAD[city];
+    const office = actingAs(policy, user.uid, city);
     const c = TREASURY.contract;
     const amount = body.amount;
     if (typeof amount !== 'number' || !c.sizes.includes(amount)) return err(400, 'Pick a contract size');
@@ -624,9 +715,10 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     if (!target?.username) return err(404, 'No such player');
     if (target.uid === user.uid) return err(400, 'You can’t award a contract to yourself');
     if (now - (await lastUsed(db, user.uid, 'contract')) < c.cooldownHours * 3600_000) return err(429, 'You awarded a contract recently. The tenders board is still stamping it');
-    // Contracts come out of the city's own share of the treasury (the president's allocation).
-    const paid = await db.prepare(`UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury * alloc_${city} / 100 >= ?1 RETURNING treasury`).bind(amount).first();
-    if (!paid) return err(402, `${CITY_NAME[city]}’s budget needs ${naira(amount)} for this contract`);
+    if (!(await houseOpen(db, city))) return err(403, 'Government House is in ruins. Repair it before you can work');
+    // Contracts come out of the city's own treasury, and the state must be out of arrears.
+    const paid = await spendState(db, city, amount);
+    if (paid === null) return err(402, `${CITY_NAME[city]}’s treasury needs ${naira(amount)} free of arrears for this contract`);
     const who = (await usernames(db, [user.uid])).get(user.uid);
     await db.batch([
       usedStmt(db, user.uid, 'contract', now),
@@ -647,6 +739,8 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     if (!target?.username) return err(404, 'No such player');
     if (target.uid === user.uid) return err(400, 'You can’t pardon yourself');
     if (now - (await lastUsed(db, user.uid, 'pardon')) < TREASURY.pardon.cooldownHours * 3600_000) return err(429, 'You granted a pardon recently');
+    const pardonCity = cityOf(policy, user.uid);
+    if (pardonCity && !(await houseOpen(db, pardonCity))) return err(403, 'Government House is in ruins. Repair it before you can work');
     const freed = await db.prepare('UPDATE players SET jailed_until = NULL WHERE uid = ? AND jailed_until > ? RETURNING uid').bind(target.uid, now).first();
     if (!freed) return err(409, `${handle(target.username)} is not in a cell`);
     const who = (await usernames(db, [user.uid])).get(user.uid);
@@ -669,13 +763,20 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     const e = TREASURY.embezzle;
     const mine = await db.prepare('SELECT embezzled_at FROM players WHERE uid = ?').bind(user.uid).first<{ embezzled_at: number | null }>();
     if (mine?.embezzled_at && now - mine.embezzled_at < e.cooldownHours * 3600_000) return err(429, 'Lie low. The auditors are asking questions');
-    const amount = Math.min(e.cap, Math.floor((policy.treasury as number) * e.share));
+    // A governor reaches into their own state's treasury; everyone else into the federal one.
+    const stateCity = cityOf(policy, user.uid);
+    const pot = stateCity
+      ? ((await db.prepare('SELECT balance FROM state_treasuries WHERE city = ?').bind(stateCity).first<{ balance: number }>())?.balance ?? 0)
+      : (policy.treasury as number);
+    const amount = Math.min(e.cap, Math.floor(pot * e.share));
     if (amount < 1_000) return err(402, 'There is nothing in the treasury to “borrow”');
     const who = (await usernames(db, [user.uid])).get(user.uid);
     await db.prepare('UPDATE players SET embezzled_at = ? WHERE uid = ?').bind(now, user.uid).run();
     // The EFCC chair rarely investigates themselves; a different chair is extra keen.
     const chance = office === 'efcc' ? 0.15 : Math.max(0.05, e.catchChance + (policy.efcc_uid ? 0.2 : 0) + ALLOCATION.efccEdge(allocationOf(policy).efcc));
-    if (rand() < chance) {
+    // With an EFCC chair in office, they decide (worker/loot.ts); without one it is down to the odds.
+    const chairUid = policy.efcc_uid && policy.efcc_uid !== user.uid ? (policy.efcc_uid as string) : null;
+    if (!chairUid && rand() < chance) {
       const laws = await loadLaws(db);
       const fine = await transfer(db, user.uid, null, e.fine, 'fine', '', `embezzle:${user.uid}:${now}`);
       await jail(db, user.uid, laws.jailMinutes * 2, `Embezzlement · ${naira(amount)} from the treasury as ${OFFICE_RULES[office].title}`);
@@ -689,7 +790,9 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
       await gazette(env, ctx, [{ uid: user.uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} was caught taking ${naira(amount)} from the treasury and is out of office.` }]);
       return json({ caught: true, until, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
     }
-    const taken = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first();
+    const taken = stateCity
+      ? await spendState(db, stateCity, amount, { allowArrears: true })
+      : await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first();
     if (!taken) return err(409, 'The treasury changed. Try again');
     await db.batch([
       ...applyStmts(db, user.uid, `embezzle:${now}`, 'embezzle', office, amount),
@@ -698,7 +801,119 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
     ]);
     // Nobody is named: they got away with it.
     await gazette(env, ctx, [{ uid: null, office: null, kind: 'scandal', icon: '🐍', text: `${naira(amount)} is missing from the treasury. A snake swallowed it.` }]);
-    return json({ caught: false, amount, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+    const caseId = chairUid ? await openLootCase(env, ctx, user.uid, chairUid, office, stateCity ?? null, amount, now) : null;
+    return json({ caught: false, amount, caseId, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+  }
+
+  // The looter offers the EFCC chair a share of the loot, or the chair decides (worker/loot.ts).
+  if (body.action === 'lootOffer' || body.action === 'lootDecide') {
+    const result = await lootAction(env, ctx, user.uid, body as unknown as LootAction, now);
+    if ('error' in result) return err(result.status, result.error);
+    return json({ outcome: result.done, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+  }
+
+  // The governor sets how much of an asset's full bill the state pays to keep it up.
+  if (body.action === 'upkeep') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = runsCity(policy, user.uid, body.city);
+    if (!city) return err(403, 'Only the governor or the FCT Minister sets the upkeep');
+    if (!STATE_ASSETS.includes(body.asset as StateAsset)) return err(400, 'Unknown asset');
+    if (!(UPKEEP_LEVELS as readonly number[]).includes(body.level as number)) return err(400, 'Choose an upkeep level from the list');
+    await db.prepare('UPDATE state_assets SET level = ? WHERE city = ? AND asset = ?').bind(body.level, city, body.asset).run();
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
+  // The governor chooses what share of the president's maximum pay to take. Only the holder of the office: the president standing in is not paid.
+  if (body.action === 'payShare') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = cityOf(policy, user.uid);
+    if (!city) return err(403, 'Only the governor sets their own pay');
+    const share = body.pct;
+    if (typeof share !== 'number' || !(GOV_STEPS as readonly number[]).includes(share)) return err(400, 'Choose a share from the list');
+    const was = await db.prepare('SELECT pay_share FROM state_treasuries WHERE city = ?').bind(city).first<{ pay_share: number }>();
+    if (was?.pay_share === share) return err(400, 'Nothing changed');
+    await db.prepare('UPDATE state_treasuries SET pay_share = ? WHERE city = ?').bind(share, city).run();
+    const office = CITY_HEAD[city];
+    const who = (await usernames(db, [user.uid])).get(user.uid);
+    await gazette(env, ctx, [{ uid: user.uid, office, kind: 'law', icon: '💼', text: `${official(office, who)} now takes ${share}% of the maximum pay in ${CITY_NAME[city]}.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
+  // The state's own taxes and fees, set by its governor (or the president while the seat is empty).
+  if (body.action === 'stateLaw') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = runsCity(policy, user.uid, body.city);
+    if (!city) return err(403, 'Only the governor, or the president while the seat is empty, sets a state’s taxes');
+    const key = STATE_LAW_KEYS.find((k) => k === body.key);
+    if (!key) return err(400, 'Unknown tax or fee');
+    const law = STATE_LAWS[key];
+    // The governor picks a share of the president's maximum; the value stored is what that share comes to, never above the maximum.
+    const cap = (await capsOf(db))[key];
+    const allowed = GOV_STEPS.map((step) => lawAt(cap, step));
+    const next = body.pct !== undefined ? (GOV_STEPS as readonly number[]).includes(body.pct) ? lawAt(cap, body.pct) : undefined : body.value;
+    if (next === undefined || !allowed.includes(next) || next > cap) return err(400, 'Choose a share of the maximum from the list');
+    const was = (await lawsOf(db, city))[key];
+    if (was === next) return err(400, 'Nothing changed');
+    await db.prepare(`UPDATE state_treasuries SET ${law.column} = ? WHERE city = ?`).bind(next, city).run();
+    const as = actingAs(policy, user.uid, city);
+    const who = (await usernames(db, [user.uid])).get(user.uid);
+    await gazette(env, ctx, [{ uid: user.uid, office: as, kind: 'law', icon: '🏛️', text: `${official(as, who)} ${next > was ? 'raised' : 'cut'} ${law.title.toLowerCase()} in ${CITY_NAME[city]}: ${was}${law.unit} → ${next}${law.unit}.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
+  // An emergency repair: a lot of money for a lot of condition, at once.
+  if (body.action === 'repairAsset') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = runsCity(policy, user.uid, body.city);
+    if (!city) return err(403, 'Only the governor or the FCT Minister can repair state property');
+    const asset = body.asset as StateAsset;
+    if (!STATE_ASSETS.includes(asset)) return err(400, 'Unknown asset');
+    const cost = repairCost(asset, city);
+    const paid = await spendState(db, city, cost, { allowArrears: true });
+    if (paid === null) return err(402, `${CITY_NAME[city]}’s treasury needs ${naira(cost)} for this repair`);
+    await db.prepare('UPDATE state_assets SET condition = MIN(100, condition + ?) WHERE city = ? AND asset = ?').bind(REPAIR.condition, city, asset).run();
+    const who = (await usernames(db, [user.uid])).get(user.uid);
+    await gazette(env, ctx, [{ uid: user.uid, office: actingAs(policy, user.uid, city), kind: 'project', icon: ASSET_INFO[asset].icon, text: `${official(actingAs(policy, user.uid, city), who)} paid ${naira(cost)} to repair ${CITY_NAME[city]}’s ${ASSET_INFO[asset].label.toLowerCase()}.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
+  // A governor asks the federal government for money; the president grants it or turns it down.
+  if (body.action === 'askGrant') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = cityOf(policy, user.uid);
+    if (!city) return err(403, 'Only the governor or the FCT Minister can ask for a grant');
+    if (!(GRANT_SIZES as readonly number[]).includes(body.amount as number)) return err(400, 'Choose how much to ask for');
+    const row = await db.prepare('UPDATE state_treasuries SET ask_amount = ?1, ask_at = ?2 WHERE city = ?3 AND ask_amount IS NULL RETURNING city').bind(body.amount, now, city).first();
+    if (!row) return err(409, 'You already have a request waiting for the president');
+    const who = (await usernames(db, [user.uid])).get(user.uid);
+    await gazette(env, ctx, [{ uid: user.uid, office: CITY_HEAD[city], kind: 'law', icon: '🙏🏾', text: `${official(CITY_HEAD[city], who)} asked the federal government for ${naira(Number(body.amount))} for ${CITY_NAME[city]}.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
+  if (body.action === 'grant' || body.action === 'declineGrant') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president decides on grants');
+    const city = CIVIC_CITIES.find((c) => c === body.city);
+    if (!city) return err(400, 'Unknown state');
+    const who = (await usernames(db, [user.uid])).get(user.uid);
+    const me = official('president', who);
+    if (body.action === 'declineGrant') {
+      const gone = await db.prepare('UPDATE state_treasuries SET ask_amount = NULL, ask_at = NULL WHERE city = ? AND ask_amount IS NOT NULL RETURNING city').bind(city).first();
+      if (!gone) return err(409, 'There is no request to turn down');
+      await gazette(env, ctx, [{ uid: user.uid, office: 'president', kind: 'law', icon: '🙅🏾', text: `${me} turned down ${CITY_NAME[city]}’s request for money.` }]);
+      return json({ snapshot: await snapshot(db, user.uid) });
+    }
+    const amount = body.amount;
+    if (typeof amount !== 'number' || !(GRANT_SIZES as readonly number[]).includes(amount)) return err(400, 'Choose a grant size');
+    const taken = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first();
+    if (!taken) return err(402, 'The federal treasury cannot cover that grant');
+    await db.batch([
+      // `incoming` is untouched: the federal government does not take a cut of its own grant.
+      db.prepare('UPDATE state_treasuries SET balance = balance + ?1, ask_amount = NULL, ask_at = NULL WHERE city = ?2').bind(amount, city),
+      blogStmt(db, user.uid, '🏛️', `FEDERAL GRANT: ${me} has sent ${naira(amount)} to ${CITY_NAME[city]}. The governor says thank you. The other governors say “and us?” 🏛️`, city),
+    ]);
+    await gazette(env, ctx, [{ uid: user.uid, office: 'president', kind: 'project', icon: '🏛️', text: `${me} granted ${CITY_NAME[city]} ${naira(amount)} from the federal treasury.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
   }
 
   if (body.action === 'allocate') {
@@ -794,29 +1009,23 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
       updates.push('transfer_fee = ?');
       values.push(body.transferFee);
     }
-    if (body.roadsFunding !== undefined) {
-      if (policy?.governor_uid !== user.uid) return err(403, 'Only the elected governor can set road funding');
-      if (!Number.isInteger(body.roadsFunding) || body.roadsFunding < 0 || body.roadsFunding > 100) return err(400, 'Road funding must be between 0 and 100');
-      updates.push('roads_funding = ?');
-      values.push(body.roadsFunding);
+    // The most a state may charge for each tax and fee: lowering one cuts every state above it down to the new maximum.
+    const lowered: { key: (typeof STATE_LAW_KEYS)[number]; cap: number }[] = [];
+    for (const key of STATE_LAW_KEYS) {
+      const law = STATE_LAWS[key];
+      const cap = (body as Record<string, unknown>)[law.capField];
+      if (cap === undefined) continue;
+      if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set the maximum for a state tax');
+      if (typeof cap !== 'number' || !law.capOptions.includes(cap)) return err(400, `Choose a maximum from the list for ${law.title.toLowerCase()}`);
+      updates.push(`${law.capColumn} = ?`);
+      values.push(cap);
+      if (cap < Number(policy?.[law.capColumn] ?? law.max)) lowered.push({ key, cap });
     }
-    if (body.roadsFundingAbuja !== undefined) {
-      if (policy?.minister_uid !== user.uid) return err(403, 'Only the FCT Minister can set Abuja’s road funding');
-      if (!Number.isInteger(body.roadsFundingAbuja) || body.roadsFundingAbuja < 0 || body.roadsFundingAbuja > 100) return err(400, 'Road funding must be between 0 and 100');
-      updates.push('roads_funding_abuja = ?');
-      values.push(body.roadsFundingAbuja);
-    }
-    if (body.roadsFundingLagos !== undefined) {
-      if (policy?.lagosgov_uid !== user.uid) return err(403, 'Only the Governor of Lagos can set Lagos’s road funding');
-      if (!Number.isInteger(body.roadsFundingLagos) || body.roadsFundingLagos < 0 || body.roadsFundingLagos > 100) return err(400, 'Road funding must be between 0 and 100');
-      updates.push('roads_funding_lagos = ?');
-      values.push(body.roadsFundingLagos);
-    }
-    if (body.roadsFundingKano !== undefined) {
-      if (policy?.kanogov_uid !== user.uid) return err(403, 'Only the Governor of Kano can set Kano’s road funding');
-      if (!Number.isInteger(body.roadsFundingKano) || body.roadsFundingKano < 0 || body.roadsFundingKano > 100) return err(400, 'Road funding must be between 0 and 100');
-      updates.push('roads_funding_kano = ?');
-      values.push(body.roadsFundingKano);
+    if (body.federalCut !== undefined) {
+      if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set the federal cut');
+      if (!Number.isInteger(body.federalCut) || body.federalCut < 0 || body.federalCut > FEDERAL_CUT.max || body.federalCut % FEDERAL_CUT.step) return err(400, `The federal cut must be a multiple of ${FEDERAL_CUT.step}% up to ${FEDERAL_CUT.max}%`);
+      updates.push('federal_cut = ?');
+      values.push(body.federalCut);
     }
     // Police and EFCC laws (see src/game/crime.ts).
     const laws: [keyof typeof LAW_LIMITS, string, PoliticalOffice][] = [
@@ -873,6 +1082,12 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
       if (on) posts.push(...vdmGov(db, user.uid, 'okadaBan', { who: official(ban.office, who), other: CITY_NAME[ban.city] }, ban.city));
     }
     if (posts.length) await db.batch(posts).catch(() => {});
+    // A lowered maximum takes every state above it down to it.
+    for (const { key, cap } of lowered) {
+      const law = STATE_LAWS[key];
+      const cut = await db.prepare(`UPDATE state_treasuries SET ${law.column} = MIN(${law.column}, ?1) WHERE ${law.column} > ?1 RETURNING city`).bind(cap).all<{ city: string }>();
+      notices.push({ uid: user.uid, office: 'president', kind: 'law', icon: '🏛️', text: `${official('president', who)} capped ${law.title.toLowerCase()} at ${cap}${law.unit}.${cut.results.length ? ` ${cut.results.map((r) => CITY_NAME[r.city as CivicCity] ?? r.city).join(', ')} cut down to it.` : ''}` });
+    }
     await gazette(env, ctx, notices);
     return json({ snapshot: await snapshot(db, user.uid) });
   }

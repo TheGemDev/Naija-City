@@ -1,3 +1,4 @@
+import { brokenAsset } from '../net/roads';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { DECAY, DRAIN_SCALE, fed, FOOD_DELIVERY, FOOD_ENERGY, ITEMS, NEEDS, PHONE_ACTIONS, TOILET_FRESHEN, WORK_HUNGER, type ActionDef, type ActivityAnimation, type Need } from './catalog';
@@ -310,6 +311,8 @@ export interface GameState {
   toasts: Toast[];
   /** Income tax the president set (worker/wallet.ts takes it from wages and hustles). */
   taxRate: number;
+  /** The extra wage tax of the state you live in, on top of the president's (worker/wallet.ts). */
+  stateTax: number;
   /** The governor dug up your street until this time (ms): slower travel, dearer fares. */
   roadBlockUntil: number | null;
   /** The owambe screen is open. */
@@ -838,10 +841,10 @@ export const useGame = create<GameState>((set, get) => {
 
   const pay = (amount: number, label: string, kind: MoneyKind = 'spend', ref?: string, qty?: number) => {
     // Wages and hustles are taxed by the server; show the same deduction straight away.
-    const tax = (kind === 'work' || kind === 'gig') && amount > 0 ? Math.floor((amount * get().taxRate) / 100) : 0;
+    const tax = (kind === 'work' || kind === 'gig') && amount > 0 ? Math.floor((amount * (get().taxRate + get().stateTax)) / 100) : 0;
     set((s) => ({
       money: s.money + amount - tax,
-      txns: [...(tax ? [{ at: s.minutes, label: `Income tax (${s.taxRate}%)`, amount: -tax }] : []), { at: s.minutes, label, amount }, ...s.txns].slice(0, 40),
+      txns: [...(tax ? [{ at: s.minutes, label: `Income tax (${s.taxRate + s.stateTax}%)`, amount: -tax }] : []), { at: s.minutes, label, amount }, ...s.txns].slice(0, 40),
     }));
     moneyHooks.onChange?.({ amount, kind, ref, qty });
   };
@@ -1268,6 +1271,7 @@ export const useGame = create<GameState>((set, get) => {
     hover: null,
     toasts: [],
     taxRate: 0,
+    stateTax: 0,
     roadBlockUntil: null,
     owambe: false,
     lifeSummary: null,
@@ -2058,6 +2062,9 @@ export const useGame = create<GameState>((set, get) => {
       }
       const st = get();
       const place = regionPlaces(st.destinationId).find((p) => p.id === placeId);
+      // A building the state has let fall apart is shut until it is repaired.
+      const broken = brokenAsset(st.destinationId, placeId);
+      if (broken) return toast(`🔧 ${place?.name ?? 'That building'} is closed: the state has let it fall apart. The governor has to repair it.`);
       const def = findAction(null, 'enter', st.items, placeId);
       // The government house stands only in the state you were born in.
       if (placeId === 'home' && st.view === 'city' && awayFromHome()) return;

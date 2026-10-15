@@ -17,8 +17,7 @@
 // here does not exist in Abuja.
 
 import type { ActionDef } from './catalog';
-import { JET_TRIP } from './cars';
-import { addCityMap, addCityPotholes, FLIGHT_FARE, FLIGHT_PERHOUR, flightMinutes, jetFlight, KANO_FARE, LAGOS_FARE, PLACE_BY_ID, PRISON_PLACE, smoothClosed, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
+import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightFare, flightMinutes, jetFare, jetFlight, PLACE_BY_ID, PRISON_PLACE, smoothClosed, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
 import { roomPlaceId } from './hotel';
 import { SUITE_ID, VILLA_ID } from './villa';
 
@@ -98,12 +97,12 @@ const PLACES: Place[] = [
     name: 'Nnamdi Azikiwe International Airport', area: 'Airport Road', blurb: 'Abuja’s airport, out past Lugbe. Flights home to Kaduna leave from here.',
     x: 3, z: 48, w: 16, d: 5, door: { x: 12, z: 46 },
   }, {}, [
-    { id: 'fly_kaduna', label: 'Fly back to Kaduna', icon: '🛫', category: 'spend', cost: FLIGHT_FARE, minutes: flightMinutes('abuja', 'kaduna'), pose: 'hidden', effect: 'travel', destination: 'kaduna', perHour: FLIGHT_PERHOUR, tagline: 'A short hop home to Kaduna International. Meat pie and a nap' },
-    { id: 'fly_kaduna_jet', label: 'Fly your private jet to Kaduna', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('abuja', 'kaduna'), pose: 'hidden', effect: 'travel', destination: 'kaduna', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
-    { id: 'fly_lagos', label: 'Fly to Lagos', icon: '🛫', category: 'spend', cost: LAGOS_FARE, minutes: flightMinutes('abuja', 'lagos'), pose: 'hidden', effect: 'travel', destination: 'lagos', perHour: FLIGHT_PERHOUR, tagline: 'The Abuja – Lagos shuttle. Every seat is a contractor or a senator’s aide' },
-    { id: 'fly_lagos_jet', label: 'Fly your private jet to Lagos', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('abuja', 'lagos'), pose: 'hidden', effect: 'travel', destination: 'lagos', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
-    { id: 'fly_kano', label: 'Fly to Kano', icon: '🛫', category: 'spend', cost: KANO_FARE, minutes: flightMinutes('abuja', 'kano'), pose: 'hidden', effect: 'travel', destination: 'kano', perHour: FLIGHT_PERHOUR, tagline: 'The Abuja – Kano shuttle: senators going home for the weekend and one man with a ram in cargo' },
-    { id: 'fly_kano_jet', label: 'Fly your private jet to Kano', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('abuja', 'kano'), pose: 'hidden', effect: 'travel', destination: 'kano', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+    { id: 'fly_kaduna', label: 'Fly back to Kaduna', icon: '🛫', category: 'spend', cost: flightFare('abuja', 'kaduna'), minutes: flightMinutes('abuja', 'kaduna'), pose: 'hidden', effect: 'travel', destination: 'kaduna', perHour: FLIGHT_PERHOUR, tagline: 'A short hop home to Kaduna International. Meat pie and a nap' },
+    { id: 'fly_kaduna_jet', label: 'Fly your private jet to Kaduna', icon: '🛩️', category: 'spend', cost: jetFare('abuja', 'kaduna'), ...jetFlight('abuja', 'kaduna'), pose: 'hidden', effect: 'travel', destination: 'kaduna', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+    { id: 'fly_lagos', label: 'Fly to Lagos', icon: '🛫', category: 'spend', cost: flightFare('abuja', 'lagos'), minutes: flightMinutes('abuja', 'lagos'), pose: 'hidden', effect: 'travel', destination: 'lagos', perHour: FLIGHT_PERHOUR, tagline: 'The Abuja – Lagos shuttle. Every seat is a contractor or a senator’s aide' },
+    { id: 'fly_lagos_jet', label: 'Fly your private jet to Lagos', icon: '🛩️', category: 'spend', cost: jetFare('abuja', 'lagos'), ...jetFlight('abuja', 'lagos'), pose: 'hidden', effect: 'travel', destination: 'lagos', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+    { id: 'fly_kano', label: 'Fly to Kano', icon: '🛫', category: 'spend', cost: flightFare('abuja', 'kano'), minutes: flightMinutes('abuja', 'kano'), pose: 'hidden', effect: 'travel', destination: 'kano', perHour: FLIGHT_PERHOUR, tagline: 'The Abuja – Kano shuttle: senators going home for the weekend and one man with a ram in cargo' },
+    { id: 'fly_kano_jet', label: 'Fly your private jet to Kano', icon: '🛩️', category: 'spend', cost: jetFare('abuja', 'kano'), ...jetFlight('abuja', 'kano'), pose: 'hidden', effect: 'travel', destination: 'kano', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
   ]),
   abuja('home', {
     name: 'Your House', area: 'Lugbe', blurb: 'Home sweet home.',

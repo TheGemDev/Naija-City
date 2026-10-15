@@ -12,10 +12,27 @@ export function freshPage(force = false): boolean {
   } catch {
     if (!force) return false; // storage blocked: nothing to stop a loop with
   }
+  try { sessionStorage.setItem('kl-why', force ? 'You tapped Refresh.' : 'A game file was missing after an update.'); } catch { /* the toast is only a hint */ }
   const url = new URL(location.href);
   url.searchParams.set('_r', String(Date.now()));
   location.replace(url);
   return true;
+}
+
+/** Why this page just loaded, when it was not the player opening it: the game says so in a toast, so a surprise refresh is never a mystery. */
+let told = false;
+export function whyReloaded(): string | null {
+  if (told) return null;
+  told = true;
+  let why: string | null = null;
+  try {
+    why = sessionStorage.getItem('kl-why');
+    sessionStorage.removeItem('kl-why');
+  } catch { /* nothing to read */ }
+  if (why) return why;
+  if ((document as Document & { wasDiscarded?: boolean }).wasDiscarded) return 'The browser dropped this tab to free memory.';
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  return nav?.type === 'reload' ? 'The page was reloaded (by you or the browser).' : null;
 }
 
 /** The error a browser throws when a game file it was told to load is not on the server any more. */

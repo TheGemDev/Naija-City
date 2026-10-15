@@ -2,6 +2,8 @@
 // listings show in three spots: the Business app's directory, the place's own hub when you are inside, and the
 // map sheet, where you can browse a place's shops and order before you travel.
 
+import { scaledFee } from '../game/treasury';
+import { useStateLaws } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { BIZ, BUSINESSES, STALLS, deliveryFee, typesAt } from '../game/career';
 import { cityMap } from '../game/city';
@@ -30,7 +32,8 @@ function Product({ item, own, here, onBought }: { item: MarketListing; own: bool
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const max = Math.min(item.stock, BIZ.maxMarketOrder);
   const total = item.price * quantity;
-  const fee = here ? 0 : deliveryFee(total);
+  const laws = useStateLaws(item.city);
+  const fee = here ? 0 : scaledFee(deliveryFee(total), laws.deliveryFee);
   const step = (by: -1 | 1) => {
     setQuantity(Math.max(1, Math.min(max, quantity + by)));
     setRequestId(crypto.randomUUID());

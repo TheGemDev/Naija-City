@@ -9,6 +9,7 @@ import { lampCity, lampOf, roadOf } from '../src/game/roads';
 import { rand, usernames } from './crime';
 import { feedStmt, naira } from './feed';
 import { official } from './gazette';
+import { conditionsOf } from './state';
 
 const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
 const DAY_MS = 24 * 3600_000;
@@ -205,6 +206,7 @@ export async function vdmGrumbles(db: D1Database, now: number): Promise<void> {
   ]);
   const p = policy.results[0];
   if (!p) return;
+  const roads = await conditionsOf(db, 'roads');
   const uidOf = (office: PoliticalOffice) => p[`${office}_uid`] as string | null;
   const names = await usernames(db, OFFICES.map(uidOf));
   const who = (office: PoliticalOffice) => official(office, names.get(uidOf(office) ?? ''));
@@ -243,7 +245,7 @@ export async function vdmGrumbles(db: D1Database, now: number): Promise<void> {
     const out = dark.results.map((r) => Number(r.site)).filter((site) => lampCity(site) === city);
     if (out.length) say(GRUMBLES.lamps, { ...m, n: out.length, what: lampOf(pick(out))?.road ?? other }, head, city, VDM_ROADS_ICON);
     if (p[`okada_ban_${city}`]) say(GRUMBLES.okada, m, head, city);
-    const funding = Number(p[city === 'kaduna' ? 'roads_funding' : `roads_funding_${city}`]);
+    const funding = roads[city] ?? 100;
     if (funding <= GOV_RANT.lowFunding) say(GRUMBLES.funding, { ...m, n: funding }, head, city);
   }
 
@@ -275,6 +277,7 @@ const LAW_ASIDES: Record<string, [up: string, down: string]> = {
   taxRate: ['Workers are recalculating what is left of their salaries. 🧮', 'Payday just got a little sweeter. 💃🏾'],
   loanRate: ['Borrowers are sweating. 🥵', 'The banks say their doors are open. 🏦'],
   transferFee: ['Sending money just got dearer. 💸', 'Cheaper transfers for everybody. 📲'],
+  federalCut: ['Governors are counting what is left for the states. 😬', 'The states keep more of what they raise. 💃🏾'],
   patrols: ['More police vans on the streets from tonight. 🚓', 'Fewer patrols, and the thieves have noticed. 👀'],
   jailMinutes: ['Longer nights in the cell for anybody caught. ⛓️', 'Shorter stays in the cell from today. 🔓'],
   finePct: ['Thieves will pay more when they are caught. ⚖️', 'Getting caught just got cheaper. 🤨'],

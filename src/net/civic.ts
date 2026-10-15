@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { ALLOCATION, banLeft, CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, VOTE_BUYING_BAN_MS, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type GazetteKind, type PoliticalOffice } from '../game/civic';
+import { banLeft, CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, VOTE_BUYING_BAN_MS, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type LootCase, type GazetteKind, type PoliticalOffice } from '../game/civic';
 import { setOkadaBan } from '../game/cityLaws';
+import type { StateAsset, StateCaps, StateLawKey, StateLaws } from '../game/treasury';
 import { refreshBalance, setServerBalance } from './wallet';
 import { api, useSession } from './session';
 import { naira, useGame } from '../game/store';
@@ -36,10 +37,17 @@ export interface CivicHolder {
 
 export interface PolicyChange {
   taxRate?: number;
-  roadsFunding?: number;
-  roadsFundingAbuja?: number;
-  roadsFundingLagos?: number;
-  roadsFundingKano?: number;
+  /** The president's share of every state's revenue, sent up to the federal treasury each hour. */
+  federalCut?: number;
+  /** The president's maximum for each state tax and fee (game/treasury.ts STATE_LAWS capField). */
+  capIncomeTax?: number;
+  capBizFee?: number;
+  capMoveFee?: number;
+  capDeliveryFee?: number;
+  capBizTax?: number;
+  capSalesTax?: number;
+  capHospitalFee?: number;
+  capExportLevy?: number;
   patrols?: number;
   jailMinutes?: number;
   finePct?: number;
@@ -53,12 +61,34 @@ export interface PolicyChange {
   okadaBanKano?: number;
 }
 
+/** One state's treasury, as the Civic app shows it. */
+export interface StateInfo {
+  balance: number;
+  /** Revenue since the last hourly round: the federal cut comes out of this. */
+  incoming: number;
+  /** Bills it could not pay. They lock the governor's spending until paid. */
+  arrears: number;
+  /** The governor's request to the president, if one is waiting. */
+  ask: { amount: number; at: number | null } | null;
+  assets: Partial<Record<StateAsset, { condition: number; level: number }>>;
+  /** The state's own taxes and fees. */
+  laws?: StateLaws;
+  /** The share (percent) of the president's maximum pay its governor takes. */
+  payShare?: number;
+}
+
 export interface CivicSnapshot {
   policies: Required<PolicyChange> & Record<PoliticalOffice, CivicHolder | null>;
   races: Partial<Record<PoliticalOffice, CivicRace>>;
-  /** Income tax collected so far, for the government to spend. */
+  /** The federal treasury. Each state's own is in `states`. */
   treasury: number;
-  /** The president's budget: the percent of the treasury each department may use. */
+  /** Every state's treasury, bills and assets, by city. */
+  states?: Record<string, StateInfo>;
+  /** The most a state may charge for each tax and fee. */
+  caps?: StateCaps;
+  /** Looting cases I am the looter or the EFCC chair in. */
+  loot?: LootCase[];
+  /** The president's budget: the percent of the federal treasury each federal department may use. */
   allocation?: Allocation;
   palliativeAt: number | null;
   /** What each office is paid a game day, when the last pay round went out, and whether there is a pay list yet (worker/civic.ts). */
@@ -102,11 +132,29 @@ interface CivicState {
   allocate(allocation: Allocation): Promise<void>;
   /** The President signs the pay list: every office's pay a game day, their own included. */
   setSalaries(salaries: Salaries): Promise<void>;
-  roadProject(target: string): Promise<void>;
-  contract(target: string, amount: number): Promise<void>;
+  /** `city` is the empty state the president is standing in for. */
+  roadProject(target: string, city?: string): Promise<void>;
+  contract(target: string, amount: number, city?: string): Promise<void>;
   pardon(target: string): Promise<void>;
-  palliative(amount: number): Promise<void>;
+  palliative(amount: number, city?: string): Promise<void>;
   embezzle(): Promise<void>;
+  /** The governor sets how much of an asset's bill the state pays. */
+  upkeep(asset: StateAsset, level: number, city?: string): Promise<void>;
+  /** The governor picks what share of the maximum pay to take. */
+  payShare(step: number): Promise<void>;
+  /** The governor sets one of the state's taxes or fees to a share (percent) of the president's maximum. */
+  stateLaw(key: StateLawKey, step: number, city?: string): Promise<void>;
+  /** The governor pays for an emergency repair. */
+  repairAsset(asset: StateAsset, city?: string): Promise<void>;
+  /** The looter offers the EFCC chair a share of the loot (percent). */
+  lootOffer(caseId: number, pct: number): Promise<void>;
+  /** The EFCC chair takes the offer (accept) or sends the looter to court. */
+  lootDecide(caseId: number, accept: boolean): Promise<void>;
+  /** The governor asks the president for money. */
+  askGrant(amount: number): Promise<void>;
+  /** The president sends a state money from the federal treasury, or turns its request down. */
+  grant(city: string, amount: number): Promise<void>;
+  declineGrant(city: string): Promise<void>;
 }
 
 interface CivicResult {
@@ -114,10 +162,11 @@ interface CivicResult {
   balance?: number;
   error?: string;
   /** Campaign chaos: the crowd ran off, or the EFCC caught you buying votes. */
-  outcome?: 'ok' | 'fled' | 'stung';
+  outcome?: string;
   until?: number;
   caught?: boolean;
   amount?: number;
+  caseId?: number | null;
   each?: number;
   people?: number;
 }
@@ -198,6 +247,9 @@ function report(body: Record<string, unknown>, r: CivicResult) {
   }
   if (body.action === 'contract') g.toast(`📝 Contract signed. ${naira(Number(body.amount))} is on its way to the contractor.`);
   if (body.action === 'pardon') g.toast('🕊️ Pardon signed. They are walking out of the cell now.');
+  if (body.action === 'stateLaw') g.toast('🏛️ Signed. The new rate is law.');
+  if (body.action === 'lootOffer') g.toast('💼 Offer sent. The money is held until the chair decides.');
+  if (body.action === 'lootDecide') g.toast(r.outcome === 'refused' ? '⚖️ Refused. The looter goes to court.' : r.outcome === 'accepted-caught' ? '🕵🏾 You took the money, but you were found out. You are out of office.' : '🤝 You took the offer. The case is closed.');
   if (body.action === 'allocate') g.toast('📊 New budget signed. The departments have their shares.');
   if (body.action === 'salaries') g.toast('💼 New pay list signed. The whole country can read it, VDM too.');
   if (body.action === 'palliative' && r.each) g.toast(`🍚 Palliatives shared: ${naira(r.each)} each to ${r.people} people.`);
@@ -205,7 +257,8 @@ function report(body: Record<string, unknown>, r: CivicResult) {
     if (r.caught) {
       g.toast('🐍 CAUGHT! The EFCC traced the money. You are out of office and in a cell.');
       void loadPolice();
-    } else if (r.amount) g.toast(`🐍 ${naira(r.amount)} quietly moved to your account. A snake swallowed it, officially.`);
+    } else if (r.caseId) g.toast(`🐍 ${naira(r.amount ?? 0)} is yours, but the EFCC chair has a case on you. Message them and offer a share.`);
+    else if (r.amount) g.toast(`🐍 ${naira(r.amount)} quietly moved to your account. A snake swallowed it, officially.`);
   }
 }
 
@@ -255,17 +308,26 @@ export const useCivic = create<CivicState>((set) => {
     setPolicy: (policy) => act({ action: 'policy', ...policy }),
     allocate: (allocation) => act({ action: 'allocate', allocation }),
     setSalaries: (salaries) => act({ action: 'salaries', salaries }),
-    roadProject: (target) => act({ action: 'roadProject', target }),
-    contract: (target, amount) => act({ action: 'contract', target, amount }),
+    roadProject: (target, city) => act({ action: 'roadProject', target, city }),
+    contract: (target, amount, city) => act({ action: 'contract', target, amount, city }),
     pardon: (target) => act({ action: 'pardon', target }),
-    palliative: (amount) => act({ action: 'palliative', amount }),
+    palliative: (amount, city) => act({ action: 'palliative', amount, city }),
     embezzle: () => act({ action: 'embezzle' }),
+    upkeep: (asset, level, city) => act({ action: 'upkeep', asset, level, city }),
+    payShare: (step) => act({ action: 'payShare', pct: step }),
+    stateLaw: (key, step, city) => act({ action: 'stateLaw', key, pct: step, city }),
+    repairAsset: (asset, city) => act({ action: 'repairAsset', asset, city }),
+    lootOffer: (caseId, pct) => act({ action: 'lootOffer', caseId, pct }),
+    lootDecide: (caseId, accept) => act({ action: 'lootDecide', caseId, accept }),
+    askGrant: (amount) => act({ action: 'askGrant', amount }),
+    grant: (city, amount) => act({ action: 'grant', city, amount }),
+    declineGrant: (city) => act({ action: 'declineGrant', city }),
   };
 });
 
 /**
  * The office whose fleet I can ride in right now (game/civic.ts STATE_FLEET): I hold it, and what it may spend covers
- * `cost`. The president draws on the whole treasury, a city's government on its own share of it.
+ * `cost`. The president draws on the federal treasury, a city's government on its own state's.
  */
 export function stateRide(cost = 0): ExecutiveOffice | null {
   const uid = useSession.getState().user?.uid;
@@ -274,15 +336,23 @@ export function stateRide(cost = 0): ExecutiveOffice | null {
   if (data.policies.president?.uid === uid) return data.treasury >= cost ? 'president' : null;
   const city = CIVIC_CITIES.find((c) => data.policies[CITY_HEAD[c]]?.uid === uid);
   if (!city) return null;
-  const share = (data.allocation ?? ALLOCATION.defaults)[city];
-  return ALLOCATION.budget(data.treasury, share) >= cost ? (CITY_HEAD[city] as ExecutiveOffice) : null;
+  return (data.states?.[city]?.balance ?? 0) >= cost ? (CITY_HEAD[city] as ExecutiveOffice) : null;
 }
 
 /** An official trip has left: the treasury pays for it. `to` is the city a jet is flying to (the blogs report it). */
 export function chargeTreasury(amount: number, vehicle: StateVehicle, to?: string) {
   const data = useCivic.getState().data;
   // Straight away, so the next trip is checked against what is left.
-  if (data) useCivic.setState({ data: { ...data, treasury: Math.max(0, data.treasury - amount) } });
+  if (data) {
+    const uid = useSession.getState().user?.uid;
+    const city = CIVIC_CITIES.find((c) => data.policies[CITY_HEAD[c]]?.uid === uid);
+    const mine = city && data.states?.[city];
+    useCivic.setState({
+      data: mine
+        ? { ...data, states: { ...data.states, [city]: { ...mine, balance: Math.max(0, mine.balance - amount) } } }
+        : { ...data, treasury: Math.max(0, data.treasury - amount) },
+    });
+  }
   void request({ action: 'officialTrip', amount, vehicle, to })
     .then((r) => { if (r.snapshot) useCivic.setState({ data: r.snapshot }); })
     .catch(() => { void useCivic.getState().refresh(); });

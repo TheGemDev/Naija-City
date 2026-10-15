@@ -15,8 +15,7 @@
 // here does not exist in Lagos.
 
 import type { ActionDef } from './catalog';
-import { JET_TRIP } from './cars';
-import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightMinutes, jetFlight, LAGOS_FARE, PLACE_BY_ID, PRISON_PLACE, smoothClosed, smoothOpen, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
+import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightFare, flightMinutes, jetFare, jetFlight, PLACE_BY_ID, PRISON_PLACE, smoothClosed, smoothOpen, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
 
 export const LAGOS_W = 84;
 export const LAGOS_H = 62;
@@ -84,8 +83,8 @@ function lagos(id: string, spot: Spot, relabel: Record<string, Partial<ActionDef
 }
 
 const flight = (to: 'kaduna' | 'abuja' | 'kano', name: string, tagline: string): ActionDef[] => [
-  { id: `fly_${to}`, label: `Fly to ${name}`, icon: '🛫', category: 'spend', cost: LAGOS_FARE, minutes: flightMinutes('lagos', to), pose: 'hidden', effect: 'travel', destination: to, perHour: FLIGHT_PERHOUR, tagline },
-  { id: `fly_${to}_jet`, label: `Fly your private jet to ${name}`, icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('lagos', to), pose: 'hidden', effect: 'travel', destination: to, jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+  { id: `fly_${to}`, label: `Fly to ${name}`, icon: '🛫', category: 'spend', cost: flightFare('lagos', to), minutes: flightMinutes('lagos', to), pose: 'hidden', effect: 'travel', destination: to, perHour: FLIGHT_PERHOUR, tagline },
+  { id: `fly_${to}_jet`, label: `Fly your private jet to ${name}`, icon: '🛩️', category: 'spend', cost: jetFare('lagos', to), ...jetFlight('lagos', to), pose: 'hidden', effect: 'travel', destination: to, jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
 ];
 
 const PLACES: Place[] = [

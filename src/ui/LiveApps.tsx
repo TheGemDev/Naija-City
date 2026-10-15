@@ -159,6 +159,8 @@ export function GistApp() {
   const busy = useLive((s) => s.busy);
   const feedEnd = useLive((s) => s.feedEnd);
   const feedCity = useLive((s) => s.feedCity);
+  const feedAuto = useLive((s) => s.feedAuto);
+  const here = useGame((s) => s.destinationId);
   const friendsEnd = useLive((s) => s.friendsEnd);
   const sharedPost = useLive((s) => s.sharedPost);
   const myUid = useSession((s) => s.user?.uid);
@@ -166,6 +168,11 @@ export function GistApp() {
   const [text, setText] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
   const [tab, setTab] = useState<'friends' | 'news' | 'vdm'>('friends');
+  // The news is the news of the state I am in, until I pick another.
+  useEffect(() => {
+    const state = CIVIC_CITIES.find((c) => c === here);
+    if (feedAuto && state) setFeedCity(state);
+  }, [here, feedAuto]);
   // A tweet opened from a share link comes with its replies showing.
   useEffect(() => {
     if (sharedPost) setOpenId(sharedPost.id);
@@ -228,9 +235,9 @@ export function GistApp() {
           <BetSlip />
           <h4>Trending in Naija</h4>
           <div className="pills" style={{ marginBottom: 10 }}>
-            <button className={feedCity === null ? 'on' : ''} onClick={() => setFeedCity(null)}>All</button>
+            <button className={feedCity === null ? 'on' : ''} onClick={() => { useLive.setState({ feedAuto: false }); setFeedCity(null); }}>All</button>
             {CIVIC_CITIES.map((c) => (
-              <button key={c} className={feedCity === c ? 'on' : ''} onClick={() => setFeedCity(c)}>{CITY_NAME[c]}</button>
+              <button key={c} className={feedCity === c ? 'on' : ''} onClick={() => { useLive.setState({ feedAuto: c === here }); setFeedCity(c); }}>{CITY_NAME[c]}</button>
             ))}
           </div>
           {!feed.length && (

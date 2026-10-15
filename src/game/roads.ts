@@ -9,7 +9,7 @@ import { cityMap, potholeCity, potholeOf } from './city';
 import { TIME_RATE } from './timeRates';
 
 export const ROADWORK = {
-  /** Real hours between new potholes: 6 with no road funding, 30 with full funding. */
+  /** Real hours between new potholes: 6 when the state's roads are in ruins, 30 when they are in perfect condition. */
   spawnHours: (roadsFunding: number) => 6 + (roadsFunding / 100) * 24,
   /** At most this many open in one go after a long quiet spell. */
   maxSpawnBatch: 3,
@@ -19,9 +19,9 @@ export const ROADWORK = {
   fixPostMs: ((6 * 60) / TIME_RATE) * 1000,
 };
 
-/** Street lights go out the same way potholes open, on the same road funding, and are fixed the same way. */
+/** Street lights go out the same way potholes open, on how well the state keeps its lights up, and are fixed the same way. */
 export const LAMPS = {
-  /** Real hours between street lights going out: 4 with no road funding, 24 with full funding. */
+  /** Real hours between street lights going out: 4 with ruined lights, 24 with perfect ones. */
   spawnHours: (roadsFunding: number) => 4 + (roadsFunding / 100) * 20,
   maxSpawnBatch: 3,
   fixCost: 300_000,
@@ -88,11 +88,17 @@ export interface RoadsSnapshot {
   /** When the next one is due to break open in Kaduna. */
   nextAt: number;
   treasury: number;
-  /** Kaduna's share of the treasury: the most a repair paid for by the state can cost. */
+  /** Kaduna's treasury: the most a repair paid for by the state can cost. */
   budget: number;
   /** The same two numbers for each city. */
   cities: Record<string, { nextAt: number; budget: number; lampNextAt?: number }>;
   /** Street lights that are out, in every city (lampOf). */
   lamps?: number[];
   recent: PotholeFix[];
+  /** How each city's buildings are holding up (0 to 100), by city then asset (game/treasury.ts). */
+  assets?: Record<string, Record<string, number>>;
+  /** Each state's own taxes and fees, by city (game/treasury.ts StateLaws). */
+  laws?: Record<string, import('./treasury').StateLaws>;
+  /** The most a state may charge for each of them (the president's maximum). */
+  caps?: import('./treasury').StateCaps;
 }

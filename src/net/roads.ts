@@ -4,6 +4,7 @@ import '../game/lagos';
 import '../game/kano';
 import { allPotholeSites } from '../game/city';
 import type { RoadsSnapshot } from '../game/roads';
+import { BROKEN_BELOW, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, PLACE_ASSET, type StateAsset, type StateCaps, type StateLaws } from '../game/treasury';
 import { setServerBalance } from './wallet';
 import { api } from './session';
 
@@ -55,3 +56,20 @@ export const useRoads = create<RoadsState>((set) => ({
   },
   reset: () => set({ open: ALL, lamps: [], data: null, error: null }),
 }));
+
+/** The state asset that keeps this place on the map up, if it has fallen apart (game/treasury.ts BROKEN_BELOW). Null for a place in good order. */
+export function brokenAsset(city: string, placeId: string): StateAsset | null {
+  const asset = PLACE_ASSET[placeId];
+  const condition = asset ? useRoads.getState().data?.assets?.[city]?.[asset] : undefined;
+  return asset && condition !== undefined && condition < BROKEN_BELOW ? asset : null;
+}
+
+/** A state's own taxes and fees, so a screen can show what things really cost there. The standard ones until the server has said. */
+export function useStateLaws(city: string): StateLaws {
+  return useRoads((s) => s.data?.laws?.[city]) ?? DEFAULT_STATE_LAWS;
+}
+
+/** The most a state may charge for each tax and fee: the president's maximum. */
+export function useStateCaps(): StateCaps {
+  return useRoads((s) => s.data?.caps) ?? DEFAULT_STATE_CAPS;
+}

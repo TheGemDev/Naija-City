@@ -7,7 +7,8 @@ import { BufferGeometry, Float32BufferAttribute, MeshStandardMaterial, Object3D,
 import {
   BRIDGE_RAMP, BRIDGE_Y, cityMap, isOpen, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
 } from '../game/city';
-import { hourOf, useGame } from '../game/store';
+import { hourOf, nairaShort, useGame } from '../game/store';
+import { producesLine } from '../game/trade';
 import { STAGES } from '../game/property';
 import { photoHour } from '../game/photo';
 import { LIGHTS_ON, sceneHour } from '../game/theme';
@@ -17,16 +18,17 @@ import { avatar } from '../game/avatar';
 import { B, Bike, Helicopter, Keke } from './models';
 import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat } from './cityModels';
 import { Slab } from './Slab';
-import { useRoads } from '../net/roads';
+import { brokenAsset, useRoads } from '../net/roads';
 import { lampCity, lampSites, streetLamps, type StreetLamp } from '../game/roads';
 import { useSession } from '../net/session';
 import { StaticBatch } from './StaticBatch';
+import { IslandBase } from './IslandBase';
 import { DriveLayer } from './Drive';
 import { CityBillboards, SeaAds } from './Billboard';
 import { SEA_MARGIN, seaBoard, seaWater } from '../game/boards';
 import { openAdsSheet } from '../net/ads';
 import { useCivic } from '../net/civic';
-import { CITY_HEAD, OFFICE_ICON, type PoliticalOffice } from '../game/civic';
+import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { Emoji } from '../ui/Icons';
 
 const ROAD_Y = 0.012;
@@ -516,34 +518,171 @@ function trafficOf(map: CityMap): Vehicle[] {
 /** Sized against the people on the map (0.85 tall): a saloon reaches their shoulder, a bus stands over them. Lanes are one tile wide. */
 const TRAFFIC_SCALE: Record<Vehicle['kind'], number> = { car: 1, bus: 1, keke: 0.68, bike: 0.62 };
 
+/** One vehicle on the move. It steers for the next road tile, picks a way at every junction, and in time heads for the edge of the map and leaves. */
+interface Drive {
+  x: number; z: number; yaw: number;
+  /** Heading as a tile step, and the tile it is driving towards. */
+  dx: number; dz: number; cx: number; cz: number;
+  /** The point it is steering for: that tile's centre, in the right-hand lane. */
+  tx: number; tz: number;
+  mode: 'road' | 'off' | 'fade';
+  leaving: boolean;
+  trips: number;
+  limit: number;
+  exit: { x: number; z: number; dx: number; dz: number } | null;
+  run: number;
+  speed: number;
+  roll: number;
+}
+
+const STEPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+/** How far right of a tile's centre a vehicle keeps, so oncoming traffic passes side by side. */
+const LANE = 0.25;
+const TURN_RATE: Record<Vehicle['kind'], number> = { car: 3, bus: 2.4, keke: 3.2, bike: 3.6 };
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
 function Traffic({ map }: { map: CityMap }) {
   const refs = useRef<(Group | null)[]>([]);
   const vehicles = useMemo(() => trafficOf(map), [map]);
-  useFrame(({ clock }) => {
+  const drives = useRef<Drive[]>([]);
+
+  const world = useMemo(() => {
+    const inBounds = (x: number, z: number) => x >= 0 && z >= 0 && x < map.w && z < map.h;
+    const open = (x: number, z: number) => inBounds(x, z) && (map.isRoad(x, z) || map.isBridge(x, z));
+    const cells: [number, number][] = [];
+    const exits: NonNullable<Drive['exit']>[] = [];
+    for (let x = 0; x < map.w; x++) {
+      for (let z = 0; z < map.h; z++) {
+        if (!open(x, z)) continue;
+        cells.push([x, z]);
+        for (const [dx, dz] of STEPS) if (!inBounds(x + dx, z + dz)) exits.push({ x, z, dx, dz });
+      }
+    }
+    return { inBounds, open, cells, exits };
+  }, [map]);
+
+  useEffect(() => {
+    const { open, cells, exits } = world;
+    const aim = (d: Drive) => {
+      d.tx = d.cx + 0.5 - d.dz * LANE;
+      d.tz = d.cz + 0.5 + d.dx * LANE;
+    };
+    const spawn = (d: Drive, fresh: boolean) => {
+      d.mode = 'road'; d.leaving = false; d.trips = 0; d.limit = 14 + Math.floor(Math.random() * 26); d.exit = null; d.run = 0; d.roll = 0;
+      if (!fresh && exits.length && Math.random() < 0.75) {
+        // Rolls in from the edge of the map.
+        const e = exits[Math.floor(Math.random() * exits.length)];
+        d.dx = -e.dx; d.dz = -e.dz; d.cx = e.x; d.cz = e.z;
+        d.x = e.x + 0.5 + e.dx * 7; d.z = e.z + 0.5 + e.dz * 7;
+        d.yaw = Math.atan2(d.dx, d.dz);
+        aim(d);
+        return;
+      }
+      for (let tries = 0; tries < 40 && cells.length; tries++) {
+        const [x, z] = cells[Math.floor(Math.random() * cells.length)];
+        const ways = STEPS.filter(([dx, dz]) => open(x + dx, z + dz));
+        if (!ways.length) continue;
+        const [dx, dz] = ways[Math.floor(Math.random() * ways.length)];
+        d.dx = dx; d.dz = dz; d.cx = x + dx; d.cz = z + dz;
+        d.x = x + 0.5 - dz * LANE; d.z = z + 0.5 + dx * LANE;
+        d.yaw = Math.atan2(dx, dz);
+        aim(d);
+        return;
+      }
+    };
+    drives.current = vehicles.map((v) => {
+      const d = { speed: v.speed } as Drive;
+      d.x = d.z = d.cx = d.cz = d.dx = d.dz = d.tx = d.tz = d.yaw = 0;
+      spawn(d, true);
+      d.speed = v.speed;
+      return d;
+    });
+    (drives.current as Drive[] & { respawn?: (d: Drive) => void }).respawn = (d) => spawn(d, false);
+  }, [world, vehicles]);
+
+  useFrame(({ clock }, delta) => {
+    const dt = Math.min(delta, 0.1);
+    const list = drives.current;
+    if (!list.length) return;
+    const { open, inBounds, exits } = world;
+    const respawn = (list as Drive[] & { respawn?: (d: Drive) => void }).respawn!;
     // The server numbers every city's potholes in one list: only this city's are on these roads.
     const openPotholes = useRoads.getState().open.filter((i) => potholeCity(i) === map.id).map((i) => potholeOf(i)!);
-    vehicles.forEach((v, i) => {
-      const g = refs.current[i];
-      if (!g) return;
-      const len = v.to - v.from;
-      const t = (clock.elapsedTime * v.speed + v.offset) % (len * 2);
-      const forward = t < len;
-      const along = v.from + (forward ? t : len * 2 - t);
-      const currX = v.axis === 'z' ? v.line + (forward ? -0.5 : 0.5) : along;
-      const currZ = v.axis === 'z' ? along : v.line + (forward ? 0.5 : -0.5);
 
-      // Realistic suspension bump / roll when hitting a pothole
-      const hitPothole = openPotholes.some((p) => Math.hypot(currX - p.x, currZ - p.z) < 0.45);
-      const bumpY = hitPothole ? Math.sin(clock.elapsedTime * 28) * 0.02 - 0.01 : 0;
-      const bumpRoll = hitPothole ? Math.sin(clock.elapsedTime * 24) * 0.06 : 0;
-
-      if (v.axis === 'z') {
-        g.position.set(currX, map.groundY(currX, currZ) + bumpY, currZ);
-        g.rotation.set(0, forward ? 0 : Math.PI, bumpRoll);
-      } else {
-        g.position.set(currX, map.groundY(currX, currZ) + bumpY, currZ);
-        g.rotation.set(bumpRoll, forward ? Math.PI / 2 : -Math.PI / 2, 0);
+    /** At the middle of a tile: choose the next one. */
+    const advance = (d: Drive) => {
+      d.trips++;
+      if (!d.leaving && d.trips > d.limit) d.leaving = true;
+      if (d.leaving) {
+        if (!exits.length || d.trips > d.limit + 90) { d.mode = 'fade'; d.run = 0; return; }
+        if (!d.exit) d.exit = exits[Math.floor(Math.random() * exits.length)];
+        if (d.cx === d.exit.x && d.cz === d.exit.z) { d.mode = 'off'; d.run = 0; d.dx = d.exit.dx; d.dz = d.exit.dz; return; }
       }
+      const ways = STEPS.filter(([dx, dz]) => !(dx === -d.dx && dz === -d.dz) && open(d.cx + dx, d.cz + dz));
+      if (!ways.length) {
+        // End of the road: off the edge of the map, or turn round.
+        if (!inBounds(d.cx + d.dx, d.cz + d.dz)) { d.mode = 'off'; d.run = 0; return; }
+        if (open(d.cx - d.dx, d.cz - d.dz)) { d.dx = -d.dx; d.dz = -d.dz; } else { d.mode = 'fade'; d.run = 0; return; }
+      } else {
+        let best = ways[0];
+        let bestScore = Infinity;
+        for (const w of ways) {
+          const straight = w[0] === d.dx && w[1] === d.dz;
+          let score = Math.random() * 3 - (straight ? 2.5 : 0);
+          if (d.leaving && d.exit) score = Math.abs(d.cx + w[0] - d.exit.x) + Math.abs(d.cz + w[1] - d.exit.z) + Math.random() * 1.5;
+          if (score < bestScore) { bestScore = score; best = w; }
+        }
+        d.dx = best[0]; d.dz = best[1];
+      }
+      d.cx += d.dx; d.cz += d.dz;
+      d.tx = d.cx + 0.5 - d.dz * LANE;
+      d.tz = d.cz + 0.5 + d.dx * LANE;
+    };
+
+    vehicles.forEach((v, i) => {
+      const d = list[i];
+      const g = refs.current[i];
+      if (!g || !d) return;
+      const wx = d.mode === 'road' ? d.tx : d.x + d.dx * 5;
+      const wz = d.mode === 'road' ? d.tz : d.z + d.dz * 5;
+      const err = wrapAngle(Math.atan2(wx - d.x, wz - d.z) - d.yaw);
+      const maxTurn = TURN_RATE[v.kind] * dt;
+      const turn = Math.max(-maxTurn, Math.min(maxTurn, err));
+      d.yaw += turn;
+
+      // Ease off into a bend, and hang back from whatever is in front.
+      let want = v.speed * (1 - 0.45 * Math.min(1, Math.abs(err) / 0.9));
+      const sy = Math.sin(d.yaw), cy = Math.cos(d.yaw);
+      for (let j = 0; j < list.length; j++) {
+        if (j === i) continue;
+        const o = list[j];
+        const ox = o.x - d.x, oz = o.z - d.z;
+        const ahead = ox * sy + oz * cy;
+        const side = ox * cy - oz * sy;
+        if (ahead > 0 && ahead < 1.4 && Math.abs(side) < 0.4) want *= Math.max(0, (ahead - 0.5) / 0.9);
+      }
+      d.speed += (want - d.speed) * Math.min(1, dt * 3);
+      d.x += sy * d.speed * dt;
+      d.z += cy * d.speed * dt;
+
+      if (d.mode === 'road') {
+        if (Math.hypot(d.tx - d.x, d.tz - d.z) < 0.45) advance(d);
+      } else {
+        d.run += d.speed * dt;
+        if (d.run > (d.mode === 'off' ? 12 : 2.5)) { respawn(d); return; }
+      }
+
+      // Suspension bump / roll when hitting a pothole; bikes and cars lean into bends.
+      const hit = openPotholes.some((p) => Math.hypot(d.x - p.x, d.z - p.z) < 0.45);
+      const bumpY = hit ? Math.sin(clock.elapsedTime * 28) * 0.02 - 0.01 : 0;
+      const lean = (-turn / Math.max(dt, 0.001)) * (v.kind === 'bike' ? 0.09 : 0.025);
+      d.roll += (lean - d.roll) * Math.min(1, dt * 6);
+      const bumpRoll = hit ? Math.sin(clock.elapsedTime * 24) * 0.06 : 0;
+      const k = TRAFFIC_SCALE[v.kind] * (d.mode === 'fade' ? Math.max(0.01, 1 - d.run / 2.5) : 1);
+      g.scale.setScalar(k);
+      g.position.set(d.x, (inBounds(Math.floor(d.x), Math.floor(d.z)) ? map.groundY(d.x, d.z) : 0) + bumpY, d.z);
+      g.rotation.order = 'YXZ';
+      g.rotation.set(0, d.yaw, d.roll + bumpRoll);
     });
   });
   return (
@@ -570,26 +709,62 @@ function PlayerRide() {
   // The state's fleet (game/civic.ts STATE_FLEET): a green-and-white helicopter, a black convoy car.
   const official = useGame((s) => !!s.task?.official);
   const ref = useRef<Group>(null);
+  const shadow = useRef<Mesh>(null);
   const car = carId ? CAR_BY_ID[carId] : null;
+  // A helicopter lifts off, cruises above the roofs, tilts into its speed, banks into turns and settles at the end.
+  const flight = useRef({ total: 0, yaw: 0, bank: 0 });
+  useEffect(() => { flight.current = { total: 0, yaw: avatar.yaw, bank: 0 }; }, [ride]);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     if (!ref.current) return;
     const groundY = mapGroundY(avatar.x, avatar.z);
-    ref.current.position.set(avatar.x, ride === 'helicopter' ? groundY + 3 : groundY, avatar.z);
-    ref.current.rotation.y = avatar.yaw;
+    ref.current.position.set(avatar.x, groundY, avatar.z);
+    ref.current.rotation.set(0, avatar.yaw, 0);
+    if (ride !== 'helicopter') return;
+    const f = flight.current;
+    const left = avatar.path.length;
+    if (left > f.total) f.total = left;
+    const progress = f.total ? 1 - left / f.total : 0;
+    // Up over the first stretch, down over the last: smooth, never a pop.
+    const edge = Math.min(1, Math.min(progress, 1 - progress) / 0.18);
+    const lift = edge * edge * (3 - 2 * edge);
+    const height = 0.4 + lift * 8;
+    ref.current.position.y = groundY + height;
+    // Turn rate of the heading, smoothed, becomes the bank.
+    let turn = avatar.yaw - f.yaw;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    f.yaw = avatar.yaw;
+    const want = Math.max(-0.45, Math.min(0.45, (turn / Math.max(dt, 0.001)) * 0.35));
+    f.bank += (want - f.bank) * Math.min(1, dt * 4);
+    ref.current.rotation.order = 'YXZ';
+    ref.current.rotation.set(lift * 0.16, avatar.yaw, -f.bank);
+    if (shadow.current) {
+      shadow.current.position.set(avatar.x, groundY + 0.04, avatar.z);
+      const spread = 1 + lift * 0.9;
+      shadow.current.scale.set(spread, spread, spread);
+      (shadow.current.material as MeshStandardMaterial).opacity = 0.34 - lift * 0.16;
+    }
   });
 
   if (!ride) return null;
   return (
-    <group ref={ref} scale={ride === 'helicopter' ? 1.1 : ride === 'okada' ? 0.82 : ride === 'keke' ? 0.72 : 1}>
-      {ride === 'helicopter' ? (
-        <Helicopter official={official} />
-      ) : (
-        <StaticBatch key={`${ride}|${carId}|${official}`}>
-          {ride === 'keke' ? <Keke /> : ride === 'okada' ? <Bike colour="#facc15" /> : <Car c={ride === 'car' ? car?.color ?? '#2563eb' : official ? '#0a0a0a' : '#facc15'} />}
-        </StaticBatch>
+    <>
+      <group ref={ref} scale={ride === 'helicopter' ? 1.1 : ride === 'okada' ? 0.82 : ride === 'keke' ? 0.72 : 1}>
+        {ride === 'helicopter' ? (
+          <Helicopter official={official} />
+        ) : (
+          <StaticBatch key={`${ride}|${carId}|${official}`}>
+            {ride === 'keke' ? <Keke /> : ride === 'okada' ? <Bike colour="#facc15" /> : <Car c={ride === 'car' ? car?.color ?? '#2563eb' : official ? '#0a0a0a' : '#facc15'} />}
+          </StaticBatch>
+        )}
+      </group>
+      {ride === 'helicopter' && (
+        <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[1.1, 20]} />
+          <meshStandardMaterial color="#000000" transparent opacity={0.34} depthWrite={false} />
+        </mesh>
       )}
-    </group>
+    </>
   );
 }
 
@@ -598,10 +773,23 @@ function PlaceLabel({ place }: { place: Place }) {
   const selected = useGame((s) => s.placeId === place.id);
   const target = useGame((s) => s.task?.actionId === 'enter' && s.task.placeId === place.id);
   const posY = place.ground ? 1.2 : 3.2;
+  // A building the state has let fall apart: the governor gets a Fix badge, everyone else a spanner.
+  const city = useGame((s) => s.destinationId);
+  const broken = useRoads((s) => (s.data ? brokenAsset(city, place.id) : null));
+  const mends = useCivic((s) => {
+    const uid = useSession.getState().user?.uid;
+    return !!broken && !!uid && s.data?.policies[CITY_HEAD[city as CivicCity]]?.uid === uid;
+  });
 
   const handleSelect = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (broken && mends) {
+      // Straight to the Treasury tab, where the repair is.
+      useCivic.setState({ wantOpen: true, wantTreasury: true });
+      useGame.getState().setPanel('phone');
+      return;
+    }
     useGame.getState().selectPlace(place.id);
   };
 
@@ -635,6 +823,7 @@ function PlaceLabel({ place }: { place: Place }) {
         >
           <span><Emoji char={place.icon} size="1em" /></span>
           <b>{place.name}</b>
+          {broken && <i className={`place-fix ${mends ? 'gov' : ''}`} title={mends ? 'Fallen apart. Tap to repair' : 'Closed: fallen apart'}>{mends ? <><Emoji char="🛠️" size="1em" /> Fix</> : <Emoji char="🔧" size="1em" />}</i>}
         </button>
       </Html>
     </group>
@@ -740,6 +929,17 @@ function Leaders({ city }: { city: keyof typeof CITY_HEAD }) {
   return <>{line('president', 'President')}{line(head, head === 'minister' ? 'FCT Minister' : 'Governor')}</>;
 }
 
+/** What this state makes, and how much its treasury holds (once the civic snapshot is in). */
+function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
+  const balance = useCivic((s) => s.data?.states?.[city]?.balance);
+  return (
+    <>
+      <span className="region-fact">Makes {producesLine(city)}</span>
+      {balance !== undefined && <span className="region-fact"><Emoji char="💰" size={11} /> Treasury <i>{nairaShort(balance)}</i></span>}
+    </>
+  );
+}
+
 /**
  * The city's name card over the map. In the game it is a button: it opens the phone on the Civic app's election board,
  * where anyone can file to run. On the title screen, where there is no phone yet, it is only a sign.
@@ -750,6 +950,7 @@ function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
     <>
       <b>{region.name}</b><span>{region.tagline}</span>
       <Leaders city={region.id} />
+      <StateFacts city={region.id} />
     </>
   );
   if (!started) return <div className="region-map-badge">{inside}</div>;
@@ -788,6 +989,7 @@ export function City() {
     <group key={map.id}>
       <MapEffects />
       <Slab outline={map.outline} depth={1.4} top={region.ground} />
+      <IslandBase outline={map.outline} seed={destinationId.length + destinationId.charCodeAt(0)} />
       {map.riverDraw.length > 1 && <River map={map} />}
       <Lakes map={map} />
       <Roads map={map} />

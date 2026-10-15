@@ -227,7 +227,18 @@ export const LAGOS_FARE = 40_000;
 /** A one-way ticket between Kano (game/kano.ts) and Kaduna or Abuja. Lagos is the long haul from there too. */
 export const KANO_FARE = 30_000;
 /** What an airline seat costs between two cities, either way. */
-export const flightFare = (a: string, b: string) => (a === 'lagos' || b === 'lagos' ? LAGOS_FARE : a === 'kano' || b === 'kano' ? KANO_FARE : FLIGHT_FARE);
+/** An airline seat for each pair of cities, by how far apart they are (Kaduna to Abuja or Kano is a short hop; Kano to Lagos is the longest). */
+const FARES: Record<string, number> = {
+  'abuja-kaduna': 20_000,
+  'kaduna-kano': 21_500,
+  'abuja-kano': 29_500,
+  'abuja-lagos': 65_000,
+  'kaduna-lagos': 85_000,
+  'kano-lagos': 110_000,
+};
+export const flightFare = (a: string, b: string) => FARES[[a, b].sort().join('-')] ?? FLIGHT_FARE;
+/** Your own jet on a route: dearer the further it goes, like the seat. */
+export const jetFare = (a: string, b: string) => Math.round((flightFare(a, b) * 200) / 100_000) * 100_000;
 /**
  * Minutes in the air between two cities, either way, on an airline and in your own jet: Abuja and Kano are short
  * hops from Kaduna, Lagos is the long haul. Every flight stays under SKIP_MIN_TASK (game/timeRates.ts): a flight
@@ -259,12 +270,12 @@ export const PLACES: Place[] = [
       { id: 'planespot', label: 'Watch planes take off', icon: '🛫', category: 'social', minutes: 45, pose: 'stand', perHour: { fun: 40 }, tagline: 'Watch private jets and commercial flights soar into the sky' },
       { id: 'runway_dash', label: 'Sprint toward runway for high-speed selfie', icon: '🏃🏾', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 170, social: 120 }, tagline: 'Airport security screaming into radios while you snap the coolest flick!' },
       { id: 'first_class_flex', label: 'Lounge in VIP first-class executive suite', icon: '🍸', category: 'spend', cost: 12_000, minutes: 45, pose: 'sit', perHour: { fun: 130, social: 110, energy: 20 }, tagline: 'Unlimited chilled drinks and plush leather recliners' },
-      { id: 'fly_abuja', label: 'Fly to Abuja', icon: '🛫', category: 'spend', cost: FLIGHT_FARE, minutes: flightMinutes('kaduna', 'abuja'), pose: hidden, effect: 'travel', destination: 'abuja', perHour: FLIGHT_PERHOUR, tagline: 'A short hop to Nnamdi Azikiwe International. Window seat, small chops' },
-      { id: 'fly_abuja_jet', label: 'Fly your private jet to Abuja', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('kaduna', 'abuja'), pose: hidden, effect: 'travel', destination: 'abuja', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
-      { id: 'fly_lagos', label: 'Fly to Lagos', icon: '🛫', category: 'spend', cost: LAGOS_FARE, minutes: flightMinutes('kaduna', 'lagos'), pose: hidden, effect: 'travel', destination: 'lagos', perHour: FLIGHT_PERHOUR, tagline: 'Half an hour south to Murtala Muhammed International. Hold your bag at arrivals' },
-      { id: 'fly_lagos_jet', label: 'Fly your private jet to Lagos', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('kaduna', 'lagos'), pose: hidden, effect: 'travel', destination: 'lagos', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
-      { id: 'fly_kano', label: 'Fly to Kano', icon: '🛫', category: 'spend', cost: KANO_FARE, minutes: flightMinutes('kaduna', 'kano'), pose: hidden, effect: 'travel', destination: 'kano', perHour: FLIGHT_PERHOUR, tagline: 'Twenty minutes north to Mallam Aminu Kano International. Seat belts on, seat belts off' },
-      { id: 'fly_kano_jet', label: 'Fly your private jet to Kano', icon: '🛩️', category: 'spend', cost: JET_TRIP.cost, ...jetFlight('kaduna', 'kano'), pose: hidden, effect: 'travel', destination: 'kano', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+      { id: 'fly_abuja', label: 'Fly to Abuja', icon: '🛫', category: 'spend', cost: flightFare('kaduna', 'abuja'), minutes: flightMinutes('kaduna', 'abuja'), pose: hidden, effect: 'travel', destination: 'abuja', perHour: FLIGHT_PERHOUR, tagline: 'A short hop to Nnamdi Azikiwe International. Window seat, small chops' },
+      { id: 'fly_abuja_jet', label: 'Fly your private jet to Abuja', icon: '🛩️', category: 'spend', cost: jetFare('kaduna', 'abuja'), ...jetFlight('kaduna', 'abuja'), pose: hidden, effect: 'travel', destination: 'abuja', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+      { id: 'fly_lagos', label: 'Fly to Lagos', icon: '🛫', category: 'spend', cost: flightFare('kaduna', 'lagos'), minutes: flightMinutes('kaduna', 'lagos'), pose: hidden, effect: 'travel', destination: 'lagos', perHour: FLIGHT_PERHOUR, tagline: 'Half an hour south to Murtala Muhammed International. Hold your bag at arrivals' },
+      { id: 'fly_lagos_jet', label: 'Fly your private jet to Lagos', icon: '🛩️', category: 'spend', cost: jetFare('kaduna', 'lagos'), ...jetFlight('kaduna', 'lagos'), pose: hidden, effect: 'travel', destination: 'lagos', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
+      { id: 'fly_kano', label: 'Fly to Kano', icon: '🛫', category: 'spend', cost: flightFare('kaduna', 'kano'), minutes: flightMinutes('kaduna', 'kano'), pose: hidden, effect: 'travel', destination: 'kano', perHour: FLIGHT_PERHOUR, tagline: 'Twenty minutes north to Mallam Aminu Kano International. Seat belts on, seat belts off' },
+      { id: 'fly_kano_jet', label: 'Fly your private jet to Kano', icon: '🛩️', category: 'spend', cost: jetFare('kaduna', 'kano'), ...jetFlight('kaduna', 'kano'), pose: hidden, effect: 'travel', destination: 'kano', jet: true, tagline: 'Private terminal, no queue. Chef, bed and shower on board: land with every bar full' },
       { id: 'ground_crew_hustle', label: 'Marshal arriving jet with bright orange batons', icon: '🛬', category: 'work', minutes: 60, payout: 5_000, pose: 'stand', perHour: { fun: 70, energy: -15 }, tagline: 'Guide 70-ton airplane safely into its parking bay' },
     ],
   },

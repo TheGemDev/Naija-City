@@ -19,9 +19,6 @@
 .tr-budget { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: var(--bg-ffffff); }
 .tr-bar { display: flex; height: 10px; overflow: hidden; border-radius: 99px; background: var(--bg-f1f5f9); }
 .tr-bar > i { transition: width 0.2s; }
-.dept-kaduna { background: #f59e0b; }
-.dept-abuja { background: #14b8a6; }
-.dept-lagos { background: #0ea5e9; }
 .dept-police { background: #2563eb; }
 .dept-efcc { background: #7c3aed; }
 .dept-welfare { background: #16a34a; }
@@ -72,3 +69,85 @@
 .tr-warn { padding: 8px 10px; border-radius: 12px; background: var(--bg-fef2f2); color: var(--fg-b91c1c); font-weight: 700; }
 .list-card.tr-danger { box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
 .tr-repairs { display: flex; flex-direction: column; gap: 10px; }
+
+/* A state's books: its balance, what it pays out each hour and how its property is holding up. */
+.tr-state { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: var(--bg-ffffff); }
+.tr-state-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tr-state-top > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tr-state-top > span > b { font-size: 15px; }
+.tr-state-top > span > small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.tr-state-top > em { flex: none; font-size: 17px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tr-state-top.tr-fed { padding: 12px; border-radius: 18px; background: var(--bg-ffffff); }
+.tr-state-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tr-state-facts > span { display: flex; flex-direction: column; gap: 1px; padding: 8px; border-radius: 12px; background: var(--bg-f1f5f9); }
+.tr-state-facts b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.tr-state-facts small { color: var(--muted); font-size: 10px; }
+.tr-sub { margin: 4px 2px 0; font-size: 12.5px; }
+
+.tr-asset { display: flex; align-items: flex-start; gap: 10px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-asset-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--bg-f1f5f9); }
+.tr-asset-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-asset-body > b { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.tr-asset-body > b > em { font-size: 12px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tr-asset-body > b > em.good { color: #15803d; }
+.tr-asset-body > b > em.fair { color: #b45309; }
+.tr-asset-body > b > em.bad { color: #b91c1c; }
+.tr-asset-body > small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.tr-cond { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: var(--bg-f1f5f9); }
+.tr-cond > u { display: block; height: 100%; border-radius: 99px; text-decoration: none; transition: width 0.3s; }
+.tr-cond.good > u { background: #22c55e; }
+.tr-cond.fair > u { background: #f59e0b; }
+.tr-cond.bad > u { background: #ef4444; }
+.tr-asset-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.tr-ask { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-ask > b { font-size: 12.5px; }
+.tr-grant { display: flex; flex-direction: column; gap: 6px; }
+.tr-grant + .tr-grant { padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-grant .row-btns { flex-wrap: wrap; }
+
+/* Looting cases: the looter and the EFCC chair (src/ui/LootCases.tsx). */
+.loot-cases { display: flex; flex-direction: column; gap: 8px; }
+.loot-case { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--bg-fef2f2); box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
+.loot-case > b { font-size: 12.5px; }
+.loot-case > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.loot-case .row-btns { flex-wrap: wrap; }
+.loot-case.closed { flex-direction: row; align-items: center; gap: 8px; background: var(--bg-f1f5f9); box-shadow: none; }
+
+/* The Treasury tab is one page of collapsible sections (src/ui/Treasury.tsx Fold). */
+.tr-fold { border-radius: 18px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px var(--bg-e2e8f0); }
+.tr-fold.danger { box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
+.tr-fold > summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px; list-style: none; cursor: pointer; font-size: 13.5px; }
+.tr-fold > summary::-webkit-details-marker { display: none; }
+.tr-fold > summary > em { margin-left: auto; font-size: 13px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tr-fold > summary > .tr-fold-chev { flex: none; width: 8px; height: 8px; margin: 0 2px 3px 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.2s; }
+.tr-fold:not(:has(summary > em)) > summary > .tr-fold-chev { margin-left: auto; }
+.tr-fold[open] > summary > .tr-fold-chev { transform: rotate(-135deg); margin-bottom: -3px; }
+.tr-fold.danger > summary { color: var(--fg-b91c1c); }
+.tr-fold-body { display: flex; flex-direction: column; gap: 10px; padding: 0 10px 12px; }
+.tr-fold-body > .list-card, .tr-fold-body > .tr-state, .tr-fold-body > .tr-budget { box-shadow: none; padding-left: 4px; padding-right: 4px; }
+.tr-pick { width: 100%; }
+
+/* A state's taxes and fees. */
+.tr-laws { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-laws > b { font-size: 12.5px; }
+.tr-law-line { display: flex; justify-content: space-between; font-size: 12px; }
+.tr-law-line > span { color: var(--muted); }
+.tr-laws .law-control { background: var(--bg-f1f5f9); }
+
+/* The money strip: the federal treasury and each state's, as tiles. Tap one to see it below. No dropdowns. */
+.tr-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.tr-strip > button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 2px 7px; border-radius: 14px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px var(--bg-e2e8f0); text-align: center; }
+.tr-strip > button b { font-size: 11px; }
+.tr-strip > button small { color: var(--muted); font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tr-strip > button.on { background: #334155; box-shadow: none; color: #fff; }
+.tr-strip > button.on small { color: rgba(255, 255, 255, 0.8); }
+.tr-strip-dot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
+.tr-panel { display: flex; flex-direction: column; gap: 10px; }
+.tr-block { display: flex; flex-direction: column; gap: 8px; }
+.tr-block > h4 { margin: 4px 2px 0; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+.tr-block.danger > h4 { color: var(--fg-b91c1c); }
+
+.tr-state-money { display: flex; flex-direction: column; gap: 2px; }
+.tr-state-money > small { color: var(--muted); font-size: 11.5px; font-weight: 700; }
+.tr-state-money > b { font-size: 24px; font-variant-numeric: tabular-nums; }
+.tr-hero .tr-hero-own { font-weight: 800; opacity: 1; }

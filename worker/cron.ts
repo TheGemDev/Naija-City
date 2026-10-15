@@ -3,6 +3,10 @@
 // moving at 3am and the first player of the morning doesn't pay for a pile of overdue work.
 
 import { paySalaries, settleElections } from './civic';
+import { feedStmt } from './feed';
+import { gazette } from './gazette';
+import { runStateRound } from './state';
+import { settleLoot } from './loot';
 import { settleSeasons } from './community';
 import { sweep as sweepManhunts } from './crime';
 import { settleDueCases } from './efcc';
@@ -31,6 +35,15 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     ['elections', () => settleElections(env, now, ctx)],
     // After the elections, so a seat won this minute is paid from this round.
     ['salaries', () => paySalaries(env.DB, now)],
+    // The states' hour: the federal cut goes up, bills are paid, roads and lights wear down or are kept up.
+    ['states', async () => {
+      const notices = await runStateRound(env.DB, now);
+      if (!notices.length) return;
+      await env.DB.batch(notices.map((n) => feedStmt(env.DB, null, 'politics', n.icon, n.text, n.city)));
+      await gazette(env, ctx, notices.map((n) => ({ uid: null, office: null, kind: 'project' as const, icon: n.icon, text: n.text })));
+    }],
+    // Looting cases the EFCC chair left alone are settled by the old odds.
+    ['loot', () => settleLoot(env, ctx, now)],
     // Elections seat the Government Forum themselves; this catches a seat that changed any other way.
     ['forum', () => syncForum(env.DB, now)],
     ['seasons', () => settleSeasons(env.DB, now)],

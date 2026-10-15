@@ -26,7 +26,7 @@ import { STAGES } from '../game/property';
 import { LiveBanner } from './LiveApps';
 import { sectionOf } from '../game/estate';
 import { PUSH_CATEGORIES, type PushCategory } from '../game/push';
-import { ALLOCATION } from '../game/civic';
+import { ALLOCATION, CITY_NAME } from '../game/civic';
 import { useCivic } from '../net/civic';
 import { useOfficeBudget } from '../net/office';
 import { GameTips } from './GameTips';
@@ -405,7 +405,7 @@ function BudgetChip() {
     return () => window.clearInterval(timer);
   }, [office]);
   if (!mine) return null;
-  const { label, icon } = ALLOCATION.info[mine.department];
+  const { label, icon } = mine.city ? { label: CITY_NAME[mine.city], icon: '🏛️' } : ALLOCATION.info[mine.department!];
   return (
     <button
       className={`chip budget-chip ${mine.low ? 'chip-warn' : ''}`}
@@ -683,6 +683,8 @@ function Nav() {
   const streetStart = useGame((s) => s.started && s.origin === 'almajiri' && !s.properties.some((p) => p.stage >= STAGES.length));
   const visiting = useVisit((v) => !!v.current);
   const jailed = useGame((s) => !!s.jailedUntil);
+  // Taken by kidnappers: no home, activities or map to go to.
+  const kidnapped = useGame((s) => !!s.heldUntil || (s.view === 'place' && s.insideId === 'camp'));
   const inRoom = useGame((s) => s.view === 'place' && isPrivateRoom(s.insideId));
   const flight = useGame(flightOf);
   const cabinOpen = useCabin((c) => c.open);
@@ -692,6 +694,16 @@ function Nav() {
   // In a house you built, the way out is the door to its estate (the government house has none: its way out is the map).
   const inEstateHouse = useGame((s) => s.view === 'home' && s.properties.some((p) => p.id === (s.activeHouseId ?? s.homePropertyId)));
   const tab = panel ?? (view === 'city' ? 'map' : view === 'estate' ? 'estate' : view === 'place' ? 'out' : mode === 'buy' ? 'buy' : 'home');
+  if (kidnapped) {
+    // In the kidnappers' camp the only thing you can do is call for help on the phone.
+    return (
+      <nav className="nav">
+        <button className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
+          <span><Emoji char="📱" size={24} /></span>Phone
+        </button>
+      </nav>
+    );
+  }
   if (jailed) {
     // Locked up there is no home or map to go to: just the cell's activities, and the phone.
     return (

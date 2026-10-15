@@ -3,7 +3,7 @@
 // Kaduna, the FCT Minister in Abuja, the Governor of Lagos in Lagos, the Governor of Kano in Kano) fixes them from the city's share of the treasury, or out of their own pocket.
 
 import { potholeCity, potholeOf, potholeSites } from '../src/game/city';
-import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, OFFICE_RULES, type CivicCity } from '../src/game/civic';
+import { CITY_HEAD, CITY_NAME, CIVIC_CITIES, OFFICE_RULES, type CivicCity } from '../src/game/civic';
 import { fixCostOf, lampCity, lampOf, LAMPS, lampSites, roadOf, ROADWORK, type RoadsSnapshot } from '../src/game/roads';
 import { GOV_RANT, VDM_ROADS_ICON } from '../src/game/news';
 import { applyStmts, getBalance } from './wallet';
@@ -11,6 +11,8 @@ import { rand } from './crime';
 import { feedStmt, handle, naira } from './feed';
 import { gazette, official } from './gazette';
 import { vdmGov } from './news';
+import { capsOf, conditionsOf, loadStates, spendState } from './state';
+import { STATE_LAW_KEYS, type StateLaws } from '../src/game/treasury';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -51,17 +53,19 @@ function vdmRoads(city: CivicCity, who: string, road: string, cost: number, from
 export async function spawn(db: D1Database, now: number) {
   const p = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<Record<string, number | null>>();
   if (!p) return;
+  // How fast roads break and lights go dark follows how well the state keeps them up (migration 0085).
+  const [roads, lights] = await Promise.all([conditionsOf(db, 'roads'), conditionsOf(db, 'lights')]);
   for (const city of CIVIC_CITIES) {
-    await spawnIn(db, now, city, p);
-    await breakLampsIn(db, now, city, p);
+    await spawnIn(db, now, city, p, roads[city] ?? 50);
+    await breakLampsIn(db, now, city, p, lights[city] ?? 50);
   }
 }
 
 /** Street lights going out, on the same pattern as spawnIn: one request wins the race to move the city's clock. */
-async function breakLampsIn(db: D1Database, now: number, city: CivicCity, p: Record<string, number | null>) {
+async function breakLampsIn(db: D1Database, now: number, city: CivicCity, p: Record<string, number | null>, condition: number) {
   const col = COLUMNS[city];
   const at = p[col.lampAt];
-  const every = LAMPS.spawnHours(p[col.funding] ?? 50) * 3600_000;
+  const every = LAMPS.spawnHours(condition) * 3600_000;
   if (at === null || at === undefined) {
     await db.prepare(`UPDATE civic_policies SET ${col.lampAt} = ? WHERE id = 1 AND ${col.lampAt} IS NULL`).bind(now).run();
     return;
@@ -87,10 +91,10 @@ async function breakLampsIn(db: D1Database, now: number, city: CivicCity, p: Rec
 }
 
 /** Only one request wins the race to move a city's clock. */
-async function spawnIn(db: D1Database, now: number, city: CivicCity, p: Record<string, number | null>) {
+async function spawnIn(db: D1Database, now: number, city: CivicCity, p: Record<string, number | null>, condition: number) {
   const col = COLUMNS[city];
   const at = p[col.at];
-  const every = ROADWORK.spawnHours(p[col.funding] ?? 50) * 3600_000;
+  const every = ROADWORK.spawnHours(condition) * 3600_000;
   if (at === null || at === undefined) {
     await db.prepare(`UPDATE civic_policies SET ${col.at} = ? WHERE id = 1 AND ${col.at} IS NULL`).bind(now).run();
     return;
@@ -133,20 +137,29 @@ async function snapshot(db: D1Database): Promise<RoadsSnapshot> {
     db.prepare('SELECT site FROM broken_lamps ORDER BY site'),
   ]);
   const p = (policy.results[0] ?? {}) as Record<string, number | null>;
-  const treasury = p.treasury ?? 0;
+  const [{ states, assets: assetRows }, roads, lights] = await Promise.all([loadStates(db), conditionsOf(db, 'roads'), conditionsOf(db, 'lights')]);
+  const laws = Object.fromEntries(states.map((s) => [s.city, Object.fromEntries(STATE_LAW_KEYS.map((k) => [k, s[k]])) as unknown as StateLaws]));
+  const caps = await capsOf(db);
+  const assets: Record<string, Record<string, number>> = {};
+  for (const a of assetRows) (assets[a.city] ??= {})[a.asset] = a.condition;
+  const balanceOf = (city: CivicCity) => states.find((s) => s.city === city)?.balance ?? 0;
   const cities = Object.fromEntries(CIVIC_CITIES.map((city) => [city, {
-    nextAt: (p[COLUMNS[city].at] ?? Date.now()) + ROADWORK.spawnHours(p[COLUMNS[city].funding] ?? 50) * 3600_000,
-    budget: ALLOCATION.budget(treasury, p[`alloc_${city}`] ?? ALLOCATION.defaults[city]),
-    lampNextAt: (p[COLUMNS[city].lampAt] ?? Date.now()) + LAMPS.spawnHours(p[COLUMNS[city].funding] ?? 50) * 3600_000,
+    nextAt: (p[COLUMNS[city].at] ?? Date.now()) + ROADWORK.spawnHours(roads[city] ?? 50) * 3600_000,
+    // A city's government repairs its roads out of that city's own treasury.
+    budget: balanceOf(city),
+    lampNextAt: (p[COLUMNS[city].lampAt] ?? Date.now()) + LAMPS.spawnHours(lights[city] ?? 50) * 3600_000,
   }]));
   return {
     // A site the game no longer has (one removed from a city's list) is nobody's to fix: leave it out.
     open: (open.results as { site: number }[]).map((r) => r.site).filter((site) => potholeOf(site)),
     nextAt: cities.kaduna.nextAt,
-    treasury,
+    treasury: p.treasury ?? 0,
     budget: cities.kaduna.budget,
     cities,
     recent: recent.results as RoadsSnapshot['recent'],
+    assets,
+    laws,
+    caps,
     lamps: (lamps.results as { site: number }[]).map((r) => r.site).filter((site) => lampOf(site)),
   };
 }
@@ -164,8 +177,9 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     if (!city || !CIVIC_CITIES.includes(city)) return err(400, 'Unknown pothole');
     const from = body?.from === 'pocket' ? 'pocket' : 'treasury';
     const office = CITY_HEAD[city];
-    const gov = await db.prepare(`SELECT ${office}_uid AS head FROM civic_policies WHERE id = 1`).first<{ head: string | null }>();
-    if (gov?.head !== uid) return err(403, `Only the ${OFFICE_RULES[office].title} can fix potholes in ${CITY_NAME[city]}`);
+    const gov = await db.prepare(`SELECT ${office}_uid AS head, president_uid AS president FROM civic_policies WHERE id = 1`).first<{ head: string | null; president: string | null }>();
+    // A state without a government is managed by the president.
+    if (!(gov?.head === uid || (!gov?.head && gov?.president === uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix potholes in ${CITY_NAME[city]}`);
     const cost = fixCostOf(site!);
     if (from === 'pocket' && (await getBalance(db, uid)) < cost) return err(402, `You need ${naira(cost)} to fix it yourself`);
 
@@ -175,7 +189,7 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     const now = Date.now();
     if (from === 'treasury') {
       // Only the city's share of the treasury (the president's allocation) is its government's to spend.
-      const paid = await db.prepare(`UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury * alloc_${city} / 100 >= ?1 RETURNING treasury`).bind(cost).first();
+      const paid = await spendState(db, city, cost, { allowArrears: true });
       if (!paid) {
         await db.prepare('INSERT OR IGNORE INTO potholes (site, opened_at) VALUES (?, ?)').bind(site, claimed.opened_at).run();
         return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} to fix this one`);
@@ -207,8 +221,9 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     if (!city || !CIVIC_CITIES.includes(city)) return err(400, 'Unknown street light');
     const from = body?.from === 'pocket' ? 'pocket' : 'treasury';
     const office = CITY_HEAD[city];
-    const gov = await db.prepare(`SELECT ${office}_uid AS head FROM civic_policies WHERE id = 1`).first<{ head: string | null }>();
-    if (gov?.head !== uid) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
+    const gov = await db.prepare(`SELECT ${office}_uid AS head, president_uid AS president FROM civic_policies WHERE id = 1`).first<{ head: string | null; president: string | null }>();
+    // A state without a government is managed by the president.
+    if (!(gov?.head === uid || (!gov?.head && gov?.president === uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
     const cost = LAMPS.fixCost;
     if (from === 'pocket' && (await getBalance(db, uid)) < cost) return err(402, `You need ${naira(cost)} to fix it yourself`);
 
@@ -216,7 +231,7 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     if (!claimed) return err(409, 'That street light is already working');
     const now = Date.now();
     if (from === 'treasury') {
-      const paid = await db.prepare(`UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury * alloc_${city} / 100 >= ?1 RETURNING treasury`).bind(cost).first();
+      const paid = await spendState(db, city, cost, { allowArrears: true });
       if (!paid) {
         await db.prepare('INSERT OR IGNORE INTO broken_lamps (site, broken_at) VALUES (?, ?)').bind(site, claimed.broken_at).run();
         return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} to fix this one`);

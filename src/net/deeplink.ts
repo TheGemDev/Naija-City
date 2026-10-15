@@ -33,6 +33,11 @@ export const placeLink = (placeId: string, city = 'kaduna') => `${SITE}/p/${city
 export const snapLink = (id: number) => `${SITE}/s/${id}`;
 export const tweetLink = (id: number) => `${SITE}/t/${id}`;
 export const shopLink = (id: number) => `${SITE}/shop/${id}`;
+/** The shop a chat message points at, when the whole message is one shop link. */
+export const shopIdOf = (text: string): number | null => {
+  const m = /^https:\/\/naija\.city\/shop\/(\d{1,9})\/?$/.exec(text.trim());
+  return m ? Number(m[1]) : null;
+};
 
 /** Read a share link off the address bar and tidy the URL back to "/". */
 export function takeDeepLink(): DeepLink | null {
@@ -130,4 +135,11 @@ export async function copyLink(url: string, title: string, copied = '🔗 Link c
   } catch {
     await shareLink(url, title);
   }
+}
+
+/** Copy a link and open the phone's share sheet in the same tap (where there is one: elsewhere the copy is all that happens). */
+export async function copyAndShare(url: string, title: string, copied = '🔗 Link copied') {
+  // Not awaited: the share sheet must open inside the tap, and some browsers drop the tap if anything waits first.
+  void navigator.clipboard?.writeText(url).then(() => useGame.getState().toast(copied)).catch(() => {});
+  await shareLink(url, title);
 }

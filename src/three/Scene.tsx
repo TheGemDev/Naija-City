@@ -179,7 +179,7 @@ function framing(s: GameState): { target: [number, number, number]; pos: [number
       transform.z + layout.depth * transform.scale / 2,
     ];
     const span = Math.max(layout.width, layout.depth) * transform.scale;
-    return { target, pos: offset(target, ISO_DIR, fitDistance(span, 22)) };
+    return { target, pos: offset(target, ISO_DIR, fitDistance(span, 22 * Math.min(1, transform.scale))) };
   }
   const flight = flightOf(s);
   if (flight) {
@@ -217,7 +217,7 @@ function framing(s: GameState): { target: [number, number, number]; pos: [number
     0,
     transform.z + (layout.gridH * transform.scale) / 2,
   ];
-  return { target, pos: offset(target, ISO_DIR, fitDistance(Math.max(layout.gridW, layout.gridH) * 0.86 * transform.scale, 28)) };
+  return { target, pos: offset(target, ISO_DIR, fitDistance(Math.max(layout.gridW, layout.gridH) * 0.86 * transform.scale, 28 * Math.min(1, transform.scale))) };
 }
 
 function bounds(s: GameState) {
@@ -335,8 +335,9 @@ function LocalWorld() {
   // Nobody is standing on the map a visitor tours.
   const touring = useTour((s) => !!s.city);
   const transform = visit ? homeTransform(visit.save.origin, visit.save.design) : view === 'home' ? homeTransform(origin, design) : { scale: 1, x: 0, z: 0 };
+  // Scaled the same on every axis: shrinking only the floor made people, walls and furniture look stretched tall.
   return (
-    <group position={[transform.x, 0, transform.z]} scale={[transform.scale, 1, transform.scale]}>
+    <group position={[transform.x, 0, transform.z]} scale={transform.scale}>
       <Area />
       {!touring && <Avatar />}
       <StreetSceneView />

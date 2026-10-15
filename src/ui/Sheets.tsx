@@ -1,3 +1,4 @@
+import { brokenAsset } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { ItemThumb } from '../three/thumbnails';
 import { CATEGORIES, ITEMS, ITEM_LIST, JOBS, type ActionDef, type Category } from '../game/catalog';
@@ -479,6 +480,8 @@ export function PlaceSheet() {
     );
   }
   const open = place.id === 'home' || isOpen(place, hour);
+  // Shut because the state let it fall apart.
+  const broken = brokenAsset(destinationId, place.id);
   const km = kmBetween(avatarCell(), place.door);
   const travelFare = fareOf(travelMode, km);
   const canAfford = money >= travelFare;
@@ -506,6 +509,7 @@ export function PlaceSheet() {
           <p className="muted place-meta">
             <Emoji char="📍" size="1em" /> {place.area} · {place.id === 'home' ? 'Your compound' : <span className={open ? 'good' : 'bad'}>{open ? 'Open' : 'Closed'} · {hoursLabel(place)}</span>}
           </p>
+          {broken && <p className="place-broken"><Emoji char="🔧" size="1em" /> Closed: fallen apart. The governor has to repair it.</p>}
           {place.blurb && <p className="place-blurb">{place.blurb}</p>}
           <WorkNote city={cityMap(destinationId).id} placeId={place.id} />
           <PlaceHappening placeId={place.id} />
@@ -517,8 +521,8 @@ export function PlaceSheet() {
       setMode={setTravelMode}
       carId={selectedCarId}
       setCarId={setSelectedCarId}
-      goLabel={open ? <>Go · {tripCost(travelMode, selectedCarId, km)}</> : <><Emoji char="🔒" size="1em" /> Closed now</>}
-      goDisabled={!open || !canAfford || carDry(travelMode, selectedCarId, carFuel, km) || (travelMode === 'car' && (!selectedCarId || !ownedCars.includes(selectedCarId)))}
+      goLabel={broken ? <><Emoji char="🔧" size="1em" /> Closed for repairs</> : open ? <>Go · {tripCost(travelMode, selectedCarId, km)}</> : <><Emoji char="🔒" size="1em" /> Closed now</>}
+      goDisabled={!!broken || !open || !canAfford || carDry(travelMode, selectedCarId, carFuel, km) || (travelMode === 'car' && (!selectedCarId || !ownedCars.includes(selectedCarId)))}
       onGo={() => go(place.id, travelMode, travelMode === 'car' ? selectedCarId ?? undefined : undefined)}
       onCancel={() => close(null)}
     />

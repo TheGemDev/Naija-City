@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { BIZ } from '../game/career';
 import { ALLOCATION, OFFICES, type Allocation, type PoliticalOffice } from '../game/civic';
 import { naira, OFFICE_RULES } from '../game/store';
-import { STATE_CUT, TRANSFER_FEE_LIMITS } from '../game/treasury';
+import { STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS } from '../game/treasury';
 import { useCivic, type CivicSnapshot, type PolicyChange } from '../net/civic';
 import { Emoji } from './Icons';
 import './laws.css';
@@ -38,21 +38,25 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
     { key: 'taxRate', title: 'Income tax', unit: '%', options: [0, 5, 10, 15, 20], hint: 'Taken from every wage and side hustle. Keke, okada, cab and helicopter fares rise by the same percentage.', treasury: true },
     { key: 'loanRate', title: 'Bank loan rate', unit: '% / week', options: [0, 5, 10, 15, 20, 30], hint: 'Interest on every bank loan, per game week.', treasury: true },
     { key: 'transferFee', title: 'Transfer fee', unit: '%', options: steps(TRANSFER_FEE_LIMITS, [0, 1, 2, 3, 5, 10]), hint: 'Charged to the sender on money sent between players.', treasury: true },
+    ...STATE_LAW_KEYS.map((k): Law => ({
+      key: STATE_LAWS[k].capField as keyof PolicyChange,
+      title: `Max ${STATE_LAWS[k].title.toLowerCase()}`,
+      unit: STATE_LAWS[k].unit,
+      options: STATE_LAWS[k].capOptions,
+      hint: `The most any state may set. Lowering it cuts every state above it down. ${STATE_LAWS[k].hint}`,
+    })),
+    { key: 'federalCut', title: 'Federal cut', unit: '%', options: [0, 5, 10, 15, 20, 25, 30], hint: 'The share of every state’s revenue sent up to the federal treasury each hour. The states keep the rest.', treasury: true },
   ],
   governor: [
-    { key: 'roadsFunding', title: 'Road funding', unit: '%', options: [0, 25, 50, 75, 100], hint: 'Less funding: potholes open more often on Kaduna’s roads.' },
     okadaBan('okadaBanKaduna', 'Kaduna'),
   ],
   minister: [
-    { key: 'roadsFundingAbuja', title: 'Road funding', unit: '%', options: [0, 25, 50, 75, 100], hint: 'Less funding: potholes open more often on Abuja’s roads.' },
     okadaBan('okadaBanAbuja', 'Abuja'),
   ],
   lagosgov: [
-    { key: 'roadsFundingLagos', title: 'Road funding', unit: '%', options: [0, 25, 50, 75, 100], hint: 'Less funding: potholes open more often on Lagos’s roads.' },
     okadaBan('okadaBanLagos', 'Lagos'),
   ],
   kanogov: [
-    { key: 'roadsFundingKano', title: 'Road funding', unit: '%', options: [0, 25, 50, 75, 100], hint: 'Less funding: potholes open more often on Kano’s roads.' },
     okadaBan('okadaBanKano', 'Kano'),
   ],
   igp: [
@@ -73,9 +77,9 @@ const pct = (share: number) => `${+(share * 100).toFixed(1)}%`;
 const FIXED: [string, string][] = [
   ['VAT on spending', pct(STATE_CUT.vat)],
   ['Land registration', pct(STATE_CUT.land)],
-  ['Business registration', pct(BIZ.registrationShare)],
-  ['Business move permit', naira(BIZ.moveFee)],
-  ['Delivery levy', pct(BIZ.deliveryShare)],
+  ['Business registration (standard)', pct(BIZ.registrationShare)],
+  ['Business move permit (standard)', naira(BIZ.moveFee)],
+  ['Delivery levy (standard)', pct(BIZ.deliveryShare)],
 ];
 
 /** The office holder's desk: one card per law they own, with the values they can pick. */
@@ -84,7 +88,7 @@ function Desk({ office, policies, busy, onSet }: { office: PoliticalOffice; poli
     <div className="law-desk">
       <div className="law-desk-head">
         <b>Your desk · {OFFICE_RULES[office].title}</b>
-        <small>Only you can change these. Citizens see the result on the gazette.{office === 'president' ? ' The budget allocation is in the Treasury tab.' : ''}{OFFICE_RULES[office].city ? ' Contracts, road repairs and pardons are in the Treasury tab.' : ''}</small>
+        <small>Only you can change these. Citizens see the result on the gazette.{office === 'president' ? ' The budget allocation is in the Treasury tab.' : ''}{OFFICE_RULES[office].city ? ' Contracts, upkeep and pardons are in the Treasury tab.' : ''}</small>
       </div>
       {LAWS[office].map((law) => {
         const value = policies[law.key];
@@ -157,7 +161,7 @@ function Gazette({ policies, treasury, allocation, only }: { policies: CivicSnap
             ))}
           </div>
           <div className="law-total">
-            <span>TREASURY BALANCE</span>
+            <span>FEDERAL TREASURY</span>
             <b>{naira(treasury)}</b>
           </div>
           <small className="law-foot"><Emoji char="🏛️" size={12} /> paid into the treasury · fines, bail, hospital bills and EFCC fees go there too</small>
@@ -172,8 +176,9 @@ export function LawsTab({ uid }: { uid: string }) {
   const busy = useCivic((s) => s.busy);
   const setPolicy = useCivic((s) => s.setPolicy);
   const holds = (office: PoliticalOffice) => !!uid && data?.policies[office]?.uid === uid;
-  // An office holder lands on their own desk.
-  const [view, setView] = useState<'all' | PoliticalOffice>(() => OFFICES.find(holds) ?? 'all');
+  // An office holder lands on their own desk, even when the board loads a moment after the tab opens. Until you pick another tab, yours is the one shown.
+  const [picked, setView] = useState<'all' | PoliticalOffice | null>(null);
+  const view: 'all' | PoliticalOffice = picked ?? OFFICES.find(holds) ?? 'all';
   if (!data) return null;
   return (
     <>
