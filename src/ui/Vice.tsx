@@ -2,9 +2,9 @@
 // contracts, ransoms, jail hustles) and Dirty Work (forgery, fake naira, bunkering, pirate radio, betting
 // shop). Plus the kidnap screen and the police stop when you drive high. Rules: src/game/vice.ts.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { naira, useGame } from '../game/store';
-import { crimeTier, nextCrimeTier } from '../game/underworld';
+import { CRIME_TIERS, crimeTier, nextCrimeTier } from '../game/underworld';
 import { CELL, CONTRACT, DUI, GOODS, GOOD_BY_ID, OPS, PLUG, RACKET, SWEEP, type GoodId } from '../game/vice';
 import { useSession } from '../net/session';
 import { searchPlayers, type PlayerRef } from '../net/social';
@@ -14,7 +14,7 @@ import {
   postContract, reportRacket, rescue, sellGood, sellInside, startOp, strikeContract, struggle, takeContract, consumeGood, useVice,
 } from '../net/vice';
 import { AskBail } from './Police';
-import { Icon } from './Icons';
+import { Emoji, Icon } from './Icons';
 import './vice.css';
 import { Face } from './Face';
 
@@ -283,36 +283,124 @@ function UserPick({ value, onChange, placeholder = 'Search username' }: { value:
 
 type FixerTab = 'protection' | 'contracts' | 'ransoms' | 'cell';
 
+/** A Fixer card: an icon tile, a title with an optional pill, a line under it, and whatever the card does below. */
+function FxCard({ icon, title, pill, tone, sub, children }: {
+  icon: string;
+  title: ReactNode;
+  pill?: ReactNode;
+  /** alert: something wants your answer. good: it went your way. mine: your own job. */
+  tone?: 'alert' | 'good' | 'mine';
+  sub?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`fx-card ${tone ?? ''}`}>
+      <span className="fx-card-icon"><Emoji char={icon} size={22} /></span>
+      <div className="fx-card-body">
+        <div className="fx-card-head"><b>{title}</b>{pill !== undefined && <em className="fx-pill">{pill}</em>}</div>
+        {sub && <small>{sub}</small>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** The rules of a tab, folded away so they don't push everything else down. */
+function HowItWorks({ children }: { children: ReactNode }) {
+  return (
+    <details className="fx-how">
+      <summary>How it works</summary>
+      <p>{children}</p>
+    </details>
+  );
+}
+
+function Section({ title, count, extra }: { title: string; count?: number; extra?: ReactNode }) {
+  return <h4 className="fx-h">{title}{!!count && <i>{count}</i>}{extra && <small>{extra}</small>}</h4>;
+}
+
+/** One choice out of a few, as a row of segments. */
+function Seg<T extends string | number>({ options, value, onChange, label }: { options: { value: T; label: ReactNode }[]; value: T; onChange(v: T): void; label: string }) {
+  return (
+    <div className="fx-seg" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={String(o.value)} type="button" className={value === o.value ? 'on' : ''} aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** How far a ransom has got. */
+function Progress({ part, whole }: { part: number; whole: number }) {
+  return <div className="fx-bar" aria-hidden><i style={{ width: `${Math.min(100, (part / Math.max(1, whole)) * 100)}%` }} /></div>;
+}
+
+const short = (n: number) => (n >= 1_000_000 ? `₦${+(n / 1_000_000).toFixed(1)}m` : n >= 1_000 ? `₦${Math.round(n / 1_000)}k` : naira(n));
+
 export function FixerApp() {
   const signedIn = useSignedIn();
   const streets = useVice((s) => s.streets);
+  const me = useVice((s) => s.me);
   const busy = useVice((s) => s.busy);
   const [tab, setTab] = useState<FixerTab>('protection');
   usePoll(loadStreets, 10_000);
   if (!signedIn) return <NotSignedIn />;
-  const tier = streets ? crimeTier(streets.score) : null;
-  const next = streets ? nextCrimeTier(streets.score) : null;
-  const jailed = !!streets?.cell.jailed;
+  const s = streets;
+  // What wants your attention on each tab: a number on its chip, red when it is about you.
+  const tabs: { id: FixerTab; label: string; count: number; alert: boolean }[] = [
+    { id: 'protection', label: 'Racket', count: s?.rackets.asPayer.filter((r) => r.status === 'demanded').length ?? 0, alert: true },
+    { id: 'contracts', label: 'Jobs', count: s?.contracts.taking.length ?? 0, alert: false },
+    { id: 'ransoms', label: 'Ransom', count: (s?.contracts.ransoms.length ?? 0) + (me.ransom ? 1 : 0), alert: !!me.ransom || !!s?.contracts.ransoms.some((r) => r.friend) },
+    { id: 'cell', label: 'Cell', count: s?.cell.jailed ? 1 : s?.cell.breakouts.length ?? 0, alert: !!s?.cell.jailed },
+  ];
   return (
     <>
-      <div className="hero hero-dark">
-        <small>{tier ? `${tier.icon} ${tier.title} · crime score ${streets!.score}${next ? ` (${next.min - streets!.score} to ${next.title})` : ''}` : 'Loading…'}</small>
-        <b>🕴🏾 Fixer</b>
-        <small>Protection. Contracts. Ransoms. Jailbreaks. Nobody is watching. (They are.)</small>
-      </div>
+      <FixerHero />
       <Err />
-      <div className="tabs fixer-tabs">
-        <button className={tab === 'protection' ? 'on' : ''} onClick={() => setTab('protection')}>🛡️ Protection</button>
-        <button className={tab === 'contracts' ? 'on' : ''} onClick={() => setTab('contracts')}>📜 Contracts</button>
-        <button className={tab === 'ransoms' ? 'on' : ''} onClick={() => setTab('ransoms')}>🆘 Ransoms</button>
-        <button className={tab === 'cell' ? 'on' : ''} onClick={() => setTab('cell')}>⛓️ Cell{jailed ? ' (you)' : ''}</button>
+      <div className="fx-tabs" role="tablist" aria-label="Fixer">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+            <span>{t.label}</span>
+            {t.count > 0 && <i className={t.alert ? 'alert' : ''}>{t.count}</i>}
+          </button>
+        ))}
       </div>
-      {!streets && <p className="muted">Loading…</p>}
-      {streets && tab === 'protection' && <Protection busy={busy} />}
-      {streets && tab === 'contracts' && <Contracts busy={busy} />}
-      {streets && tab === 'ransoms' && <Ransoms busy={busy} />}
-      {streets && tab === 'cell' && <Cell busy={busy} />}
+      {!s && <p className="muted">Loading…</p>}
+      {s && tab === 'protection' && <Protection busy={busy} />}
+      {s && tab === 'contracts' && <Contracts busy={busy} />}
+      {s && tab === 'ransoms' && <Ransoms busy={busy} />}
+      {s && tab === 'cell' && <Cell busy={busy} />}
     </>
+  );
+}
+
+/** Who you are on the street: your tier, how far to the next, and what your business is bringing in. */
+function FixerHero() {
+  const s = useVice((st) => st.streets);
+  if (!s) return <div className="hero hero-dark fx-hero"><b>🕴🏾 Fixer</b><small>Loading…</small></div>;
+  const tier = crimeTier(s.score);
+  const next = nextCrimeTier(s.score);
+  const progress = next ? ((s.score - tier.min) / (next.min - tier.min)) * 100 : 100;
+  const running = s.rackets.asBoss.filter((r) => r.status === 'active');
+  const collected = s.rackets.asBoss.reduce((n, r) => n + r.paidTotal, 0);
+  return (
+    <div className="hero hero-dark fx-hero">
+      <div className="fx-hero-top">
+        <span className="fx-hero-badge"><Emoji char={tier.icon} size={28} /></span>
+        <span className="fx-hero-who">
+          <small>Fixer · your street name</small>
+          <b>{tier.title}</b>
+        </span>
+        <em>{+s.score.toFixed(1)}<small>crime score</small></em>
+      </div>
+      <div className="fx-hero-bar" aria-hidden><i style={{ width: `${Math.max(4, Math.min(100, progress))}%` }} /></div>
+      <small className="fx-hero-next">{next ? `${+(next.min - s.score).toFixed(1)} more to ${next.icon} ${next.title}` : 'Top of the food chain. Nobody above you.'}</small>
+      <div className="fx-hero-stats">
+        <span><b>{running.length}/{RACKET.maxVictims}</b><small>paying you</small></span>
+        <span><b>{short(collected)}</b><small>collected</small></span>
+        <span><b>{s.contracts.taking.length}</b><small>jobs on you</small></span>
+      </div>
+    </div>
   );
 }
 
@@ -322,67 +410,95 @@ function Protection({ busy }: { busy: boolean }) {
   const [target, setTarget] = useState('');
   const [fee, setFee] = useState<number>(RACKET.fees[1]);
   const [rival, setRival] = useState('');
+  // The racket whose payer is choosing a rival gang to hire.
+  const [hiring, setHiring] = useState<number | null>(null);
   const now = useNow(5000);
-  const weeks = Math.round(RACKET.periodMs / 60_000);
+  const week = Math.round(RACKET.periodMs / 60_000);
+  const need = CRIME_TIERS.find((t) => t.id === RACKET.tier)!;
+  const allowed = s.score >= need.min;
+  const full = s.rackets.asBoss.length >= RACKET.maxVictims;
   return (
     <>
-      <div className="civic-notice">
-        “Protection” is a weekly fee (one game week is about {Math.floor(weeks / 60)}h {weeks % 60}m real time). Area boys and above can demand it from anyone: shop owners, big spenders, you name it. Payers can pay, refuse, hire a rival gang… or call the police.
-      </div>
-      {s.rackets.asPayer.length > 0 && <h4>Deals on you</h4>}
+      <HowItWorks>
+        “Protection” is a weekly fee: one game week is about {Math.floor(week / 60)}h {week % 60}m of real time. {need.title}s and above can demand it from anyone.
+        Whoever is asked can pay, refuse (and get leaned on for {Math.round(RACKET.leanPct * 100)}% of the fee), hire a rival gang, or call the police.
+        Miss {RACKET.maxStrikes} payments in a row and the boys visit. Every collection risks a police raid.
+      </HowItWorks>
+
+      {s.rackets.asPayer.length > 0 && <Section title="Leaning on you" count={s.rackets.asPayer.length} />}
       {s.rackets.asPayer.map((r) => (
-        <div key={r.id} className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-          <b>🕴🏾 @{r.other} wants {naira(r.fee)} a week</b>
+        <FxCard
+          key={r.id}
+          icon={r.status === 'protected' ? '🛡️' : '🕴🏾'}
+          tone={r.status === 'demanded' ? 'alert' : r.status === 'protected' ? 'good' : undefined}
+          title={`@${r.other}`}
+          pill={`${short(r.fee)}/week`}
+          sub={
+            r.status === 'demanded' ? 'Wants paying to “keep your shop safe”.'
+            : r.status === 'protected' ? `@${r.protector} has your back this week.`
+            : `Paid ${naira(r.paidTotal)} so far · next in ${r.nextDue ? mmss(r.nextDue - now) : '?'}${r.strikes ? ` · ${r.strikes} missed` : ''}`
+          }
+        >
           {r.status === 'demanded' && (
             <>
-              <div className="row-btns">
-                <button className="btn sm go" disabled={busy || money < r.fee} onClick={() => void answerRacket(r.id, 'pay')}>Pay up</button>
+              <div className="fx-actions">
+                <button className="btn sm go" disabled={busy || money < r.fee} onClick={() => void answerRacket(r.id, 'pay')}>Pay {short(r.fee)}</button>
                 <button className="btn sm danger" disabled={busy} onClick={() => void answerRacket(r.id, 'refuse')}>Refuse</button>
-                <button className="btn sm" disabled={busy} onClick={() => void reportRacket(r.id)}>🚔 Report</button>
+                <button className="btn sm" disabled={busy} onClick={() => void reportRacket(r.id)}><Emoji char="🚔" size={14} /> Report</button>
               </div>
-              <div className="row-btns">
-                <UserPick placeholder="Rival gang boss" value={rival} onChange={setRival} />
-                <button className="btn sm" disabled={busy || !rival.trim() || money < r.fee} onClick={() => void answerRacket(r.id, 'hire', rival)}>⚔️ Hire gang · {naira(r.fee)}</button>
-              </div>
-              <small className="muted">Refusing gets you leaned on for {naira(Math.round(r.fee * RACKET.leanPct))}. A hired gang wins or loses on crime score.</small>
+              {hiring === r.id ? (
+                <div className="fx-form">
+                  <UserPick placeholder="Rival gang boss" value={rival} onChange={setRival} />
+                  <div className="fx-actions">
+                    <button className="btn sm" disabled={busy || !rival.trim() || money < r.fee} onClick={() => void answerRacket(r.id, 'hire', rival)}><Emoji char="⚔️" size={14} /> Hire for {short(r.fee)}</button>
+                    <button className="ghost-btn" onClick={() => setHiring(null)}>Cancel</button>
+                  </div>
+                  <small className="fx-note">The gang with the higher crime score wins.</small>
+                </div>
+              ) : (
+                <button className="fx-link" onClick={() => setHiring(r.id)}><Emoji char="⚔️" size={13} /> Hire a rival gang instead</button>
+              )}
             </>
           )}
           {r.status === 'active' && (
-            <>
-              <small className="muted">Paid {naira(r.paidTotal)} so far · next payment in {r.nextDue ? mmss(r.nextDue - now) : '?'}{r.strikes ? ` · ${r.strikes} missed` : ''}</small>
-              <div className="row-btns">
-                <button className="btn sm danger" disabled={busy} onClick={() => void endRacket(r.id)}>Stop paying ({naira(Math.round(r.fee * 1.5))} exit tax)</button>
-                <button className="btn sm" disabled={busy} onClick={() => void reportRacket(r.id)}>🚔 Report</button>
-              </div>
-            </>
+            <div className="fx-actions">
+              <button className="btn sm danger" disabled={busy} onClick={() => void endRacket(r.id)}>Stop paying · {short(Math.round(r.fee * 1.5))} exit</button>
+              <button className="btn sm" disabled={busy} onClick={() => void reportRacket(r.id)}><Emoji char="🚔" size={14} /> Report</button>
+            </div>
           )}
-          {r.status === 'protected' && <small className="muted">🛡️ @{r.protector} has your back this week.</small>}
-        </div>
+        </FxCard>
       ))}
-      <h4>Your racket</h4>
-      <div className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-        <UserPick placeholder="Who to “protect”" value={target} onChange={setTarget} />
-        <div className="row-btns">
-          {RACKET.fees.map((f) => (
-            <button key={f} className={`btn sm ${fee === f ? 'go' : ''}`} onClick={() => setFee(f)}>{naira(f)}</button>
-          ))}
+
+      <Section title="Your racket" extra={`${s.rackets.asBoss.length} of ${RACKET.maxVictims}`} />
+      {allowed ? (
+        <div className="fx-form fx-panel">
+          <UserPick placeholder="Who needs “protecting”?" value={target} onChange={setTarget} />
+          <Seg<number> label="Weekly fee" value={fee} onChange={setFee} options={RACKET.fees.map((f) => ({ value: f, label: short(f) }))} />
+          <button className="btn danger" disabled={busy || full || !target.trim()} onClick={() => void demandRacket(target, fee)}>
+            {full ? `Your books are full (${RACKET.maxVictims})` : `Send the boys · ${short(fee)} a week`}
+          </button>
         </div>
-        <button className="btn sm danger" disabled={busy || !target.trim()} onClick={() => void demandRacket(target, fee)}>Send the boys</button>
-        <small className="muted">Needs Area boy or higher. At most {RACKET.maxVictims} people at once. Each collection risks a police raid.</small>
-      </div>
+      ) : (
+        <FxCard icon="🔒" title={`Reach ${need.icon} ${need.title} first`} sub={`You need a crime score of ${need.min} to run a racket. You have ${+s.score.toFixed(1)}.`} />
+      )}
       {s.rackets.asBoss.map((r) => (
-        <div key={r.id} className="tile">
-          <span className="tile-icon">💰</span>
-          <span className="tile-info">
-            <b>@{r.other} · {naira(r.fee)}/week</b>
-            <small>{r.status === 'demanded' ? 'Waiting for an answer' : `Collected ${naira(r.paidTotal)} · next ${r.nextDue ? mmss(r.nextDue - now) : '?'}${r.strikes ? ` · ${r.strikes} missed` : ''}`}</small>
-          </span>
-          <button className="btn sm danger" disabled={busy || r.status !== 'active'} onClick={() => void endRacket(r.id)}>Drop</button>
-        </div>
+        <FxCard
+          key={r.id}
+          icon="💰"
+          tone="mine"
+          title={`@${r.other}`}
+          pill={`${short(r.fee)}/week`}
+          sub={r.status === 'demanded' ? 'Waiting for an answer…' : `Collected ${naira(r.paidTotal)} · next ${r.nextDue ? mmss(r.nextDue - now) : '?'}${r.strikes ? ` · ${r.strikes} missed` : ''}`}
+        >
+          {r.status === 'active' && <div className="fx-actions"><button className="btn sm" disabled={busy} onClick={() => void endRacket(r.id)}>Let them go</button></div>}
+        </FxCard>
       ))}
     </>
   );
 }
+
+const KIND = { hit: { icon: '🥊', label: 'Hit' }, kidnap: { icon: '🪢', label: 'Kidnap' } } as const;
+const STATUS: Record<string, string> = { open: 'On the board', taken: 'Someone took it', ransom: 'Hostage held' };
 
 function Contracts({ busy }: { busy: boolean }) {
   const s = useVice((st) => st.streets)!;
@@ -393,66 +509,83 @@ function Contracts({ busy }: { busy: boolean }) {
   const [ransom, setRansom] = useState<number>(CONTRACT.ransoms[1]);
   const c = s.contracts;
   const myUser = useSession((st) => st.user?.username);
+  const cut = (n: number) => Math.round(n * (1 - CONTRACT.cutPct));
+  const amount = Number(reward) || 0;
+  const min = CONTRACT.minReward[kind];
+  const quick = [min, 50_000, 100_000, 250_000, CONTRACT.maxReward].filter((n, i, a) => n >= min && a.indexOf(n) === i);
+  const why = !target.trim() ? 'Pick a target' : amount < min ? `At least ${short(min)}` : amount > CONTRACT.maxReward ? `At most ${short(CONTRACT.maxReward)}` : money < amount ? 'Not enough cash' : null;
   return (
     <>
-      <div className="civic-notice">
-        Post a job and the money is held until someone does it. The taker has to find the target in person. Hits put them in hospital. Kidnaps hold them for {CONTRACT.holdMs / 60_000} minutes until their friends pay the ransom. Police can raid a kidnapper’s den.
-      </div>
-      {c.taking.length > 0 && <h4>Your jobs</h4>}
+      <HowItWorks>
+        Post a job and the reward is held until someone does it. The taker has to find the target in person and strike from close by.
+        A hit puts them in hospital. A kidnap holds them for {CONTRACT.holdMs / 60_000} minutes while their friends raise the ransom. Police can raid a kidnapper’s den.
+        The server keeps {Math.round(CONTRACT.cutPct * 100)}%. Untaken jobs lapse after {CONTRACT.expiresMs / 3_600_000} hours and you are refunded.
+      </HowItWorks>
+
+      {c.taking.length > 0 && <Section title="Your jobs" count={c.taking.length} />}
       {c.taking.map((j) => (
-        <div key={j.id} className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-          <b>{j.kind === 'hit' ? '🥊 Hit' : '🪢 Kidnap'} @{j.target} · {naira(j.reward)}</b>
-          <small className="muted">
-            {j.status === 'ransom' ? `Hostage held. Ransom ${naira(j.pledged)} / ${naira(j.ransom)}` : 'Stand right next to them (same building or street) and strike.'}
-          </small>
+        <FxCard
+          key={j.id}
+          icon={KIND[j.kind].icon}
+          tone="mine"
+          title={`${KIND[j.kind].label} @${j.target}`}
+          pill={short(cut(j.reward))}
+          sub={j.status === 'ransom' ? `Hostage held · ransom ${naira(j.pledged)} of ${naira(j.ransom)}` : 'Find them in the game, stand right next to them, then strike.'}
+        >
+          {j.status === 'ransom' && <Progress part={j.pledged} whole={j.ransom} />}
           {j.status === 'taken' && (
-            <div className="row-btns">
+            <div className="fx-actions">
               <button className="btn sm danger" disabled={busy} onClick={() => void strikeContract(j.id)}>Strike</button>
               <button className="btn sm" disabled={busy} onClick={() => void dropContract(j.id)}>Drop the job</button>
             </div>
           )}
-        </div>
+        </FxCard>
       ))}
-      <h4>Job board</h4>
-      {c.open.length === 0 && <p className="muted">No jobs right now.</p>}
+
+      <Section title="Job board" count={c.open.length} />
+      {c.open.length === 0 && <p className="fx-empty">No jobs right now. Check back later.</p>}
       {c.open.map((j) => (
-        <div key={j.id} className="tile">
-          <span className="tile-icon">{j.kind === 'hit' ? '🥊' : '🪢'}</span>
-          <span className="tile-info">
-            <b>{j.kind === 'hit' ? 'Hit' : 'Kidnap'} @{j.target}</b>
-            <small>{naira(Math.round(j.reward * (1 - CONTRACT.cutPct)))} for you{j.kind === 'kidnap' ? ` + ransom ${naira(j.ransom)}` : ''} · {ago(j.at)}</small>
-          </span>
-          <button className="btn sm" disabled={busy || j.target === myUser} onClick={() => void takeContract(j.id)}>Take</button>
-        </div>
-      ))}
-      <h4>Post a contract</h4>
-      <div className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-        <div className="row-btns">
-          <button className={`btn sm ${kind === 'hit' ? 'go' : ''}`} onClick={() => setKind('hit')}>🥊 Hit</button>
-          <button className={`btn sm ${kind === 'kidnap' ? 'go' : ''}`} onClick={() => setKind('kidnap')}>🪢 Kidnap</button>
-        </div>
-        <UserPick placeholder="Target" value={target} onChange={setTarget} />
-        <input className="text-input" inputMode="numeric" value={reward} onChange={(e) => setReward(e.target.value.replace(/\D/g, ''))} aria-label="Reward" />
-        {kind === 'kidnap' && (
-          <div className="row-btns">
-            {CONTRACT.ransoms.map((r) => (
-              <button key={r} className={`btn sm ${ransom === r ? 'go' : ''}`} onClick={() => setRansom(r)}>Ransom {naira(r)}</button>
-            ))}
+        <FxCard
+          key={j.id}
+          icon={KIND[j.kind].icon}
+          title={`${KIND[j.kind].label} @${j.target}`}
+          pill={short(cut(j.reward))}
+          sub={`${j.kind === 'kidnap' ? `Plus a ${short(j.ransom)} ransom · ` : ''}posted ${ago(j.at)}`}
+        >
+          <div className="fx-actions">
+            <button className="btn sm" disabled={busy || j.target === myUser} onClick={() => void takeContract(j.id)}>{j.target === myUser ? 'That’s you' : 'Take the job'}</button>
           </div>
-        )}
-        <button className="btn sm danger" disabled={busy || !target.trim() || Number(reward) < CONTRACT.minReward[kind] || Number(reward) > CONTRACT.maxReward || money < Number(reward)}
-          onClick={() => void postContract(kind, target, Number(reward), kind === 'kidnap' ? ransom : undefined)}>
-          Post · {naira(Number(reward) || 0)} held ({naira(CONTRACT.minReward[kind])} to {naira(CONTRACT.maxReward)})
-        </button>
-        <small className="muted">The server keeps {Math.round(CONTRACT.cutPct * 100)}% as its cut. Untaken jobs lapse after {CONTRACT.expiresMs / 3_600_000} hours and you’re refunded.</small>
-      </div>
-      {c.mine.length > 0 && <h4>Contracts you posted</h4>}
-      {c.mine.map((j) => (
-        <div key={j.id} className="tile">
-          <span className="tile-icon">{j.kind === 'hit' ? '🥊' : '🪢'}</span>
-          <span className="tile-info"><b>@{j.target} · {naira(j.reward)}</b><small>{j.status}</small></span>
-          <button className="btn sm danger" disabled={busy || j.status !== 'open'} onClick={() => void cancelContract(j.id)}>Cancel</button>
+        </FxCard>
+      ))}
+
+      <Section title="Post a contract" />
+      <div className="fx-form fx-panel">
+        <Seg<"hit" | "kidnap"> label="Kind of job" value={kind} onChange={setKind} options={(['hit', 'kidnap'] as const).map((k) => ({ value: k, label: <><Emoji char={KIND[k].icon} size={14} /> {KIND[k].label}</> }))} />
+        <UserPick placeholder="Target" value={target} onChange={setTarget} />
+        <label className="fx-field">
+          <span>Reward</span>
+          <input className="text-input" inputMode="numeric" value={reward} onChange={(e) => setReward(e.target.value.replace(/\D/g, ''))} aria-label="Reward" />
+        </label>
+        <div className="fx-chips">
+          {quick.map((n) => <button key={n} type="button" className={amount === n ? 'on' : ''} onClick={() => setReward(String(n))}>{short(n)}</button>)}
         </div>
+        {kind === 'kidnap' && (
+          <label className="fx-field">
+            <span>Ransom</span>
+            <Seg<number> label="Ransom" value={ransom} onChange={setRansom} options={CONTRACT.ransoms.map((r) => ({ value: r, label: short(r) }))} />
+          </label>
+        )}
+        <small className="fx-note">You pay {naira(amount)} now. Whoever does it gets {naira(cut(amount))}{kind === 'kidnap' ? ' plus the ransom' : ''}.</small>
+        <button className="btn danger" disabled={busy || !!why} onClick={() => void postContract(kind, target, amount, kind === 'kidnap' ? ransom : undefined)}>
+          {why ?? `Post the ${KIND[kind].label.toLowerCase()} · ${short(amount)}`}
+        </button>
+      </div>
+
+      {c.mine.length > 0 && <Section title="Contracts you posted" count={c.mine.length} />}
+      {c.mine.map((j) => (
+        <FxCard key={j.id} icon={KIND[j.kind].icon} title={`${KIND[j.kind].label} @${j.target}`} pill={STATUS[j.status] ?? j.status} sub={`${naira(j.reward)} held · ${ago(j.at)}`}>
+          {j.status === 'open' && <div className="fx-actions"><button className="btn sm" disabled={busy} onClick={() => void cancelContract(j.id)}>Cancel and refund</button></div>}
+        </FxCard>
       ))}
     </>
   );
@@ -464,29 +597,34 @@ function Ransoms({ busy }: { busy: boolean }) {
   const money = useGame((st) => st.money);
   const officer = useGame((st) => st.jobId === 'police');
   const now = useNow();
-  const [amount, setAmount] = useState('10000');
+  const [amount, setAmount] = useState(10_000);
   const list = s.contracts.ransoms;
   return (
     <>
-      <div className="civic-notice">When a friend is kidnapped, the ransom is crowdfunded. Chip in whatever you can; if it isn’t met in time, everyone is refunded and the victim is dumped by the road.</div>
+      <HowItWorks>
+        When somebody is kidnapped, their ransom is crowdfunded. Chip in whatever you can. If it isn’t met in time, everyone is refunded and the victim is dumped by the road.
+      </HowItWorks>
       {me.ransom && (
-        <div className="list-card" style={{ padding: 10 }}>
-          <b>🆘 You are being held</b>
-          <small className="muted">Ransom {naira(me.ransom.pledged)} / {naira(me.ransom.amount)} · {mmss(me.ransom.endsAt - now)} left</small>
+        <FxCard icon="🆘" tone="alert" title="You are being held" pill={mmss(me.ransom.endsAt - now)} sub={`Ransom ${naira(me.ransom.pledged)} of ${naira(me.ransom.amount)}`}>
+          <Progress part={me.ransom.pledged} whole={me.ransom.amount} />
+        </FxCard>
+      )}
+      <Section title="Held right now" count={list.length} />
+      {list.length === 0 && <p className="fx-empty">Nobody is being held. The streets are calm. For now.</p>}
+      {list.length > 0 && (
+        <div className="fx-chips" role="group" aria-label="How much to chip in">
+          <small>Chip in:</small>
+          {[5_000, 10_000, 50_000, 100_000].map((n) => <button key={n} type="button" className={amount === n ? 'on' : ''} onClick={() => setAmount(n)}>{short(n)}</button>)}
         </div>
       )}
-      {list.length === 0 && <p className="muted">Nobody is being held right now. The streets are calm. For now.</p>}
       {list.map((j) => (
-        <div key={j.id} className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-          <b>🆘 @{j.target}{j.friend ? ' (your friend)' : ''}</b>
-          <div className="bar light"><i style={{ width: `${Math.min(100, (j.pledged / Math.max(1, j.ransom)) * 100)}%` }} /></div>
-          <small className="muted">{naira(j.pledged)} of {naira(j.ransom)} · {j.holdEnds ? mmss(j.holdEnds - now) : ''} left</small>
-          <div className="row-btns">
-            <input className="text-input" inputMode="numeric" style={{ width: 90 }} value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} aria-label="Amount" />
-            <button className="btn sm go" disabled={busy || !Number(amount) || money <= 0} onClick={() => void pledgeRansom(j.id, Number(amount))}>🙏🏾 Chip in</button>
-            {officer && <button className="btn sm danger" disabled={busy} onClick={() => void rescue(j.id)}>🚔 Raid the den</button>}
+        <FxCard key={j.id} icon="🆘" tone={j.friend ? 'alert' : undefined} title={`@${j.target}${j.friend ? ' · your friend' : ''}`} pill={j.holdEnds ? mmss(j.holdEnds - now) : undefined} sub={`${naira(j.pledged)} of ${naira(j.ransom)} raised`}>
+          <Progress part={j.pledged} whole={j.ransom} />
+          <div className="fx-actions">
+            <button className="btn sm go" disabled={busy || money < amount} onClick={() => void pledgeRansom(j.id, amount)}><Emoji char="🙏🏾" size={14} /> Chip in {short(amount)}</button>
+            {officer && <button className="btn sm danger" disabled={busy} onClick={() => void rescue(j.id)}><Emoji char="🚔" size={14} /> Raid the den</button>}
           </div>
-        </div>
+        </FxCard>
       ))}
     </>
   );
@@ -504,35 +642,39 @@ function Cell({ busy }: { busy: boolean }) {
     <>
       {cell.jailed ? (
         <>
-          <div className="civic-notice">You’re inside for {mmss((cell.jailedUntil ?? now) - now)}. Time to hustle.</div>
-          <div className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-            <b>🔑 Bribe a guard · {naira(cell.bribeCost ?? 0)}</b>
-            <small className="muted">Cuts {Math.round(CELL.cutPct * 100)}% off what’s left. {Math.round(CELL.snitchChance * 100)}% of guards snitch: more time and a fine.</small>
-            <button className="btn sm danger" disabled={busy || money < (cell.bribeCost ?? 0)} onClick={() => void bribeGuard()}>Slide the envelope</button>
+          <div className="fx-jail">
+            <Emoji char="⛓️" size={26} />
+            <span><small>You’re inside for</small><b>{mmss((cell.jailedUntil ?? now) - now)}</b></span>
           </div>
-          <div className="list-card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-            <b>📞 Plan a jailbreak</b>
-            <small className="muted">Offer a price; any free player can take the job. You pay only if it works.</small>
-            <div className="row-btns">
+          <FxCard icon="🔑" title="Bribe a guard" pill={short(cell.bribeCost ?? 0)} sub={`Cuts ${Math.round(CELL.cutPct * 100)}% off what’s left. ${Math.round(CELL.snitchChance * 100)}% of guards snitch: more time and a fine.`}>
+            <div className="fx-actions"><button className="btn sm danger" disabled={busy || money < (cell.bribeCost ?? 0)} onClick={() => void bribeGuard()}>Slide the envelope</button></div>
+          </FxCard>
+          <FxCard icon="📞" title="Plan a jailbreak" sub="Name a price. Any free player can take the job, and you only pay if it works.">
+            <div className="fx-chips">
+              {[CELL.breakoutMin, 50_000, 100_000, 250_000].map((n) => <button key={n} type="button" className={Number(price) === n ? 'on' : ''} onClick={() => setPrice(String(n))}>{short(n)}</button>)}
+            </div>
+            <div className="fx-actions">
               <input className="text-input" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/\D/g, ''))} aria-label="Price" />
               <button className="btn sm" disabled={busy || Number(price) < CELL.breakoutMin} onClick={() => void postBreakout(Number(price))}>Put the word out</button>
             </div>
-          </div>
-          {stashed.length > 0 && <small className="muted">Got stash on you? Open Plug → Stash and sell inside to cellmates at {CELL.insideMarkup}× (guards catch {Math.round(CELL.guardCatch * 100)}%).</small>}
+          </FxCard>
+          {stashed.length > 0 && <small className="fx-note">Got stash on you? Open Plug → Stash and sell inside to cellmates at {CELL.insideMarkup}× (guards catch {Math.round(CELL.guardCatch * 100)}%).</small>}
         </>
       ) : (
-        <div className="civic-notice">You’re free. Below: friends and strangers locked up and looking for a way out. A breakout costs {naira(CELL.helperCost)} in tools and, if it fails, you join them.</div>
+        <HowItWorks>
+          You’re free. Below are players locked up and looking for a way out. A breakout costs {naira(CELL.helperCost)} in tools, and if it fails you join them inside.
+        </HowItWorks>
       )}
-      <h4>Jailbreak board</h4>
-      {cell.breakouts.length === 0 && <p className="muted">Nobody is planning anything. The guards are bored.</p>}
+      <Section title="Jailbreak board" count={cell.breakouts.length} />
+      {cell.breakouts.length === 0 && <p className="fx-empty">Nobody is planning anything. The guards are bored.</p>}
       {cell.breakouts.map((b) => (
-        <div key={b.id} className="tile">
-          <span className="tile-icon">🔓</span>
-          <span className="tile-info"><b>@{b.inmate}{b.mine ? ' (you)' : ''}</b><small>pays {naira(b.price)} on success · {ago(b.at)}</small></span>
-          {b.mine
-            ? <button className="btn sm danger" disabled={busy} onClick={() => void cancelBreakout(b.id)}>Cancel</button>
-            : <button className="btn sm" disabled={busy || cell.jailed || money < CELL.helperCost} onClick={() => void assistBreakout(b.id)}>Break them out</button>}
-        </div>
+        <FxCard key={b.id} icon="🔓" tone={b.mine ? 'mine' : undefined} title={`@${b.inmate}${b.mine ? ' (you)' : ''}`} pill={short(b.price)} sub={`Pays on success · ${ago(b.at)}`}>
+          <div className="fx-actions">
+            {b.mine
+              ? <button className="btn sm" disabled={busy} onClick={() => void cancelBreakout(b.id)}>Call it off</button>
+              : <button className="btn sm danger" disabled={busy || cell.jailed || money < CELL.helperCost} onClick={() => void assistBreakout(b.id)}>Break them out · {short(CELL.helperCost)} tools</button>}
+          </div>
+        </FxCard>
       ))}
     </>
   );

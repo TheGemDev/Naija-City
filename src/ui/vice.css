@@ -1,6 +1,4 @@
 /* Fixer / Plug: keep everything inside the phone screen. */
-.fixer-tabs { flex-wrap: wrap; overflow-x: visible; }
-.fixer-tabs button { flex: 1 1 auto; }
 .app-body .list-card .row-btns,
 .app-body .tile + .row-btns { flex-wrap: wrap; }
 .app-body .row-btns > .btn { flex: 1 1 auto; min-width: 0; white-space: normal; }
@@ -11,3 +9,85 @@
 .user-pick .list-card { max-height: 190px; overflow-y: auto; border: 1px solid var(--line); }
 .user-pick .convo { width: 100%; text-align: left; padding: 9px 12px; }
 .row-btns > .user-pick { flex: 1 1 100%; }
+
+/* ---------- Fixer (src/ui/Vice.tsx FixerApp) ---------- */
+
+/* Your street name, how far to the next one, and what the racket brings in. */
+.fx-hero { gap: 8px; }
+.fx-hero-top { display: flex; align-items: center; gap: 10px; }
+.fx-hero-badge { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: rgba(255, 255, 255, 0.12); }
+.fx-hero-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.fx-hero .fx-hero-who small { font-size: 10.5px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; }
+.fx-hero .fx-hero-who b { font-size: 19px; line-height: 1.15; }
+.fx-hero-top > em { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 22px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.fx-hero-top > em small { margin-top: 3px; font-size: 9.5px; font-weight: 700; opacity: 0.65; }
+.fx-hero-bar { height: 6px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, 0.14); }
+.fx-hero-bar > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b, #ef4444); transition: width 0.3s; }
+.fx-hero .fx-hero-next { font-size: 11px; opacity: 0.8; }
+.fx-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.fx-hero-stats > span { display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.09); }
+.fx-hero .fx-hero-stats b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.fx-hero .fx-hero-stats small { font-size: 10px; opacity: 0.7; }
+
+/* One line of tabs, never wrapping: icon, label and a count when something wants you. */
+.fx-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 14px; background: var(--surface-3); }
+.fx-tabs button { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 6px; border-radius: 11px; color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.fx-tabs button > span { overflow: hidden; text-overflow: ellipsis; }
+.fx-tabs button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.fx-tabs button > i { flex: none; min-width: 16px; padding: 1px 4px; border-radius: 99px; background: var(--muted); color: #fff; font-size: 9.5px; font-style: normal; font-weight: 800; text-align: center; }
+.fx-tabs button > i.alert { background: #dc2626; }
+
+/* The rules, folded. */
+.fx-how { border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.fx-how summary { padding: 8px 12px; color: var(--muted); font-size: 11.5px; font-weight: 700; cursor: pointer; list-style: none; }
+.fx-how summary::-webkit-details-marker { display: none; }
+.fx-how summary::before { content: 'ⓘ  '; }
+.fx-how[open] summary { color: var(--ink); }
+.fx-how p { margin: 0; padding: 0 12px 10px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+
+.fx-h { display: flex; align-items: center; gap: 6px; margin: 6px 2px 0; font-size: 13px; }
+.fx-h > i { min-width: 18px; padding: 1px 6px; border-radius: 99px; background: var(--surface-3); color: var(--muted); font-size: 10.5px; font-style: normal; text-align: center; }
+.fx-h > small { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; }
+.fx-empty { margin: 0; padding: 14px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 12px; text-align: center; }
+.fx-note { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+/* A card: icon tile, then the title line, a line under it, and what it does. */
+.fx-card { display: flex; align-items: flex-start; gap: 10px; padding: 11px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.fx-card.alert { border-color: rgba(220, 38, 38, 0.45); background: linear-gradient(0deg, rgba(220, 38, 38, 0.06), rgba(220, 38, 38, 0.06)), var(--surface); }
+.fx-card.good { border-color: rgba(22, 163, 74, 0.45); }
+.fx-card.mine { border-color: rgba(245, 158, 11, 0.45); }
+.fx-card-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--surface-3); }
+.fx-card.alert .fx-card-icon { background: rgba(220, 38, 38, 0.14); }
+.fx-card.mine .fx-card-icon { background: rgba(245, 158, 11, 0.16); }
+.fx-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.fx-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fx-card-head > b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.fx-pill { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--surface-3); color: var(--ink); font-size: 11px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fx-card.alert .fx-pill { background: #dc2626; color: #fff; }
+.fx-card-body > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.fx-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.fx-actions > .btn { flex: 1 1 auto; min-width: 0; }
+.fx-actions > .text-input { flex: 1 1 90px; min-width: 0; width: auto; }
+.fx-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; color: var(--muted); font-size: 11.5px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+/* A form: a white panel of fields, with the action last. */
+.fx-form { display: flex; flex-direction: column; gap: 8px; }
+.fx-panel { padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.fx-panel > .btn { width: 100%; }
+.fx-field { display: flex; flex-direction: column; gap: 4px; }
+.fx-field > span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.fx-seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: var(--surface-3); }
+.fx-seg button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 4px; border-radius: 9px; color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.fx-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.fx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.fx-chips > small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.fx-chips button { padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 11.5px; font-weight: 700; }
+.fx-chips button.on { border-color: transparent; background: var(--ink); color: var(--surface); }
+.fx-bar { height: 7px; overflow: hidden; border-radius: 99px; background: var(--surface-3); }
+.fx-bar > i { display: block; height: 100%; border-radius: inherit; background: #16a34a; transition: width 0.3s; }
+
+/* Inside: the time left, big. */
+.fx-jail { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; background: linear-gradient(135deg, #7f1d1d, #1c1917); color: #fff; }
+.fx-jail > span { display: flex; flex-direction: column; }
+.fx-jail small { font-size: 11px; opacity: 0.75; }
+.fx-jail b { font-size: 24px; font-variant-numeric: tabular-nums; }
