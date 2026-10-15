@@ -280,6 +280,17 @@ export default withSentry(
   handler,
 );
 
+/** D1 now and then fails with an internal error or resets its storage object for no fault of ours. Only for work that is safe to repeat. */
+const D1_BLIP = /D1_ERROR: (internal error|network connection lost)|object to be reset/i;
+async function retryD1<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!D1_BLIP.test(String(error))) throw error;
+    return run();
+  }
+}
+
 /** Every signed-in /api route. Split from auth so it can be exercised with test users. */
 export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, user: FirebaseUser): Promise<Response> {
   const url = new URL(req.url);
@@ -415,7 +426,8 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       if (changed) save.investments = corrected.investments = fixed;
     }
     // One round trip for every write, in order: the wallet is seeded from the save row written just before it.
-    await env.DB.batch([
+    // Every statement sets values outright, so if D1 drops the batch it is safe to send again.
+    await retryD1(() => env.DB.batch([
       ...saveStateStmts(env.DB, user.uid, state),
       env.DB.prepare(
         `INSERT INTO saves (uid, version, data, saved_at) VALUES (?1, ?2, ?3, ?4)
@@ -424,7 +436,7 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       env.DB.prepare('UPDATE players SET name = ? WHERE uid = ?').bind(save.name, user.uid),
       // First upload ever (e.g. a guest signing in): seed the wallet from it, capped.
       ensureWallet(env.DB, user.uid),
-    ]);
+    ]));
     return json({ ok: true, savedAt, corrected: Object.keys(corrected).length ? corrected : undefined });
   }
 

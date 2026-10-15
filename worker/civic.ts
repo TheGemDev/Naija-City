@@ -373,7 +373,7 @@ export async function handleCivic(req: Request, env: Env, user: { uid: string; e
   try {
     return await handleCivicOnce(req, env, user, ctx);
   } catch (error) {
-    if (req.method === 'GET' && /D1_ERROR: internal error/.test(String(error))) return handleCivicOnce(req, env, user, ctx);
+    if (req.method === 'GET' && /D1_ERROR: internal error/i.test(String(error))) return handleCivicOnce(req, env, user, ctx);
     throw error;
   }
 }

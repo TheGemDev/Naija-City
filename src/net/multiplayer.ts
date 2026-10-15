@@ -286,7 +286,8 @@ export function startMultiplayer() {
         void handOff();
       }
       else if (!stopped) {
-        timer = setTimeout(connect, Math.min(30_000, 1000 * 2 ** retry++));
+        // Spread out: after a deploy every player in the city reconnects at the same moment.
+        timer = setTimeout(connect, Math.min(30_000, 1000 * 2 ** retry++) * (0.5 + Math.random()));
       }
     };
   }
