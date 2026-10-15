@@ -92,14 +92,8 @@ function TopBar() {
   const minutes = useGame((s) => Math.floor(s.minutes));
   // Cash you can spend. What is owed is not taken off here: the debt pill and the Bank say that.
   const money = useGame((s) => s.money);
-  const setPanel = useGame((s) => s.setPanel);
   const h = hourOf(minutes);
   const day = h >= 6 && h < 18.5;
-  // The balance and its + both open the phone on the Top Up app.
-  const topUp = () => {
-    useGame.setState({ openApp: 'topup' });
-    setPanel('phone');
-  };
 
   return (
     <div className="topbar">
@@ -112,20 +106,10 @@ function TopBar() {
           </small>
         </div>
       </div>
-      <div className="hud-card money-card-top" role="button" tabIndex={0} onClick={topUp} title="Add money">
+      {/* Buying money is switched off for now: the balance is display only. */}
+      <div className="hud-card money-card-top">
         <Emoji char="💰" size={22} />
         <b className={money < 0 ? 'owing' : undefined}>{naira(money)}</b>
-        <button
-          className="money-plus"
-          title="Add money"
-          aria-label="Add money"
-          onClick={(e) => {
-            e.stopPropagation();
-            topUp();
-          }}
-        >
-          +
-        </button>
       </div>
       <div className="hud-actions">
         <button className="round-btn" title="Ads" aria-label="Ads" onClick={() => openAdsSheet(null, true)}>
