@@ -1,10 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { EFCC, efccDirty, efccTimeLeft, type EfccCase, type EfccStatus } from '../game/efcc';
+import { EFCC, EFCC_RECORD_MS, efccDirty, efccTimeLeft, type EfccCase, type EfccStatus } from '../game/efcc';
 import { naira } from '../game/store';
 import { useEfcc, loadEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
 import { searchPlayers, type PlayerRef } from '../net/social';
 import { useSession } from '../net/session';
+import { useCivic } from '../net/civic';
 import { Face } from './Face';
+import { Emoji } from './Icons';
+import './laws.css';
 
 const dateLabel = (at: number) => new Date(at).toLocaleString();
 
@@ -39,8 +42,48 @@ const FILTERS: { id: Filter; icon: string; label: string; match: (s: EfccStatus)
   { id: 'cleared', icon: '✅', label: 'Cleared', match: (s) => s === 'cleared' || s === 'bribed' },
 ];
 
+type Tab = 'cases' | 'report' | 'rules';
+
+/** The commission's rules printed like the Civic gazette: what it costs, what gets you convicted, what you lose. */
+function RulesReceipt() {
+  const chair = useCivic((s) => s.data?.policies.efcc);
+  const line = (title: string, value: string) => (
+    <div className="law-line" key={title}><span>{title}</span><i /><b>{value}</b></div>
+  );
+  return (
+    <div className="law-receipt" aria-label="EFCC rules">
+      <div className="law-receipt-head">
+        <b>EFCC CHARGE SHEET</b>
+        <small>Economic and Financial Crimes Commission</small>
+      </div>
+      <div className="law-section">
+        <div className="law-signer"><span>Chairman</span><span>{chair?.username ? `@${chair.username}` : chair?.name ?? 'Vacant'}</span></div>
+        {line('Filing a case', naira(EFCC.filingFee))}
+        {line('Incomes audited', `last ${EFCC.auditSize}`)}
+        {line('Time to respond', `${EFCC.investigationMs / 1000}s`)}
+        {line('Unmask your accuser', naira(EFCC.revealFee))}
+        {line('Bribe', `${naira(EFCC.bribeAmount)} · ${Math.round(EFCC.bribeChance * 100)}% works`)}
+      </div>
+      <div className="law-section">
+        <div className="law-signer"><span>Verdict</span><span>From the audit</span></div>
+        {line('Convicted at', `${Math.round(EFCC.dirtyShare * 100)}% dirty`)}
+        {line('...or flagged money of', naira(EFCC.dirtyFloor))}
+        {line('Wallet and savings seized', `${EFCC.walletSeizurePercent}%`)}
+        {line('Property seized', 'one, can be bought back')}
+        {line('Big clean income', 'never evidence')}
+      </div>
+      <div className="law-section">
+        <div className="law-signer"><span>Flagged money</span><span /></div>
+        <small className="law-foot" style={{ textAlign: 'left' }}>Scams, theft, heists, fencing, embezzlement and every vice hustle: drugs, rackets, contracts, ransoms, forgery, fake notes, bunkering, pirate ads, betting shops and jailbreaks.</small>
+      </div>
+      <small className="law-foot">Closed cases are struck off the record after {Math.round(EFCC_RECORD_MS / 86_400_000)} days. A seized property stays on file until it is bought back.</small>
+    </div>
+  );
+}
+
 export function EfccApp() {
   const user = useSession((s) => s.user);
+  const [tab, setTab] = useState<Tab>('cases');
   const { cases, loading, busy, error } = useEfcc();
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<PlayerRef[]>([]);
@@ -175,53 +218,77 @@ export function EfccApp() {
 
   const shown = cases.filter((item) => FILTERS.find((f) => f.id === filter)!.match(item.status));
 
+  const count = (f: Filter) => cases.filter((item) => FILTERS.find((x) => x.id === f)!.match(item.status)).length;
+
   return (
     <div className="efcc-app">
       <div className="efcc-hero">
         <span className="efcc-badge" aria-hidden>🕵🏾</span>
         <div className="efcc-hero-title"><b>EFCC</b><small>Economic and Financial Crimes Commission</small></div>
         <div className="efcc-stats">
-          <span><b>💸 {naira(EFCC.filingFee)}</b><small>to file</small></span>
-          <span><b>🧾 {EFCC.auditSize}</b><small>incomes audited</small></span>
-          <span><b>⏱ {EFCC.investigationMs / 1000}s</b><small>to respond</small></span>
+          <span><b>⏳ {count('open')}</b><small>open</small></span>
+          <span><b>🔒 {count('convicted')}</b><small>convicted</small></span>
+          <span><b>✅ {count('cleared')}</b><small>cleared</small></span>
         </div>
       </div>
-      <form className="efcc-search" onSubmit={submitSearch}>
-        <i aria-hidden>{searching ? '⏳' : '🔍'}</i>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Who are you reporting?" aria-label="Find a player by username" />
-      </form>
-      {searchError && <small className="efcc-error">⚠️ {searchError}</small>}
-      {found.filter((player) => player.uid !== user.uid).slice(0, 8).map((player) => (
-        <div className="efcc-row" key={player.uid}>
-          <Face uid={player.uid} username={player.username} look={player.look} />
-          <span><b>{player.name ?? 'Naija City player'}</b><small>@{player.username ?? 'player'}</small></span>
-          <button className="btn sm danger" disabled={busy} onClick={() => {
-            if (confirm(`File an investigation against @${player.username}? This costs ${naira(EFCC.filingFee)} and reviews their ${EFCC.auditSize} latest verified incomes.`)) {
-              act(() => fileEfccCase(player.username ?? ''));
-            }
-          }}>⚖️ Accuse</button>
-        </div>
-      ))}
+      <div className="tabs">
+        <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}><Emoji char="🗂️" size={14} /> Cases</button>
+        <button className={tab === 'report' ? 'on' : ''} onClick={() => setTab('report')}><Emoji char="⚖️" size={14} /> Report</button>
+        <button className={tab === 'rules' ? 'on' : ''} onClick={() => setTab('rules')}><Emoji char="📜" size={14} /> Rules</button>
+      </div>
       {error && <small className="efcc-error">⚠️ {error}</small>}
-      <div className="efcc-tabs">
-        {FILTERS.map((f) => (
-          <button key={f.id} type="button" className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>
-            <i aria-hidden>{f.icon}</i>{f.label}<b>{cases.filter((item) => f.match(item.status)).length}</b>
-          </button>
-        ))}
-      </div>
-      {loading && !cases.length && <p className="efcc-note">Loading…</p>}
-      {!loading && !shown.length && <div className="efcc-empty"><span>🗂️</span><small>No cases here</small></div>}
-      {shown.map(caseCard)}
-      <details className="efcc-rules">
-        <summary>ℹ️ How verdicts work</summary>
-        <ul>
-          <li><i aria-hidden>🚩</i>Scam, theft, heist, fencing and vice money is flagged</li>
-          <li><i aria-hidden>🔒</i>Convicted at {Math.round(EFCC.dirtyShare * 100)}%+ dirty, or {naira(EFCC.dirtyFloor)}+ flagged</li>
-          <li><i aria-hidden>💰</i>{EFCC.walletSeizurePercent}% of wallet and savings seized, plus a property</li>
-          <li><i aria-hidden>✅</i>Big clean income alone is never evidence</li>
-        </ul>
-      </details>
+
+      {tab === 'cases' && (
+        <>
+          <div className="efcc-tabs">
+            {FILTERS.map((f) => (
+              <button key={f.id} type="button" className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>
+                <i aria-hidden>{f.icon}</i>{f.label}<b>{count(f.id)}</b>
+              </button>
+            ))}
+          </div>
+          {loading && !cases.length && <p className="efcc-note">Loading…</p>}
+          {!loading && !shown.length && (
+            <div className="list-card civic-empty">
+              <span><Emoji char="🗂️" size={28} /></span>
+              <b>{cases.length ? 'No cases of this kind' : 'No cases on record'}</b>
+              <small className="muted">Investigations you file, or that are filed against you, show here.</small>
+              <button className="ghost-btn" onClick={() => setTab('report')}>Report someone</button>
+            </div>
+          )}
+          {shown.map(caseCard)}
+        </>
+      )}
+
+      {tab === 'report' && (
+        <>
+          <form className="efcc-search" onSubmit={submitSearch}>
+            <i aria-hidden>{searching ? '⏳' : '🔍'}</i>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Who are you reporting?" aria-label="Find a player by username" />
+          </form>
+          {searchError && <small className="efcc-error">⚠️ {searchError}</small>}
+          {found.filter((player) => player.uid !== user.uid).slice(0, 8).map((player) => (
+            <div className="efcc-row" key={player.uid}>
+              <Face uid={player.uid} username={player.username} look={player.look} />
+              <span><b>{player.name ?? 'Naija City player'}</b><small>@{player.username ?? 'player'}</small></span>
+              <button className="btn sm danger" disabled={busy} onClick={() => {
+                if (confirm(`File an investigation against @${player.username}? This costs ${naira(EFCC.filingFee)} and reviews their ${EFCC.auditSize} latest verified incomes.`)) {
+                  act(async () => {
+                    if (!(await fileEfccCase(player.username ?? ''))) return;
+                    setQuery('');
+                    setTab('cases');
+                  });
+                }
+              }}>⚖️ Accuse</button>
+            </div>
+          ))}
+          {!query.trim() && (
+            <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits their last {EFCC.auditSize} incomes and gives them {EFCC.investigationMs / 1000}s to answer. See Rules for what gets someone convicted.</small>
+          )}
+        </>
+      )}
+
+      {tab === 'rules' && <RulesReceipt />}
     </div>
   );
 }

@@ -93,11 +93,14 @@ async function perform(path: string, body?: object): Promise<boolean> {
 
 const filingIds = new Map<string, string>();
 
-export async function fileEfccCase(target: string) {
+/** True once the case is filed. */
+export async function fileEfccCase(target: string): Promise<boolean> {
   const key = target.trim().toLowerCase();
   const requestId = filingIds.get(key) ?? crypto.randomUUID();
   filingIds.set(key, requestId);
-  if (await perform('/api/efcc/cases', { target, requestId })) filingIds.delete(key);
+  const filed = !!(await perform('/api/efcc/cases', { target, requestId }));
+  if (filed) filingIds.delete(key);
+  return filed;
 }
 
 export async function respondEfccCase(id: string, statement: string) {

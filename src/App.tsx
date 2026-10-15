@@ -10,6 +10,7 @@ import { ProfileSheet } from './ui/ProfileSheet';
 import { PhoneShop } from './ui/PhoneShop';
 import { Auth } from './ui/Auth';
 import { Landing } from './ui/Landing';
+import { GlBoundary, NoWebGLScreen } from './ui/NoWebGL';
 import { ConnectionGate } from './ui/ConnectionGate';
 import { startSession, useSession } from './net/session';
 import { startMultiplayer, useNet } from './net/multiplayer';
@@ -159,7 +160,7 @@ export default function App() {
   return (
     <div className="app-root">
       <div className="scene-wrap">
-        {!replaced && <Scene />}
+        {!replaced && <GlBoundary where="scene" fallback={<NoWebGLScreen />}><Scene /></GlBoundary>}
       </div>
       <div className={`ui ${panel === 'phone' ? 'phone-open' : ''}`}>
         {ready && !replaced && (

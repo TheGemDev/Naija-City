@@ -1,4 +1,5 @@
 import { ITEMS, NEEDS, SPRAY_ACTIONS, type Need } from '../game/catalog';
+import { GlBoundary } from './NoWebGL';
 import { originOf } from '../game/origins';
 import { toastApp, toastHome, toastPlace } from '../game/toastTarget';
 import { tipOfToast, useHelp } from '../game/tips';
@@ -605,7 +606,7 @@ function Needs() {
         onClick={() => useGame.getState().openProfile('profile')}
         style={{ borderColor: origin.color }}
       >
-        <ProfilePortrait look={look} />
+        <GlBoundary where="portrait" fallback={null}><ProfilePortrait look={look} /></GlBoundary>
         <svg className="avatar-ring" viewBox="0 0 64 64" aria-hidden="true">
           <circle cx="32" cy="32" r={r} fill="none" stroke={needColor(worstValue)} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0.04, worstValue / 100))} />
         </svg>

@@ -125,11 +125,13 @@ function DayNight() {
     const bulbs = indoors && (s.view === 'place' && !visit ? true : homePower) ? night : 0;
     const moon = night * (low ? 0.75 : 0.55);
     sun.current.intensity = 0.15 + day * 2.2 + moon * (1 - bulbs * 0.6);
-    hemi.current.intensity = 0.35 + day * 0.9 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85);
+    // High mode's room environment already fills the shadows, so its sky light is turned down by as much: stacked
+    // together at noon they washed the whole map out to white.
+    hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + moon * 0.9 + bulbs * (low ? 1.1 : 0.85);
     hemi.current.color.copy(SKY_DAY).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8);
     hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - bulbs));
 
-    scene.environmentIntensity = 0.08 + day * 0.32;
+    scene.environmentIntensity = 0.05 + day * 0.1;
 
     const lit = homePower && (h < 6.5 || h >= LIGHTS_ON) ? 3.2 : 0;
     lamps.current.forEach((l) => l && (l.intensity = lit));

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type RefObject } from 'react';
+import { GlBoundary } from './NoWebGL';
 import { Canvas, useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
 import { placeHere } from '../game/city';
@@ -34,6 +35,7 @@ export function PersonPreview({ look, height = 220, camZ = 3.1, y = -0.88 }: { l
       onPointerUp={() => (turn.current.held = false)}
       onPointerCancel={() => (turn.current.held = false)}
     >
+      <GlBoundary where="closet" fallback={<p className="muted" style={{ textAlign: 'center' }}>3D preview unavailable on this device</p>}>
       <Canvas camera={{ position: [0, 0.25, camZ], fov: 34 }} dpr={[1, 2]} shadows>
         <ambientLight intensity={0.9} />
         <directionalLight position={[2, 4, 3]} intensity={1.6} castShadow />
@@ -46,6 +48,7 @@ export function PersonPreview({ look, height = 220, camZ = 3.1, y = -0.88 }: { l
           </mesh>
         </group>
       </Canvas>
+      </GlBoundary>
     </div>
   );
 }

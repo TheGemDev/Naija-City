@@ -2,7 +2,10 @@
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { useThree } from '@react-three/fiber';
+import { PMREMGenerator } from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Person, type Clip } from '../src/three/Person';
 import { CarModel } from '../src/three/CarModel';
 import { ItemModel, Keke, Bike } from '../src/three/models';
@@ -53,6 +56,22 @@ list = list.slice(start, start + count);
 const cols = Math.ceil(Math.sqrt(list.length * 1.6));
 const size = Math.max(...list.map((c) => c.size));
 
+/** ?env=0.4: the game's room environment light at that strength, to match high quality mode. */
+function Env({ intensity }: { intensity: number }) {
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    const pm = new PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const env = pm.fromScene(room, 0.04).texture;
+    scene.environment = env;
+    scene.environmentIntensity = intensity;
+    return () => { scene.environment = null; env.dispose(); pm.dispose(); };
+  }, [gl, scene, intensity]);
+  return null;
+}
+const ENV = q.get('env');
+const GAME = q.has('game');
+
 function App() {
   const rows = Math.ceil(list.length / cols);
   const span = Math.max(cols, rows * 1.6) * size;
@@ -61,8 +80,9 @@ function App() {
   return (
     <Canvas shadows camera={{ position: [0, h + span * tilt, span * 0.95], fov: 34, near: 0.05, far: 5000 }} gl={{ preserveDrawingBuffer: true }}>
       <color attach="background" args={['#cfe3ef']} />
-      <hemisphereLight args={['#ffffff', '#8a7a60', 1.1]} />
-      <directionalLight position={[span, span * 1.5, span * 0.8]} intensity={2.2} castShadow shadow-mapSize={[4096, 4096]}
+      {ENV && <Env intensity={Number(ENV)} />}
+      <hemisphereLight args={GAME ? ['#fff8ec', '#6b5a3a', Number(q.get('hemi') ?? 1.25)] : ['#ffffff', '#8a7a60', 1.1]} />
+      <directionalLight position={[span, span * 1.5, span * 0.8]} intensity={GAME ? 2.35 : 2.2} castShadow shadow-mapSize={[4096, 4096]}
         shadow-camera-left={-span} shadow-camera-right={span} shadow-camera-top={span} shadow-camera-bottom={-span} shadow-camera-far={span * 5} />
       <mesh rotation-x={-Math.PI / 2} receiveShadow><planeGeometry args={[span * 4, span * 4]} /><meshStandardMaterial color="#d9d3c4" /></mesh>
       {list.map((c, i) => {
