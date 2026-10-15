@@ -1,4 +1,4 @@
-// Dev-only gallery of the code-built models: /dev/models.html?set=people|cars|items|props|places|landmarks
+// Dev-only gallery of the code-built models: /dev/models.html?set=people|cars|items|props|places|landmarks|aircraft
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
@@ -11,6 +11,7 @@ import { CarModel } from '../src/three/CarModel';
 import { ItemModel, Keke, Bike } from '../src/three/models';
 import { PropModel } from '../src/three/interiorModels';
 import { PlaceModel, LandmarkModel, HouseModel, Car } from '../src/three/cityModels';
+import { Airliner, PrivateJet } from '../src/three/aircraft';
 import { CARS } from '../src/game/cars';
 import { ITEMS } from '../src/game/catalog';
 import { encodeLook, defaultAppearance, HAIRS } from '../src/game/wardrobe';
@@ -41,6 +42,11 @@ function cells(): Cell[] {
       .concat([{ name: 'city Car', node: <Car />, size: 5.5 }, { name: 'keke', node: <Keke />, size: 4 }, { name: 'bike', node: <Bike rider />, size: 3 }]);
     case 'items': return Object.keys(ITEMS).map((t) => ({ name: t, node: <ItemModel type={t} powered running />, size: 3 }));
     case 'props': return PROPS.map((t) => ({ name: t, node: <PropModel type={t} text="Sign" />, size: 3 }));
+    case 'aircraft': return [
+      { name: 'airliner', node: <group rotation-y={-0.7}><Airliner /></group>, size: 16 },
+      { name: 'private jet', node: <group rotation-y={-0.7}><PrivateJet /></group>, size: 16 },
+      { name: 'map airport', node: <PlaceModel model="airport" w={16} d={5} />, size: 16 },
+    ];
     case 'places': return PLACES.map((m) => ({ name: m, node: <PlaceModel model={m} w={14} d={14} />, size: 18 }))
       .concat([0, 1, 2, 3].map((s) => ({ name: `house ${s}`, node: <HouseModel w={10} d={10} style={s} wall="#f1e3c8" roof="#9a3412" storeys={1 + (s % 2)} />, size: 14 })));
     default: return LANDMARKS.map((m) => ({ name: m, node: <LandmarkModel model={m} w={20} d={20} />, size: 26 }));

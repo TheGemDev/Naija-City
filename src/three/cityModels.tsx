@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, type Group, type Mesh } from 'three';
 import { B, Keke } from './models';
+import { Airliner } from './aircraft';
 
 type V3 = [number, number, number];
 
@@ -524,25 +525,13 @@ function Jetty({ w, d }: { w: number; d: number }) {
   );
 }
 
-/** Small airliner, nose towards +x. */
+/** The apron's airliner (aircraft.tsx) shrunk to the map: about 2.5 long, nose towards +x. */
 function Plane() {
   return (
-    <group>
-      <mesh position={[0, 0.35, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-        <cylinderGeometry args={[0.17, 0.17, 2.2, 10]} />
-        <meshStandardMaterial color="#f8fafc" flatShading />
-      </mesh>
-      <mesh position={[1.2, 0.35, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow>
-        <coneGeometry args={[0.17, 0.3, 10]} />
-        <meshStandardMaterial color="#f8fafc" flatShading />
-      </mesh>
-      <B p={[0, 0.3, 0]} s={[2.2, 0.06, 0.36]} c="#15803d" />
-      <B p={[0.05, 0.3, 0]} s={[0.55, 0.05, 2.2]} c="#e2e8f0" />
-      <B p={[-1.0, 0.62, 0]} s={[0.35, 0.45, 0.05]} c="#15803d" />
-      <B p={[-1.0, 0.4, 0]} s={[0.3, 0.04, 0.8]} c="#e2e8f0" />
-      {[-0.55, 0.55].map((z) => (
-        <Cyl key={z} p={[0.2, 0.22, z]} r={0.08} h={0.3} c="#94a3b8" />
-      ))}
+    <group rotation={[0, Math.PI / 2, 0]} scale={0.2}>
+      <group position={[0, 0, 6]}>
+        <Airliner />
+      </group>
     </group>
   );
 }

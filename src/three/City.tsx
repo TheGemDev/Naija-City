@@ -522,24 +522,47 @@ function trafficOf(map: CityMap): Vehicle[] {
 const TRAFFIC_SCALE: Record<Vehicle['kind'], number> = { car: 1, bus: 1, keke: 0.68, bike: 0.62 };
 
 /**
- * One vehicle on the move. It crosses the map a tile at a time along a curve that keeps it in the
- * right-hand lane: straight through, round the corner at a junction, or back the other way at a
- * dead end. In time it heads for the edge of the map and drives off, and another comes in.
+ * A stretch of road traffic drives along: one road (or several end to end) between the points where it leaves
+ * the land or the map. `axis` is the way it runs, `c` its centre line, `half` how far right of that the lane
+ * sits (each way of a two-tile road gets a whole tile), `a0`–`a1` its ends along the axis.
+ */
+interface Lane {
+  axis: 'x' | 'z'; c: number; width: number; half: number; a0: number; a1: number;
+  /** Where other roads cross or join, by the position along this one, and the ends. */
+  stops: Stop[];
+}
+interface Stop {
+  at: number;
+  /** The roads met here and where along them this one's centre line is. Empty at an end. */
+  links: { lane: number; at: number }[];
+  /** The road ends here at the edge of the map: the way traffic comes in and goes out. */
+  edge: boolean;
+  /** The road ends here short of the edge: turn round. */
+  end: boolean;
+}
+
+/**
+ * One vehicle on the move. It keeps to the right-hand lane of the road it's on and only turns where another
+ * road meets it: straight on, round the corner, or round and back at a dead end. In time it heads for a road
+ * off the edge of the map, fades away on the last stretch, and another comes in.
  */
 interface Drive {
-  /** The tile being crossed, the way it came in, and the way it will leave. */
-  cx: number; cz: number; dx: number; dz: number; ex: number; ez: number;
-  /** The curve across this tile (start, bend, end) and how far along it the vehicle is. */
+  lane: number; dir: number;
+  /** Where along its road the current piece of driving ends, and the junction it is pulling up to, if any. */
+  s: number; pending: Stop | null; last: Stop | null;
+  /** The piece being driven (start, bend, end) and how far along it the vehicle is. */
   p: [number, number, number, number, number, number];
   t: number; len: number;
+  /** How hard it slows for this piece: 1 straight, less round a corner. */
+  bend: number;
   x: number; z: number; yaw: number;
   mode: 'road' | 'fade';
-  /** Tiles left before it fades away (at the edge of the map, or wherever it gave up looking for it), and how many it fades over. */
+  /** Pieces left before it fades away, and how many it fades over. */
   left: number; span: number;
   leaving: boolean;
   trips: number;
   limit: number;
-  exit: { x: number; z: number; dx: number; dz: number } | null;
+  exit: { lane: number; at: number } | null;
   speed: number;
   roll: number;
   turn: number;
@@ -549,26 +572,82 @@ interface Drive {
   stuck: number;
 }
 
-const STEPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-/** How far right of a tile's centre line a vehicle keeps, so oncoming traffic passes side by side. */
-const LANE = 0.25;
+/** The point `a` along a lane, on the right-hand side for traffic going `dir`. */
+function lanePoint(l: Lane, a: number, dir: number): [number, number] {
+  return l.axis === 'x' ? [a, l.c + dir * l.half] : [l.c - dir * l.half, a];
+}
 
-/** Lays the curve across the vehicle's tile: in on the right of `d`, out on the right of `e`. */
-function laneCurve(v: Drive) {
-  const mx = v.cx + 0.5, mz = v.cz + 0.5;
-  const ax = mx - v.dx * 0.5 - v.dz * LANE, az = mz - v.dz * 0.5 + v.dx * LANE;
-  const bx = mx + v.ex * 0.5 - v.ez * LANE, bz = mz + v.ez * 0.5 + v.ex * LANE;
-  let kx: number, kz: number;
-  if (v.ex === v.dx && v.ez === v.dz) { kx = (ax + bx) / 2; kz = (az + bz) / 2; }
-  else if (v.ex === -v.dx && v.ez === -v.dz) { kx = mx + v.dx * 0.55; kz = mz + v.dz * 0.55; }
-  else {
-    // Where the lane coming in meets the lane going out.
-    const k = (bx - ax) * v.dx + (bz - az) * v.dz;
-    kx = ax + v.dx * k; kz = az + v.dz * k;
-  }
+function setPiece(v: Drive, a: [number, number], k: [number, number] | null, b: [number, number], bend: number) {
+  const [ax, az] = a, [bx, bz] = b;
+  const [kx, kz] = k ?? [(ax + bx) / 2, (az + bz) / 2];
   v.p = [ax, az, kx, kz, bx, bz];
-  v.len = (Math.hypot(kx - ax, kz - az) + Math.hypot(bx - kx, bz - kz) + Math.hypot(bx - ax, bz - az)) / 2 || 1;
+  v.len = (Math.hypot(kx - ax, kz - az) + Math.hypot(bx - kx, bz - kz) + Math.hypot(bx - ax, bz - az)) / 2 || 0.01;
   v.t = 0;
+  v.bend = bend;
+}
+
+/** Every road on the map as lanes joined at their junctions. */
+function laneNetwork(map: CityMap, open: (x: number, z: number) => boolean): Lane[] {
+  // Roads that carry on from one another in a straight line are one lane: group them by line and width.
+  const groups = new Map<string, { axis: 'x' | 'z'; c: number; width: number; cells: Set<number> }>();
+  for (const r of map.roads) {
+    if (r.w === r.d) continue;
+    const axis = r.w > r.d ? 'x' : 'z';
+    const width = axis === 'x' ? r.d : r.w;
+    const from = axis === 'x' ? r.z : r.x;
+    const c = from + width / 2;
+    const key = `${axis}|${c}|${width}`;
+    const g = groups.get(key) ?? { axis, c, width, cells: new Set<number>() };
+    groups.set(key, g);
+    const [a0, n] = axis === 'x' ? [r.x, r.w] : [r.z, r.d];
+    for (let a = a0; a < a0 + n; a++) {
+      let ok = true;
+      for (let k = from; k < from + width; k++) if (!(axis === 'x' ? open(a, k) : open(k, a))) ok = false;
+      if (ok) g.cells.add(a);
+    }
+  }
+  const lanes: Lane[] = [];
+  for (const g of groups.values()) {
+    const cells = [...g.cells].sort((a, b) => a - b);
+    // Split where the road leaves the land (water with no bridge).
+    let start = 0;
+    for (let i = 1; i <= cells.length; i++) {
+      if (i < cells.length && cells[i] === cells[i - 1] + 1) continue;
+      const a0 = cells[start], a1 = cells[i - 1] + 1;
+      if (a1 - a0 >= 3) lanes.push({ axis: g.axis, c: g.c, width: g.width, half: g.width / 4, a0, a1, stops: [] });
+      start = i;
+    }
+  }
+  // Junctions: where a road along x meets one along z, each one's centre line crossing (or reaching) the other.
+  const near = 0.01;
+  lanes.forEach((h, hi) => {
+    if (h.axis !== 'x') return;
+    lanes.forEach((v, vi) => {
+      if (v.axis !== 'z') return;
+      if (v.c < h.a0 - v.width / 2 - near || v.c > h.a1 + v.width / 2 + near) return;
+      if (h.c < v.a0 - h.width / 2 - near || h.c > v.a1 + h.width / 2 + near) return;
+      // A road that stops at the side of another runs on to its centre line.
+      h.a0 = Math.min(h.a0, v.c); h.a1 = Math.max(h.a1, v.c);
+      v.a0 = Math.min(v.a0, h.c); v.a1 = Math.max(v.a1, h.c);
+      const add = (l: Lane, at: number, other: number, otherAt: number) => {
+        let s = l.stops.find((x) => Math.abs(x.at - at) < near);
+        if (!s) l.stops.push((s = { at, links: [], edge: false, end: false }));
+        s.links.push({ lane: other, at: otherAt });
+      };
+      add(h, v.c, vi, h.c);
+      add(v, h.c, hi, v.c);
+    });
+  });
+  for (const l of lanes) {
+    const size = l.axis === 'x' ? map.w : map.h;
+    for (const at of [l.a0, l.a1]) {
+      if (l.stops.some((s) => Math.abs(s.at - at) < near)) continue;
+      const edge = at <= 0 || at >= size;
+      l.stops.push({ at, links: [], edge, end: !edge });
+    }
+    l.stops.sort((a, b) => a.at - b.at);
+  }
+  return lanes;
 }
 
 function Traffic({ map }: { map: CityMap }) {
@@ -578,89 +657,123 @@ function Traffic({ map }: { map: CityMap }) {
   const world = useMemo(() => {
     const inBounds = (x: number, z: number) => x >= 0 && z >= 0 && x < map.w && z < map.h;
     const open = (x: number, z: number) => inBounds(x, z) && (map.isRoad(x, z) || map.isBridge(x, z));
-    const cells: [number, number][] = [];
-    const exits: NonNullable<Drive['exit']>[] = [];
-    for (let x = 0; x < map.w; x++) {
-      for (let z = 0; z < map.h; z++) {
-        if (!open(x, z)) continue;
-        cells.push([x, z]);
-        // Only a road that runs off the edge is a way in or out: one running along the edge isn't.
-        for (const [dx, dz] of STEPS) {
-          if (!inBounds(x + dx, z + dz) && open(x - dx, z - dz) && open(x - dx * 2, z - dz * 2) && open(x - dx * 3, z - dz * 3)) exits.push({ x, z, dx, dz });
-        }
-      }
-    }
-    /** Nothing else is on or about to roll onto tile (x, z). */
-    const clear = (v: Drive, x: number, z: number, others: Drive[]) => others.every((o) => o === v || o.x === undefined || Math.hypot(o.x - (x + 0.5), o.z - (z + 0.5)) > 1.8);
-    const fadeOut = (v: Drive, tiles: number) => { v.mode = 'fade'; v.left = v.span = tiles; v.ex = v.dx; v.ez = v.dz; };
+    const lanes = laneNetwork(map, open);
+    // Ways in and out: a road that runs off the edge of the map, at least a few tiles long.
+    const exits = lanes.flatMap((l, lane) => l.stops.filter((s) => s.edge && l.a1 - l.a0 >= 4).map((s) => ({ lane, at: s.at })));
+    /** Room to move: how far a lane runs on past `at` going `dir`. */
+    const runs = (l: Lane, at: number, dir: number) => (dir > 0 ? l.a1 - at : at - l.a0);
+    const pos = (l: Lane, at: number): [number, number] => (l.axis === 'x' ? [at, l.c] : [l.c, at]);
 
-    /** Arrived in tile (cx, cz) heading (dx, dz): choose the way out of it. */
-    const choose = (v: Drive) => {
-      if (v.mode !== 'road' || !inBounds(v.cx, v.cz)) { v.ex = v.dx; v.ez = v.dz; return; }
-      v.trips++;
-      if (!v.leaving && v.trips > v.limit) v.leaving = true;
-      if (v.leaving) {
-        if (!exits.length || v.trips > v.limit + 90) { fadeOut(v, 3); return; }
-        if (!v.exit) v.exit = exits[Math.floor(Math.random() * exits.length)];
-        // Fades away across the last tile of road, never out over the edge.
-        if (v.cx === v.exit.x && v.cz === v.exit.z) { fadeOut(v, 1); v.ex = v.exit.dx; v.ez = v.exit.dz; return; }
+    /** Nothing else is near the point (x, z). */
+    const clear = (v: Drive, x: number, z: number, others: Drive[]) => others.every((o) => o === v || o.x === undefined || Math.hypot(o.x - x, o.z - z) > 1.6);
+
+    /** The current piece is done: lay the next one. */
+    const next = (v: Drive) => {
+      const l = lanes[v.lane];
+      const here = lanePoint(l, v.s, v.dir);
+      const stop = v.pending;
+      if (!stop) {
+        // Drive on to the next junction or end of the road, pulling up at the near side of the road across.
+        const ahead = l.stops.filter((s) => s !== v.last && (s.at - v.s) * v.dir > 0.001);
+        const s = v.dir > 0 ? ahead[0] : ahead[ahead.length - 1];
+        if (!s) { v.mode = 'fade'; v.left = v.span = 1; setPiece(v, here, null, lanePoint(l, v.s + v.dir, v.dir), 1); return; }
+        // Off the edge only when it's going; anywhere else the end of the road is somewhere to turn round.
+        const across = s.links.length ? Math.max(...s.links.map((k) => lanes[k.lane].width)) / 2 : s.edge && v.leaving ? 0 : Math.max(0.5, l.half * 2);
+        let to = s.at - v.dir * across;
+        if ((to - v.s) * v.dir < 0.001) to = v.s + v.dir * 0.001;
+        const gaveUp = v.leaving && v.trips > v.limit + 40;
+        setPiece(v, here, null, lanePoint(l, to, v.dir), 1);
+        v.s = to;
+        v.pending = s;
+        if (gaveUp || (s.edge && v.leaving)) { v.mode = 'fade'; v.left = v.span = 1; }
+        return;
       }
-      const ways = STEPS.filter(([x, z]) => !(x === -v.dx && z === -v.dz) && open(v.cx + x, v.cz + z));
+      v.pending = null;
+      v.last = stop;
+      v.trips++;
+      if (!v.leaving && v.trips > v.limit) { v.leaving = true; v.exit = exits.length ? exits[Math.floor(Math.random() * exits.length)] : null; }
+
+      // The ways on from here: straight over, or onto a road that meets this one, either way along it.
+      type Way = { lane: number; dir: number; at: number; straight: boolean };
+      const ways: Way[] = [];
+      const crossing = stop.links.length ? Math.max(...stop.links.map((k) => lanes[k.lane].width)) / 2 : 0;
+      if (runs(l, stop.at, v.dir) > crossing + 0.3) ways.push({ lane: v.lane, dir: v.dir, at: stop.at, straight: true });
+      for (const k of stop.links) {
+        for (const dir of [-1, 1]) if (runs(lanes[k.lane], k.at, dir) > l.width / 2 + 0.3) ways.push({ lane: k.lane, dir, at: k.at, straight: false });
+      }
       if (!ways.length) {
-        // End of the road: fade away at the edge of the map, or round and back.
-        if (!inBounds(v.cx + v.dx, v.cz + v.dz)) { fadeOut(v, 1); return; }
-        v.ex = -v.dx; v.ez = -v.dz;
+        // End of the road, or nowhere to go: round and back.
+        const k = pos(l, v.s + v.dir * l.half * 1.8);
+        setPiece(v, here, k, lanePoint(l, v.s, -v.dir), 0.4);
+        v.dir = -v.dir;
         return;
       }
       let best = ways[0];
       let bestScore = Infinity;
       for (const w of ways) {
-        const straight = w[0] === v.dx && w[1] === v.dz;
-        const score = v.leaving && v.exit
-          ? Math.abs(v.cx + w[0] - v.exit.x) + Math.abs(v.cz + w[1] - v.exit.z) + Math.random() * 1.5
-          : Math.random() * 3 - (straight ? 2 : 0);
+        const wl = lanes[w.lane];
+        const [px, pz] = pos(wl, w.at + w.dir * 3);
+        const target = v.leaving && v.exit ? pos(lanes[v.exit.lane], v.exit.at) : null;
+        const score = target
+          ? Math.abs(px - target[0]) + Math.abs(pz - target[1]) + Math.random() * 2
+          : Math.random() * 3 - (w.straight ? 1.6 : 0);
         if (score < bestScore) { bestScore = score; best = w; }
       }
-      v.ex = best[0]; v.ez = best[1];
+      if (best.straight) { next(v); return; }
+      // Round the corner: from this lane at the near side of the junction to the new lane at its far side,
+      // bending where the two lanes cross.
+      const nl = lanes[best.lane];
+      const out = best.at + best.dir * (l.width / 2);
+      const b = lanePoint(nl, out, best.dir);
+      const [ax, az] = here;
+      const k: [number, number] = l.axis === 'x' ? [b[0], az] : [ax, b[1]];
+      setPiece(v, here, k, b, 0.55);
+      v.lane = best.lane; v.dir = best.dir; v.s = out;
     };
 
     const spawn = (v: Drive, fresh: boolean, others: Drive[]) => {
-      v.mode = 'road'; v.leaving = false; v.trips = 0; v.grow = fresh ? 1 : 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0; v.span = 1; v.stuck = 0;
+      v.mode = 'road'; v.leaving = false; v.trips = 0; v.grow = fresh ? 1 : 0; v.limit = 8 + Math.floor(Math.random() * 14); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0; v.span = 1; v.stuck = 0;
+      v.pending = null; v.last = null;
       let placed = false;
       if (!fresh) {
-        // Comes in on a road at the edge of the map, fading in on the edge tile, wherever that is free.
+        // Comes in on a road off the edge of the map, fading in on its last tile, wherever that is free.
         for (let tries = 0; tries < 12 && exits.length && !placed; tries++) {
           const e = exits[Math.floor(Math.random() * exits.length)];
-          if (!clear(v, e.x, e.z, others)) continue;
-          v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x; v.cz = e.z;
-          placed = true;
-        }
-      }
-      if (!placed) {
-        for (let tries = 0; tries < 40 && cells.length && !placed; tries++) {
-          const [x, z] = cells[Math.floor(Math.random() * cells.length)];
+          const l = lanes[e.lane];
+          const dir = e.at <= l.a0 ? 1 : -1;
+          const [x, z] = lanePoint(l, e.at, dir);
           if (!clear(v, x, z, others)) continue;
-          const ways = STEPS.filter(([dx, dz]) => open(x - dx, z - dz) || open(x + dx, z + dz));
-          if (!ways.length) continue;
-          [v.dx, v.dz] = ways[Math.floor(Math.random() * ways.length)];
-          v.cx = x; v.cz = z;
+          v.lane = e.lane; v.dir = dir; v.s = e.at;
+          v.last = l.stops.find((s) => s.at === e.at) ?? null;
           placed = true;
         }
-        if (!placed) { v.cx = v.cz = -100; v.dx = 1; v.dz = 0; }
       }
-      choose(v);
-      laneCurve(v);
-      if (fresh) v.t = Math.random();
-      const [ax, az] = v.p;
-      v.x = ax; v.z = az;
+      // Otherwise somewhere along a road, out of the way of the others.
+      const total = lanes.reduce((n, l) => n + l.a1 - l.a0, 0);
+      for (let tries = 0; tries < 40 && total && !placed; tries++) {
+        let pick = Math.random() * total;
+        const lane = lanes.findIndex((l) => (pick -= l.a1 - l.a0) < 0);
+        const l = lanes[lane];
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const s = l.a0 + 1 + Math.random() * Math.max(0, l.a1 - l.a0 - 2);
+        const [x, z] = lanePoint(l, s, dir);
+        if (!clear(v, x, z, others)) continue;
+        v.lane = lane; v.dir = dir; v.s = s;
+        placed = true;
+        if (!fresh) v.grow = 0;
+      }
+      if (!placed) { v.lane = 0; v.dir = 1; v.s = lanes[0]?.a0 ?? 0; }
+      [v.x, v.z] = lanes.length ? lanePoint(lanes[v.lane], v.s, v.dir) : [-100, -100];
+      v.yaw = lanes[v.lane]?.axis === 'z' ? (v.dir > 0 ? 0 : Math.PI) : v.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      if (lanes.length) next(v);
     };
-    return { inBounds, open, cells, exits, choose, spawn };
+    return { inBounds, lanes, next, spawn };
   }, [map]);
 
   const drives = useMemo(() => {
     const out: Drive[] = [];
     for (const veh of vehicles) {
-      const v = { speed: veh.speed, p: [0, 0, 0, 0, 0, 0] } as unknown as Drive;
+      const v = { speed: veh.speed, p: [0, 0, 0, 0, 0, 0], yaw: 0 } as unknown as Drive;
       world.spawn(v, true, out);
       v.speed = veh.speed;
       out.push(v);
@@ -679,8 +792,7 @@ function Traffic({ map }: { map: CityMap }) {
       if (!g || !v) return;
 
       // Ease off for a bend, and hang back from whatever is in front in the same lane.
-      const bend = v.ex === v.dx && v.ez === v.dz ? 1 : v.ex === -v.dx && v.ez === -v.dz ? 0.4 : 0.6;
-      let want = veh.speed * bend;
+      let want = veh.speed * v.bend;
       const sy = Math.sin(v.yaw), cy = Math.cos(v.yaw);
       // Ones fading in or out don't hold anyone up, and nobody waits forever.
       if (v.stuck >= 0) {
@@ -702,9 +814,7 @@ function Traffic({ map }: { map: CityMap }) {
       while (v.t >= 1) {
         const over = (v.t - 1) * v.len;
         if (v.mode !== 'road' && --v.left <= 0) { world.spawn(v, false, drives); break; }
-        v.cx += v.ex; v.cz += v.ez; v.dx = v.ex; v.dz = v.ez;
-        world.choose(v);
-        laneCurve(v);
+        world.next(v);
         v.t = over / v.len;
       }
 

@@ -18,6 +18,7 @@ import { B, Bike, Keke } from './models';
 import { Car, Horse } from './cityModels';
 import { Person, type Clip } from './Person';
 import { MAP_SCALE } from './Avatar';
+import { encodeLook } from '../game/wardrobe';
 
 function DriveLoop() {
   useFrame((_, dt) => stepDrive(dt));
@@ -90,27 +91,35 @@ function PassengerMarkers() {
   return <Beacon x={to.door.x + 0.5} z={to.door.z + 0.5} colour="#22c55e" label={`📍 ${p.toName}`} />;
 }
 
-/** Drums, a striped plank and an officer at every checkpoint. */
+/** Same uniform as the officers at the station (Interior.tsx). */
+const OFFICER_LOOK = encodeLook({ body: 'm', skin: 5, hair: 'fade', hairColor: 0, outfit: { top: 'shirt_denim', bottom: 'trousers_black', shoes: 'boots_black', head: 'beanie_black' } });
+const OFFICER_CLIP = { current: 'idle' as Clip };
+
+/** Drums, a striped plank and an officer at every checkpoint, standing on the road wherever the ground sits. */
 function Checkpoints() {
   const driving = useDrive((s) => !!s.vehicle && s.vehicle !== 'horse');
   useGame((s) => s.destinationId);
   return (
     <group>
       {checkpointsHere().map((c) => (
-        <group key={c.id} position={[c.x, 0, c.z]} rotation={[0, c.horiz ? Math.PI / 2 : 0, 0]}>
-          <B p={[-0.95, 0.18, 0]} s={[0.22, 0.36, 0.22]} c="#ea580c" />
-          <B p={[0.95, 0.18, 0]} s={[0.22, 0.36, 0.22]} c="#ea580c" />
-          <B p={[0, 0.4, 0]} s={[2.1, 0.06, 0.08]} c="#f8fafc" />
-          {[-0.6, -0.2, 0.2, 0.6].map((x) => (
-            <B key={x} p={[x, 0.4, 0.001]} s={[0.18, 0.065, 0.085]} c="#dc2626" />
+        <group key={c.id} position={[c.x, mapGroundY(c.x, c.z), c.z]} rotation={[0, c.horiz ? Math.PI / 2 : 0, 0]}>
+          {/* Oil drums waist-high to the officer, the plank across them. */}
+          {[-0.95, 0.95].map((x) => (
+            <group key={x} position={[x, 0, 0]}>
+              <B p={[0, 0.25, 0]} s={[0.3, 0.5, 0.3]} c="#ea580c" />
+              <B p={[0, 0.2, 0]} s={[0.31, 0.05, 0.31]} c="#f8fafc" />
+              <B p={[0, 0.36, 0]} s={[0.31, 0.05, 0.31]} c="#f8fafc" />
+            </group>
           ))}
-          <group position={[1.35, 0, 0.3]}>
-            <B p={[0, 0.25, 0]} s={[0.18, 0.5, 0.14]} c="#1e3a8a" />
-            <B p={[0, 0.58, 0]} s={[0.14, 0.14, 0.14]} c="#5b3a29" />
-            <B p={[0, 0.68, 0]} s={[0.17, 0.05, 0.17]} c="#111827" />
+          <B p={[0, 0.54, 0]} s={[2.2, 0.08, 0.1]} c="#f8fafc" />
+          {[-0.6, -0.2, 0.2, 0.6].map((x) => (
+            <B key={x} p={[x, 0.54, 0.001]} s={[0.18, 0.085, 0.105]} c="#dc2626" />
+          ))}
+          <group position={[1.4, 0, 0.3]} rotation={[0, -Math.PI / 2, 0]} scale={MAP_SCALE}>
+            <Person look={OFFICER_LOOK} clipRef={OFFICER_CLIP} />
           </group>
           {driving && (
-            <Html position={[0, 1.2, 0]} center zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
+            <Html position={[0, 1.5, 0]} center zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
               <div className="drive-marker small">👮🏾 Checkpoint</div>
             </Html>
           )}

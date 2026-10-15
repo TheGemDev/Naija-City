@@ -47,7 +47,7 @@ function loft(list: Ring[], from: number, to: number, grow: number, around: numb
 /** A closed skin runs belly to belly, so its seam is underneath. */
 export const ALL_ROUND: [number, number] = [0, Math.PI * 2];
 
-export function Skin({ rings, arc, colour, grow = 0, inside, glass, shine }: {
+export function Skin({ rings, arc, colour, grow = 0, inside, glass, shine, cast }: {
   rings: Ring[];
   arc: [number, number];
   colour: string;
@@ -58,10 +58,12 @@ export function Skin({ rings, arc, colour, grow = 0, inside, glass, shine }: {
   glass?: number;
   /** Lit from within, like a window with the sky behind it. */
   shine?: string;
+  /** Throws a shadow on the ground (a whole hull parked outside). */
+  cast?: boolean;
 }) {
   const geometry = useMemo(() => loft(rings, arc[0], arc[1], grow, Math.max(6, Math.round(Math.abs(arc[1] - arc[0]) * 7))), [rings, arc, grow]);
   return (
-    <mesh geometry={geometry}>
+    <mesh geometry={geometry} castShadow={cast}>
       <meshStandardMaterial
         color={colour}
         side={inside ? BackSide : DoubleSide}

@@ -8,113 +8,13 @@ import type { Interior } from '../game/interiors';
 import { B } from './models';
 import { Cyl } from './propKit';
 import { StaticBatch } from './StaticBatch';
+import { Airliner, PrivateJet } from './aircraft';
 
 type V3 = [number, number, number];
 
 const ALONG: V3 = [Math.PI / 2, 0, 0];
 const GREEN = '#15803d';
 const WHITE = '#f8fafc';
-
-/** A wing or tailplane: a tapered slab swept back from the root. `side` is -1 (left of the nose) or 1. */
-function Wing({ p, span, chord, sweep, side, c = '#e2e8f0', t = 0.14 }: { p: V3; span: number; chord: number; sweep: number; side: number; c?: string; t?: number }) {
-  return (
-    <group position={p} rotation={[0, side * sweep, 0]}>
-      <B p={[(side * span) / 2, 0, 0]} s={[span, t, chord]} c={c} />
-      <B p={[side * (span - 0.2), 0.02, -chord * 0.1]} s={[0.4, t + 0.02, chord * 0.7]} c={c} />
-    </group>
-  );
-}
-
-/** Airliner, nose towards +z, wheels on y=0. About 13 long. */
-function Airliner() {
-  const r = 0.95;
-  const y = 1.95;
-  return (
-    <group>
-      {/* Fuselage, nose and tail cone */}
-      <Cyl p={[0, y, -5.4]} r={r} h={8.4} c={WHITE} seg={14} rot={ALONG} />
-      <Cyl p={[0, y - 0.08, -0.55]} r={r} rt={0.3} h={1.5} c={WHITE} seg={14} rot={ALONG} />
-      <Cyl p={[0, y - 0.3, 0.3]} r={0.3} rt={0.08} h={0.3} c="#334155" seg={10} rot={ALONG} />
-      <Cyl p={[0, y + 0.22, -10.8]} r={0.34} rt={r} h={2.6} c={WHITE} seg={14} rot={ALONG} />
-      {/* Cheatline and cabin windows */}
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <B p={[s * (r - 0.02), y - 0.18, -5.4]} s={[0.06, 0.16, 8.2]} c={GREEN} />
-          {Array.from({ length: 13 }, (_, i) => <B key={i} p={[s * (r - 0.03), y + 0.2, -1.9 - i * 0.56]} s={[0.07, 0.2, 0.26]} c="#1e293b" />)}
-          <B p={[s * 0.5, y + 0.38, -0.5]} s={[0.36, 0.26, 0.5]} c="#0f172a" />
-        </group>
-      ))}
-      <B p={[0, y + 0.42, -0.34]} s={[0.7, 0.24, 0.3]} c="#0f172a" />
-      {/* Forward door, where the bridge meets it */}
-      <B p={[r - 0.02, y - 0.05, -1.5]} s={[0.07, 1.1, 0.6]} c="#cbd5e1" />
-      {/* Wings and engines */}
-      {[-1, 1].map((s) => (
-        <group key={`w${s}`}>
-          <Wing p={[s * 0.6, y - 0.55, -5.2]} span={5.6} chord={2.0} sweep={0.42} side={s} />
-          <Cyl p={[s * 2.7, y - 1.05, -5.3]} r={0.48} rt={0.42} h={1.7} c="#cbd5e1" seg={12} rot={ALONG} />
-          <Cyl p={[s * 2.7, y - 1.05, -4.43]} r={0.36} h={0.06} c="#1f2937" seg={12} rot={ALONG} />
-          <B p={[s * 2.7, y - 0.68, -5.5]} s={[0.12, 0.34, 1.2]} c="#cbd5e1" />
-          <Wing p={[s * 0.3, y + 0.35, -11.0]} span={2.4} chord={1.0} sweep={0.5} side={s} t={0.1} />
-        </group>
-      ))}
-      {/* Fin, in the colours of the flag */}
-      <group position={[0, y + 0.7, -10.9]} rotation={[-0.5, 0, 0]}>
-        <B p={[0, 1.4, 0]} s={[0.16, 3.0, 1.7]} c={GREEN} />
-        <B p={[0, 1.5, 0]} s={[0.18, 0.7, 1.72]} c={WHITE} />
-      </group>
-      {/* Undercarriage */}
-      <B p={[0, 0.55, -1.4]} s={[0.1, 1.0, 0.1]} c="#64748b" />
-      <Cyl p={[0, 0.22, -1.4]} r={0.22} h={0.34} c="#111827" rot={[0, 0, Math.PI / 2]} />
-      {[-1.3, 1.3].map((x) => (
-        <group key={x}>
-          <B p={[x, 0.6, -5.8]} s={[0.12, 1.0, 0.12]} c="#64748b" />
-          <Cyl p={[x, 0.28, -5.8]} r={0.28} h={0.5} c="#111827" rot={[0, 0, Math.PI / 2]} />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/** Business jet, nose towards +z: low wing, engines on the tail, T-tail. About 7 long. */
-function PrivateJet() {
-  const r = 0.55;
-  const y = 1.15;
-  return (
-    <group>
-      <Cyl p={[0, y, -2.9]} r={r} h={4.2} c={WHITE} seg={12} rot={ALONG} />
-      <Cyl p={[0, y - 0.06, -0.35]} r={r} rt={0.14} h={1.1} c={WHITE} seg={12} rot={ALONG} />
-      <Cyl p={[0, y + 0.14, -5.8]} r={0.18} rt={r} h={1.6} c={WHITE} seg={12} rot={ALONG} />
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <B p={[s * (r - 0.02), y - 0.12, -2.9]} s={[0.05, 0.1, 4.2]} c="#ca8a04" />
-          {[0, 1, 2, 3, 4].map((i) => <B key={i} p={[s * (r - 0.03), y + 0.14, -1.6 - i * 0.6]} s={[0.06, 0.2, 0.3]} c="#1e293b" />)}
-          <B p={[s * 0.28, y + 0.24, -0.5]} s={[0.24, 0.18, 0.4]} c="#0f172a" />
-          <Wing p={[s * 0.3, y - 0.4, -3.1]} span={3.0} chord={1.1} sweep={0.4} side={s} t={0.09} />
-          <Cyl p={[s * 0.85, y + 0.3, -4.9]} r={0.26} rt={0.22} h={1.2} c="#cbd5e1" seg={10} rot={ALONG} />
-          <Wing p={[s * 0.05, y + 1.75, -6.3]} span={1.3} chord={0.6} sweep={0.45} side={s} t={0.07} />
-        </group>
-      ))}
-      <group position={[0, y + 0.4, -6.0]} rotation={[-0.6, 0, 0]}>
-        <B p={[0, 0.7, 0]} s={[0.1, 1.6, 0.9]} c="#111827" />
-        <B p={[0, 0.7, 0]} s={[0.12, 0.3, 0.92]} c="#ca8a04" />
-      </group>
-      {/* Door let down as steps */}
-      <group position={[r + 0.3, 0.5, -1.2]} rotation={[0, 0, -0.9]}>
-        <B p={[0, 0, 0]} s={[0.08, 1.1, 0.6]} c="#e2e8f0" />
-        {[-0.35, -0.1, 0.15, 0.4].map((s) => <B key={s} p={[-0.06, s, 0]} s={[0.14, 0.04, 0.56]} c="#94a3b8" />)}
-      </group>
-      <B p={[r - 0.02, y + 0.05, -1.2]} s={[0.05, 0.9, 0.6]} c="#0f172a" />
-      <B p={[0, 0.3, -0.9]} s={[0.07, 0.6, 0.07]} c="#64748b" />
-      <Cyl p={[0, 0.14, -0.9]} r={0.14} h={0.2} c="#111827" rot={[0, 0, Math.PI / 2]} />
-      {[-0.8, 0.8].map((x) => (
-        <group key={x}>
-          <B p={[x, 0.35, -3.3]} s={[0.08, 0.6, 0.08]} c="#64748b" />
-          <Cyl p={[x, 0.17, -3.3]} r={0.17} h={0.26} c="#111827" rot={[0, 0, Math.PI / 2]} />
-        </group>
-      ))}
-    </group>
-  );
-}
 
 /** Baggage tug pulling carts of bags. Faces +x. */
 function BaggageTrain() {
