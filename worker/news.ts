@@ -16,7 +16,7 @@ const DAY_MS = 24 * 3600_000;
 
 /* ---------- VDM on the government ---------- */
 
-export type Grievance = 'trips' | 'levy' | 'snake' | 'looter' | 'contract' | 'pardon' | 'palliative' | 'roadProject' | 'okadaBan' | 'potholes' | 'ownPay' | 'payCut' | 'fatPay' | 'unpaid';
+export type Grievance = 'trips' | 'levy' | 'snake' | 'looter' | 'contract' | 'pardon' | 'palliative' | 'roadProject' | 'okadaBan' | 'potholes' | 'ownPay' | 'payCut' | 'fatPay' | 'unpaid' | 'impeach';
 
 /** What a rant is about: the official as the gazette names them ("President @musa"), and whatever the matter needs. */
 interface Matter {
@@ -85,6 +85,12 @@ const RANTS: Record<Grievance, ((m: Matter) => string)[]> = {
   fatPay: [
     (m) => `${m.who} don raise the pay of ${m.other} to ${m.amount} a day. Na your padi abi na your in-law? Una dey share treasury for una selves like suya. Corrupt, greedy lot! Wetin the person do to deserve am? 🧐`,
     (m) => `${m.amount} a day for ${m.other}, courtesy of ${m.who}. Settlement dey sweet o. Meanwhile teacher dey collect ₦4,500. Una no get conscience at all. 😡`,
+  ],
+  // The president impeached a governor (worker/civic.ts). `other` is the governor, `what` the state, `n` the hours.
+  impeach: [
+    (m) => `${m.who} don impeach ${m.other} for ${m.n} hours, carry ${m.what} put for im own pocket. Na democracy be this or na military rule wey wear agbada? Power drunk! Ratels, una dey see am? ⚖️🤬`,
+    (m) => `So ${m.who} wake up one morning, sack ${m.other} say na “national interest”. Which nation? Your own village? ${m.what} people vote, you dey cancel their vote with biro. Dictator in suit! 😡`,
+    (m) => `${m.n} hours suspension for ${m.other}, signed by ${m.who}. Make una no deceive us: na political vendetta. If governor no gree bow, una go remove am. Shameless abuse of power. 🎤`,
   ],
   unpaid: [
     (m) => `Salary day reach, treasury dry. Wage bill na ${m.amount} and the money no dey. ${m.who}, you promise people salary wey you no fit pay? Audio government! Where the tax money go? 🧾🤬`,

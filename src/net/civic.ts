@@ -33,7 +33,15 @@ export interface CivicHolder {
   name: string | null;
   /** When their term ends (ms); null for terms that began before terms existed. */
   termEnds: number | null;
+  /** Impeached by the president until then (a state's head only): the president runs the state meanwhile. */
+  suspendedUntil?: number | null;
 }
+
+/** Whether the president has impeached this office holder, right now. */
+export const isSuspended = (holder: CivicHolder | null | undefined, now = Date.now()) => (holder?.suspendedUntil ?? 0) > now;
+/** The state this player runs right now: they hold its head's seat and are not impeached. */
+export const cityRunBy = (policies: CivicSnapshot['policies'] | undefined, uid: string | undefined) =>
+  !uid || !policies ? undefined : CIVIC_CITIES.find((c) => policies[CITY_HEAD[c]]?.uid === uid && !isSuspended(policies[CITY_HEAD[c]]));
 
 export interface PolicyChange {
   taxRate?: number;
@@ -159,6 +167,9 @@ interface CivicState {
   /** The president sends a state money from the federal treasury, or turns its request down. */
   grant(city: string, amount: number): Promise<void>;
   declineGrant(city: string): Promise<void>;
+  /** The president suspends whoever runs a state for a few hours (game/civic.ts IMPEACH), or lets them back early. */
+  impeach(city: string, hours: number): Promise<void>;
+  reinstate(city: string): Promise<void>;
 }
 
 interface CivicResult {
@@ -188,6 +199,15 @@ export function onElectionEvent(e: ElectionEvent) {
       : `🗳️ The ${title} election ended with no candidates.`);
   // Anyone looking at the board sees it change straight away.
   if (useCivic.getState().data) void useCivic.getState().refresh();
+}
+
+/** The president impeached me (worker/civic.ts): the state is theirs until `until`. */
+export type ImpeachedEvent = { t: 'impeached'; city: string; until: number; by: string | null };
+
+export function onImpeachedEvent(e: ImpeachedEvent) {
+  const hours = Math.max(1, Math.round((e.until - Date.now()) / 3_600_000));
+  useGame.getState().toast(`⚖️ ${e.by ? `President @${e.by}` : 'The president'} has impeached you for ${hours} hour${hours === 1 ? '' : 's'}. No powers and no pay until then: the president runs your state.`);
+  void useCivic.getState().refresh();
 }
 
 /** An office holder just did something, pushed to everyone online (worker/gazette.ts). */
@@ -254,6 +274,8 @@ function report(body: Record<string, unknown>, r: CivicResult) {
   if (body.action === 'stateLaw') g.toast('🏛️ Signed. The new rate is law.');
   if (body.action === 'lootOffer') g.toast('💼 Offer sent. The money is held until the chair decides.');
   if (body.action === 'lootDecide') g.toast(r.outcome === 'refused' ? '⚖️ Refused. The looter goes to court.' : r.outcome === 'accepted-caught' ? '🕵🏾 You took the money, but you were found out. You are out of office.' : '🤝 You took the offer. The case is closed.');
+  if (body.action === 'impeach') g.toast(`⚖️ Impeached for ${body.hours} hours. You run the state until then.`);
+  if (body.action === 'reinstate') g.toast('🤝🏾 Reinstated. The state is theirs to run again.');
   if (body.action === 'allocate') g.toast('📊 New budget signed. The departments have their shares.');
   if (body.action === 'salaries') g.toast('💼 New pay list signed. The whole country can read it, VDM too.');
   if (body.action === 'palliative' && r.each) g.toast(`🍚 Palliatives shared: ${naira(r.each)} each to ${r.people} people.`);
@@ -327,6 +349,8 @@ export const useCivic = create<CivicState>((set) => {
     askGrant: (amount) => act({ action: 'askGrant', amount }),
     grant: (city, amount) => act({ action: 'grant', city, amount }),
     declineGrant: (city) => act({ action: 'declineGrant', city }),
+    impeach: (city, hours) => act({ action: 'impeach', city, hours }),
+    reinstate: (city) => act({ action: 'reinstate', city }),
   };
 });
 
@@ -339,7 +363,7 @@ export function stateRide(cost = 0): ExecutiveOffice | null {
   const data = useCivic.getState().data;
   if (!uid || !data) return null;
   if (data.policies.president?.uid === uid) return data.treasury >= cost ? 'president' : null;
-  const city = CIVIC_CITIES.find((c) => data.policies[CITY_HEAD[c]]?.uid === uid);
+  const city = cityRunBy(data.policies, uid);
   if (!city) return null;
   return (data.states?.[city]?.balance ?? 0) >= cost ? (CITY_HEAD[city] as ExecutiveOffice) : null;
 }
@@ -350,7 +374,7 @@ export function chargeTreasury(amount: number, vehicle: StateVehicle, to?: strin
   // Straight away, so the next trip is checked against what is left.
   if (data) {
     const uid = useSession.getState().user?.uid;
-    const city = CIVIC_CITIES.find((c) => data.policies[CITY_HEAD[c]]?.uid === uid);
+    const city = cityRunBy(data.policies, uid);
     const mine = city && data.states?.[city];
     useCivic.setState({
       data: mine

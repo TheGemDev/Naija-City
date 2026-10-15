@@ -811,12 +811,24 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .bub-quote small { font-weight: 700; display: block; opacity: 0.95; margin: 0 0 1px; font-size: 10px; text-align: left; }
 .bub-quote span { display: block; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; text-align: left; }
 
-.msg-actions { display: flex; align-items: center; gap: 4px; background: var(--inverse); color: #fff; padding: 3px 6px; border-radius: 999px; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.35); margin-top: 4px; z-index: 5; animation: pop 0.15s ease-out; }
-.msg-act-btn { font-size: 11px; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.1); padding: 4px 9px; border-radius: 999px; display: flex; align-items: center; gap: 4px; cursor: pointer; transition: background 0.12s, transform 0.1s; }
-.msg-act-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.msg-actions { display: flex; align-items: center; gap: 4px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); padding: 3px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); margin-top: 6px; z-index: 5; animation: pop 0.15s ease-out; }
+.msg-act-btn { font-size: 12px; font-weight: 700; color: var(--ink); background: var(--surface-3); padding: 6px 12px; border-radius: 999px; display: flex; align-items: center; gap: 4px; cursor: pointer; transition: background 0.12s, transform 0.1s; }
+.msg-act-btn:hover { background: var(--line); }
 .msg-act-btn:active { transform: scale(0.95); }
-.msg-act-btn.danger { color: #fca5a5; background: rgba(239, 68, 68, 0.2); }
-.msg-act-btn.danger:hover { background: rgba(239, 68, 68, 0.35); }
+.msg-act-btn.danger { color: #ef4444; background: rgba(239, 68, 68, 0.12); }
+.msg-act-btn.danger:hover { background: rgba(239, 68, 68, 0.22); }
+/* The reactions for a tapped message, in a pill above it. */
+.msg-react-bar { display: flex; align-items: center; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; background: var(--surface); border: 1px solid var(--line); padding: 3px 5px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); margin-bottom: 6px; z-index: 5; animation: pop 0.15s ease-out; }
+.msg-react-bar::-webkit-scrollbar { display: none; }
+.msg-react-bar button { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; transition: transform 0.12s, background 0.12s; }
+.msg-react-bar button:hover { transform: scale(1.15); }
+.msg-react-bar button:active { transform: scale(0.92); }
+.msg-react-bar button.on { background: rgba(56, 189, 248, 0.25); }
+/* What was reacted, tucked under the bubble's corner. */
+.bub-reacts { display: flex; align-items: center; gap: 2px; margin-top: -6px; padding: 2px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); cursor: pointer; z-index: 1; }
+.bub-wrap.mine .bub-reacts { margin-right: 10px; }
+.bub-wrap:not(.mine) .bub-reacts { margin-left: 10px; }
+.bub-reacts small { font-size: 11px; font-weight: 700; color: var(--muted); }
 
 .money-card { width: 74%; border-radius: 18px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; background: var(--bg-ffffff); border: 1px solid var(--line); cursor: pointer; transition: transform 0.12s, box-shadow 0.15s; }
 .money-card:active { transform: scale(0.98); }

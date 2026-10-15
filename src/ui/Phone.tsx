@@ -13,7 +13,7 @@ import { useSession } from '../net/session';
 import { useNet } from '../net/multiplayer';
 import { useRoads } from '../net/roads';
 import { fixCostOf, lampCity, lampOf, LAMPS, lampSites, roadOf } from '../game/roads';
-import { useCivic } from '../net/civic';
+import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CivicNewsTab } from './Gazette';
 import { LawsTab } from './Laws';
 import { TreasuryHero, TreasuryTab } from './Treasury';
@@ -1590,8 +1590,8 @@ function SharedCivic() {
     return holder?.username ? `@${holder.username}` : holder?.name ?? 'Vacant';
   };
   const holds = (office: Office) => holderOf(office)?.uid === uid;
-  // Whoever runs a city repairs its roads from the Treasury tab.
-  const myCity = CIVIC_CITIES.find((c) => holds(CITY_HEAD[c]));
+  // Whoever runs a city repairs its roads from the Treasury tab: its governor, or the president while they are impeached.
+  const myCity = cityRunBy(policy, uid) ?? (holds('president') ? CIVIC_CITIES.find((c) => isSuspended(holderOf(CITY_HEAD[c]))) : undefined);
   return (
     <>
       <TreasuryHero />

@@ -10,6 +10,7 @@ import {
   requestHomeVisit,
   sendHomeInvite,
   deleteMessage,
+  reactMessage,
   loadInbox,
   loadThread,
   requestMoney,
@@ -37,6 +38,7 @@ import { FriendsTab } from './Community';
 import { LootCases } from './LootCases';
 import { Emoji } from './Icons';
 import { ReactionOr, ReactionToggle, ReactionTray, useReactions } from './Reactions';
+import { REACTIONS } from '../game/reactions';
 import { useNet } from '../net/multiplayer';
 import { PlayerLabel, PlayerName } from './PlayerName';
 import { Face } from './Face';
@@ -398,6 +400,12 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  // Tapping the reaction I already gave takes it back.
+  const handleReact = (m: Message, emoji: string | null) => {
+    setSelectedId(null);
+    reactMessage(m, emoji).catch((err) => setError((err as Error).message));
+  };
+
   const handleDelete = async (m: Message) => {
     setDeletingId(m.id);
     try {
@@ -460,6 +468,7 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
               deleting={deletingId === m.id}
               onSelect={(id) => setSelectedId((prev) => (prev === id ? null : id))}
               onReply={handleReply}
+              onReact={handleReact}
               onDelete={handleDelete}
               onError={setError}
             />
@@ -569,6 +578,7 @@ function Bubble({
   deleting,
   onSelect,
   onReply,
+  onReact,
   onDelete,
   onError,
 }: {
@@ -580,6 +590,7 @@ function Bubble({
   deleting: boolean;
   onSelect: (id: number) => void;
   onReply: (m: Message) => void;
+  onReact: (m: Message, emoji: string | null) => void;
   onDelete: (m: Message) => void;
   onError: (e: string | null) => void;
 }) {
@@ -626,6 +637,46 @@ function Bubble({
     </div>
   );
 
+  // The reactions sit above a tapped message, reply and delete below it.
+  const myReact = (mine ? m.fromReact : m.toReact) ?? null;
+  const reactBar = selected && (
+    <div className="msg-react-bar" role="group" aria-label="React to message">
+      {REACTIONS.map((r) => (
+        <button
+          key={r.char}
+          type="button"
+          className={myReact === r.char ? 'on' : ''}
+          aria-label={r.label}
+          aria-pressed={myReact === r.char}
+          title={r.label}
+          onClick={(e) => {
+            e.stopPropagation();
+            onReact(m, myReact === r.char ? null : r.char);
+          }}
+        >
+          <Emoji char={r.char} size={24} />
+        </button>
+      ))}
+    </div>
+  );
+  // What both sides reacted with, under the bubble: one chip, counted when both picked the same.
+  const given = [m.fromReact, m.toReact].filter((r): r is string => !!r);
+  const reacts = given.length > 0 && (
+    <button
+      type="button"
+      className="bub-reacts"
+      aria-label={myReact ? 'Take back your reaction' : 'React'}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (myReact) onReact(m, null);
+        else onSelect(m.id);
+      }}
+    >
+      {[...new Set(given)].map((r) => <Emoji key={r} char={r} size={15} />)}
+      {given.length > 1 && given[0] === given[1] && <small>2</small>}
+    </button>
+  );
+
   const quoteBox = refMsg && (
     <div className="bub-quote">
       <small>{refMsg.from === m.from ? (mine ? 'You' : `@${who}`) : (mine ? `@${who}` : 'You')}</small>
@@ -658,6 +709,7 @@ function Bubble({
   if (m.kind === 'text') {
     return (
       <div className={`bub-wrap ${mine ? 'mine' : ''}`}>
+        {reactBar}
         <div className={`bub-line ${mine ? 'mine' : ''}`}>
           <div
             className={`bub ${mine ? 'mine' : ''} ${selected ? 'selected' : ''}`}
@@ -672,6 +724,7 @@ function Bubble({
             </small>
           </div>
         </div>
+        {reacts}
         {actionMenu}
       </div>
     );

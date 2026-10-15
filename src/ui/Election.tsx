@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
-import { useCivic, type CivicCandidate } from '../net/civic';
+import { isSuspended, useCivic, type CivicCandidate } from '../net/civic';
 import { useSession } from '../net/session';
 import { Face } from './Face';
 import { Emoji } from './Icons';
@@ -136,6 +136,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
         <span>
           {holder ? <b>{nameOf(holder)}{holder.uid === uid ? ' (you)' : ''}</b> : <span className="muted">Vacant</span>}
           {holder?.termEnds ? <small> · {left(holder.termEnds - Date.now())} left</small> : null}
+          {isSuspended(holder) ? <small className="ev-impeached"> · ⚖️ Impeached for {left(holder!.suspendedUntil! - Date.now())}</small> : null}
         </span>
         {pot && <span className="ev-pot"><b>{nairaShort(pot.amount)}</b><small>{pot.label}</small></span>}
       </div>

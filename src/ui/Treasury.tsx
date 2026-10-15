@@ -4,11 +4,11 @@
 // The header card (TreasuryHero) shows the federal balance and, tapped open, every state's.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, NO_SALARIES, OFFICE_ICON, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
+import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
 import { naira, nairaShort, useGame } from '../game/store';
 import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
-import { useCivic, type CivicHolder, type StateInfo } from '../net/civic';
+import { cityRunBy, isSuspended, useCivic, type CivicHolder, type StateInfo } from '../net/civic';
 import { useOfficeBudget } from '../net/office';
 import { useRoads } from '../net/roads';
 import { potholeCity } from '../game/city';
@@ -387,6 +387,40 @@ function Grants({ canEdit, busy }: { canEdit: boolean; busy: boolean }) {
   );
 }
 
+/** The president's hold over a state's government: impeach whoever runs it for a few hours, or let them back early. */
+function Impeach({ city, holder, busy, wait, now }: { city: CivicCity; holder: CivicHolder; busy: boolean; wait: number; now: number }) {
+  const impeach = useCivic((s) => s.impeach);
+  const reinstate = useCivic((s) => s.reinstate);
+  const [sure, setSure] = useState<number | null>(null);
+  const until = holder.suspendedUntil ?? 0;
+  const name = holder.username ? `@${holder.username}` : holder.name ?? 'the governor';
+  return (
+    <div className="tr-ask">
+      <b>Impeach {OFFICE_SHORT[CITY_HEAD[city]]}</b>
+      {until > now ? (
+        <>
+          <small className="muted">{name} is impeached for another {left(until - now)}. You run {CITY_NAME[city]} until then.</small>
+          <div className="row-btns"><button className="btn sm" disabled={busy} onClick={() => void reinstate(city)}>Reinstate {name}</button></div>
+        </>
+      ) : (
+        <>
+          <small className="muted">Suspend {name}: no powers and no pay while you run {CITY_NAME[city]}. Everybody hears about it.{wait > 0 ? ` Next in ${left(wait)}.` : ''}</small>
+          {sure ? (
+            <div className="row-btns">
+              <button className="btn sm danger" disabled={busy} onClick={() => { setSure(null); void impeach(city, sure); }}>Yes, impeach for {sure}h</button>
+              <button className="btn sm" onClick={() => setSure(null)}>No</button>
+            </div>
+          ) : (
+            <div className="row-btns">
+              {IMPEACH.hours.map((h) => <button key={h} className="btn sm danger" disabled={busy || wait > 0} onClick={() => setSure(h)}>{h} hours</button>)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** `repairs` is the pothole and street light lists of the city this player runs (src/ui/Phone.tsx). */
 export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode }) {
   const data = useCivic((s) => s.data);
@@ -421,15 +455,19 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const { treasury } = data;
   // Whoever runs a city spends that state's money: the governor in Kaduna, the FCT Minister in Abuja, and so on.
   const isPres = p.president?.uid === uid;
-  const myCity = CIVIC_CITIES.find((city) => p[CITY_HEAD[city]]?.uid === uid);
+  const myCity = cityRunBy(p, uid);
+  // A seat I hold that the president has impeached me from, for now.
+  const lostCity = CIVIC_CITIES.find((city) => p[CITY_HEAD[city]]?.uid === uid && isSuspended(p[CITY_HEAD[city]], now));
   const selected: 'federal' | CivicCity = sel ?? (myCity ?? (isPres ? 'federal' : 'kaduna'));
   const shown: CivicCity = selected === 'federal' ? (myCity ?? 'kaduna') : selected;
-  // A state without a government is managed by the president: its seat is empty and the president is looking at it.
-  const actCity = myCity ?? (isPres && selected !== 'federal' && !p[CITY_HEAD[shown]] ? shown : undefined);
+  // A state without a government is managed by the president: its seat is empty, or its governor impeached, and the president is looking at it.
+  const shownHead = p[CITY_HEAD[shown]];
+  const actCity = myCity ?? (isPres && selected !== 'federal' && (!shownHead || isSuspended(shownHead, now)) ? shown : undefined);
   /** Sent with an action when the president is standing in for an empty seat. */
   const standIn = !myCity ? actCity : undefined;
   const isExec = isPres || !!myCity;
-  const office = OFFICES.find((o) => p[o]?.uid === uid);
+  // An impeached governor can't reach the state's money.
+  const office = OFFICES.find((o) => p[o]?.uid === uid && !(OFFICE_RULES[o].city && isSuspended(p[o], now)));
   const allocation = { ...ALLOCATION.defaults, ...data.allocation };
   const potholes = openSites?.filter((site) => (actCity ? potholeCity(site) === actCity : !!potholeCity(site))).length;
   const darkLamps = lampsOut?.filter((site) => (actCity ? lampCity(site) === actCity : !!lampCity(site))).length;
@@ -443,6 +481,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const { palliative: pal, roadProject: project, embezzle: snake, contract: deal, pardon: mercy } = TREASURY;
   const dealWait = (data.cooldowns?.contract ?? 0) + deal.cooldownHours * HOUR - now;
   const mercyWait = (data.cooldowns?.pardon ?? 0) + mercy.cooldownHours * HOUR - now;
+  const impeachWait = (data.cooldowns?.impeach ?? 0) + IMPEACH.cooldownHours * HOUR - now;
   const palWait = data.palliativeAt ? data.palliativeAt + pal.cooldownHours * HOUR - now : 0;
   // The server shares at most this much; under ₦500 each it refuses.
   const palLow = palBudget < 500;
@@ -459,6 +498,12 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
       {blockLeft > 0 && (
         <div className="civic-notice civic-error" role="status">
           <Emoji char="🚧" size={12} /> The government is “fixing” your street for another {left(blockLeft)}: slow travel and double fares.
+        </div>
+      )}
+
+      {lostCity && (
+        <div className="civic-notice civic-error" role="status">
+          <Emoji char="⚖️" size={12} /> The president has impeached you for another {left((p[CITY_HEAD[lostCity]]?.suspendedUntil ?? 0) - now)}. No powers and no pay until then: the president runs {CITY_NAME[lostCity]}.
         </div>
       )}
 
@@ -509,6 +554,9 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
           onLaw={(key, value) => void stateLaw(key, value, standIn)}
           onPay={(step) => void payShare(step)}
         />
+      )}
+      {isPres && selected !== 'federal' && shownHead && shownHead.uid !== uid && (
+        <Impeach city={shown} holder={shownHead} busy={busy} wait={impeachWait} now={now} />
       )}
 
       {isExec && (

@@ -19,6 +19,9 @@ export interface Message {
   ref: number | null;
   at: number;
   read: boolean;
+  /** The emoji each side reacted with (game/reactions.ts), or null. */
+  fromReact?: string | null;
+  toReact?: string | null;
 }
 
 export interface PlayerRef {
@@ -155,6 +158,19 @@ export async function enterAcceptedVisit(id: number): Promise<{ home: HomeResult
 
 export async function revokeHomeVisit() {
   await post<{ ok: boolean }>('/api/visit/leave');
+}
+
+/** React to a message with an emoji, or take my reaction back (null). It shows at once and the server confirms it. */
+export async function reactMessage(m: Message, emoji: string | null) {
+  const mine = m.from === useSession.getState().user?.uid;
+  upsert({ ...m, ...(mine ? { fromReact: emoji } : { toReact: emoji }) });
+  try {
+    const { message } = await post<{ message: Message }>(`/api/messages/${m.id}/react`, { emoji });
+    upsert(message);
+  } catch (e) {
+    upsert(m);
+    throw e;
+  }
 }
 
 export async function deleteMessage(id: number) {

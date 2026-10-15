@@ -6,7 +6,7 @@ import { BIZ } from '../game/career';
 import { ALLOCATION, OFFICES, type Allocation, type PoliticalOffice } from '../game/civic';
 import { naira, OFFICE_RULES } from '../game/store';
 import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, STATE_ASSETS, STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS, type StateCaps, type StateLawKey } from '../game/treasury';
-import { useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
+import { isSuspended, useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
 import { Emoji } from './Icons';
 import './laws.css';
 
@@ -214,7 +214,13 @@ export function LawsTab({ uid, start }: { uid: string; start?: PoliticalOffice }
   const data = useCivic((s) => s.data);
   const busy = useCivic((s) => s.busy);
   const setPolicy = useCivic((s) => s.setPolicy);
-  const holds = (office: PoliticalOffice) => !!uid && data?.policies[office]?.uid === uid;
+  // A state's laws are signed by whoever runs it: its head, or the president while that head is impeached.
+  const holds = (office: PoliticalOffice) => {
+    const holder = data?.policies[office];
+    if (!uid || !holder) return false;
+    if (!OFFICE_RULES[office].city) return holder.uid === uid;
+    return isSuspended(holder) ? data?.policies.president?.uid === uid : holder.uid === uid;
+  };
   // An office holder lands on their own desk, even when the board loads a moment after the tab opens. Until you pick another tab, yours is the one shown.
   const [picked, setView] = useState<'all' | PoliticalOffice | null>(start ?? null);
   const view: 'all' | PoliticalOffice = picked ?? OFFICES.find(holds) ?? 'all';

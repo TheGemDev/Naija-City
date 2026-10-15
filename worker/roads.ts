@@ -3,7 +3,7 @@
 // Kaduna, the FCT Minister in Abuja, the Governor of Lagos in Lagos, the Governor of Kano in Kano) fixes them from the city's share of the treasury, or out of their own pocket.
 
 import { potholeCity, potholeOf, potholeSites } from '../src/game/city';
-import { CITY_HEAD, CITY_NAME, CIVIC_CITIES, OFFICE_RULES, type CivicCity } from '../src/game/civic';
+import { CITY_HEAD, CITY_NAME, CIVIC_CITIES, OFFICE_RULES, suspendedUntil, type CivicCity } from '../src/game/civic';
 import { fixCostOf, lampCity, lampOf, LAMPS, lampSites, roadOf, ROADWORK, type RoadsSnapshot } from '../src/game/roads';
 import { GOV_RANT, VDM_ROADS_ICON } from '../src/game/news';
 import { applyStmts, getBalance } from './wallet';
@@ -26,6 +26,14 @@ const COLUMNS: Record<CivicCity, { funding: string; at: string; lampAt: string }
   kano: { funding: 'roads_funding_kano', at: 'pothole_at_kano', lampAt: 'lamp_at_kano' },
 };
 /** "Governor" or "Minister", as VDM says it. */
+/** Whether this player runs the city's roads: its head, or the president while the seat is empty or its head impeached. */
+async function runsRoads(db: D1Database, city: CivicCity, uid: string) {
+  const office = CITY_HEAD[city];
+  const p = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<Record<string, unknown>>();
+  const head = p?.[`${office}_uid`] as string | null | undefined;
+  const out = suspendedUntil(p, office) > 0;
+  return (head === uid && !out) || ((!head || out) && p?.president_uid === uid);
+}
 const headTitle = (city: CivicCity) => (CITY_HEAD[city] === 'minister' ? 'Minister' : 'Governor');
 
 /** Marks VDM's roadwork posts apart from his crime exposés, so they can be spaced out. */
@@ -177,9 +185,8 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     if (!city || !CIVIC_CITIES.includes(city)) return err(400, 'Unknown pothole');
     const from = body?.from === 'pocket' ? 'pocket' : 'treasury';
     const office = CITY_HEAD[city];
-    const gov = await db.prepare(`SELECT ${office}_uid AS head, president_uid AS president FROM civic_policies WHERE id = 1`).first<{ head: string | null; president: string | null }>();
-    // A state without a government is managed by the president.
-    if (!(gov?.head === uid || (!gov?.head && gov?.president === uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix potholes in ${CITY_NAME[city]}`);
+    // A state without a government, or with its governor impeached, is managed by the president.
+    if (!(await runsRoads(db, city, uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix potholes in ${CITY_NAME[city]}`);
     const cost = fixCostOf(site!);
     if (from === 'pocket' && (await getBalance(db, uid)) < cost) return err(402, `You need ${naira(cost)} to fix it yourself`);
 
@@ -221,9 +228,7 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     if (!city || !CIVIC_CITIES.includes(city)) return err(400, 'Unknown street light');
     const from = body?.from === 'pocket' ? 'pocket' : 'treasury';
     const office = CITY_HEAD[city];
-    const gov = await db.prepare(`SELECT ${office}_uid AS head, president_uid AS president FROM civic_policies WHERE id = 1`).first<{ head: string | null; president: string | null }>();
-    // A state without a government is managed by the president.
-    if (!(gov?.head === uid || (!gov?.head && gov?.president === uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
+    if (!(await runsRoads(db, city, uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
     const cost = LAMPS.fixCost;
     if (from === 'pocket' && (await getBalance(db, uid)) < cost) return err(402, `You need ${naira(cost)} to fix it yourself`);
 

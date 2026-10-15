@@ -16,6 +16,7 @@ import { sectionOf } from '../src/game/estate';
 import { CAR_BY_ID } from '../src/game/cars';
 import { supplyOf, type PowerSave, type Supply } from '../src/game/power';
 import { normalizeOrigin } from '../src/game/origins';
+import { isReaction } from '../src/game/reactions';
 import { getRegion } from '../src/game/regions';
 import { DESIGN_BY_ID, REGION_BY_ID, STAGES } from '../src/game/property';
 import { HOUSEHOLD_STAFF, type HouseholdStaff } from '../src/game/staff';
@@ -39,6 +40,9 @@ export interface Message {
   ref: number | null;
   at: number;
   read: boolean;
+  /** The emoji each side reacted with (game/reactions.ts), or null. */
+  fromReact: string | null;
+  toReact: string | null;
 }
 
 interface MessageRow {
@@ -52,6 +56,9 @@ interface MessageRow {
   ref: number | null;
   created_at: number;
   read_at: number | null;
+  /** Until migration 0093 has run there are no reactions. */
+  from_react?: string | null;
+  to_react?: string | null;
 }
 
 const toMessage = (r: MessageRow): Message => ({
@@ -65,6 +72,8 @@ const toMessage = (r: MessageRow): Message => ({
   ref: r.ref,
   at: r.created_at,
   read: r.read_at !== null,
+  fromReact: r.from_react ?? null,
+  toReact: r.to_react ?? null,
 });
 
 const json = (data: unknown, status = 200) =>
@@ -341,6 +350,25 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
       await (await roomOf(env, me)).allowHomeVisit(me, home.ownerUid, 'invited', home.propertyId ?? undefined);
     }
     return json({ message, ...(home ? { home } : {}) });
+  }
+
+  // React to a message in a chat I'm in: one emoji a side, sending null (or the same again, on the phone) takes it back.
+  const reactMsg = path.match(/^\/api\/messages\/(\d+)\/react$/);
+  if (reactMsg && req.method === 'POST') {
+    const b = await body<{ emoji?: string | null }>(req);
+    const emoji = b.emoji ?? null;
+    if (emoji !== null && !isReaction(emoji)) return err(400, 'Pick one of the reactions');
+    const row = await db
+      .prepare(
+        `UPDATE messages SET from_react = CASE WHEN from_uid = ?2 THEN ?3 ELSE from_react END, to_react = CASE WHEN to_uid = ?2 THEN ?3 ELSE to_react END
+         WHERE id = ?1 AND (from_uid = ?2 OR to_uid = ?2) RETURNING *`,
+      )
+      .bind(Number(reactMsg[1]), me, emoji)
+      .first<MessageRow>();
+    if (!row) return err(404, 'Message not found');
+    const message = toMessage(row);
+    notify(env, ctx, row.from_uid === me ? row.to_uid : row.from_uid, { t: 'msg-update', message });
+    return json({ message });
   }
 
   const delMsg = path.match(/^\/api\/messages\/(\d+)$/);

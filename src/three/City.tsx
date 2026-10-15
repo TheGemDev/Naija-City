@@ -27,7 +27,7 @@ import { DriveLayer } from './Drive';
 import { CityBillboards, SeaAds } from './Billboard';
 import { SEA_MARGIN, seaBoard, seaWater } from '../game/boards';
 import { openAdsSheet } from '../net/ads';
-import { useCivic } from '../net/civic';
+import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { Emoji } from '../ui/Icons';
 
@@ -936,7 +936,10 @@ function PlaceLabel({ place }: { place: Place }) {
   const broken = useRoads((s) => (s.data ? brokenAsset(city, place.id) : null));
   const mends = useCivic((s) => {
     const uid = useSession.getState().user?.uid;
-    return !!broken && !!uid && s.data?.policies[CITY_HEAD[city as CivicCity]]?.uid === uid;
+    const p = s.data?.policies;
+    // Whoever runs the city: its head, or the president while the seat is empty or its head impeached.
+    const head = p?.[CITY_HEAD[city as CivicCity]];
+    return !!broken && !!uid && (cityRunBy(p, uid) === city || (p?.president?.uid === uid && (!head || isSuspended(head))));
   });
 
   const handleSelect = (e: React.SyntheticEvent) => {

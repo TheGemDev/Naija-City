@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -95,7 +95,8 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
       ...(candidates
         ? [
             db
-              .prepare(`UPDATE civic_policies SET ${election.office}_uid = ?, ${election.office}_term_ends = ?, updated_at = ? WHERE id = 1`)
+              // A new term starts clean: whoever wins a state's seat is not impeached.
+              .prepare(`UPDATE civic_policies SET ${election.office}_uid = ?, ${election.office}_term_ends = ?, ${OFFICE_RULES[election.office].city ? `${election.office}_suspended_until = NULL, ` : ''}updated_at = ? WHERE id = 1`)
               // In office until the polls next close.
               .bind(candidates.uid, nextElectionEnds(now), now),
           ]
@@ -137,23 +138,27 @@ const GAZETTE_LAWS = {
 /** Each city's okada ban: the law's name, its column, and the office that signs it. */
 const OKADA_BANS = CIVIC_CITIES.map((city) => ({ city, key: OKADA_BAN_LAW[city], column: `okada_ban_${city}`, office: CITY_HEAD[city] }));
 
-/** The city this player runs, as governor or FCT Minister. */
-const cityOf = (policy: PolicyRow | null | undefined, uid: string): CivicCity | undefined => CIVIC_CITIES.find((city) => policy?.[`${CITY_HEAD[city]}_uid`] === uid);
+/** Whether the president has impeached whoever runs this city, for now. */
+const suspended = (policy: PolicyRow | null | undefined, city: CivicCity) => suspendedUntil(policy, CITY_HEAD[city]) > 0;
+/** The city this player runs, as governor or FCT Minister. An impeached governor runs nothing until the suspension ends. */
+const cityOf = (policy: PolicyRow | null | undefined, uid: string): CivicCity | undefined => CIVIC_CITIES.find((city) => policy?.[`${CITY_HEAD[city]}_uid`] === uid && !suspended(policy, city));
+/** Whether the president runs this state: its seat is empty, or its governor is impeached. */
+const presidentRuns = (policy: PolicyRow | null | undefined, city: CivicCity) => !policy?.[`${CITY_HEAD[city]}_uid`] || suspended(policy, city);
 /**
- * The state this player runs: as its governor, or as the president while the seat is empty (`wanted` picks which empty
- * seat; a state without a government is managed by the president).
+ * The state this player runs: as its governor, or as the president while the seat is empty or its governor impeached
+ * (`wanted` picks which state; a state without a government is managed by the president).
  */
 const runsCity = (policy: PolicyRow | null | undefined, uid: string, wanted?: string): CivicCity | undefined => {
   const own = cityOf(policy, uid);
   if (own) return own;
   if (policy?.president_uid !== uid) return undefined;
-  return CIVIC_CITIES.find((c) => c === wanted && !policy[`${CITY_HEAD[c]}_uid`]);
+  return CIVIC_CITIES.find((c) => c === wanted && presidentRuns(policy, c));
 };
 /** The office a player acts as in a state: its governor, or the president standing in. */
-const actingAs = (policy: PolicyRow | null | undefined, uid: string, city: CivicCity): PoliticalOffice => (policy?.[`${CITY_HEAD[city]}_uid`] === uid ? CITY_HEAD[city] : 'president');
-/** The offices that can grant a pardon or share palliatives: the president and whoever runs a city. */
+const actingAs = (policy: PolicyRow | null | undefined, uid: string, city: CivicCity): PoliticalOffice => (cityOf(policy, uid) === city ? CITY_HEAD[city] : 'president');
+/** The offices that can grant a pardon or share palliatives: the president and whoever runs a city (not while impeached). */
 const EXECUTIVES: PoliticalOffice[] = ['president', ...CIVIC_CITIES.map((city) => CITY_HEAD[city])];
-const executiveOf = (policy: PolicyRow | null | undefined, uid: string) => EXECUTIVES.find((o) => policy?.[`${o}_uid`] === uid);
+const executiveOf = (policy: PolicyRow | null | undefined, uid: string) => EXECUTIVES.find((o) => policy?.[`${o}_uid`] === uid && !suspendedUntil(policy, o));
 
 const findPlayer = (db: D1Database, target: string) =>
   db.prepare('SELECT uid, username FROM players WHERE uid = ? OR username = ?').bind(target, target.replace(/^@/, '').toLowerCase()).first<{ uid: string; username: string | null }>();
@@ -224,7 +229,8 @@ export async function paySalaries(db: D1Database, now: number): Promise<void> {
   for (const city of CIVIC_CITIES) {
     const head = due.find((d) => d.office === CITY_HEAD[city]);
     const state = states.find((s) => s.city === city);
-    if (!head || !state) continue;
+    // An impeached governor is not paid while the suspension lasts.
+    if (!head || !state || suspended(round, city)) continue;
     const amount = governorPay(head.amount, state.payShare, state.balance);
     if (amount <= 0 || (await spendState(db, city, amount, { allowArrears: true })) === null) continue;
     paid.push({ ...head, amount });
@@ -269,6 +275,8 @@ async function snapshot(db: D1Database, uid: string) {
           name: policies[`${o}_name`] as string | null,
           // Whoever is in office stays until the next result, whatever was written down when they won.
           termEnds: pollsCloseAt(Date.now()),
+          /** Impeached by the president until then: the president runs the state. */
+          suspendedUntil: suspendedUntil(policies, o) || null,
         }
       : null;
   const races = await db
@@ -435,6 +443,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     amount?: number;
     vehicle?: string;
     to?: string;
+    hours?: number;
   } | null;
   if (!body) return err(400, 'Invalid JSON');
 
@@ -765,6 +774,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
     const office = OFFICE_LIST.find((o) => policy?.[`${o}_uid`] === user.uid);
     if (!office || !policy) return err(403, 'Only office holders can reach the treasury');
+    if (suspendedUntil(policy, office)) return err(403, 'You are impeached. The treasury is locked to you until the president lets you back');
     const e = TREASURY.embezzle;
     const mine = await db.prepare('SELECT embezzled_at FROM players WHERE uid = ?').bind(user.uid).first<{ embezzled_at: number | null }>();
     if (mine?.embezzled_at && now - mine.embezzled_at < e.cooldownHours * 3600_000) return err(429, 'Lie low. The auditors are asking questions');
@@ -921,6 +931,53 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     return json({ snapshot: await snapshot(db, user.uid) });
   }
 
+  // The president impeaches whoever runs a state for a few hours and runs it themselves until then, or lets them back early.
+  if (body.action === 'impeach' || body.action === 'reinstate') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    if (!policy || policy.president_uid !== user.uid) return err(403, 'Only the elected president can impeach a governor');
+    const city = CIVIC_CITIES.find((c) => c === body.city);
+    if (!city) return err(400, 'Unknown state');
+    const office = CITY_HEAD[city];
+    const title = OFFICE_RULES[office].title;
+    const head = policy[`${office}_uid`] as string | null;
+    const names = await usernames(db, [user.uid, head]);
+    const me = official('president', names.get(user.uid));
+    const them = head ? official(office, names.get(head)) : `the ${title}`;
+    if (body.action === 'reinstate') {
+      const back = await db
+        .prepare(`UPDATE civic_policies SET ${office}_suspended_until = NULL, updated_at = ?1 WHERE id = 1 AND ${office}_suspended_until > ?1 RETURNING id`)
+        .bind(now)
+        .first();
+      if (!back) return err(409, `The ${title} is not impeached`);
+      await postFeed(db, head, 'politics', '🤝🏾', `${me} has reinstated ${them}. The keys to Government House are back where they belong, for now. 🤝🏾`, city).catch(() => {});
+      await gazette(env, ctx, [{ uid: user.uid, office: 'president', kind: 'law', icon: '🤝🏾', text: `${me} reinstated ${them}: ${CITY_NAME[city]} is theirs to run again.` }]);
+      return json({ snapshot: await snapshot(db, user.uid) });
+    }
+    if (!head) return err(409, `${CITY_NAME[city]} has no ${title} to impeach. You already run it`);
+    if (head === user.uid) return err(400, 'You can’t impeach yourself');
+    const hours = body.hours;
+    if (typeof hours !== 'number' || !IMPEACH.hours.includes(hours)) return err(400, 'Choose how long the impeachment lasts');
+    if (suspended(policy, city)) return err(409, `The ${title} is already impeached`);
+    if (now - (await lastUsed(db, user.uid, 'impeach')) < IMPEACH.cooldownHours * 3600_000) return err(429, 'You impeached a governor recently. The National Assembly needs a rest');
+    const until = now + hours * 3600_000;
+    // Only the governor it was aimed at, and only once: two taps, or a new governor elected meanwhile, change nothing.
+    const done = await db
+      .prepare(`UPDATE civic_policies SET ${office}_suspended_until = ?1, updated_at = ?2 WHERE id = 1 AND president_uid = ?3 AND ${office}_uid = ?4 AND COALESCE(${office}_suspended_until, 0) <= ?2 RETURNING id`)
+      .bind(until, now, user.uid, head)
+      .first();
+    if (!done) return err(409, 'Something changed. Try again');
+    await db.batch([
+      usedStmt(db, user.uid, 'impeach', now),
+      feedStmt(db, head, 'politics', '⚖️', `IMPEACHED! ${me} has suspended ${them} for ${hours} hours and taken over ${CITY_NAME[city]}. Government House locks have been changed. Aso Rock says it is “in the national interest”. 😳`, city),
+      ...vdmGov(db, user.uid, 'impeach', { who: me, other: them, n: hours, what: CITY_NAME[city] }, city, true),
+    ]);
+    const telling = notifyPlayer(env, head, { t: 'impeached', city, until, by: names.get(user.uid) ?? null });
+    if (ctx) ctx.waitUntil(telling.catch(() => {}));
+    else await telling.catch(() => {});
+    await gazette(env, ctx, [{ uid: user.uid, office: 'president', kind: 'law', icon: '⚖️', text: `${me} impeached ${them} for ${hours} hours. The president runs ${CITY_NAME[city]} until then.` }]);
+    return json({ snapshot: await snapshot(db, user.uid) });
+  }
+
   if (body.action === 'allocate') {
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
     if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can allocate the treasury');
@@ -1049,15 +1106,17 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       values.push(value);
     }
     // Each city's own laws, signed by whoever runs it.
-    const bans: { ban: (typeof OKADA_BANS)[number]; on: number }[] = [];
+    const bans: { ban: (typeof OKADA_BANS)[number]; on: number; as: PoliticalOffice }[] = [];
     for (const ban of OKADA_BANS) {
       const on = body[ban.key];
       if (on === undefined) continue;
-      if (policy?.[`${ban.office}_uid`] !== user.uid) return err(403, `Only the ${OFFICE_RULES[ban.office].title} can ban okada in ${CITY_NAME[ban.city]}`);
+      // Whoever runs the city signs it: its head, or the president while the head is impeached.
+      const signs = cityOf(policy, user.uid) === ban.city || (policy?.president_uid === user.uid && suspended(policy, ban.city));
+      if (!signs) return err(403, `Only the ${OFFICE_RULES[ban.office].title} can ban okada in ${CITY_NAME[ban.city]}`);
       if (on !== 0 && on !== 1) return err(400, 'The ban is either on or off');
       updates.push(`${ban.column} = ?`);
       values.push(on);
-      if (policy[ban.column] !== on) bans.push({ ban, on });
+      if (policy?.[ban.column] !== on) bans.push({ ban, on, as: actingAs(policy, user.uid, ban.city) });
     }
     if (!updates.length) return err(400, 'No policy changes supplied');
     const before = await db.prepare(`SELECT ${Object.values(GAZETTE_LAWS).map((l) => l.column).join(', ')} FROM civic_policies WHERE id = 1`).first<Record<string, number>>().catch(() => null);
@@ -1079,12 +1138,12 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       posts.push(blogStmt(db, user.uid, law.icon, lawNews(key, official(law.office, who), law.label, was, next, law.unit), OFFICE_RULES[law.office].city));
       if (law.office === 'president' && next > was) posts.push(...vdmGov(db, user.uid, 'levy', { who: official(law.office, who), what: `${law.label} from ${was}${law.unit} to ${next}${law.unit}` }));
     }
-    for (const { ban, on } of bans) {
-      notices.push({ uid: user.uid, office: ban.office, kind: 'law', icon: '🏍️', text: on
-        ? `${official(ban.office, who)} banned okada in ${CITY_NAME[ban.city]}.`
-        : `${official(ban.office, who)} lifted the okada ban in ${CITY_NAME[ban.city]}.` });
-      posts.push(blogStmt(db, user.uid, '🏍️', okadaNews(official(ban.office, who), ban.city, !!on), ban.city));
-      if (on) posts.push(...vdmGov(db, user.uid, 'okadaBan', { who: official(ban.office, who), other: CITY_NAME[ban.city] }, ban.city));
+    for (const { ban, on, as } of bans) {
+      notices.push({ uid: user.uid, office: as, kind: 'law', icon: '🏍️', text: on
+        ? `${official(as, who)} banned okada in ${CITY_NAME[ban.city]}.`
+        : `${official(as, who)} lifted the okada ban in ${CITY_NAME[ban.city]}.` });
+      posts.push(blogStmt(db, user.uid, '🏍️', okadaNews(official(as, who), ban.city, !!on), ban.city));
+      if (on) posts.push(...vdmGov(db, user.uid, 'okadaBan', { who: official(as, who), other: CITY_NAME[ban.city] }, ban.city));
     }
     if (posts.length) await db.batch(posts).catch(() => {});
     // A lowered maximum takes every state above it down to it.

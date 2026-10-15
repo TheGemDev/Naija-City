@@ -63,7 +63,7 @@ export const OFFICE_RULES: Record<PoliticalOffice, {
   minister: { title: 'FCT Minister', city: 'abuja', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Abuja: contracts, okada bans, road projects, pardons.' },
   lagosgov: { title: 'Governor of Lagos', city: 'lagos', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Lagos: roads and potholes, contracts, okada bans, pardons.' },
   kanogov: { title: 'Governor of Kano', city: 'kano', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kano: roads and potholes, contracts, okada bans, pardons.' },
-  president: { title: 'President', filingFee: 1_000_000, targetSupport: 75, termMs: TERM_MS, powers: 'Sets taxes, shares the treasury between departments, grants pardons.' },
+  president: { title: 'President', filingFee: 1_000_000, targetSupport: 75, termMs: TERM_MS, powers: 'Sets taxes, shares the treasury between departments, grants pardons, can impeach a governor for a few hours and run their state.' },
   igp: { title: 'IGP (Inspector-General of Police)', filingFee: 150_000, targetSupport: 50, termMs: TERM_MS, powers: 'Sets jail terms and street patrols.' },
   efcc: { title: 'EFCC Chair', filingFee: 300_000, targetSupport: 60, termMs: TERM_MS, powers: 'Sets fines on thieves and the deadline to report a theft.' },
 };
@@ -111,6 +111,19 @@ export const TREASURY = {
   palliative: { sizes: [5_000, 25_000, 100_000, 500_000, 1_000_000], cooldownHours: 6, maxPlayers: 100 },
   /** Any office holder: a "snake" swallows part of the treasury. */
   embezzle: { share: 0.2, cap: 500_000, cooldownHours: 12, catchChance: 0.35, fine: 50_000 },
+};
+
+/**
+ * The president can impeach whoever runs a state for a few hours: the governor keeps the seat but loses its powers and
+ * its pay, and the president runs the state until then (worker/civic.ts). The president can reinstate them sooner,
+ * and the next election result ends it.
+ */
+export const IMPEACH = { hours: [2, 4, 8], cooldownHours: 12 };
+/** When the suspension of whoever holds this office ends; 0 when they govern. `policy` is a civic_policies row. */
+export const suspendedUntil = (policy: Record<string, unknown> | null | undefined, office: PoliticalOffice, now = Date.now()) => {
+  if (!OFFICE_RULES[office].city) return 0;
+  const until = Number(policy?.[`${office}_suspended_until`] ?? 0);
+  return until > now ? until : 0;
 };
 
 /** How an office is named in a list: shorter than its title. */
@@ -228,7 +241,7 @@ export function banLeft(ms: number): string {
 
 
 /** The powers with a waiting time, and when I last used each (worker/civic.ts). */
-export type CivicCooldown = 'contract' | 'pardon';
+export type CivicCooldown = 'contract' | 'pardon' | 'impeach';
 
 /** What kind of government notice a line of the gazette is (worker/gazette.ts). */
 export type GazetteKind = 'law' | 'project' | 'palliative' | 'scandal' | 'elected';
