@@ -13,7 +13,7 @@ You need Node 22+, a Cloudflare account (the free plan is enough to start) and a
 ```bash
 npm install
 cp .env.example .env                    # Firebase web config (public values only)
-cp wrangler.example.jsonc wrangler.jsonc
+cp wrangler.example.jsonc wrangler.jsonc  # replaces Naija City's own config
 cp .dev.vars.example .dev.vars          # optional Worker secrets for local dev
 ```
 
@@ -36,7 +36,7 @@ cp .dev.vars.example .dev.vars          # optional Worker secrets for local dev
 
 4. **Deploy:** `npm run db:migrate` (remote D1), then `npm run deploy`. Set production secrets with `npx wrangler secret put <NAME>`; `.dev.vars.example` lists them all. Every one is optional: payments, push notifications, the owner dashboard and visit counts each switch off when their secret is missing.
 
-Nothing secret lives in the repo. `.env`, `.dev.vars` and `wrangler.jsonc` hold your own values and are git-ignored.
+Nothing secret lives in the repo. `.env` and `.dev.vars` hold your own values and are git-ignored. `wrangler.jsonc` is committed with Naija City's own public ids and domains, because Workers Builds deploys straight from git and a deploy without it replaces the Worker with a bare static site, dropping every binding and secret. Secrets go in `npx wrangler secret put`, which survives deploys.
 
 ## Project layout
 

@@ -4,11 +4,11 @@ dist
 *.log
 tsconfig.tsbuildinfo
 
-# Local config with real values: copy from the *.example files
+# Local config with real values: copy from the *.example files.
+# wrangler.jsonc is committed: Workers Builds deploys from git, and without it the deploy wipes every binding and secret.
 .env
 .env.*
 !.env.example
-/wrangler.jsonc
 .dev.vars
 
 # Cloudflare
