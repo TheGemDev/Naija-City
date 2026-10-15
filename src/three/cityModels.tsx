@@ -1,4 +1,4 @@
-// Low-poly town buildings for the map. Each model is centred on its footprint (w along x,
+// Town buildings for the map, built from primitives with trim, framed windows and smooth curves. Each model is centred on its footprint (w along x,
 // d along z, in tiles), sits on y=0 and has its entrance on the +z side.
 
 import { useRef } from 'react';
@@ -9,22 +9,53 @@ import { B, Keke } from './models';
 type V3 = [number, number, number];
 
 /** Shared materials so windows and street lamps can all light up at night in one go. */
-export const windowMat = new MeshStandardMaterial({ color: '#7fb4d6', emissive: '#ffcf7a', emissiveIntensity: 0, flatShading: true });
+export const windowMat = new MeshStandardMaterial({ color: '#5f8fb0', emissive: '#ffcf7a', emissiveIntensity: 0, roughness: 0.18, metalness: 0.55 });
 export const lampMat = new MeshStandardMaterial({ color: '#fff4cf', emissive: '#ffd27a', emissiveIntensity: 0 });
 
+const FRAME = '#f1ede4';
+const SILL = '#cfc8ba';
+
+/** A glazed window: the glass, a frame round it, a glazing bar or two and a sill under it. Works on any wall: the thinnest side of `s` is its depth. */
 function Win({ p, s }: { p: V3; s: V3 }) {
-  return (
+  const pane = (
     <mesh position={p} material={windowMat}>
       <boxGeometry args={s} />
     </mesh>
   );
+  const deep = s[0] < s[2] ? 0 : 2;
+  if (s[1] < Math.min(s[0], s[2])) return pane;
+  const wide = deep === 0 ? 2 : 0;
+  const t = 0.035;
+  const box = (w: number, h: number, dd: number): V3 => (wide === 0 ? [w, h, dd] : [dd, h, w]);
+  const at = (a: number, y: number, out = 0): V3 => {
+    const q: V3 = [...p];
+    q[wide] += a;
+    q[1] += y;
+    q[deep] += out * Math.sign(p[deep] || 1);
+    return q;
+  };
+  const W = s[wide], H = s[1], D = s[deep];
+  return (
+    <group>
+      {pane}
+      <B p={at(0, H / 2 + t / 2)} s={box(W + t * 2, t, D + 0.02)} c={FRAME} />
+      <B p={at(0, -H / 2 - t / 2)} s={box(W + t * 2, t, D + 0.02)} c={FRAME} />
+      <B p={at(-W / 2 - t / 2, 0)} s={box(t, H, D + 0.02)} c={FRAME} />
+      <B p={at(W / 2 + t / 2, 0)} s={box(t, H, D + 0.02)} c={FRAME} />
+      {W > 0.2 && <B p={at(0, 0, 0.004)} s={box(0.02, H, D + 0.01)} c={FRAME} />}
+      {H > 0.32 && <B p={at(0, H * 0.12, 0.004)} s={box(W, 0.02, D + 0.01)} c={FRAME} />}
+      <B p={at(0, -H / 2 - t - 0.018, 0.03)} s={box(W + 0.14, 0.036, D + 0.08)} c={SILL} />
+    </group>
+  );
 }
 
-function Cyl({ p, r, h, c, rt, seg = 12, e }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number; e?: string }) {
+function Cyl({ p, r, h, c, rt, seg = 24, e }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number; e?: string }) {
+  // Square and five-sided posts keep their edges; anything rounder is drawn round, with twice the sides.
+  const facets = seg < 6;
   return (
     <mesh position={p} castShadow receiveShadow>
-      <cylinderGeometry args={[rt ?? r, r, h, seg]} />
-      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading />
+      <cylinderGeometry args={[rt ?? r, r, h, facets ? seg : Math.max(seg * 2, 16)]} />
+      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading={facets} />
     </mesh>
   );
 }
@@ -32,8 +63,8 @@ function Cyl({ p, r, h, c, rt, seg = 12, e }: { p: V3; r: number; h: number; c: 
 function Dome({ p, r, c }: { p: V3; r: number; c: string }) {
   return (
     <mesh position={p} castShadow>
-      <sphereGeometry args={[r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      <meshStandardMaterial color={c} flatShading />
+      <sphereGeometry args={[r, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      <meshStandardMaterial color={c} roughness={0.55} />
     </mesh>
   );
 }
@@ -51,11 +82,14 @@ function Gable({ p, w, d, h, c }: { p: V3; w: number; d: number; h: number; c: s
 function Tree({ p, s = 0.6, c = '#3f7d2a' }: { p: V3; s?: number; c?: string }) {
   return (
     <group position={p} scale={s}>
-      <Cyl p={[0, 1, 0]} r={0.16} rt={0.11} h={2} c="#5b3a1e" seg={6} />
-      <mesh position={[0, 2.4, 0]} castShadow>
-        <icosahedronGeometry args={[1.1, 0]} />
-        <meshStandardMaterial color={c} flatShading />
-      </mesh>
+      <Cyl p={[0, 1, 0]} r={0.16} rt={0.11} h={2} c="#5b3a1e" seg={8} />
+      {/* A full crown: one big mass with two smaller ones bulging out of it. */}
+      {([[0, 2.4, 0, 1.1], [0.55, 2.15, 0.25, 0.7], [-0.5, 2.25, -0.3, 0.72]] as const).map(([x, y, z, r], i) => (
+        <mesh key={i} position={[x, y, z]} castShadow>
+          <icosahedronGeometry args={[r, 3]} />
+          <meshStandardMaterial color={c} roughness={0.85} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -1895,6 +1929,10 @@ export function HouseModel({ w, d, style, wall, roof, storeys, kind }: { w: numb
       <B p={[0, 0.3, -d / 2 + 0.1]} s={[w - 0.1, 0.6, 0.08]} c="#d8c7a8" />
       <group position={[0, 0, -0.2]}>
         <B p={[0, h / 2, 0]} s={[bw, h, bd]} c={wall} />
+        {/* plinth along the foot of the walls, and a band between floors */}
+        <B p={[0, 0.08, 0]} s={[bw + 0.06, 0.16, bd + 0.06]} c="#8b7d6b" />
+        {storeys === 2 && <B p={[0, 1.17, 0]} s={[bw + 0.05, 0.07, bd + 0.05]} c="#ece6da" />}
+        {style === 2 && <B p={[0, h + 0.2, bd / 2 - 0.03]} s={[bw + 0.15, 0.14, 0.08]} c="#ece6da" />}
         {style === 0 && <Gable p={[0, h + 0.3, 0]} w={bw + 0.25} d={bd / 2 + 0.15} h={0.5} c={roof} />}
         {style === 1 && (
           <mesh position={[0, h + 0.3, 0]} rotation={[0, Math.PI / 4, 0]} scale={[bw * 0.75, 1, bd * 0.75]} castShadow>
@@ -1906,7 +1944,12 @@ export function HouseModel({ w, d, style, wall, roof, storeys, kind }: { w: numb
         {Array.from({ length: storeys }, (_, f) => (
           <WindowRow key={f} w={bw} d={bd} y={0.7 + f * 1} n={Math.max(2, Math.round(bw))} inset={0.25} />
         ))}
-        <B p={[0.25, 0.35, bd / 2 + 0.02]} s={[0.3, 0.7, 0.04]} c="#5a371e" />
+        {/* front door in a frame, a step up to it and a little canopy over it */}
+        <B p={[0.25, 0.37, bd / 2 + 0.015]} s={[0.4, 0.78, 0.03]} c={FRAME} />
+        <B p={[0.25, 0.35, bd / 2 + 0.025]} s={[0.3, 0.7, 0.04]} c="#5a371e" />
+        <B p={[0.34, 0.36, bd / 2 + 0.05]} s={[0.03, 0.03, 0.03]} c="#d4af37" />
+        <B p={[0.25, 0.03, bd / 2 + 0.12]} s={[0.5, 0.06, 0.22]} c="#a8a29e" />
+        <B p={[0.25, 0.8, bd / 2 + 0.13]} s={[0.56, 0.04, 0.26]} c={roof} />
         {kind === 'tank' && (
           <group position={[bw / 2 - 0.35, h, -bd / 4]}>
             {[[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].map(([x, z], i) => (

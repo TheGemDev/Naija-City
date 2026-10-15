@@ -1,11 +1,12 @@
-// Hand holding the phone (desktop only), drawn as smooth shaded vector shapes. Drawn in a 520×560 box
-// where the phone covers x 90–430 and its bottom edge sits at y 360. Fingers wrap the left edge
-// from behind; the thumb rests on the right edge in front.
+// Right hand holding the phone (desktop only), drawn as a soft-shaded illustration. Drawn in a
+// 520×560 box where the phone covers x 90–430 and its bottom edge sits at y 360. The palm and
+// fingers are behind the phone, with only the fingertips peeking round the left edge; the thumb
+// rests along the right edge in front.
 
 type P = [number, number];
 
-const SKIN = { base: '#8a5a3c', dark: '#5b3622', deep: '#3f2415', light: '#b57c57', hi: '#d09a73' };
-const NAIL = { base: '#e8c4ad', edge: '#c99a82', hi: '#fbeee4' };
+const SKIN = { hi: '#c98d64', light: '#b07650', base: '#935d3c', dark: '#6e4229', deep: '#4a2a18' };
+const NAIL = { base: '#e6bba1', tip: '#f3dccd', edge: '#b9876c' };
 
 /** Closed smooth outline through the points (Catmull-Rom turned into Béziers). */
 function blob(pts: P[]): string {
@@ -20,106 +21,116 @@ function blob(pts: P[]): string {
   return d + 'Z';
 }
 
-/** A tapering limb: round-capped segments laid down in layers (outline, body, light, highlight). */
-function Tube({ line, widths, id }: { line: P[]; widths: number[]; id: string }) {
-  const seg = (k: number, inset: number, dx: number, dy: number, stroke: string, op = 1) =>
-    line.slice(0, -1).map((a, i) => {
-      const b = line[i + 1];
-      return (
-        <line
-          key={`${k}-${i}`}
-          x1={a[0] + dx} y1={a[1] + dy} x2={b[0] + dx} y2={b[1] + dy}
-          stroke={stroke} strokeOpacity={op} strokeLinecap="round"
-          strokeWidth={Math.max(1.5, Math.min(widths[i], widths[i + 1]) - inset)}
-        />
-      );
-    });
-  return (
-    <g data-id={id}>
-      {seg(0, -2.5, 0, 0, SKIN.deep)}
-      {seg(1, 0, 0, 0, SKIN.base)}
-      {seg(2, 12, -2, -2.5, SKIN.light, 0.9)}
-      {seg(3, 22, -3.5, -4.5, SKIN.hi, 0.55)}
-    </g>
-  );
-}
+// The hand from the heel of the palm down through the wrist into the forearm, off the bottom-right.
+// Its top is hidden behind the phone.
+const HAND: P[] = [
+  [175, 250], [300, 225], [425, 250], [462, 320], [470, 395], [492, 455], [540, 540], [575, 620],
+  [420, 660], [372, 560], [322, 492], [250, 450], [196, 392],
+];
 
-/** A rounded nail with a soft sheen. */
-function Nail({ at, r, rot, w = 1 }: { at: P; r: number; rot: number; w?: number }) {
-  return (
-    <g transform={`translate(${at[0]} ${at[1]}) rotate(${rot})`}>
-      <rect x={-r} y={-r * 0.8 * w} width={r * 2} height={r * 1.6 * w} rx={r * 0.8} fill={NAIL.edge} />
-      <rect x={-r + 1.2} y={-r * 0.8 * w + 1.2} width={r * 2 - 2.4} height={r * 1.6 * w - 2.4} rx={r * 0.7} fill={NAIL.base} />
-      <ellipse cx={-r * 0.25} cy={-r * 0.3 * w} rx={r * 0.45} ry={r * 0.22 * w} fill={NAIL.hi} opacity={0.7} />
-    </g>
-  );
-}
+// Fingertips curled round the left edge, index at the top. Only the pads past the edge show.
+const TIPS = [
+  { y: 150, h: 44, reach: 22, tilt: -8 },
+  { y: 198, h: 46, reach: 27, tilt: -4 },
+  { y: 246, h: 44, reach: 24, tilt: 2 },
+  { y: 290, h: 38, reach: 17, tilt: 8 },
+];
 
-// Heel of the palm and wrist: only the part below the phone shows, flowing down into the forearm.
-const PALM: P[] = [[205, 200], [330, 190], [430, 240], [458, 330], [440, 400], [400, 440], [330, 450], [260, 430], [210, 380], [185, 290]];
-const FOREARM: P[] = [[290, 380], [420, 380], [540, 580], [450, 650], [350, 520]];
-const THENAR: P[] = [[418, 340], [466, 350], [476, 410], [440, 440], [408, 405]];
-
-// index → pinky, wrapping the left edge: bent across the edge, tips curling back round the side.
-const FINGERS = [
-  { y: 118, w: 50, tip: 46, len: 1 },
-  { y: 170, w: 52, tip: 38, len: 1.1 },
-  { y: 224, w: 50, tip: 44, len: 1 },
-  { y: 276, w: 44, tip: 58, len: 0.8 },
+// The thumb, its base (the mound under it) at the bottom right, tip resting on the edge of the screen.
+const THUMB: P[] = [
+  [404, 196], [424, 194], [440, 212], [450, 250], [462, 296], [478, 340], [486, 388], [478, 440],
+  [462, 500], [436, 510], [416, 460], [414, 400], [416, 352], [406, 300], [394, 252], [390, 218],
 ];
 
 export function Hand({ part }: { part: 'back' | 'thumb' }) {
   const id = `hand-${part}`;
+  const url = (n: string) => `url(#${id}-${n})`;
   return (
     <svg className={`hand hand-${part}`} viewBox="0 0 520 560" aria-hidden>
       <defs>
-        <radialGradient id={`${id}-palm`} cx="0.35" cy="0.3" r="0.85">
+        <linearGradient id={`${id}-arm`} x1="0.1" y1="0.2" x2="0.9" y2="0.6">
           <stop offset="0" stopColor={SKIN.light} />
-          <stop offset="0.55" stopColor={SKIN.base} />
-          <stop offset="1" stopColor={SKIN.dark} />
-        </radialGradient>
-        <linearGradient id={`${id}-arm`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={SKIN.dark} />
           <stop offset="0.45" stopColor={SKIN.base} />
-          <stop offset="1" stopColor={SKIN.deep} />
+          <stop offset="1" stopColor={SKIN.dark} />
         </linearGradient>
-        <filter id={`${id}-soft`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="7" />
+        <linearGradient id={`${id}-tip`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={SKIN.hi} />
+          <stop offset="0.55" stopColor={SKIN.light} />
+          <stop offset="1" stopColor={SKIN.dark} />
+        </linearGradient>
+        <linearGradient id={`${id}-thumb`} x1="0" y1="0" x2="1" y2="0.15">
+          <stop offset="0" stopColor={SKIN.hi} />
+          <stop offset="0.5" stopColor={SKIN.light} />
+          <stop offset="1" stopColor={SKIN.dark} />
+        </linearGradient>
+        <radialGradient id={`${id}-nail`} cx="0.4" cy="0.35" r="0.7">
+          <stop offset="0" stopColor={NAIL.tip} />
+          <stop offset="0.7" stopColor={NAIL.base} />
+          <stop offset="1" stopColor={NAIL.edge} />
+        </radialGradient>
+        <filter id={`${id}-blur`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="8" />
         </filter>
-        <filter id={`${id}-fine`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="1.6" />
+        <filter id={`${id}-soft`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" />
         </filter>
+        <clipPath id={`${id}-handclip`}>
+          <path d={blob(HAND)} />
+        </clipPath>
+        {/* the thumb's base melts into the palm instead of ending in an edge */}
+        <linearGradient id={`${id}-melt`} x1="0" y1="0" x2="0" y2="560" gradientUnits="userSpaceOnUse">
+          <stop offset="0.76" stopColor="#fff" />
+          <stop offset="0.9" stopColor="#000" />
+        </linearGradient>
+        <mask id={`${id}-fade`} maskUnits="userSpaceOnUse" x="0" y="0" width="520" height="560">
+          <rect width="520" height="560" fill={url('melt')} />
+        </mask>
+        <clipPath id={`${id}-thumbclip`}>
+          <path d={blob(THUMB)} />
+        </clipPath>
       </defs>
+
       {part === 'back' ? (
         <>
-          {/* forearm running off the bottom-right */}
-          <path d={blob(FOREARM)} fill={`url(#${id}-arm)`} />
-          {/* palm behind the phone */}
-          <path d={blob(PALM)} fill={`url(#${id}-palm)`} />
-          <path d={blob(PALM)} fill="none" stroke={SKIN.deep} strokeOpacity={0.55} strokeWidth={16} filter={`url(#${id}-soft)`} />
-          {FINGERS.map((f, i) => (
-            <g key={i}>
-              <Tube
-                id={`f${i}`}
-                line={[[230, f.y], [118, f.y + 2], [f.tip + 34, f.y + 8], [f.tip + 8, f.y + 24], [f.tip + 2, f.y + 34]]}
-                widths={[f.w, f.w, f.w - 2, f.w - 6, f.w - 14]}
-              />
-              {/* knuckle creases */}
-              <path d={`M${f.tip + 66},${f.y - f.w * 0.28} q-6 ${f.w * 0.28} 0 ${f.w * 0.56}`} stroke={SKIN.deep} strokeOpacity={0.45} strokeWidth={2} fill="none" strokeLinecap="round" filter={`url(#${id}-fine)`} />
-              <Nail at={[f.tip + 6, f.y + 29]} r={9} rot={-105} />
+          {TIPS.map((f, i) => (
+            <g key={i} transform={`rotate(${f.tilt} 100 ${f.y})`}>
+              <rect x={90 - f.reach} y={f.y - f.h / 2} width={f.reach + 60} height={f.h} rx={f.h / 2} fill={url('tip')} />
+              {/* the pad's rounded highlight, and the crease where it meets the next finger */}
+              <ellipse cx={90 - f.reach + f.h * 0.42} cy={f.y - f.h * 0.16} rx={f.h * 0.26} ry={f.h * 0.16} fill={SKIN.hi} opacity={0.55} filter={url('soft')} />
+              <path d={`M${92 - f.reach + f.h * 0.3},${f.y + f.h / 2 - 1} H150`} stroke={SKIN.deep} strokeOpacity={0.35} strokeWidth={3} filter={url('soft')} />
             </g>
           ))}
+
+          <path d={blob(HAND)} fill={url('arm')} />
+          <g clipPath={url('handclip')}>
+            {/* soft form shading: the far side of the wrist turns away from the light */}
+            <path d={blob([[470, 330], [600, 400], [600, 680], [470, 660], [430, 470]])} fill={SKIN.deep} opacity={0.45} filter={url('blur')} />
+            <path d={blob([[180, 300], [260, 300], [330, 520], [300, 640], [200, 520]])} fill={SKIN.hi} opacity={0.35} filter={url('blur')} />
+            {/* the phone's shadow across the palm */}
+            <rect x={80} y={350} width={360} height={30} fill="#000" opacity={0.35} filter={url('blur')} />
+            {/* wrist creases */}
+            <path d="M318 488 q40 -22 92 -30" stroke={SKIN.deep} strokeOpacity={0.3} strokeWidth={3} fill="none" strokeLinecap="round" filter={url('soft')} />
+            <path d="M334 506 q36 -18 84 -26" stroke={SKIN.deep} strokeOpacity={0.22} strokeWidth={2.5} fill="none" strokeLinecap="round" filter={url('soft')} />
+          </g>
         </>
       ) : (
-        <>
-          {/* thumb pad / base on the right edge */}
-          <path d={blob(THENAR)} fill={`url(#${id}-palm)`} />
-          <path d={blob(THENAR)} fill="none" stroke={SKIN.deep} strokeOpacity={0.4} strokeWidth={10} filter={`url(#${id}-soft)`} />
-          <Tube id="thumb" line={[[450, 392], [442, 322], [424, 266], [402, 214]]} widths={[54, 46, 38, 31]} />
-          {/* joint crease */}
-          <path d="M432 262 q14 -6 28 4" stroke={SKIN.deep} strokeOpacity={0.45} strokeWidth={2} fill="none" strokeLinecap="round" filter={`url(#${id}-fine)`} />
-          <Nail at={[402, 204]} r={13} rot={-28} w={1.05} />
-        </>
+        <g mask={url('fade')}>
+          <path d={blob(THUMB)} fill={url('thumb')} />
+          <g clipPath={url('thumbclip')}>
+            {/* rim of shade down the outer side, and a soft sheen along the top */}
+            <path d={blob([[450, 200], [520, 260], [530, 480], [480, 500], [460, 330]])} fill={SKIN.deep} opacity={0.5} filter={url('blur')} />
+            <path d={blob([[396, 220], [418, 220], [430, 330], [420, 430], [404, 330]])} fill={SKIN.hi} opacity={0.5} filter={url('blur')} />
+            {/* knuckle creases */}
+            <path d="M404 292 q20 -10 46 -4" stroke={SKIN.deep} strokeOpacity={0.4} strokeWidth={2.5} fill="none" strokeLinecap="round" filter={url('soft')} />
+            <path d="M408 302 q18 -6 38 -2" stroke={SKIN.deep} strokeOpacity={0.25} strokeWidth={2} fill="none" strokeLinecap="round" filter={url('soft')} />
+          </g>
+          {/* nail */}
+          <g transform="rotate(-18 416 228)">
+            <rect x={402} y={204} width={28} height={40} rx={13} fill={NAIL.edge} opacity={0.6} />
+            <rect x={404} y={206} width={24} height={36} rx={11.5} fill={url('nail')} />
+            <path d="M408 212 q8 -4 16 0" stroke="#fff" strokeOpacity={0.55} strokeWidth={2} fill="none" strokeLinecap="round" />
+          </g>
+        </g>
       )}
     </svg>
   );

@@ -1,8 +1,9 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Color, MOUSE, PCFShadowMap, TOUCH, type DirectionalLight, type HemisphereLight, type PointLight } from 'three';
+import { Color, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight, type PointLight } from 'three';
 import { activeDesignOf, flightOf, hourOf, houseKeyOf, litHere, useGame, type GameState } from '../game/store';
 import { avatar } from '../game/avatar';
 import { driveState } from '../game/driveState';
@@ -74,11 +75,27 @@ function DayNight() {
   const sun = useRef<DirectionalLight>(null!);
   const hemi = useRef<HemisphereLight>(null!);
   const lamps = useRef<(PointLight | null)[]>([]);
-  const { scene, controls } = useThree();
+  const { scene, controls, gl } = useThree();
   const view = useGame((s) => s.view);
   const bg = useRef(new Color());
   const frames = useRef(0);
   const low = useLowPerf();
+
+  // Soft light bounced in from all round, so glass, paint and metal pick up reflections instead of
+  // looking chalky. Skipped in low mode.
+  useEffect(() => {
+    if (low) return;
+    const pm = new PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const env = pm.fromScene(room, 0.04).texture;
+    scene.environment = env;
+    return () => {
+      scene.environment = null;
+      env.dispose();
+      room.dispose();
+      pm.dispose();
+    };
+  }, [gl, scene, low]);
 
   useFrame(() => {
     const s = useGame.getState();
@@ -111,6 +128,8 @@ function DayNight() {
     hemi.current.intensity = 0.35 + day * 0.9 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85);
     hemi.current.color.copy(SKY_DAY).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8);
     hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - bulbs));
+
+    scene.environmentIntensity = 0.08 + day * 0.32;
 
     const lit = homePower && (h < 6.5 || h >= LIGHTS_ON) ? 3.2 : 0;
     lamps.current.forEach((l) => l && (l.intensity = lit));
@@ -357,7 +376,7 @@ export function Scene() {
   return (
     <Canvas
       key={low ? 'low' : 'high'}
-      shadows={low ? false : { type: PCFShadowMap }}
+      shadows={low ? false : { type: PCFSoftShadowMap }}
       dpr={low ? Math.min(dpr, LOW_DPR) : dpr}
       gl={{ powerPreference: low ? 'low-power' : 'high-performance', antialias: !low }}
       camera={{ position: framing(useGame.getState()).pos, fov: FOV, near: 0.5, far: 400 }}

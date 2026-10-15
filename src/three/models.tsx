@@ -1,4 +1,4 @@
-// Built-in low-poly models made from primitives. Each is centred on its footprint,
+// Built-in models made from primitives. Each is centred on its footprint,
 // sits on y=0 and faces +z. Swap any of them for a .glb via ITEM_MODELS in assets.ts.
 
 import { createContext, useContext, useRef, type ReactNode } from 'react';
@@ -22,12 +22,14 @@ export function B({ p, s, c: base, e, o }: { p: V3; s: V3; c: string; e?: string
   );
 }
 
-function Cyl({ p, r, h, c: base, rt, seg = 10 }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number }) {
+function Cyl({ p, r, h, c: base, rt, seg = 24 }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number }) {
   const c = useTint(base);
+  // Square and five-sided posts keep their edges; anything rounder is drawn round, with twice the sides.
+  const facets = seg < 6;
   return (
     <mesh position={p} castShadow receiveShadow>
-      <cylinderGeometry args={[rt ?? r, r, h, seg]} />
-      <meshStandardMaterial color={c} flatShading />
+      <cylinderGeometry args={[rt ?? r, r, h, facets ? seg : Math.max(seg * 2, 16)]} />
+      <meshStandardMaterial color={c} flatShading={facets} />
     </mesh>
   );
 }
@@ -36,8 +38,8 @@ function Ball({ p, r, c: base, detail = 0 }: { p: V3; r: number; c: string; deta
   const c = useTint(base);
   return (
     <mesh position={p} castShadow>
-      <icosahedronGeometry args={[r, detail]} />
-      <meshStandardMaterial color={c} flatShading />
+      <icosahedronGeometry args={[r, Math.max(detail, 3)]} />
+      <meshStandardMaterial color={c} />
     </mesh>
   );
 }

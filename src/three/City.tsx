@@ -518,33 +518,55 @@ function trafficOf(map: CityMap): Vehicle[] {
 /** Sized against the people on the map (0.85 tall): a saloon reaches their shoulder, a bus stands over them. Lanes are one tile wide. */
 const TRAFFIC_SCALE: Record<Vehicle['kind'], number> = { car: 1, bus: 1, keke: 0.68, bike: 0.62 };
 
-/** One vehicle on the move. It steers for the next road tile, picks a way at every junction, and in time heads for the edge of the map and leaves. */
+/**
+ * One vehicle on the move. It crosses the map a tile at a time along a curve that keeps it in the
+ * right-hand lane: straight through, round the corner at a junction, or back the other way at a
+ * dead end. In time it heads for the edge of the map and drives off, and another comes in.
+ */
 interface Drive {
+  /** The tile being crossed, the way it came in, and the way it will leave. */
+  cx: number; cz: number; dx: number; dz: number; ex: number; ez: number;
+  /** The curve across this tile (start, bend, end) and how far along it the vehicle is. */
+  p: [number, number, number, number, number, number];
+  t: number; len: number;
   x: number; z: number; yaw: number;
-  /** Heading as a tile step, and the tile it is driving towards. */
-  dx: number; dz: number; cx: number; cz: number;
-  /** The point it is steering for: that tile's centre, in the right-hand lane. */
-  tx: number; tz: number;
   mode: 'road' | 'off' | 'fade';
+  /** Tiles left before it leaves the road (off the edge, or fading out where no road reaches the edge). */
+  left: number;
   leaving: boolean;
   trips: number;
   limit: number;
   exit: { x: number; z: number; dx: number; dz: number } | null;
-  run: number;
   speed: number;
   roll: number;
+  turn: number;
 }
 
 const STEPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-/** How far right of a tile's centre a vehicle keeps, so oncoming traffic passes side by side. */
+/** How far right of a tile's centre line a vehicle keeps, so oncoming traffic passes side by side. */
 const LANE = 0.25;
-const TURN_RATE: Record<Vehicle['kind'], number> = { car: 3, bus: 2.4, keke: 3.2, bike: 3.6 };
-const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** Lays the curve across the vehicle's tile: in on the right of `d`, out on the right of `e`. */
+function laneCurve(v: Drive) {
+  const mx = v.cx + 0.5, mz = v.cz + 0.5;
+  const ax = mx - v.dx * 0.5 - v.dz * LANE, az = mz - v.dz * 0.5 + v.dx * LANE;
+  const bx = mx + v.ex * 0.5 - v.ez * LANE, bz = mz + v.ez * 0.5 + v.ex * LANE;
+  let kx: number, kz: number;
+  if (v.ex === v.dx && v.ez === v.dz) { kx = (ax + bx) / 2; kz = (az + bz) / 2; }
+  else if (v.ex === -v.dx && v.ez === -v.dz) { kx = mx + v.dx * 0.55; kz = mz + v.dz * 0.55; }
+  else {
+    // Where the lane coming in meets the lane going out.
+    const k = (bx - ax) * v.dx + (bz - az) * v.dz;
+    kx = ax + v.dx * k; kz = az + v.dz * k;
+  }
+  v.p = [ax, az, kx, kz, bx, bz];
+  v.len = (Math.hypot(kx - ax, kz - az) + Math.hypot(bx - kx, bz - kz) + Math.hypot(bx - ax, bz - az)) / 2 || 1;
+  v.t = 0;
+}
 
 function Traffic({ map }: { map: CityMap }) {
   const refs = useRef<(Group | null)[]>([]);
   const vehicles = useMemo(() => trafficOf(map), [map]);
-  const drives = useRef<Drive[]>([]);
 
   const world = useMemo(() => {
     const inBounds = (x: number, z: number) => x >= 0 && z >= 0 && x < map.w && z < map.h;
@@ -558,131 +580,124 @@ function Traffic({ map }: { map: CityMap }) {
         for (const [dx, dz] of STEPS) if (!inBounds(x + dx, z + dz)) exits.push({ x, z, dx, dz });
       }
     }
-    return { inBounds, open, cells, exits };
+
+    /** Arrived in tile (cx, cz) heading (dx, dz): choose the way out of it. */
+    const choose = (v: Drive) => {
+      if (v.mode !== 'road' || !inBounds(v.cx, v.cz)) { v.ex = v.dx; v.ez = v.dz; return; }
+      v.trips++;
+      if (!v.leaving && v.trips > v.limit) v.leaving = true;
+      if (v.leaving) {
+        if (!exits.length || v.trips > v.limit + 90) { v.mode = 'fade'; v.left = 3; v.ex = v.dx; v.ez = v.dz; return; }
+        if (!v.exit) v.exit = exits[Math.floor(Math.random() * exits.length)];
+        if (v.cx === v.exit.x && v.cz === v.exit.z) { v.mode = 'off'; v.left = 10; v.ex = v.exit.dx; v.ez = v.exit.dz; return; }
+      }
+      const ways = STEPS.filter(([x, z]) => !(x === -v.dx && z === -v.dz) && open(v.cx + x, v.cz + z));
+      if (!ways.length) {
+        // End of the road: off the edge of the map, or round and back.
+        if (!inBounds(v.cx + v.dx, v.cz + v.dz)) { v.mode = 'off'; v.left = 10; v.ex = v.dx; v.ez = v.dz; return; }
+        v.ex = -v.dx; v.ez = -v.dz;
+        return;
+      }
+      let best = ways[0];
+      let bestScore = Infinity;
+      for (const w of ways) {
+        const straight = w[0] === v.dx && w[1] === v.dz;
+        const score = v.leaving && v.exit
+          ? Math.abs(v.cx + w[0] - v.exit.x) + Math.abs(v.cz + w[1] - v.exit.z) + Math.random() * 1.5
+          : Math.random() * 3 - (straight ? 2 : 0);
+        if (score < bestScore) { bestScore = score; best = w; }
+      }
+      v.ex = best[0]; v.ez = best[1];
+    };
+
+    const spawn = (v: Drive, fresh: boolean) => {
+      v.mode = 'road'; v.leaving = false; v.trips = 0; v.limit = 14 + Math.floor(Math.random() * 26); v.exit = null; v.roll = 0; v.turn = 0; v.left = 0;
+      if (!fresh && exits.length && Math.random() < 0.75) {
+        // Rolls in from beyond the edge of the map.
+        const e = exits[Math.floor(Math.random() * exits.length)];
+        v.dx = -e.dx; v.dz = -e.dz; v.cx = e.x + e.dx * 6; v.cz = e.z + e.dz * 6;
+      } else {
+        let placed = false;
+        for (let tries = 0; tries < 40 && cells.length && !placed; tries++) {
+          const [x, z] = cells[Math.floor(Math.random() * cells.length)];
+          const ways = STEPS.filter(([dx, dz]) => open(x - dx, z - dz) || open(x + dx, z + dz));
+          if (!ways.length) continue;
+          [v.dx, v.dz] = ways[Math.floor(Math.random() * ways.length)];
+          v.cx = x; v.cz = z;
+          placed = true;
+        }
+        if (!placed) { v.cx = v.cz = -100; v.dx = 1; v.dz = 0; }
+      }
+      choose(v);
+      laneCurve(v);
+      if (fresh) v.t = Math.random();
+    };
+    return { inBounds, open, cells, exits, choose, spawn };
   }, [map]);
 
-  useEffect(() => {
-    const { open, cells, exits } = world;
-    const aim = (d: Drive) => {
-      d.tx = d.cx + 0.5 - d.dz * LANE;
-      d.tz = d.cz + 0.5 + d.dx * LANE;
-    };
-    const spawn = (d: Drive, fresh: boolean) => {
-      d.mode = 'road'; d.leaving = false; d.trips = 0; d.limit = 14 + Math.floor(Math.random() * 26); d.exit = null; d.run = 0; d.roll = 0;
-      if (!fresh && exits.length && Math.random() < 0.75) {
-        // Rolls in from the edge of the map.
-        const e = exits[Math.floor(Math.random() * exits.length)];
-        d.dx = -e.dx; d.dz = -e.dz; d.cx = e.x; d.cz = e.z;
-        d.x = e.x + 0.5 + e.dx * 7; d.z = e.z + 0.5 + e.dz * 7;
-        d.yaw = Math.atan2(d.dx, d.dz);
-        aim(d);
-        return;
-      }
-      for (let tries = 0; tries < 40 && cells.length; tries++) {
-        const [x, z] = cells[Math.floor(Math.random() * cells.length)];
-        const ways = STEPS.filter(([dx, dz]) => open(x + dx, z + dz));
-        if (!ways.length) continue;
-        const [dx, dz] = ways[Math.floor(Math.random() * ways.length)];
-        d.dx = dx; d.dz = dz; d.cx = x + dx; d.cz = z + dz;
-        d.x = x + 0.5 - dz * LANE; d.z = z + 0.5 + dx * LANE;
-        d.yaw = Math.atan2(dx, dz);
-        aim(d);
-        return;
-      }
-    };
-    drives.current = vehicles.map((v) => {
-      const d = { speed: v.speed } as Drive;
-      d.x = d.z = d.cx = d.cz = d.dx = d.dz = d.tx = d.tz = d.yaw = 0;
-      spawn(d, true);
-      d.speed = v.speed;
-      return d;
-    });
-    (drives.current as Drive[] & { respawn?: (d: Drive) => void }).respawn = (d) => spawn(d, false);
-  }, [world, vehicles]);
+  const drives = useMemo(() => vehicles.map((veh) => {
+    const v = { speed: veh.speed, p: [0, 0, 0, 0, 0, 0] } as unknown as Drive;
+    world.spawn(v, true);
+    v.speed = veh.speed;
+    return v;
+  }), [vehicles, world]);
 
   useFrame(({ clock }, delta) => {
     const dt = Math.min(delta, 0.1);
-    const list = drives.current;
-    if (!list.length) return;
-    const { open, inBounds, exits } = world;
-    const respawn = (list as Drive[] & { respawn?: (d: Drive) => void }).respawn!;
     // The server numbers every city's potholes in one list: only this city's are on these roads.
     const openPotholes = useRoads.getState().open.filter((i) => potholeCity(i) === map.id).map((i) => potholeOf(i)!);
 
-    /** At the middle of a tile: choose the next one. */
-    const advance = (d: Drive) => {
-      d.trips++;
-      if (!d.leaving && d.trips > d.limit) d.leaving = true;
-      if (d.leaving) {
-        if (!exits.length || d.trips > d.limit + 90) { d.mode = 'fade'; d.run = 0; return; }
-        if (!d.exit) d.exit = exits[Math.floor(Math.random() * exits.length)];
-        if (d.cx === d.exit.x && d.cz === d.exit.z) { d.mode = 'off'; d.run = 0; d.dx = d.exit.dx; d.dz = d.exit.dz; return; }
-      }
-      const ways = STEPS.filter(([dx, dz]) => !(dx === -d.dx && dz === -d.dz) && open(d.cx + dx, d.cz + dz));
-      if (!ways.length) {
-        // End of the road: off the edge of the map, or turn round.
-        if (!inBounds(d.cx + d.dx, d.cz + d.dz)) { d.mode = 'off'; d.run = 0; return; }
-        if (open(d.cx - d.dx, d.cz - d.dz)) { d.dx = -d.dx; d.dz = -d.dz; } else { d.mode = 'fade'; d.run = 0; return; }
-      } else {
-        let best = ways[0];
-        let bestScore = Infinity;
-        for (const w of ways) {
-          const straight = w[0] === d.dx && w[1] === d.dz;
-          let score = Math.random() * 3 - (straight ? 2.5 : 0);
-          if (d.leaving && d.exit) score = Math.abs(d.cx + w[0] - d.exit.x) + Math.abs(d.cz + w[1] - d.exit.z) + Math.random() * 1.5;
-          if (score < bestScore) { bestScore = score; best = w; }
-        }
-        d.dx = best[0]; d.dz = best[1];
-      }
-      d.cx += d.dx; d.cz += d.dz;
-      d.tx = d.cx + 0.5 - d.dz * LANE;
-      d.tz = d.cz + 0.5 + d.dx * LANE;
-    };
-
-    vehicles.forEach((v, i) => {
-      const d = list[i];
+    vehicles.forEach((veh, i) => {
+      const v = drives[i];
       const g = refs.current[i];
-      if (!g || !d) return;
-      const wx = d.mode === 'road' ? d.tx : d.x + d.dx * 5;
-      const wz = d.mode === 'road' ? d.tz : d.z + d.dz * 5;
-      const err = wrapAngle(Math.atan2(wx - d.x, wz - d.z) - d.yaw);
-      const maxTurn = TURN_RATE[v.kind] * dt;
-      const turn = Math.max(-maxTurn, Math.min(maxTurn, err));
-      d.yaw += turn;
+      if (!g || !v) return;
 
-      // Ease off into a bend, and hang back from whatever is in front.
-      let want = v.speed * (1 - 0.45 * Math.min(1, Math.abs(err) / 0.9));
-      const sy = Math.sin(d.yaw), cy = Math.cos(d.yaw);
-      for (let j = 0; j < list.length; j++) {
+      // Ease off for a bend, and hang back from whatever is in front in the same lane.
+      const bend = v.ex === v.dx && v.ez === v.dz ? 1 : v.ex === -v.dx && v.ez === -v.dz ? 0.4 : 0.6;
+      let want = veh.speed * bend;
+      const sy = Math.sin(v.yaw), cy = Math.cos(v.yaw);
+      for (let j = 0; j < drives.length; j++) {
         if (j === i) continue;
-        const o = list[j];
-        const ox = o.x - d.x, oz = o.z - d.z;
+        const o = drives[j];
+        const ox = o.x - v.x, oz = o.z - v.z;
         const ahead = ox * sy + oz * cy;
         const side = ox * cy - oz * sy;
-        if (ahead > 0 && ahead < 1.4 && Math.abs(side) < 0.4) want *= Math.max(0, (ahead - 0.5) / 0.9);
+        if (ahead > 0 && ahead < 1.3 && Math.abs(side) < 0.3 && Math.cos(o.yaw - v.yaw) > 0) want *= Math.max(0, (ahead - 0.55) / 0.75);
       }
-      d.speed += (want - d.speed) * Math.min(1, dt * 3);
-      d.x += sy * d.speed * dt;
-      d.z += cy * d.speed * dt;
+      v.speed += (want - v.speed) * Math.min(1, dt * 3);
 
-      if (d.mode === 'road') {
-        if (Math.hypot(d.tx - d.x, d.tz - d.z) < 0.45) advance(d);
-      } else {
-        d.run += d.speed * dt;
-        if (d.run > (d.mode === 'off' ? 12 : 2.5)) { respawn(d); return; }
+      v.t += (v.speed * dt) / v.len;
+      while (v.t >= 1) {
+        const over = (v.t - 1) * v.len;
+        if (v.mode !== 'road' && --v.left <= 0) { world.spawn(v, false); break; }
+        v.cx += v.ex; v.cz += v.ez; v.dx = v.ex; v.dz = v.ez;
+        world.choose(v);
+        laneCurve(v);
+        v.t = over / v.len;
       }
 
-      // Suspension bump / roll when hitting a pothole; bikes and cars lean into bends.
-      const hit = openPotholes.some((p) => Math.hypot(d.x - p.x, d.z - p.z) < 0.45);
+      const [ax, az, kx, kz, bx, bz] = v.p;
+      const t = v.t, u = 1 - t;
+      v.x = u * u * ax + 2 * u * t * kx + t * t * bx;
+      v.z = u * u * az + 2 * u * t * kz + t * t * bz;
+      const tx = u * (kx - ax) + t * (bx - kx), tz = u * (kz - az) + t * (bz - kz);
+      const yaw = Math.atan2(tx, tz);
+      const turn = Math.atan2(Math.sin(yaw - v.yaw), Math.cos(yaw - v.yaw));
+      v.yaw = yaw;
+      v.turn += (turn / Math.max(dt, 0.001) - v.turn) * Math.min(1, dt * 6);
+
+      // Suspension bump / roll when hitting a pothole; bikes lean into bends.
+      const hit = openPotholes.some((p) => Math.hypot(v.x - p.x, v.z - p.z) < 0.45);
       const bumpY = hit ? Math.sin(clock.elapsedTime * 28) * 0.02 - 0.01 : 0;
-      const lean = (-turn / Math.max(dt, 0.001)) * (v.kind === 'bike' ? 0.09 : 0.025);
-      d.roll += (lean - d.roll) * Math.min(1, dt * 6);
       const bumpRoll = hit ? Math.sin(clock.elapsedTime * 24) * 0.06 : 0;
-      const k = TRAFFIC_SCALE[v.kind] * (d.mode === 'fade' ? Math.max(0.01, 1 - d.run / 2.5) : 1);
-      g.scale.setScalar(k);
-      g.position.set(d.x, (inBounds(Math.floor(d.x), Math.floor(d.z)) ? map.groundY(d.x, d.z) : 0) + bumpY, d.z);
+      const lean = Math.max(-0.4, Math.min(0.4, -v.turn * (veh.kind === 'bike' ? 0.12 : 0.02)));
+      v.roll += (lean - v.roll) * Math.min(1, dt * 6);
+      const fade = v.mode === 'fade' ? Math.max(0.01, Math.min(1, (v.left - 1 + (1 - v.t)) / 2)) : 1;
+      g.scale.setScalar(TRAFFIC_SCALE[veh.kind] * fade);
+      const ground = world.inBounds(Math.floor(v.x), Math.floor(v.z)) ? map.groundY(v.x, v.z) : 0;
+      g.position.set(v.x, ground + bumpY, v.z);
       g.rotation.order = 'YXZ';
-      g.rotation.set(0, d.yaw, d.roll + bumpRoll);
+      g.rotation.set(0, v.yaw, v.roll + bumpRoll);
     });
   });
   return (
