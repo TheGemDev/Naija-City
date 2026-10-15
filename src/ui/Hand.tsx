@@ -33,10 +33,11 @@ function line(pts: P[]): string {
   return d;
 }
 
-// The thumb's centre line, a cubic Bézier from its root by the wrist to the tip on the screen, and its
-// half-width along the way: thick at the base, narrowing at the knuckle, a little fuller over the pad.
-const SPINE: [P, P, P, P] = [[488, 560], [506, 440], [472, 320], [398, 248]];
-const HALF = [62, 52, 42, 35, 31, 32, 31];
+// The thumb's centre line, a cubic Bézier from its root down in the heel of the hand to the tip on the
+// screen, and its half-width along the way: the broad muscle pad at the base, narrowing to the knuckle,
+// a little fuller over the pad. Its outer side is the hand's own outline (HAND), so the two are one shape.
+const SPINE: [P, P, P, P] = [[526, 620], [528, 440], [474, 318], [398, 248]];
+const HALF = [82, 64, 48, 37, 32, 32, 31];
 
 function bez(t: number): { at: P; dir: P } {
   const [a, b, c, d] = SPINE;
@@ -96,13 +97,16 @@ function crease(t: number, from: number, to: number, bow: number): string {
 const THUMB = thumbOutline();
 const TIP = bez(1);
 const NAIL_AT = bez(0.95);
+/** The joint the thumb bends at, about two thirds of the way up. */
+const JOINT = 0.75;
 const NAIL_ANGLE = (Math.atan2(TIP.dir[1], TIP.dir[0]) * 180) / Math.PI + 90;
 
 // The hand from the heel of the palm down through the wrist into the forearm, off the bottom-right.
-// Its top is hidden behind the phone.
+// Its top is hidden behind the phone; its right side runs down the outside of the thumb.
 const HAND: P[] = [
-  [150, 250], [300, 215], [430, 240], [480, 330], [512, 410], [556, 470], [600, 560], [624, 640],
-  [430, 680], [380, 580], [322, 500], [244, 456], [180, 400], [150, 320],
+  [150, 250], [300, 215], [430, 240], [476, 300],
+  ...[0.6, 0.5, 0.4, 0.3, 0.2, 0.1].map((t) => across(t, 1)),
+  [624, 640], [430, 680], [380, 580], [322, 500], [244, 456], [180, 400], [150, 320],
 ];
 
 // Fingertips curled round the left edge, index at the top. Only the pads past the edge show, each one
@@ -129,9 +133,10 @@ export function Hand({ part }: { part: 'back' | 'thumb' }) {
   return (
     <svg className={`hand hand-${part}`} viewBox="0 0 520 560" aria-hidden>
       <defs>
-        <linearGradient id={`${id}-arm`} x1="0.1" y1="0.2" x2="0.9" y2="0.6">
+        {/* one light over hand and thumb alike, so where the thumb grows out of the palm the skin is the same */}
+        <linearGradient id={`${id}-arm`} x1="200" y1="250" x2="620" y2="560" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor={SKIN.light} />
-          <stop offset="0.45" stopColor={SKIN.base} />
+          <stop offset="0.5" stopColor={SKIN.base} />
           <stop offset="1" stopColor={SKIN.dark} />
         </linearGradient>
         {/* lit from the upper left; the side of each fingertip turning in behind the phone falls into its shadow */}
@@ -141,9 +146,10 @@ export function Hand({ part }: { part: 'back' | 'thumb' }) {
           <stop offset="0.7" stopColor={SKIN.base} />
           <stop offset="1" stopColor={SKIN.deep} />
         </linearGradient>
-        <linearGradient id={`${id}-thumb`} x1="0" y1="0" x2="1" y2="0.3">
+        <linearGradient id={`${id}-thumb`} x1="340" y1="230" x2="620" y2="560" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor={SKIN.hi} />
-          <stop offset="0.45" stopColor={SKIN.light} />
+          <stop offset="0.35" stopColor={SKIN.light} />
+          <stop offset="0.7" stopColor={SKIN.base} />
           <stop offset="1" stopColor={SKIN.dark} />
         </linearGradient>
         <linearGradient id={`${id}-nail`} x1="0" y1="1" x2="0" y2="0">
@@ -166,10 +172,18 @@ export function Hand({ part }: { part: 'back' | 'thumb' }) {
         {/* the thumb's base melts into the palm instead of ending in an edge */}
         <linearGradient id={`${id}-melt`} x1="0" y1="0" x2="0" y2="560" gradientUnits="userSpaceOnUse">
           <stop offset="0.8" stopColor="#fff" />
-          <stop offset="0.96" stopColor="#000" />
+          <stop offset="0.98" stopColor="#000" />
         </linearGradient>
-        <mask id={`${id}-fade`} maskUnits="userSpaceOnUse" x="-100" y="0" width="720" height="560">
-          <rect x="-100" width="720" height="560" fill={url('melt')} />
+        <mask id={`${id}-fade`} maskUnits="userSpaceOnUse" x="-100" y="0" width="760" height="700">
+          <rect x="-100" width="760" height="700" fill={url('melt')} />
+        </mask>
+        {/* the thumb's shadow falls on the screen, not on the palm it grows out of */}
+        <linearGradient id={`${id}-onscreen`} x1="0" y1="0" x2="0" y2="560" gradientUnits="userSpaceOnUse">
+          <stop offset="0.62" stopColor="#fff" />
+          <stop offset="0.68" stopColor="#000" />
+        </linearGradient>
+        <mask id={`${id}-screen`} maskUnits="userSpaceOnUse" x="-100" y="0" width="760" height="700">
+          <rect x="-100" width="760" height="700" fill={url('onscreen')} />
         </mask>
         <clipPath id={`${id}-thumbclip`}>
           <path d={blob(THUMB)} />
@@ -210,16 +224,21 @@ export function Hand({ part }: { part: 'back' | 'thumb' }) {
         </>
       ) : (
         <g mask={url('fade')}>
+          <path d={blob(THUMB)} transform="translate(-5 8)" fill="#000" opacity={0.4} filter={url('mid')} mask={url('screen')} />
+          {/* where the thumb's pad lies against the palm, a soft fold rather than an edge */}
+          <path d={line(along(-1.02, 0.12, 0.5))} stroke={SKIN.deep} strokeWidth={10} strokeOpacity={0.4} fill="none" strokeLinecap="round" filter={url('mid')} />
           <path d={blob(THUMB)} fill={url('thumb')} />
           <g clipPath={url('thumbclip')}>
             {/* shade down the outer side turning away from the light, and a sheen along the top of the thumb */}
-            <path d={line(along(1.15, 0, 1))} stroke={SKIN.deep} strokeWidth={34} strokeOpacity={0.55} fill="none" filter={url('blur')} />
-            <path d={line(along(-0.35, 0.15, 0.95))} stroke={SKIN.hi} strokeWidth={16} strokeOpacity={0.5} fill="none" strokeLinecap="round" filter={url('mid')} />
+            <path d={line(along(1.15, 0.25, 1))} stroke={SKIN.deep} strokeWidth={34} strokeOpacity={0.5} fill="none" filter={url('blur')} />
+            <path d={line(along(-0.35, 0.3, 0.95))} stroke={SKIN.hi} strokeWidth={16} strokeOpacity={0.5} fill="none" strokeLinecap="round" filter={url('mid')} />
+            {/* the round of the muscle at the base, catching the light */}
+            <ellipse cx={across(0.22, -0.2)[0]} cy={across(0.22, -0.2)[1]} rx={42} ry={58} transform={`rotate(-18 ${across(0.22, -0.2)[0]} ${across(0.22, -0.2)[1]})`} fill={SKIN.light} opacity={0.35} filter={url('blur')} />
             {/* the knuckle: a soft bump of light above folds of skin */}
-            <ellipse cx={across(0.6, -0.1)[0]} cy={across(0.6, -0.1)[1]} rx={22} ry={16} fill={SKIN.hi} opacity={0.3} filter={url('mid')} />
-            <path d={crease(0.62, -0.7, 0.55, 6)} stroke={SKIN.deep} strokeOpacity={0.45} strokeWidth={2.4} fill="none" strokeLinecap="round" filter={url('soft')} />
-            <path d={crease(0.6, -0.55, 0.45, 5)} stroke={SKIN.deep} strokeOpacity={0.3} strokeWidth={1.8} fill="none" strokeLinecap="round" filter={url('soft')} />
-            <path d={crease(0.645, -0.5, 0.35, 4)} stroke={SKIN.deep} strokeOpacity={0.25} strokeWidth={1.6} fill="none" strokeLinecap="round" filter={url('soft')} />
+            <ellipse cx={across(JOINT - 0.02, -0.1)[0]} cy={across(JOINT - 0.02, -0.1)[1]} rx={20} ry={15} fill={SKIN.hi} opacity={0.3} filter={url('mid')} />
+            <path d={crease(JOINT, -0.7, 0.55, 6)} stroke={SKIN.deep} strokeOpacity={0.45} strokeWidth={2.4} fill="none" strokeLinecap="round" filter={url('soft')} />
+            <path d={crease(JOINT - 0.02, -0.55, 0.45, 5)} stroke={SKIN.deep} strokeOpacity={0.3} strokeWidth={1.8} fill="none" strokeLinecap="round" filter={url('soft')} />
+            <path d={crease(JOINT + 0.025, -0.5, 0.35, 4)} stroke={SKIN.deep} strokeOpacity={0.25} strokeWidth={1.6} fill="none" strokeLinecap="round" filter={url('soft')} />
             {/* the tip pressing on the glass is a touch darker where it meets it */}
             <ellipse cx={TIP.at[0] - TIP.dir[0] * 4} cy={TIP.at[1] - TIP.dir[1] * 4} rx={30} ry={18} transform={`rotate(${NAIL_ANGLE} ${TIP.at[0]} ${TIP.at[1]})`} fill={SKIN.dark} opacity={0.18} filter={url('mid')} />
           </g>

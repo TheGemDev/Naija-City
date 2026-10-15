@@ -521,7 +521,7 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 /* Hand holding the phone: desktop only */
 .hand { display: none; position: absolute; left: -90px; bottom: -200px; width: 520px; height: 560px; pointer-events: none; overflow: visible; }
 .hand-back { z-index: 0; filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.3)); }
-.hand-thumb { z-index: 2; filter: drop-shadow(-4px 6px 8px rgba(0, 0, 0, 0.4)); }
+.hand-thumb { z-index: 2; }
 .btn { background: var(--inverse); color: #fff; padding: 8px 14px; border-radius: 99px; font-weight: 700; font-size: 13px; white-space: nowrap; }
 .btn:disabled { background: var(--bg-cbd5e1); cursor: not-allowed; }
 .btn.danger { background: #dc2626; }
