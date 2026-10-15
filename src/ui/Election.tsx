@@ -98,6 +98,8 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
   const me = race?.candidates.find((c) => c.uid === uid);
   const bannedFor = (data?.bannedUntil ?? 0) - Date.now();
   const banned = bannedFor > 0;
+  // A new account can't vote until it is 12 hours old.
+  const tooNewFor = (data?.voteFrom ?? 0) - Date.now();
   const elsewhere = data?.runningFor && data.runningFor !== office ? data.runningFor : null;
   // A race takes candidates all day and votes only in the polling hour, when the ballot is closed to newcomers.
   const voting = !!race && pollsOpen(race.endsAt, Date.now());
@@ -161,7 +163,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
               <span className="ev-bar" aria-label={`${share}% of votes`}><i style={{ width: `${share}%` }} /></span>
             </span>
             <small className="ev-votes">{c.votes}</small>
-            {c.uid !== uid && voting && (
+            {c.uid !== uid && voting && tooNewFor <= 0 && (
               <button className={`ev-vote ${race?.myVote === c.uid ? 'done' : ''}`} disabled={busy || race?.myVote === c.uid} onClick={() => void vote(office, c.uid)}>
                 {race?.myVote === c.uid ? '✓' : 'Vote'}
               </button>
@@ -170,6 +172,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
         );
       })}
       {hidden > 0 && <small className="ev-more">+{hidden} more</small>}
+      {voting && tooNewFor > 0 && <small className="ev-note">New accounts can vote once they are 12 hours old · {banLeft(tooNewFor)} to go</small>}
 
       {!me && blocked && <small className="ev-note">{blocked}</small>}
       {!me && !blocked && (
@@ -223,6 +226,7 @@ export function ElectionDayPill() {
   const uid = useSession((s) => s.user?.uid ?? '');
   const refresh = useCivic((s) => s.refresh);
   const races = useCivic((s) => s.data?.races);
+  const voteFrom = useCivic((s) => s.data?.voteFrom ?? 0);
   useTick(60_000);
   const today = isElectionDay(Date.now());
   useEffect(() => {
@@ -241,7 +245,7 @@ export function ElectionDayPill() {
       <Emoji char="🗳️" size={18} />
       <span>
         <b>Polls are open</b>
-        <small>{waiting ? `Vote now · ${waiting} race${waiting === 1 ? '' : 's'} waiting` : `You have voted · results at ${POLLS_CLOSE_AT}`}</small>
+        <small>{voteFrom > Date.now() ? `New accounts vote after 12 hours · ${banLeft(voteFrom - Date.now())} to go` : waiting ? `Vote now · ${waiting} race${waiting === 1 ? '' : 's'} waiting` : `You have voted · results at ${POLLS_CLOSE_AT}`}</small>
       </span>
     </button>
   );

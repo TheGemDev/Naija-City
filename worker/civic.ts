@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, governorPay, banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -316,7 +316,7 @@ async function snapshot(db: D1Database, uid: string) {
        JOIN players p ON p.uid = c.uid ORDER BY c.created_at DESC LIMIT 12`,
     )
     .all<{ username: string | null; office: PoliticalOffice }>();
-  const me = await db.prepare('SELECT road_block_until, embezzled_at, civic_banned_at FROM players WHERE uid = ?').bind(uid).first<{ road_block_until: number | null; embezzled_at: number | null; civic_banned_at: number | null }>();
+  const me = await db.prepare('SELECT road_block_until, embezzled_at, civic_banned_at, created_at FROM players WHERE uid = ?').bind(uid).first<{ road_block_until: number | null; embezzled_at: number | null; civic_banned_at: number | null; created_at: number | null }>();
   const running = await db
     .prepare("SELECT e.office FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id AND e.status = 'open' WHERE c.uid = ? LIMIT 1")
     .bind(uid)
@@ -346,6 +346,8 @@ async function snapshot(db: D1Database, uid: string) {
     runningFor: running?.office ?? null,
     banned: bannedUntil(me?.civic_banned_at) > Date.now(),
     bannedUntil: bannedUntil(me?.civic_banned_at) || null,
+    /** A new account may vote from then on. */
+    voteFrom: (me?.created_at ?? 0) + VOTER_MIN_AGE_MS,
     news: await recentNews(db),
     policies: {
       taxRate: (policies?.tax_rate as number) ?? 10,
@@ -604,6 +606,9 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     if (!race) return err(409, 'There is no open election for this office');
     if (!pollsOpen(race.ends_at, now)) return err(409, `The polls open at ${POLLS_OPEN_AT}. Until then candidates can only campaign`);
     if (body.candidateUid === user.uid) return err(400, 'You cannot vote for yourself');
+    const voter = await db.prepare('SELECT created_at FROM players WHERE uid = ?').bind(user.uid).first<{ created_at: number }>();
+    const voteFrom = (voter?.created_at ?? now) + VOTER_MIN_AGE_MS;
+    if (voteFrom > now) return err(403, `New accounts can vote once they are 12 hours old. You can vote in ${banLeft(voteFrom - now)}`);
     const candidate = await db
       .prepare('SELECT 1 AS candidate FROM civic_candidates WHERE election_id = ? AND uid = ?')
       .bind(race.id, body.candidateUid)

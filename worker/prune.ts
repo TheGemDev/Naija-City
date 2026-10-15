@@ -9,6 +9,7 @@
 // (lifetime counts on profiles and shops), paid orders and ads (real-money records), and anything a player owns.
 
 import { DAY_MS, seasonKey } from '../src/game/community';
+import { EFCC_RECORD_MS } from '../src/game/efcc';
 
 /** Newest messages kept per conversation (DMs) and per group chat. */
 export const DM_KEEP = 200;
@@ -88,7 +89,7 @@ export async function pruneOldData(db: D1Database, now: number) {
     db.prepare(
       `DELETE FROM efcc_cases WHERE resolves_at < ? AND (status IN ('cleared', 'bribed')
          OR (status = 'convicted' AND (seized_property_json IS NULL OR bought_back_at IS NOT NULL)))`,
-    ).bind(record),
+    ).bind(now - EFCC_RECORD_MS),
     db.prepare(`DELETE FROM civic_votes WHERE election_id IN ${oldElection}`).bind(record),
     db.prepare(`DELETE FROM civic_candidates WHERE election_id IN ${oldElection}`).bind(record),
     db.prepare(`DELETE FROM civic_posters WHERE election_id IN ${oldElection}`).bind(record),

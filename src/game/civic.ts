@@ -215,6 +215,8 @@ export interface LootCase {
 
 /** Nobody locked up in the last 12 hours (or still in a cell) may file to run for office. */
 export const ARREST_BAN_MS = 12 * 60 * 60_000;
+/** A new account waits this long before it may vote, so a candidate can't sign up a crowd of fresh accounts to vote for them. */
+export const VOTER_MIN_AGE_MS = 12 * HOUR_MS;
 /** Caught buying votes: out of that race, and barred from filing for any office for this long. Nobody is barred for life. */
 export const VOTE_BUYING_BAN_MS = 3 * DAY_MS;
 /** How much of a ban is left, in words: "3 days", "5 hours". */

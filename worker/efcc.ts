@@ -1,4 +1,4 @@
-import { EFCC, EFCC_DIRTY_KINDS, efccConvicts, efccSource, type EfccCase, type EfccIncome, type EfccStatus } from '../src/game/efcc';
+import { EFCC, EFCC_DIRTY_KINDS, EFCC_RECORD_MS, efccConvicts, efccSource, type EfccCase, type EfccIncome, type EfccStatus } from '../src/game/efcc';
 import { DESIGN_BY_ID, STAGES, type Property } from '../src/game/property';
 import { syncEstate } from './estate';
 import { sendPush } from './push';
@@ -196,9 +196,11 @@ async function refreshedRows(db: D1Database, uid: string) {
      FROM efcc_cases c
      JOIN players target ON target.uid = c.target_uid
      JOIN players accuser ON accuser.uid = c.accuser_uid
-     WHERE c.accuser_uid = ? OR c.target_uid = ?
+     WHERE (c.accuser_uid = ?1 OR c.target_uid = ?1)
+       AND (c.status = 'investigating' OR COALESCE(c.resolved_at, c.resolves_at) > ?2
+         OR (c.status = 'convicted' AND c.seized_property_json IS NOT NULL AND c.bought_back_at IS NULL))
      ORDER BY c.filed_at DESC LIMIT 50`,
-  ).bind(uid, uid).all<CaseRow & { target: string; accuser: string }>();
+  ).bind(uid, Date.now() - EFCC_RECORD_MS).all<CaseRow & { target: string; accuser: string }>();
   return results;
 }
 

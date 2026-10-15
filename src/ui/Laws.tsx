@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { BIZ } from '../game/career';
 import { ALLOCATION, OFFICES, type Allocation, type PoliticalOffice } from '../game/civic';
 import { naira, OFFICE_RULES } from '../game/store';
-import { STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS } from '../game/treasury';
-import { useCivic, type CivicSnapshot, type PolicyChange } from '../net/civic';
+import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, STATE_ASSETS, STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS, type StateCaps, type StateLawKey } from '../game/treasury';
+import { useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
 import { Emoji } from './Icons';
 import './laws.css';
 
@@ -82,6 +82,44 @@ const FIXED: [string, string][] = [
   ['Delivery levy (standard)', pct(BIZ.deliveryShare)],
 ];
 
+/** A state's own rate as the gazette prints it: fees are a share of the standard fee, the rest plain percents. */
+function stateRate(key: StateLawKey, value: number) {
+  if (STATE_LAWS[key].max !== 200) return `${value}%`;
+  return value === 100 ? 'Standard' : `${value}% of standard`;
+}
+
+/** What a city's government charges and how its treasury and services stand, under its head's signature. */
+function StateLines({ state, caps, full }: { state?: StateInfo; caps: StateCaps; full: boolean }) {
+  const laws = { ...DEFAULT_STATE_LAWS, ...state?.laws };
+  return (
+    <>
+      {STATE_LAW_KEYS.map((k) => (
+        <div className="law-line" key={k}>
+          <span>{STATE_LAWS[k].title} <Emoji char="🏛️" size={12} /></span>
+          <i />
+          <b>{stateRate(k, Math.min(laws[k], caps[k]))}</b>
+        </div>
+      ))}
+      {full && state && (
+        <>
+          {state.payShare !== undefined && (
+            <div className="law-line"><span>Governor’s pay</span><i /><b>{state.payShare}% of the maximum</b></div>
+          )}
+          <div className="law-line"><span>State treasury</span><i /><b>{naira(state.balance)}</b></div>
+          {state.arrears > 0 && <div className="law-line"><span>Unpaid bills</span><i /><b>{naira(state.arrears)}</b></div>}
+          {STATE_ASSETS.filter((a) => state.assets[a]).map((a) => (
+            <div className="law-line" key={a}>
+              <span><Emoji char={ASSET_INFO[a].icon} size={12} /> {ASSET_INFO[a].label}</span>
+              <i />
+              <b>{Math.round(state.assets[a]!.condition)}% condition</b>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 /** The office holder's desk: one card per law they own, with the values they can pick. */
 function Desk({ office, policies, busy, onSet }: { office: PoliticalOffice; policies: CivicSnapshot['policies']; busy: boolean; onSet(change: PolicyChange): void }) {
   return (
@@ -110,7 +148,7 @@ function Desk({ office, policies, busy, onSet }: { office: PoliticalOffice; poli
 }
 
 /** The laws in force, printed like a receipt: no controls, just what each setting is and who signed it. */
-function Gazette({ policies, treasury, allocation, only }: { policies: CivicSnapshot['policies']; treasury: number; allocation: Allocation; only?: PoliticalOffice }) {
+function Gazette({ policies, treasury, allocation, states, caps, only }: { policies: CivicSnapshot['policies']; treasury: number; allocation: Allocation; states?: CivicSnapshot['states']; caps: StateCaps; only?: PoliticalOffice }) {
   const signer = (office: PoliticalOffice) => {
     const holder = policies[office];
     return holder?.username ? `@${holder.username}` : holder?.name ?? 'Vacant';
@@ -131,6 +169,7 @@ function Gazette({ policies, treasury, allocation, only }: { policies: CivicSnap
               <b>{show(law, policies[law.key])}</b>
             </div>
           ))}
+          {OFFICE_RULES[office].city && <StateLines state={states?.[OFFICE_RULES[office].city!]} caps={caps} full={!!only} />}
         </div>
       ))}
       {(!only || only === 'president') && (
@@ -193,7 +232,7 @@ export function LawsTab({ uid }: { uid: string }) {
       {view !== 'all' && holds(view) ? (
         <Desk office={view} policies={data.policies} busy={busy} onSet={(change) => void setPolicy(change)} />
       ) : (
-        <Gazette policies={data.policies} treasury={data.treasury} allocation={{ ...ALLOCATION.defaults, ...data.allocation }} only={view === 'all' ? undefined : view} />
+        <Gazette policies={data.policies} treasury={data.treasury} allocation={{ ...ALLOCATION.defaults, ...data.allocation }} states={data.states} caps={{ ...DEFAULT_STATE_CAPS, ...data.caps }} only={view === 'all' ? undefined : view} />
       )}
     </>
   );

@@ -1,10 +1,11 @@
 // Cars parked at home. Each one is drawn side-on as a few outlines (the body below its crease, the
 // body above it, the cabin) and stretched across the car's width, narrower at the roof and rounded
-// at the nose and tail. Lamps, grille, glass, bumpers and wheels are laid on top, and the lot is
-// merged into one mesh per finish. Cars face +z and sit on y=0.
+// at the nose and tail, with the edges rolled over so the paint catches the light. Lamps, grille,
+// glass, bumpers and wheels are laid on top, and the lot is merged into one mesh per finish. Cars
+// face +z and sit on y=0.
 
 import { useMemo } from 'react';
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Euler, Float32BufferAttribute, Matrix4, Quaternion, ShapeUtils, Vector2, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CircleGeometry, CylinderGeometry, Euler, Float32BufferAttribute, LatheGeometry, Matrix4, Quaternion, ShapeUtils, Vector2, Vector3 } from 'three';
 import { CAR_BY_ID, type CarDef } from '../game/cars';
 import { audio } from '../game/audio';
 import { useGame } from '../game/store';
@@ -14,7 +15,7 @@ type Pt = [number, number];
 type V3 = [number, number, number];
 /** Half the car's width at a point on the side view. */
 type Width = (z: number, y: number) => number;
-type Part = 'paint' | 'roof' | 'glass' | 'dark' | 'trim' | 'chrome' | 'tyre' | 'rim' | 'head' | 'tail' | 'amber' | 'plate';
+type Part = 'paint' | 'roof' | 'glass' | 'dark' | 'trim' | 'chrome' | 'tyre' | 'rim' | 'gun' | 'head' | 'tail' | 'amber' | 'plate';
 
 interface Look {
   len: number;
@@ -60,7 +61,12 @@ interface Look {
   pods?: boolean;
   pipes?: 'rear' | 'side';
   mascot?: 'star' | 'lady';
+  /** How rounded the upper body and cabin edges are, against the usual: boxy cars roll them less. */
+  soft?: number;
 }
+
+/** How far the body's edges roll over, so light runs round them instead of stopping at a crease. */
+const ROUND = 0.045;
 
 const SALOON: Look = {
   len: 3, width: 1.36, ride: 0.2, waist: 0.58, belt: 0.75, roof: 1.17, nose: 0.69, tail: 0.72, sag: 0.01,
@@ -82,34 +88,36 @@ const ESTATE: Look = {
 const LOOKS: Record<string, Look> = {
   // Long, low boot and chrome bumpers.
   peugeot_504: { ...SALOON, len: 3.1, axle: 0.95, cowl: 0.55, deck: -0.85, rakeF: 0.3, rakeR: 0.28, nose: 0.68, tail: 0.64, roof: 1.16, bumper: 'chrome', wheels: 'cap', bright: true, strip: true },
-  golf_3: ESTATE,
+  // A short hatchback: the tail drops straight down behind a leaning hatch.
+  golf_3: { ...ESTATE, len: 2.72, axle: 0.84, cowl: 0.47, rakeF: 0.4, rakeR: 0.2, roof: 1.18, tail: 0.8, rails: false, grille: 'bar', lamps: 'slim', tails: 'tall' },
   // Upright and square, with the grille standing proud.
   benz_190e: { ...SALOON, cowl: 0.5, deck: -0.86, rakeF: 0.3, rakeR: 0.27, nose: 0.71, tail: 0.73, roof: 1.16, tuck: 0.07, grille: 'upright', bumper: 'trim', bright: true, strip: true, mascot: 'star' },
   // Fast screens and a short, high boot.
   corolla: { ...SALOON, cowl: 0.6, deck: -0.9, rakeF: 0.46, rakeR: 0.4, nose: 0.66, tail: 0.76, roof: 1.15, sag: 0.03, tumble: 0.12, grille: 'slit', lamps: 'slim', tails: 'strip' },
   prado: OFFROADER,
   // A box: flat glass, round lamps, spare on the back.
-  g_wagon: { ...OFFROADER, len: 3, ride: 0.34, waist: 0.8, belt: 1.04, roof: 1.62, nose: 1, tail: 1.04, sag: 0, cowl: 0.5, rakeF: 0.1, rakeR: 0.04, tumble: 0.03, tuck: 0.025, wheelR: 0.31, axle: 0.94, lamps: 'round', tails: 'square', wheels: 'black', rails: false, spare: true, pods: true, pipes: 'side' },
+  g_wagon: { ...OFFROADER, len: 3, ride: 0.34, waist: 0.8, belt: 1.04, roof: 1.62, nose: 1, tail: 1.04, sag: 0, cowl: 0.5, rakeF: 0.1, rakeR: 0.04, tumble: 0.03, tuck: 0.025, wheelR: 0.31, axle: 0.94, lamps: 'round', tails: 'square', wheels: 'black', rails: false, spare: true, pods: true, pipes: 'side', soft: 0.45 },
   lexus_lx: { ...OFFROADER, len: 3.25, width: 1.5, waist: 0.78, belt: 1.02, roof: 1.55, nose: 0.98, tail: 1.02, cowl: 0.6, rakeF: 0.32, rakeR: 0.12, wheelR: 0.31, axle: 1.02, grille: 'spindle', lamps: 'slim', tails: 'strip', bumper: 'paint', cladding: false, bright: true },
   // Sleek: the roof falls away and nothing sticks out.
   range_autobiography: { ...OFFROADER, len: 3.25, width: 1.5, ride: 0.28, belt: 0.99, roof: 1.47, nose: 0.96, tail: 0.99, sag: 0.06, cowl: 0.6, rakeF: 0.4, rakeR: 0.22, tumble: 0.09, tuck: 0.07, wheelR: 0.31, axle: 1.02, lamps: 'slim', bumper: 'paint', cladding: false, rails: false },
   bentayga: { ...OFFROADER, len: 3.2, width: 1.5, ride: 0.28, belt: 0.99, roof: 1.46, nose: 0.95, tail: 0.99, sag: 0.05, rakeF: 0.38, rakeR: 0.26, tumble: 0.09, tuck: 0.08, wheelR: 0.31, axle: 1, grille: 'bar', lamps: 'twin', tails: 'square', bumper: 'paint', cladding: false, rails: false, bright: true, pipes: 'rear' },
   // A long, high bonnet behind a chrome temple of a grille.
-  cullinan: { ...OFFROADER, len: 3.35, width: 1.52, waist: 0.8, belt: 1.05, roof: 1.6, nose: 1.03, tail: 1.05, sag: 0.01, cowl: 0.52, rakeF: 0.24, rakeR: 0.08, tumble: 0.06, tuck: 0.045, wheelR: 0.32, axle: 1.05, grille: 'upright', bumper: 'paint', cladding: false, rails: false, bright: true, mascot: 'lady', pipes: 'rear' },
+  cullinan: { ...OFFROADER, len: 3.35, width: 1.52, waist: 0.8, belt: 1.05, roof: 1.6, nose: 1.03, tail: 1.05, sag: 0.01, cowl: 0.52, rakeF: 0.24, rakeR: 0.08, tumble: 0.06, tuck: 0.045, wheelR: 0.32, axle: 1.05, grille: 'upright', lamps: 'slim', bumper: 'paint', cladding: false, rails: false, bright: true, mascot: 'lady', pipes: 'rear' },
 };
 
 const lookOf = (car: CarDef) =>
   LOOKS[car.id] ?? (car.bodyStyle === 'suv' || car.bodyStyle === 'luxury' ? OFFROADER : car.bodyStyle === 'wagon' ? ESTATE : SALOON);
 
 const FINISH: Record<Part, { color?: string; roughness: number; metalness: number; emissive?: string; emissiveIntensity?: number }> = {
-  paint: { roughness: 0.38, metalness: 0.2 },
-  roof: { roughness: 0.38, metalness: 0.2 },
-  glass: { color: '#3f5871', roughness: 0.25, metalness: 0.1 },
+  paint: { roughness: 0.3, metalness: 0.3 },
+  roof: { roughness: 0.3, metalness: 0.3 },
+  glass: { color: '#2c4560', roughness: 0.08, metalness: 0.3 },
   dark: { color: '#14171c', roughness: 0.8, metalness: 0 },
   trim: { color: '#2d333b', roughness: 0.7, metalness: 0.1 },
-  chrome: { color: '#eef2f6', roughness: 0.25, metalness: 0.1 },
+  chrome: { color: '#eef2f6', roughness: 0.16, metalness: 0.35 },
   tyre: { color: '#17181b', roughness: 0.9, metalness: 0 },
-  rim: { color: '#cfd6de', roughness: 0.3, metalness: 0.15 },
+  rim: { color: '#d3d9e0', roughness: 0.22, metalness: 0.4 },
+  gun: { color: '#5b626c', roughness: 0.32, metalness: 0.4 },
   head: { color: '#fff7d6', roughness: 0.3, metalness: 0, emissive: '#fde68a', emissiveIntensity: 0.6 },
   tail: { color: '#dc2626', roughness: 0.4, metalness: 0, emissive: '#b91c1c', emissiveIntensity: 0.5 },
   amber: { color: '#f59e0b', roughness: 0.4, metalness: 0, emissive: '#d97706', emissiveIntensity: 0.3 },
@@ -136,42 +144,70 @@ function cut(poly: Pt[], z0: number, front: boolean): Pt[] {
 const ONE = new Vector3(1, 1, 1);
 const v = new Vector3();
 
-/** Gathers triangles by finish. */
+interface Soup { pos: number[]; nor: number[] }
+
+/** Gathers triangles, with their normals, by finish. */
 class Mesher {
-  readonly parts = new Map<Part, number[]>();
+  readonly parts = new Map<Part, Soup>();
 
   /** `corner` is how far from the middle the nose and tail start to round off: flat patches never straddle it. */
   constructor(private corner: number) {}
 
   private into(part: Part) {
     let out = this.parts.get(part);
-    if (!out) this.parts.set(part, (out = []));
+    if (!out) this.parts.set(part, (out = { pos: [], nor: [] }));
     return out;
   }
 
-  /** A flat convex patch, wound to face `facing`. */
-  face(part: Part, pts: V3[], facing: V3) {
+  /** A flat convex patch, wound to face `facing`. `normals`, one per point, make it shade as a curve. */
+  face(part: Part, pts: V3[], facing: V3, normals?: V3[]) {
     const out = this.into(part);
     for (let i = 1; i < pts.length - 1; i++) {
       const [a, b, c] = [pts[0], pts[i], pts[i + 1]];
       const [ux, uy, uz] = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
       const [wx, wy, wz] = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-      const flip = (uy * wz - uz * wy) * facing[0] + (uz * wx - ux * wz) * facing[1] + (ux * wy - uy * wx) * facing[2] < 0;
-      out.push(...a, ...(flip ? c : b), ...(flip ? b : c));
+      let [nx, ny, nz] = [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx];
+      const flip = nx * facing[0] + ny * facing[1] + nz * facing[2] < 0;
+      out.pos.push(...a, ...(flip ? c : b), ...(flip ? b : c));
+      if (normals) {
+        const [na, nb, nc] = [normals[0], normals[i], normals[i + 1]];
+        out.nor.push(...na, ...(flip ? nc : nb), ...(flip ? nb : nc));
+      } else {
+        const len = Math.hypot(nx, ny, nz) || 1;
+        if (flip) [nx, ny, nz] = [-nx, -ny, -nz];
+        for (let j = 0; j < 3; j++) out.nor.push(nx / len, ny / len, nz / len);
+      }
     }
   }
 
-  private solid(part: Part, geo: BufferGeometry, at: V3, rot: V3) {
+  solid(part: Part, geo: BufferGeometry, at: V3, rot: V3) {
     const out = this.into(part);
-    const m = new Matrix4().compose(new Vector3(...at), new Quaternion().setFromEuler(new Euler(...rot)), ONE);
-    const flat = geo.toNonIndexed();
+    const q = new Quaternion().setFromEuler(new Euler(...rot));
+    const m = new Matrix4().compose(new Vector3(...at), q, ONE);
+    const flat = geo.index ? geo.toNonIndexed() : geo;
     const pos = flat.attributes.position;
+    const nor = flat.attributes.normal;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(m);
-      out.push(v.x, v.y, v.z);
+      out.pos.push(v.x, v.y, v.z);
+      v.fromBufferAttribute(nor, i).applyQuaternion(q);
+      out.nor.push(v.x, v.y, v.z);
     }
     geo.dispose();
     flat.dispose();
+  }
+
+  /** A tyre with rounded shoulders and sidewalls, lying across the car. */
+  tyre(at: V3, r: number, w: number) {
+    const h = w / 2;
+    const profile = [[0.66, -h * 0.94], [0.86, -h], [0.97, -h * 0.75], [1, -h * 0.25], [1, h * 0.25], [0.97, h * 0.75], [0.86, h], [0.66, h * 0.94]]
+      .map(([x, y]) => new Vector2(x * r, y));
+    this.solid('tyre', new LatheGeometry(profile, 16), at, [0, 0, Math.PI / 2]);
+  }
+
+  /** A flat disc facing out of the car's side `out` (1 or -1). */
+  disc(part: Part, at: V3, r: number, out: number, seg = 16) {
+    this.solid(part, new CircleGeometry(r, seg), at, [0, (out * Math.PI) / 2, 0]);
   }
 
   box(part: Part, at: V3, size: V3, rot: V3 = [0, 0, 0]) {
@@ -179,7 +215,7 @@ class Mesher {
   }
 
   /** A disc or drum lying across the car (wheels) or along it (lamps, pipes). */
-  drum(part: Part, at: V3, r: number, len: number, along: 'x' | 'z', seg = 12) {
+  drum(part: Part, at: V3, r: number, len: number, along: 'x' | 'z', seg = 16) {
     this.solid(part, new CylinderGeometry(r, r, len, seg), at, along === 'x' ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]);
   }
 
@@ -200,24 +236,97 @@ class Mesher {
     return [cut(poly, c, true), cut(cut(poly, c, false), -c, true), cut(poly, -c, false)].filter((p) => p.length > 2 && Math.abs(area(p)) > 1e-6);
   }
 
-  /** A side-view outline given the car's width. `whole` outlines may be hollowed (wheel arches) but must stay clear of the corners. */
-  loft(part: Part, outline: Pt[], width: Width, whole = false) {
-    for (const piece of whole ? [outline] : this.pieces(outline)) {
-      const pts = area(piece) < 0 ? [...piece].reverse() : piece;
+  /**
+   * A side-view outline given the car's width. `whole` outlines may be hollowed (wheel arches) but must stay clear of the corners.
+   * `round` rolls every edge over with that radius, except `seam` edges, where the outline meets another one and nothing shows.
+   */
+  loft(part: Part, outline: Pt[], width: Width, whole = false, round = 0, seam: (p: Pt, q: Pt) => boolean = () => false) {
+    const pts = area(outline) < 0 ? [...outline].reverse() : outline;
+    const n = pts.length;
+    const edge = (i: number) => {
+      const [p, q] = [pts[i], pts[(i + 1) % n]];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      // Anticlockwise, so the outside is on the right.
+      const out: Pt = [(q[1] - p[1]) / len, -(q[0] - p[0]) / len];
+      const r = round > 0 && !seam(p, q) ? round : 0;
+      // Without rounding, where two pieces meet there is nothing to see.
+      const hidden = round > 0 ? r === 0 : p[0] === q[0] && Math.abs(p[0]) === this.corner;
+      return { out, r, hidden };
+    };
+    const edges = pts.map((_, i) => edge(i));
+    // Each corner pulled in so the rolled edges either side of it keep their radius.
+    const inset = pts.map((p, i): Pt => {
+      const [a, b] = [edges[(i - 1 + n) % n], edges[i]];
+      const det = a.out[0] * b.out[1] - a.out[1] * b.out[0];
+      if (Math.abs(det) < 1e-6) return [p[0] - a.out[0] * Math.max(a.r, b.r), p[1] - a.out[1] * Math.max(a.r, b.r)];
+      const [ra, rb] = [-a.r, -b.r];
+      return [p[0] + (ra * b.out[1] - rb * a.out[1]) / det, p[1] + (rb * a.out[0] - ra * b.out[0]) / det];
+    });
+
+    for (const piece of whole ? [inset] : this.pieces(inset)) {
+      const flat = area(piece) < 0 ? [...piece].reverse() : piece;
       const tris = whole
-        ? ShapeUtils.triangulateShape(pts.map(([z, y]) => new Vector2(z, y)), [])
-        : pts.slice(2).map((_, i) => [0, i + 1, i + 2]);
+        ? ShapeUtils.triangulateShape(flat.map(([z, y]) => new Vector2(z, y)), [])
+        : flat.slice(2).map((_, i) => [0, i + 1, i + 2]);
       for (const side of [1, -1]) {
-        for (const tri of tris) this.face(part, tri.map((i): V3 => [side * width(...pts[i]), pts[i][1], pts[i][0]]), [side, 0, 0]);
+        for (const tri of tris) this.face(part, tri.map((i): V3 => [side * width(...flat[i]), flat[i][1], flat[i][0]]), [side, 0, 0]);
       }
-      pts.forEach((p, i) => {
-        const q = pts[(i + 1) % pts.length];
-        // Where two pieces meet there is nothing to see.
-        if (p[0] === q[0] && Math.abs(p[0]) === this.corner) return;
-        const [wp, wq] = [width(...p), width(...q)];
-        this.face(part, [[-wp, p[1], p[0]], [wp, p[1], p[0]], [wq, q[1], q[0]], [-wq, q[1], q[0]]], [0, p[0] - q[0], q[1] - p[1]]);
-      });
     }
+
+    // The rolled edges: a quarter round from each flank to the face across the top, bottom or ends.
+    const steps = round > 0 ? [0, Math.PI / 4, Math.PI / 2] : [Math.PI / 2];
+    const ring = (at: Pt, dir: Pt, r: number, a: number, side: number): [V3, V3] => {
+      const [c, s] = [Math.cos(a), Math.sin(a)];
+      return [[side * (width(...at) - r + r * c), at[1] + r * s * dir[1], at[0] + r * s * dir[0]], [side * c, s * dir[1], s * dir[0]]];
+    };
+    const sweep = (p: Pt, q: Pt, dp: Pt, dq: Pt, r: number) => {
+      for (const side of [1, -1]) {
+        for (let k = 0; k < steps.length - 1; k++) {
+          const [a, b, c, d] = [ring(p, dp, r, steps[k], side), ring(q, dq, r, steps[k], side), ring(q, dq, r, steps[k + 1], side), ring(p, dp, r, steps[k + 1], side)];
+          const mid = (steps[k] + steps[k + 1]) / 2;
+          const f = (dp[0] + dq[0]) / 2, g = (dp[1] + dq[1]) / 2;
+          this.face(part, [a[0], b[0], c[0], d[0]], [side * Math.cos(mid), Math.sin(mid) * g, Math.sin(mid) * f], [a[1], b[1], c[1], d[1]]);
+        }
+      }
+      // Across the car between the two flanks.
+      const top = steps[steps.length - 1];
+      const [a, b, c, d] = [ring(p, dp, r, top, -1), ring(p, dp, r, top, 1), ring(q, dq, r, top, 1), ring(q, dq, r, top, -1)];
+      this.face(part, [a[0], b[0], c[0], d[0]], [0, (dp[1] + dq[1]) / 2, (dp[0] + dq[0]) / 2], round > 0 ? [a[1], b[1], c[1], d[1]] : undefined);
+    };
+    for (let i = 0; i < n; i++) {
+      const e = edges[i];
+      const j = (i + 1) % n;
+      if (!e.hidden) {
+        // Split where the flanks start to tuck in at the nose and tail, so the roll follows the same kink as the flank.
+        const [p, q] = [inset[i], inset[j]];
+        const stops = [p];
+        for (const c of whole ? [] : [-this.corner, this.corner]) {
+          const t = (c - p[0]) / (q[0] - p[0]);
+          if (t > 1e-4 && t < 1 - 1e-4) stops.push([c, lerp(p[1], q[1], t)]);
+        }
+        stops.push(q);
+        if (stops.length === 4 && (stops[1][0] - p[0]) * (stops[2][0] - stops[1][0]) < 0) stops.splice(1, 2, stops[2], stops[1]);
+        for (let k = 0; k < stops.length - 1; k++) sweep(stops[k], stops[k + 1], e.out, e.out, e.r || 0);
+      }
+      // Round the corner from this edge to the next one, if both are rolled and it turns outward.
+      const f = edges[j];
+      if (round > 0 && e.r > 0 && f.r > 0 && e.out[0] * f.out[1] - e.out[1] * f.out[0] > 1e-4) {
+        const a0 = Math.atan2(e.out[1], e.out[0]);
+        let turn = Math.atan2(f.out[1], f.out[0]) - a0;
+        while (turn < 0) turn += Math.PI * 2;
+        const cuts = Math.max(1, Math.ceil(turn / (Math.PI / 6)));
+        for (let k = 0; k < cuts; k++) {
+          const [u, w] = [a0 + (turn * k) / cuts, a0 + (turn * (k + 1)) / cuts];
+          sweep(inset[j], inset[j], [Math.cos(u), Math.sin(u)], [Math.cos(w), Math.sin(w)], e.r);
+        }
+      }
+    }
+  }
+
+  /** A bar across the middle of the car (bumpers, grille surrounds) with every edge rolled over. */
+  bar(part: Part, at: V3, size: V3, round: number) {
+    const [hz, hy] = [size[2] / 2, size[1] / 2];
+    this.loft(part, rect(at[2] - hz, at[2] + hz, at[1] - hy, at[1] + hy), () => size[0] / 2, true, Math.min(round, hy * 0.9, hz * 0.9));
   }
 
   /** A patch on both flanks, a hair proud of the surface under it. */
@@ -230,7 +339,8 @@ class Mesher {
 
 const rect = (z0: number, z1: number, y0: number, y1: number): Pt[] => [[z0, y0], [z1, y0], [z1, y1], [z0, y1]];
 
-function build(k: Look): [Part, BufferGeometry][] {
+function build(look: Look): [Part, BufferGeometry][] {
+  const k = { soft: 1, ...look };
   const L = k.len / 2;
   const W = k.width / 2;
   const deck = k.deck ?? -L + 0.08;
@@ -256,21 +366,23 @@ function build(k: Look): [Part, BufferGeometry][] {
   const frontArch = archPts(k.axle);
   rearArch[0] = [-corner, k.ride];
   frontArch[6] = [corner, k.ride];
-  m.loft('paint', [[corner, k.waist], [-corner, k.waist], ...rearArch, ...frontArch], body, true);
+  // Edges where one outline meets the next are left square: they are inside the car.
+  const seam = (p: Pt, q: Pt) => (p[1] === q[1] && p[1] === k.waist) || (p[0] === q[0] && Math.abs(p[0]) === corner);
+  m.loft('paint', [[corner, k.waist], [-corner, k.waist], ...rearArch, ...frontArch], body, true, ROUND, seam);
   const chin: Pt[] = [[corner, k.ride], [L - 0.08, k.ride], [L, k.ride + 0.08], [L, k.waist], [corner, k.waist]];
-  m.loft('paint', chin, body);
-  m.loft('paint', chin.map(([z, y]): Pt => [-z, y]), body);
+  m.loft('paint', chin, body, true, ROUND, seam);
+  m.loft('paint', chin.map(([z, y]): Pt => [-z, y]), body, true, ROUND, seam);
 
   const bonnetLip = L - 0.07;
   const bootLip = -L + 0.07;
-  m.loft('paint', [[L, k.waist], [L, k.nose - 0.05], [bonnetLip, k.nose], [k.cowl, k.belt], [deck, k.belt], [bootLip, k.tail], [-L, k.tail - 0.05], [-L, k.waist]], body);
+  m.loft('paint', [[L, k.waist], [L, k.nose - 0.05], [bonnetLip, k.nose], [k.cowl, k.belt], [deck, k.belt], [bootLip, k.tail], [-L, k.tail - 0.05], [-L, k.waist]], body, false, ROUND * k.soft, seam);
   const bonnetY = (z: number) => lerp(k.belt, k.nose, clamp((z - k.cowl) / (bonnetLip - k.cowl)));
 
   const roofFront = k.cowl - k.rakeF;
   const roofBack = deck + k.rakeR;
   const roofMid = (roofFront + roofBack) / 2;
   const roofY = (z: number) => (z > roofMid ? lerp(k.roof + 0.02, k.roof, clamp((z - roofMid) / (roofFront - roofMid))) : lerp(k.roof + 0.02, k.roof - k.sag, clamp((roofMid - z) / (roofMid - roofBack))));
-  m.loft('roof', [[k.cowl, k.belt], [roofFront, k.roof], [roofMid, k.roof + 0.02], [roofBack, k.roof - k.sag], [deck, k.belt]], cabin);
+  m.loft('roof', [[k.cowl, k.belt], [roofFront, k.roof], [roofMid, k.roof + 0.02], [roofBack, k.roof - k.sag], [deck, k.belt]], cabin, false, ROUND * k.soft, (p, q) => p[1] === q[1] && p[1] === k.belt);
 
   // What you see through the arches and under the sills.
   m.box('dark', [0, (k.ride + k.waist) / 2, 0], [2 * (W - 0.075), k.waist - k.ride - 0.03, 2 * corner]);
@@ -353,9 +465,13 @@ function build(k: Look): [Part, BufferGeometry][] {
   // How far each kind of bumper stands out, for the plates.
   const stand = { chrome: 0.065, trim: 0.055, paint: 0.04 }[k.bumper];
   for (const end of [1, -1]) {
-    if (k.bumper === 'chrome') m.box('chrome', [0, bumperY, end * (L + 0.02)], [2 * half + 0.06, 0.08, 0.09]);
-    if (k.bumper === 'trim') m.box('trim', [0, bumperY, end * (L + 0.015)], [2 * half + 0.04, 0.13, 0.08]);
-    if (k.bumper === 'paint') m.box('paint', [0, bumperY, end * (L + 0.01)], [2 * half + 0.02, 0.14, 0.06]);
+    if (k.bumper === 'chrome') {
+      m.bar('chrome', [0, bumperY, end * (L + 0.02)], [2 * half + 0.06, 0.08, 0.09], 0.03);
+      // Rubber overriders.
+      for (const side of [1, -1]) m.box('dark', [side * 0.42 * half, bumperY, end * (L + 0.06)], [0.06, 0.1, 0.05]);
+    }
+    if (k.bumper === 'trim') m.bar('trim', [0, bumperY, end * (L + 0.015)], [2 * half + 0.04, 0.13, 0.08], 0.035);
+    if (k.bumper === 'paint') m.bar('paint', [0, bumperY, end * (L + 0.01)], [2 * half + 0.02, 0.14, 0.06], 0.03);
   }
   if (k.bumper === 'paint') {
     if (k.grille !== 'spindle') m.box('dark', [0, bumperY - 0.01, L + 0.035], [half * 1.1, 0.07, 0.02]);
@@ -367,11 +483,15 @@ function build(k: Look): [Part, BufferGeometry][] {
   if (k.lamps === 'square') {
     const h = Math.min(0.13, bandH * 0.8);
     for (const side of [1, -1]) {
-      m.box('head', [side * (half - 0.2), bandHigh - h / 2, L + 0.005], [0.22, h, 0.03]);
-      m.box('amber', [side * (half - 0.055), bandHigh - h / 2, L + 0.005], [0.05, h, 0.03]);
+      m.box('dark', [side * (half - 0.17), bandHigh - h / 2, L], [0.31, h + 0.03, 0.03]);
+      m.box('head', [side * (half - 0.2), bandHigh - h / 2, L + 0.008], [0.22, h, 0.03]);
+      m.box('amber', [side * (half - 0.055), bandHigh - h / 2, L + 0.008], [0.05, h, 0.03]);
     }
   } else if (k.lamps === 'slim') {
-    for (const side of [1, -1]) m.box('head', [side * (half - 0.18), bandHigh - 0.03, L + 0.005], [0.3, 0.055, 0.03]);
+    for (const side of [1, -1]) {
+      m.box('dark', [side * (half - 0.18), bandHigh - 0.03, L], [0.33, 0.08, 0.03]);
+      m.box('head', [side * (half - 0.18), bandHigh - 0.03, L + 0.008], [0.3, 0.05, 0.03]);
+    }
     inner = half - 0.37;
   } else {
     const spots: [number, number][] = k.lamps === 'twin' ? [[half - 0.11, 0.07], [half - 0.26, 0.055]] : [[half - 0.13, 0.085]];
@@ -445,25 +565,37 @@ function build(k: Look): [Part, BufferGeometry][] {
 
   const r = k.wheelR;
   for (const x of [W - 0.105, -W + 0.105]) {
+    const out = Math.sign(x);
     for (const z of [k.axle, -k.axle]) {
-      m.drum('tyre', [x, r, z], r, 0.17, 'x', 14);
+      m.tyre([x, r, z], r, 0.18);
       if (k.wheels === 'cap') {
-        m.drum('trim', [x, r, z], r * 0.7, 0.182, 'x');
-        m.drum('chrome', [x, r, z], r * 0.5, 0.2, 'x');
-        m.drum('trim', [x, r, z], r * 0.15, 0.21, 'x', 8);
+        // A pressed-steel wheel under a domed hubcap.
+        m.disc('trim', [x + out * 0.084, r, z], r * 0.67, out);
+        m.drum('chrome', [x + out * 0.08, r, z], r * 0.5, 0.025, 'x', 16);
+        m.drum('chrome', [x + out * 0.095, r, z], r * 0.36, 0.02, 'x', 12);
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          m.box('trim', [x + out * 0.094, r + Math.cos(a) * r * 0.44, z + Math.sin(a) * r * 0.44], [0.008, r * 0.1, r * 0.05], [a, 0, 0]);
+        }
       } else {
-        m.drum(k.wheels === 'black' ? 'chrome' : 'rim', [x, r, z], r * 0.72, 0.182, 'x');
-        m.drum('dark', [x, r, z], r * 0.6, 0.19, 'x');
-        for (const turn of [0, 1, 2]) m.box(k.wheels === 'black' ? 'trim' : 'rim', [x, r, z], [0.2, r * 1.16, r * 0.16], [(turn * Math.PI) / 3, 0, 0]);
-        m.drum('chrome', [x, r, z], r * 0.18, 0.21, 'x', 8);
+        // A rim, the dark brake behind it, and five spokes running out from the hub.
+        const face: Part = k.wheels === 'black' ? 'gun' : 'rim';
+        m.solid(face, new CylinderGeometry(r * 0.68, r * 0.68, 0.05, 16, 1, true), [x + out * 0.06, r, z], [0, 0, Math.PI / 2]);
+        m.disc('dark', [x + out * 0.075, r, z], r * 0.68, out);
+        for (let i = 0; i < 5; i++) {
+          const a = (i * 2 * Math.PI) / 5;
+          m.box(face, [x + out * 0.084, r + Math.cos(a) * r * 0.36, z + Math.sin(a) * r * 0.36], [0.022, r * 0.6, r * 0.15], [a, 0, 0]);
+        }
+        m.drum(face, [x + out * 0.086, r, z], r * 0.17, 0.025, 'x', 10);
+        m.disc('chrome', [x + out * 0.1, r, z], r * 0.08, out, 8);
       }
     }
   }
 
-  return [...m.parts].map(([part, positions]) => {
+  return [...m.parts].map(([part, soup]) => {
     const geo = new BufferGeometry();
-    geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
-    geo.computeVertexNormals();
+    geo.setAttribute('position', new Float32BufferAttribute(soup.pos, 3));
+    geo.setAttribute('normal', new Float32BufferAttribute(soup.nor, 3));
     return [part, geo];
   });
 }

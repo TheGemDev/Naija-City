@@ -1,3 +1,6 @@
+/** How long a closed EFCC case stays on record (and in the app). A conviction whose seized property can still be bought back stays until it is. */
+export const EFCC_RECORD_MS = 3 * 24 * 60 * 60_000;
+
 export const EFCC = {
   filingFee: 250_000,
   bribeAmount: 500_000,

@@ -4,7 +4,7 @@
 
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFrame, type ThreeElements } from '@react-three/fiber';
-import { CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, LatheGeometry, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TubeGeometry, Vector2, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
+import { CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, LatheGeometry, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TorusGeometry, TubeGeometry, Vector2, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
 import { decodeLook, GARMENT_BY_ID, HAIR_COLORS, isFullOutfit, SKINS, type Appearance, type Body, type Garment, type Pattern } from '../game/wardrobe';
 import type { ActivityAnimation } from '../game/catalog';
 
@@ -106,21 +106,48 @@ function geo(key: string, make: () => BufferGeometry) {
   return g;
 }
 const capsule = (r: number, len: number) => geo(`cap:${r}:${len}`, () => new CapsuleGeometry(r, len, 8, 20));
-/** A limb: rounded at both ends, thicker at the top. `len` is the straight part between the ends. */
+/**
+ * A limb: rounded at both ends, thicker at the top. `len` is the distance between the centres of the two
+ * rounded ends; the sides run tangent to both, so there is no ridge where an end meets the side.
+ */
 const taper = (rTop: number, rBot: number, len: number) =>
   geo(`taper:${rTop}:${rBot}:${len}`, () => {
+    const tilt = Math.asin(Math.max(-1, Math.min(1, -(rTop - rBot) / len)));
     const pts: Vector2[] = [];
     for (let i = 0; i <= 8; i++) {
-      const a = -Math.PI / 2 + (i / 8) * (Math.PI / 2);
+      const a = -Math.PI / 2 + (i / 8) * (tilt + Math.PI / 2);
       pts.push(new Vector2(Math.max(0.0001, rBot * Math.cos(a)), -len / 2 + rBot * Math.sin(a)));
     }
-    for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * (Math.PI / 2);
+    for (let i = 0; i <= 10; i++) {
+      const a = tilt + (i / 10) * (Math.PI / 2 - tilt);
       pts.push(new Vector2(Math.max(0.0001, rTop * Math.cos(a)), len / 2 + rTop * Math.sin(a)));
     }
     return new LatheGeometry(pts, 24);
   });
 const sphere = (r: number) => geo(`sph:${r}`, () => new SphereGeometry(r, 28, 20));
+/**
+ * A limb segment from its joint at y=0 down to the next joint at y=-len, rounded at both. Neighbouring
+ * segments share the sphere at the joint between them, so a bent elbow or knee stays one smooth surface.
+ */
+function Seg({ rTop, rBot, len, ...rest }: { rTop: number; rBot: number; len: number } & Omit<Parameters<typeof M>[0], 'geometry'>) {
+  return <M geometry={taper(rTop, rBot, len)} position={[0, -len / 2, 0]} {...rest} />;
+}
+/**
+ * Cloth round the top of a limb segment (a sleeve, a shorts leg): domed over the joint, a hair
+ * looser than the limb all the way down, and ending in an open, turned-in hem instead of a blob.
+ */
+const sleeveGeo = (rTop: number, rBot: number, limb: number, len: number, loose = 0.008) =>
+  geo(`sleeve:${rTop}:${rBot}:${limb}:${len}:${loose}`, () => {
+    const at = (y: number) => rTop + ((rBot - rTop) * -y) / limb + loose;
+    const pts: Vector2[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const a = (i / 6) * (Math.PI / 2);
+      pts.push(new Vector2(Math.max(0.0001, (rTop + loose) * Math.sin(a)), (rTop + loose) * Math.cos(a)));
+    }
+    for (let i = 1; i <= 4; i++) pts.push(new Vector2(at((-len * i) / 4), (-len * i) / 4));
+    pts.push(new Vector2(at(-len) - loose * 0.7, -len));
+    return new LatheGeometry(pts.reverse(), 24);
+  });
 /** Lathe outlines are written top-down or bottom-up; faces only point outwards when they go bottom-up. */
 const lathe = (key: string, pts: [number, number][], seg = 32) =>
   geo(`lathe:${key}`, () => {
@@ -133,8 +160,8 @@ const lathe = (key: string, pts: [number, number][], seg = 32) =>
 const smoothOutline = (pts: [number, number][], per = 4): [number, number][] =>
   new SplineCurve(pts.map(([r, y]) => new Vector2(r, y))).getPoints((pts.length - 1) * per).map((v) => [Math.max(0, v.x), v.y]);
 const TORSO_RAW: Record<Body, [number, number][]> = {
-  m: [[0, -0.04], [0.15, -0.035], [0.16, 0.04], [0.148, 0.17], [0.162, 0.3], [0.182, 0.4], [0.19, 0.45], [0.165, 0.5], [0.09, 0.545], [0, 0.55]],
-  f: [[0, -0.04], [0.165, -0.035], [0.172, 0.04], [0.124, 0.19], [0.142, 0.29], [0.152, 0.36], [0.148, 0.43], [0.152, 0.46], [0.12, 0.51], [0.07, 0.54], [0, 0.545]],
+  m: [[0, -0.05], [0.166, -0.048], [0.168, -0.02], [0.16, 0.04], [0.148, 0.17], [0.162, 0.3], [0.182, 0.4], [0.19, 0.45], [0.165, 0.5], [0.09, 0.545], [0, 0.55]],
+  f: [[0, -0.05], [0.175, -0.048], [0.176, -0.02], [0.172, 0.04], [0.124, 0.19], [0.142, 0.29], [0.152, 0.36], [0.148, 0.43], [0.152, 0.46], [0.12, 0.51], [0.07, 0.54], [0, 0.545]],
 };
 const TORSO: Record<Body, [number, number][]> = { m: smoothOutline(TORSO_RAW.m), f: smoothOutline(TORSO_RAW.f) };
 const TORSO_DEPTH = 0.66;
@@ -201,6 +228,11 @@ const SHOULDER_Y = 0.45;
 const ARM_U = UPPER_ARM - 0.03;
 const ARM_F = FOREARM + 0.015;
 const LEG = THIGH + SHIN;
+/** Elbow to wrist (the hand hangs below it), and how thick a knee is. */
+const WRIST = FOREARM - 0.02;
+const KNEE_R = 0.058;
+/** The top of each thigh (men, women), kept inside the hem of whatever is worn above it. */
+const THIGH_R = [0.07, 0.076];
 
 /** The pose being composed this frame; clips write straight into it. */
 const P = newPose();
@@ -714,6 +746,11 @@ export function Person({ look, clipRef, seatedRef }: {
   const pelvisColor = full ? topColor : bottom && bottom.shape !== 'wrapper' ? bottom.color : topColor;
   // Trousers are a little looser than skin.
   const legR = (base: number, covered: boolean) => base + (covered ? 0.006 : 0);
+  // Shorts are drawn as cloth over a bare thigh, so they end in a hem above the knee.
+  const shortsLen = !full && bottom?.shape === 'shorts' ? THIGH * 0.55 : !full && bottom?.shape === 'bermuda' ? THIGH * 0.82 : 0;
+  const thighSkin = full || !bottom || shortsLen > 0 || thighColor === skin;
+  // Shoulder, elbow and wrist thickness.
+  const arm: [number, number, number] = f ? [0.05, 0.04, 0.032] : [0.058, 0.046, 0.037];
 
   useLayoutEffect(() => {
     rig.root.current.traverse((o) => {
@@ -728,7 +765,7 @@ export function Person({ look, clipRef, seatedRef }: {
     <group ref={rig.root}>
       <group ref={rig.hips} position={[0, HIP_Y, 0]}>
         {/* Pelvis: hides the hip joints */}
-        <M color={pelvisColor} geometry={sphere(0.16)} position={[0, 0.0, 0]} scale={[f ? 1.08 : 1, 0.62, 0.7]} />
+        <M color={pelvisColor} geometry={sphere(0.16)} position={[0, 0.0, 0]} scale={[f ? 1.08 : 1, 0.62, 0.62]} />
         <group ref={rig.torso}>
           <Torso a={a} top={top} color={topColor} skin={skin} bag={bagG} />
           <group ref={rig.head} position={[0, NECK_PIVOT, 0]} rotation-order="YXZ">
@@ -739,12 +776,11 @@ export function Person({ look, clipRef, seatedRef }: {
           {/* Arms (pivot at the shoulder): they hang off the torso, so they follow it when it leans or turns. */}
           {([-1, 1] as const).map((side) => (
             <group key={side} ref={side < 0 ? rig.armL : rig.armR} position={[side * shoulderX, SHOULDER_Y, 0]}>
-              <M color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} geometry={taper(f ? 0.05 : 0.058, f ? 0.04 : 0.046, UPPER_ARM - 0.06)} position={[0, -UPPER_ARM / 2 + 0.015, 0]} />
-              {sleeve === 'short' && <M color={topColor} pat={topPat} geometry={taper(f ? 0.056 : 0.065, f ? 0.05 : 0.058, 0.07)} position={[0, -0.04, 0]} />}
-              <group ref={side < 0 ? rig.elbowL : rig.elbowR} position={[0, -UPPER_ARM + 0.03, 0]}>
-                <M color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} geometry={taper(f ? 0.041 : 0.047, f ? 0.032 : 0.037, FOREARM - 0.05)} position={[0, -FOREARM / 2 + 0.01, 0]} />
-                {/* Hand */}
-                <M color={skin} geometry={sphere(0.045)} position={[0, -FOREARM - 0.015, 0.005]} scale={[0.72, 1.15, 0.95]} />
+              <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[0]} rBot={arm[1]} len={ARM_U} />
+              {sleeve === 'short' && <M color={topColor} pat={topPat} geometry={sleeveGeo(arm[0], arm[1], ARM_U, 0.12, 0.01)} />}
+              <group ref={side < 0 ? rig.elbowL : rig.elbowR} position={[0, -ARM_U, 0]}>
+                <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[1]} rBot={arm[2]} len={WRIST} />
+                <HandModel skin={skin} f={f} side={side} />
                 {side < 0 && a.outfit.wrist && <Wrist g={GARMENT_BY_ID[a.outfit.wrist]} />}
                 {side > 0 && bagG && HAND_BAGS.has(bagG.shape) && <HandBag g={bagG} />}
               </group>
@@ -760,11 +796,10 @@ export function Person({ look, clipRef, seatedRef }: {
       {/* Legs (pivot at the hip). Under an abaya or wrapper only the feet show, but the rig stays. */}
       {([-1, 1] as const).map((side) => (
         <group key={side} ref={side < 0 ? rig.legL : rig.legR} position={[side * hipX, HIP_Y, 0]}>
-          {!legsHidden && (
-            <M color={full ? skin : thighColor} pat={full ? undefined : botPat} geometry={taper(legR(f ? 0.088 : 0.085, !!bottom), legR(0.058, !!bottom), THIGH - 0.1)} position={[0, -THIGH / 2 + 0.02, 0]} />
-          )}
+          {!legsHidden && <Seg color={thighSkin ? skin : thighColor} pat={thighSkin ? undefined : botPat} rTop={legR(THIGH_R[+f], !thighSkin)} rBot={legR(KNEE_R, !thighSkin)} len={THIGH} />}
+          {!legsHidden && shortsLen > 0 && <M color={thighColor} pat={botPat} geometry={sleeveGeo(THIGH_R[+f] - 0.008, KNEE_R, THIGH, shortsLen, 0.014)} />}
           <group ref={side < 0 ? rig.kneeL : rig.kneeR} position={[0, -THIGH, 0]}>
-            {!legsHidden && <M color={full ? skin : shinColor} pat={full ? undefined : longBottom ? botPat : undefined} geometry={taper(legR(0.058, !!longBottom), legR(0.04, !!longBottom), SHIN - 0.07)} position={[0, -SHIN / 2 + 0.01, 0]} />}
+            {!legsHidden && <Seg color={full ? skin : shinColor} pat={full ? undefined : longBottom ? botPat : undefined} rTop={legR(KNEE_R, !!longBottom)} rBot={legR(0.04, !!longBottom)} len={SHIN} />}
             {/* Ankle */}
             <group ref={side < 0 ? rig.footL : rig.footR} position={[0, -SHIN, 0]}>
               <group position={[0, SHIN, 0]}>
@@ -774,6 +809,17 @@ export function Person({ look, clipRef, seatedRef }: {
           </group>
         </group>
       ))}
+    </group>
+  );
+}
+
+/** A relaxed hand below the wrist: a flat palm, fingers curling in towards the body, and the thumb in front. */
+function HandModel({ skin, f, side }: { skin: string; f: boolean; side: -1 | 1 }) {
+  return (
+    <group position={[0, -WRIST, 0]} scale={f ? 0.9 : 1}>
+      <M color={skin} geometry={capsule(0.028, 0.03)} position={[0, -0.036, 0.002]} scale={[0.6, 1, 1.15]} />
+      <M color={skin} geometry={capsule(0.025, 0.034)} position={[-side * 0.004, -0.074, 0]} rotation={[0, 0, -side * 0.22]} scale={[0.56, 1, 1.1]} />
+      <M color={skin} geometry={capsule(0.012, 0.03)} position={[-side * 0.008, -0.04, 0.03]} rotation={[-0.45, 0, -side * 0.15]} />
     </group>
   );
 }
@@ -828,7 +874,7 @@ function Torso({ a, top, color, skin, bag }: { a: Appearance; top?: Garment; col
       {shape === 'bomber' && (
         // Ribbed collar, cuffs and hem in the accent colour
         <>
-          <M color={accent} geometry={lathe('bomber-hem', [[0.162, -0.03], [0.168, 0.04]])} scale={[1, 1, TORSO_DEPTH]} />
+          <M color={accent} geometry={lathe('bomber-hem', [[0.174, -0.05], [0.176, 0.02]])} scale={[1, 1, TORSO_DEPTH]} />
           <M color={accent} position={[0, NECK_Y - 0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.065, 0.016, 6, 16]} />
           </M>
@@ -904,7 +950,7 @@ function SkirtOrRobe({ top, bottom, f }: { top?: Garment; bottom?: Garment; f: b
   // A wrapper hides the legs, so it is drawn even when a senator or kaftan hangs over the top of it.
   const wrapper = bottom?.shape === 'wrapper' && (
     <>
-      {robe('wrapper', bottom.color, [[0.15, 0.08], [0.17, 0.0], [0.19, -0.5], [0.2, -0.84], [0.001, -0.84]])}
+      {robe('wrapper', bottom.color, [[0.168, 0.095], [0.184, 0.03], [0.19, -0.02], [0.2, -0.5], [0.205, -0.84], [0.001, -0.84]])}
       {bottom.accent && <M color={bottom.accent} geometry={lathe('wrapper-band', [[0.176, -0.17], [0.18, -0.23]])} scale={[1, 1, 0.82]} />}
     </>
   );
@@ -919,10 +965,13 @@ function SkirtOrRobe({ top, bottom, f }: { top?: Garment; bottom?: Garment; f: b
   }
   if (top?.shape === 'dress') return robe('dress', top.color, [[0.125, 0.19], [0.166, 0.05], [0.187, -0.03], [0.205, -0.2], [0.25, -0.45], [0.001, -0.45]]);
   if (top?.shape === 'abaya') return robe('abaya', top.color, [[0.13, 0.12], [0.17, 0.0], [0.21, -0.5], [0.24, -0.84], [0.001, -0.84]]);
-  if (bottom?.shape === 'pleated') return robe('pleated', bottom.color, [[f ? 0.15 : 0.14, 0.08], [0.172, 0.03], [0.19, -0.03], [0.27, -0.28], [0.001, -0.28]]);
-  if (bottom?.shape === 'skirt') return robe('skirt', bottom.color, [[f ? 0.15 : 0.14, 0.08], [0.172, 0.03], [0.187, -0.03], [0.23, -0.34], [0.001, -0.34]]);
+  if (bottom?.shape === 'pleated') return robe('pleated', bottom.color, [[f ? 0.168 : 0.158, 0.095], [0.184, 0.03], [0.195, -0.03], [0.27, -0.28], [0.001, -0.28]]);
+  if (bottom?.shape === 'skirt') return robe('skirt', bottom.color, [[f ? 0.168 : 0.158, 0.095], [0.184, 0.03], [0.192, -0.03], [0.23, -0.34], [0.001, -0.34]]);
   return wrapper || null;
 }
+
+/** A rounded sole, flattened from a capsule so it has no hard box corners. */
+const sole = capsule(0.05, 0.13);
 
 function Shoe({ g, skin }: { g?: Garment; skin: string }) {
   const y = -SHIN - 0.045;
@@ -933,9 +982,7 @@ function Shoe({ g, skin }: { g?: Garment; skin: string }) {
       return (
         <>
           {foot(skin, 0.038)}
-          <M color={g.color} position={[0, y - 0.03, 0.045]}>
-            <boxGeometry args={[0.095, 0.018, 0.23]} />
-          </M>
+          <M color={g.color} geometry={sole} position={[0, y - 0.03, 0.045]} rotation={[Math.PI / 2, 0, 0]} scale={[0.95, 1, 0.19]} />
           <M color={g.color} geometry={capsule(0.03, 0.06)} position={[0, y + 0.01, 0.07]} rotation={[0, 0, Math.PI / 2]} scale={[1, 1, 0.6]} />
         </>
       );
@@ -960,15 +1007,33 @@ function Shoe({ g, skin }: { g?: Garment; skin: string }) {
       return (
         <>
           {foot(g.color, 0.05, 1.15)}
-          <M color={g.accent ?? '#ffffff'} position={[0, y - 0.03, 0.045]}>
-            <boxGeometry args={[0.1, 0.022, 0.21]} />
-          </M>
+          <M color={g.accent ?? '#ffffff'} geometry={sole} position={[0, y - 0.032, 0.045]} rotation={[Math.PI / 2, 0, 0]} scale={[1.02, 0.95, 0.24]} />
         </>
       );
     default:
       return foot(g.color, 0.045, 1.1);
   }
 }
+
+/**
+ * The head as one lathe: the top half is the round skull the hair is cut to fit (radius 0.14, a little
+ * tall), the bottom narrows through the cheeks to the chin. Women's jaws are a touch finer.
+ */
+const headGeo = (f: boolean) =>
+  geo(`head:${f}`, () => {
+    const pts: Vector2[] = [];
+    const jaw: [number, number][] = [[0.132, -0.04], [0.116, -0.08], [0.092, -0.11], [0.058, -0.134], [0.024, -0.146], [0.0001, -0.149]];
+    for (let i = jaw.length - 1; i >= 0; i--) pts.push(new Vector2(jaw[i][0] * (f && i > 0 ? 0.94 : 1), jaw[i][1]));
+    for (let i = 0; i <= 12; i++) {
+      const a = (i / 12) * (Math.PI / 2);
+      pts.push(new Vector2(Math.max(0.0001, 0.14 * Math.cos(a)), 0.1456 * Math.sin(a)));
+    }
+    return new LatheGeometry(new SplineCurve(pts).getPoints(48), 32);
+  });
+
+/** The mouth: a short arc turned up at the corners, so faces at rest look friendly rather than glum. */
+const SMILE = 1.5;
+const smile = geo('smile', () => new TorusGeometry(0.03, 0.0075, 6, 12, SMILE));
 
 function Head({ a, skin }: { a: Appearance; skin: string }) {
   const f = a.body === 'f';
@@ -977,21 +1042,20 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
   const coversHair = head && (head.shape === 'hijab' || head.shape === 'turban' || head.shape === 'gele' || head.shape === 'durag' || head.shape === 'headtie');
   return (
     <group>
-      {/* Skull and jaw */}
-      <M color={skin} geometry={sphere(0.14)} scale={[0.92, 1.04, 1]} />
-      <M color={skin} geometry={sphere(0.11)} position={[0, -0.055, 0.02]} scale={[f ? 0.86 : 0.95, 0.82, 0.95]} />
+      {/* Skull and jaw in one smooth piece */}
+      <M color={skin} geometry={headGeo(f)} scale={[0.92, 1, 1]} />
       {/* Eyes */}
       {([-1, 1] as const).map((s) => (
         <group key={s} position={[s * 0.047, 0.012, 0.118]}>
           <M color="#f8fafc" geometry={sphere(0.022)} scale={[1, 0.85, 0.5]} rough={0.3} />
           <M color="#1c1917" geometry={sphere(0.013)} position={[0, 0, 0.009]} scale={[1, 1, 0.5]} rough={0.2} />
           {/* Brow */}
-          <M color={hairColor} position={[0, 0.036, 0.004]} rotation={[0, 0, s * -0.12]}>
+          <M color={hairColor} position={[0, 0.038, 0.004]} rotation={[0, 0, s * 0.04]}>
             <boxGeometry args={[0.042, f ? 0.007 : 0.011, 0.01]} />
           </M>
           {f && (
-            <M color="#111827" position={[0, 0.014, 0.008]}>
-              <boxGeometry args={[0.044, 0.005, 0.006]} />
+            <M color="#111827" position={[s * 0.004, 0.016, 0.009]} rotation={[0, 0, s * 0.12]}>
+              <boxGeometry args={[0.046, 0.0035, 0.006]} />
             </M>
           )}
         </group>
@@ -999,7 +1063,7 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
       {/* Nose */}
       <M color={skin} geometry={sphere(0.024)} position={[0, -0.025, 0.128]} scale={[1.05, 0.9, 0.85]} />
       {/* Lips */}
-      <M color={f ? '#9f1239' : shade(skin, 0.7)} geometry={capsule(0.012, 0.035)} position={[0, -0.072, 0.11]} rotation={[0, 0, Math.PI / 2]} scale={[1, 1, 0.6]} />
+      <M color={f ? '#9f1239' : shade(skin, 0.62)} geometry={smile} position={[0, -0.05, 0.116]} rotation={[0.12, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.6]} />
       {/* Ears */}
       {([-1, 1] as const).map((s) => (
         <M key={s} color={skin} geometry={sphere(0.03)} position={[s * 0.128, -0.005, 0]} scale={[0.45, 1, 0.75]} />

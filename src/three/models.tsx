@@ -3,7 +3,9 @@
 
 import { createContext, useContext, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
-import type { Group } from 'three';
+import { BoxGeometry, type Group } from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { useLowPerf } from '../game/quality';
 
 type V3 = [number, number, number];
 
@@ -12,8 +14,37 @@ const PaintCtx = createContext<Record<string, string> | null>(null);
 export const PaintProvider = PaintCtx.Provider;
 const useTint = (c: string) => useContext(PaintCtx)?.[c] ?? c;
 
-export function B({ p, s, c: base, e, o }: { p: V3; s: V3; c: string; e?: string; o?: number }) {
+/**
+ * Furniture and props (ItemModel, PropModel) are seen up close, so their boxes get softly rounded edges and a
+ * little sheen (not in low performance mode). The town's thousands of boxes stay plain: they are seen from afar and phones pay for every triangle.
+ */
+export const SoftCtx = createContext(false);
+
+/** Rounded boxes are shared by size: a room full of furniture reuses a few dozen of them. */
+const softBoxes = new Map<string, BoxGeometry>();
+function softBox([w, h, d]: V3, r?: number): BoxGeometry {
+  const key = `${w},${h},${d},${r ?? ''}`;
+  let g = softBoxes.get(key);
+  if (!g) {
+    const min = Math.min(w, h, d);
+    // A sheet thinner than a few centimetres reads as flat anyway: a plain box with smooth-looking edges is enough.
+    g = min < 0.025 ? new BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, min < 0.1 ? 1 : 2, Math.min(r ?? 0.045, min * (r ? 0.5 : 0.28)));
+    softBoxes.set(key, g);
+  }
+  return g;
+}
+
+/** A box. `r` rounds its corners that much (cushions, mattresses); only furniture (SoftCtx) is ever rounded. `m` is metal or glass sheen. */
+export function B({ p, s, c: base, e, o, r, m }: { p: V3; s: V3; c: string; e?: string; o?: number; r?: number; m?: boolean }) {
   const c = useTint(base);
+  const soft = useContext(SoftCtx);
+  if (soft) {
+    return (
+      <mesh position={p} geometry={softBox(s, r)} castShadow receiveShadow dispose={null}>
+        <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} transparent={o !== undefined} opacity={o ?? 1} roughness={m ? 0.28 : 0.62} metalness={m ? 0.45 : 0} />
+      </mesh>
+    );
+  }
   return (
     <mesh position={p} castShadow receiveShadow>
       <boxGeometry args={s} />
@@ -34,10 +65,10 @@ function Cyl({ p, r, h, c: base, rt, seg = 24 }: { p: V3; r: number; h: number; 
   );
 }
 
-function Ball({ p, r, c: base, detail = 0 }: { p: V3; r: number; c: string; detail?: number }) {
+function Ball({ p, r, c: base, detail = 0, s }: { p: V3; r: number; c: string; detail?: number; s?: V3 }) {
   const c = useTint(base);
   return (
-    <mesh position={p} castShadow>
+    <mesh position={p} scale={s} castShadow>
       <icosahedronGeometry args={[r, Math.max(detail, 3)]} />
       <meshStandardMaterial color={c} />
     </mesh>
@@ -48,6 +79,35 @@ const legs = (w: number, d: number, h: number, c: string, t = 0.06) =>
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
     <B key={i} p={[(sx * (w - t)) / 2, h / 2, (sz * (d - t)) / 2]} s={[t, h, t]} c={c} />
   ));
+
+/** Four round legs narrowing toward the floor, set in from the corners of a w×d top. */
+const roundLegs = (w: number, d: number, h: number, c: string, r = 0.03, inset = 0.07) =>
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
+    <Cyl key={i} p={[sx * (w / 2 - inset), h / 2, sz * (d / 2 - inset)]} r={r * 0.7} rt={r} h={h} c={c} />
+  ));
+
+/** Long leaves arching out of a pot from height y: `n` of them, alternating two greens. */
+function Leaves({ y, n, len, c1, c2, spread = 0.9 }: { y: number; n: number; len: number; c1: string; c2: string; spread?: number }) {
+  return (
+    <group position={[0, y, 0]}>
+      {Array.from({ length: n }, (_, i) => {
+        const yaw = (i / n) * Math.PI * 2 + (i % 2) * 0.4;
+        const tilt = spread * (0.45 + (i % 3) * 0.18);
+        const l = len * (0.8 + ((i * 7) % 5) * 0.08);
+        return (
+          <group key={i} rotation={[0, yaw, 0]}>
+            <group rotation={[tilt, 0, 0]}>
+              <Ball p={[0, l * 0.5, 0]} r={0.1} s={[0.55, l * 5, 0.16]} c={i % 2 ? c2 : c1} />
+            </group>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/** A pillow: plump, with rounded corners. */
+const Pillow = ({ p, w, d, c = '#fff' }: { p: V3; w: number; d: number; c?: string }) => <B p={p} s={[w, 0.15, d]} c={c} r={0.07} />;
 
 function Spin({ children, speed = 6 }: { children: ReactNode; speed?: number }) {
   const ref = useRef<Group>(null!);
@@ -69,17 +129,31 @@ export interface ModelProps {
   running?: boolean;
 }
 
-export function ItemModel({ type, powered, running }: ModelProps) {
+export function ItemModel(props: ModelProps) {
+  // Low performance mode keeps the plain boxes: a rounded one costs 9 to 25 times the triangles.
+  const soft = !useLowPerf();
+  return <SoftCtx.Provider value={soft}>{itemShape(props)}</SoftCtx.Provider>;
+}
+
+function itemShape({ type, powered, running }: ModelProps): ReactNode {
   switch (type) {
     case 'bed_foam':
       return (
         <group>
-          <B p={[0, 0.15, 0]} s={[1.9, 0.3, 2.9]} c="#6b4426" />
-          <B p={[0, 0.38, 0.05]} s={[1.8, 0.18, 2.75]} c="#f5f1e8" />
-          <B p={[0, 0.49, 0.45]} s={[1.82, 0.06, 1.9]} c="#2f6f4f" />
-          <B p={[-0.45, 0.52, -1.1]} s={[0.7, 0.14, 0.4]} c="#fff" />
-          <B p={[0.45, 0.52, -1.1]} s={[0.7, 0.14, 0.4]} c="#fff" />
-          <B p={[0, 0.6, -1.42]} s={[1.95, 1.2, 0.1]} c="#5a371e" />
+          {roundLegs(1.9, 2.9, 0.09, '#5a371e', 0.04, 0.12)}
+          <B p={[0, 0.2, 0]} s={[1.9, 0.24, 2.9]} c="#6b4426" />
+          <B p={[0, 0.42, 0.05]} s={[1.78, 0.22, 2.74]} c="#f5f1e8" r={0.08} />
+          {/* the blanket hangs over the sides and the foot */}
+          <B p={[0, 0.545, 0.46]} s={[1.84, 0.04, 1.9]} c="#2f6f4f" r={0.02} />
+          <B p={[-0.91, 0.45, 0.46]} s={[0.04, 0.2, 1.9]} c="#2f6f4f" />
+          <B p={[0.91, 0.45, 0.46]} s={[0.04, 0.2, 1.9]} c="#2f6f4f" />
+          <B p={[0, 0.45, 1.4]} s={[1.84, 0.2, 0.04]} c="#2f6f4f" />
+          <B p={[0, 0.56, -0.44]} s={[1.84, 0.06, 0.22]} c="#ece6d8" r={0.03} />
+          <Pillow p={[-0.43, 0.6, -1.08]} w={0.72} d={0.42} />
+          <Pillow p={[0.43, 0.6, -1.08]} w={0.72} d={0.42} />
+          {/* headboard with a padded panel */}
+          <B p={[0, 0.72, -1.42]} s={[1.98, 1.32, 0.1]} c="#5a371e" />
+          <B p={[0, 0.88, -1.36]} s={[1.74, 0.78, 0.06]} c="#6b4426" r={0.03} />
         </group>
       );
     case 'bed_royal':
@@ -100,65 +174,107 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'fridge':
       return (
         <group>
-          <B p={[0, 0.85, 0]} s={[0.8, 1.7, 0.72]} c="#e9edf1" />
-          <B p={[0, 1.15, 0.37]} s={[0.76, 0.02, 0.02]} c="#9aa5b1" />
-          <B p={[0.3, 1.4, 0.38]} s={[0.04, 0.3, 0.04]} c="#6b7785" />
-          <B p={[0.3, 0.75, 0.38]} s={[0.04, 0.4, 0.04]} c="#6b7785" />
+          <B p={[0, 0.04, 0]} s={[0.74, 0.08, 0.66]} c="#2b2f36" />
+          <B p={[0, 0.89, 0]} s={[0.8, 1.62, 0.7]} c="#e9edf1" r={0.04} />
+          {/* freezer door on top, fridge door below, a gap between */}
+          <B p={[0, 1.42, 0.355]} s={[0.78, 0.5, 0.03]} c="#e9edf1" r={0.012} />
+          <B p={[0, 0.69, 0.355]} s={[0.78, 0.98, 0.03]} c="#e9edf1" r={0.012} />
+          <B p={[0, 1.165, 0.36]} s={[0.78, 0.012, 0.02]} c="#9aa5b1" />
+          <B p={[0.31, 1.4, 0.385]} s={[0.03, 0.28, 0.03]} c="#6b7785" m />
+          <B p={[0.31, 0.92, 0.385]} s={[0.03, 0.42, 0.03]} c="#6b7785" m />
+          <B p={[-0.2, 1.57, 0.374]} s={[0.18, 0.04, 0.005]} c="#9aa5b1" />
         </group>
       );
     case 'washing_machine':
       return (
         <group>
-          <B p={[0, 0.45, 0]} s={[0.75, 0.9, 0.7]} c="#f1f4f7" />
-          <B p={[0, 0.8, 0.36]} s={[0.7, 0.12, 0.02]} c="#9aa5b1" />
-          <B p={[0, 0.4, 0.36]} s={[0.4, 0.4, 0.03]} c="#cfd6dd" />
-          <B p={[0, 0.4, 0.375]} s={[0.3, 0.3, 0.02]} c="#3b6ea5" o={0.8} />
-          <B p={[0.25, 0.8, 0.375]} s={[0.08, 0.06, 0.02]} c="#1f2329" />
+          <B p={[0, 0.03, 0]} s={[0.7, 0.06, 0.64]} c="#9aa5b1" />
+          <B p={[0, 0.48, 0]} s={[0.75, 0.86, 0.7]} c="#f1f4f7" r={0.035} />
+          <B p={[0, 0.82, 0.355]} s={[0.7, 0.13, 0.02]} c="#9aa5b1" r={0.008} />
+          <B p={[0.25, 0.82, 0.368]} s={[0.12, 0.06, 0.01]} c="#1f2329" />
+          <group position={[-0.2, 0.82, 0.37]} rotation={[Math.PI / 2, 0, 0]}><Cyl p={[0, 0, 0]} r={0.035} h={0.02} c="#f1f4f7" /></group>
+          {/* the round door: chrome ring, blue glass */}
+          <group position={[0, 0.42, 0.36]} rotation={[Math.PI / 2, 0, 0]}>
+            <Cyl p={[0, 0.01, 0]} r={0.22} h={0.03} c="#cfd6dd" />
+            <Cyl p={[0, 0.03, 0]} r={0.16} h={0.02} c="#3b6ea5" />
+          </group>
         </group>
       );
     case 'cooker':
       return (
         <group>
-          <B p={[0, 0.43, 0]} s={[0.8, 0.86, 0.7]} c="#d7dbe0" />
-          <B p={[0, 0.88, 0]} s={[0.8, 0.04, 0.7]} c="#2b2f36" />
-          <B p={[0, 0.4, 0.36]} s={[0.6, 0.45, 0.02]} c="#1f2329" />
+          <B p={[0, 0.03, 0]} s={[0.74, 0.06, 0.64]} c="#2b2f36" />
+          <B p={[0, 0.46, 0]} s={[0.8, 0.82, 0.7]} c="#d7dbe0" r={0.02} />
+          <B p={[0, 0.885, 0]} s={[0.8, 0.03, 0.7]} c="#2b2f36" r={0.01} />
+          {/* oven door with its window and handle, knobs along the top */}
+          <B p={[0, 0.4, 0.355]} s={[0.7, 0.5, 0.02]} c="#d7dbe0" r={0.008} />
+          <B p={[0, 0.38, 0.367]} s={[0.54, 0.3, 0.005]} c="#1f2329" />
+          <B p={[0, 0.69, 0.385]} s={[0.56, 0.025, 0.025]} c="#9aa5b1" m />
+          {[-0.27, -0.09, 0.09, 0.27].map((x) => <group key={x} position={[x, 0.8, 0.365]} rotation={[Math.PI / 2, 0, 0]}><Cyl p={[0, 0, 0]} r={0.025} h={0.03} c="#2b2f36" /></group>)}
           {[[-0.2, -0.15], [0.2, -0.15], [-0.2, 0.15], [0.2, 0.15]].map(([x, z], i) => (
-            <Cyl key={i} p={[x, 0.92, z]} r={0.09} h={0.03} c="#111" />
+            <group key={i}>
+              <Cyl p={[x, 0.905, z]} r={0.1} h={0.012} c="#4b5563" />
+              <Cyl p={[x, 0.915, z]} r={0.05} h={0.012} c="#111" />
+            </group>
           ))}
-          <Cyl p={[0.2, 1.0, 0.15]} r={0.12} h={0.16} c="#b45309" />
+          <Cyl p={[0.2, 0.99, 0.15]} r={0.12} h={0.15} c="#b45309" />
+          <Cyl p={[0.2, 1.07, 0.15]} r={0.125} h={0.015} c="#78350f" />
         </group>
       );
     case 'counter':
       return (
         <group>
-          <B p={[0, 0.43, 0]} s={[1.9, 0.86, 0.7]} c="#8b5a2b" />
-          <B p={[0, 0.88, 0]} s={[1.95, 0.05, 0.74]} c="#efe8dc" />
-          <B p={[-0.45, 0.45, 0.36]} s={[0.8, 0.7, 0.02]} c="#7a4e24" />
-          <B p={[0.45, 0.45, 0.36]} s={[0.8, 0.7, 0.02]} c="#7a4e24" />
-          <B p={[0.5, 0.92, 0]} s={[0.5, 0.04, 0.4]} c="#b8c2cc" />
+          <B p={[0, 0.05, 0.03]} s={[1.86, 0.1, 0.6]} c="#3b2a1a" />
+          <B p={[0, 0.48, 0]} s={[1.9, 0.76, 0.7]} c="#8b5a2b" r={0.015} />
+          <B p={[0, 0.885, 0]} s={[1.95, 0.05, 0.74]} c="#efe8dc" r={0.015} />
+          {[-0.475, 0.475].map((x) => (
+            <group key={x}>
+              <B p={[x, 0.48, 0.355]} s={[0.9, 0.68, 0.02]} c="#7a4e24" r={0.008} />
+              <B p={[x > 0 ? x - 0.37 : x + 0.37, 0.66, 0.375]} s={[0.025, 0.16, 0.025]} c="#b8c2cc" m />
+            </group>
+          ))}
+          {/* a sink with its tap */}
+          <B p={[0.5, 0.9, 0]} s={[0.52, 0.02, 0.42]} c="#b8c2cc" m r={0.008} />
+          <B p={[0.5, 0.895, 0]} s={[0.44, 0.02, 0.34]} c="#64748b" m />
+          <Cyl p={[0.5, 0.98, -0.18]} r={0.018} h={0.16} c="#b8c2cc" />
+          <group position={[0.5, 1.05, -0.12]} rotation={[Math.PI / 2, 0, 0]}>
+            <Cyl p={[0, 0, 0]} r={0.015} h={0.13} c="#b8c2cc" />
+          </group>
+          <B p={[-0.5, 0.925, 0]} s={[0.4, 0.03, 0.28]} c="#c08a5a" r={0.01} />
         </group>
       );
     case 'dining':
       return (
         <group>
-          <B p={[0, 0.75, 0]} s={[1.6, 0.07, 1.2]} c="#7a4a26" />
-          {legs(1.5, 1.1, 0.72, '#5a3418')}
+          <B p={[0, 0.74, 0]} s={[1.6, 0.06, 1.2]} c="#7a4a26" r={0.025} />
+          <B p={[0, 0.67, 0]} s={[1.44, 0.08, 1.04]} c="#5a3418" />
+          {roundLegs(1.5, 1.1, 0.66, '#5a3418', 0.04, 0.08)}
           {[[0, 0.8, 0], [0, -0.8, Math.PI]].map(([x, z, r], i) => (
             <group key={i} position={[x, 0, z]} rotation={[0, r, 0]}>
-              <B p={[0, 0.45, 0]} s={[0.45, 0.06, 0.45]} c="#8b5a2b" />
-              <B p={[0, 0.75, 0.2]} s={[0.45, 0.6, 0.05]} c="#8b5a2b" />
-              {legs(0.42, 0.42, 0.44, '#5a3418', 0.04)}
+              <B p={[0, 0.45, 0]} s={[0.45, 0.05, 0.45]} c="#8b5a2b" r={0.02} />
+              <B p={[0, 0.49, 0]} s={[0.4, 0.04, 0.4]} c="#f1e7d0" r={0.02} />
+              {roundLegs(0.42, 0.42, 0.43, '#5a3418', 0.022, 0.04)}
+              {[-0.19, 0.19].map((sx) => <B key={sx} p={[sx, 0.76, 0.2]} s={[0.04, 0.62, 0.04]} c="#8b5a2b" />)}
+              <B p={[0, 1.0, 0.2]} s={[0.44, 0.12, 0.04]} c="#8b5a2b" r={0.015} />
+              {[-0.07, 0.07].map((sx) => <B key={sx} p={[sx, 0.76, 0.2]} s={[0.04, 0.38, 0.025]} c="#8b5a2b" />)}
             </group>
           ))}
-          <Cyl p={[0, 0.84, 0]} r={0.16} h={0.1} c="#d97706" />
+          {/* plates at each place and a bowl of stew in the middle */}
+          {[-0.4, 0.4].map((z) => <Cyl key={z} p={[0, 0.775, z]} r={0.14} rt={0.16} h={0.015} c="#f8fafc" />)}
+          <Cyl p={[0, 0.81, 0]} r={0.1} rt={0.16} h={0.1} c="#d97706" />
         </group>
       );
     case 'toilet':
       return (
         <group>
-          <Cyl p={[0, 0.2, 0.08]} r={0.2} rt={0.24} h={0.4} c="#fafafa" />
-          <B p={[0, 0.42, 0.1]} s={[0.46, 0.04, 0.52]} c="#f1f1f1" />
-          <B p={[0, 0.6, -0.28]} s={[0.46, 0.5, 0.2]} c="#fafafa" />
+          <Cyl p={[0, 0.18, 0.06]} r={0.16} rt={0.2} h={0.36} c="#fafafa" />
+          <group position={[0, 0.38, 0.12]} scale={[1, 1, 1.25]}>
+            <Cyl p={[0, 0, 0]} r={0.2} rt={0.22} h={0.06} c="#fafafa" />
+            <Cyl p={[0, 0.045, 0]} r={0.22} h={0.03} c="#f1f1f1" />
+          </group>
+          <B p={[0, 0.62, -0.27]} s={[0.46, 0.46, 0.2]} c="#fafafa" r={0.04} />
+          <B p={[0, 0.865, -0.27]} s={[0.48, 0.04, 0.22]} c="#f1f1f1" r={0.015} />
+          <Cyl p={[0, 0.9, -0.27]} r={0.03} h={0.02} c="#cbd5e1" />
         </group>
       );
     case 'shower':
@@ -275,20 +391,45 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'sofa':
       return (
         <group>
-          <B p={[0, 0.22, 0]} s={[2.8, 0.36, 0.85]} c="#7f1d1d" />
-          <B p={[0, 0.45, 0.05]} s={[2.5, 0.12, 0.7]} c="#991b1b" />
-          <B p={[0, 0.65, -0.33]} s={[2.8, 0.6, 0.2]} c="#7f1d1d" />
-          <B p={[-1.3, 0.5, 0]} s={[0.2, 0.3, 0.85]} c="#6b1717" />
-          <B p={[1.3, 0.5, 0]} s={[0.2, 0.3, 0.85]} c="#6b1717" />
-          <B p={[-0.7, 0.62, -0.18]} s={[0.4, 0.3, 0.12]} c="#fbbf24" />
+          {roundLegs(2.7, 0.8, 0.1, '#3b2a1a', 0.03, 0.1)}
+          <B p={[0, 0.24, 0]} s={[2.8, 0.28, 0.85]} c="#7f1d1d" r={0.05} />
+          {[-0.8, 0, 0.8].map((x) => <B key={x} p={[x, 0.45, 0.07]} s={[0.79, 0.16, 0.68]} c="#991b1b" r={0.07} />)}
+          <B p={[0, 0.66, -0.34]} s={[2.8, 0.6, 0.18]} c="#7f1d1d" r={0.06} />
+          {[-0.8, 0, 0.8].map((x) => (
+            <group key={x} position={[x, 0.74, -0.2]} rotation={[-0.14, 0, 0]}>
+              <B p={[0, 0, 0]} s={[0.78, 0.44, 0.14]} c="#991b1b" r={0.07} />
+            </group>
+          ))}
+          <B p={[-1.3, 0.48, 0]} s={[0.22, 0.38, 0.86]} c="#6b1717" r={0.09} />
+          <B p={[1.3, 0.48, 0]} s={[0.22, 0.38, 0.86]} c="#6b1717" r={0.09} />
+          <group position={[-0.82, 0.66, -0.06]} rotation={[-0.25, 0.25, 0.12]}>
+            <B p={[0, 0, 0]} s={[0.4, 0.36, 0.12]} c="#fbbf24" r={0.06} />
+          </group>
         </group>
       );
     case 'plastic_chair':
+      // The white monobloc chair of every Nigerian party: splayed legs, arms, and a slatted back.
       return (
         <group>
-          <B p={[0, 0.42, 0]} s={[0.5, 0.05, 0.5]} c="#f8fafc" />
-          <B p={[0, 0.72, -0.24]} s={[0.5, 0.55, 0.04]} c="#f8fafc" />
-          {legs(0.48, 0.48, 0.4, '#e2e8f0', 0.05)}
+          <B p={[0, 0.43, 0.02]} s={[0.5, 0.035, 0.46]} c="#f8fafc" r={0.015} />
+          <B p={[0, 0.41, 0.24]} s={[0.5, 0.05, 0.03]} c="#f8fafc" r={0.015} />
+          {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
+            <group key={i} position={[sx * 0.22, 0.42, sz * 0.2]} rotation={[sz * -0.1, 0, sx * 0.1]}>
+              <Cyl p={[0, -0.21, 0]} r={0.018} rt={0.026} h={0.42} c="#e2e8f0" />
+            </group>
+          ))}
+          {/* arms and their posts down to the seat */}
+          {[-1, 1].map((sx) => (
+            <group key={sx}>
+              <B p={[sx * 0.25, 0.63, 0.0]} s={[0.05, 0.03, 0.44]} c="#f8fafc" r={0.012} />
+              <B p={[sx * 0.25, 0.53, 0.19]} s={[0.035, 0.2, 0.035]} c="#e2e8f0" />
+            </group>
+          ))}
+          <group position={[0, 0.44, -0.21]} rotation={[-0.17, 0, 0]}>
+            {[-1, 1].map((sx) => <B key={sx} p={[sx * 0.225, 0.26, 0]} s={[0.05, 0.52, 0.035]} c="#f8fafc" r={0.015} />)}
+            <B p={[0, 0.48, 0]} s={[0.5, 0.1, 0.035]} c="#f8fafc" r={0.02} />
+            {[0.14, 0.24, 0.34].map((y) => <B key={y} p={[0, y, 0]} s={[0.4, 0.045, 0.025]} c="#f8fafc" />)}
+          </group>
         </group>
       );
     case 'aircon':
@@ -303,57 +444,98 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'fan':
       return (
         <group>
-          <Cyl p={[0, 0.03, 0]} r={0.2} h={0.06} c="#334155" />
-          <Cyl p={[0, 0.65, 0]} r={0.025} h={1.2} c="#64748b" />
+          <Cyl p={[0, 0.03, 0]} r={0.22} rt={0.2} h={0.06} c="#334155" />
+          <Cyl p={[0, 0.65, 0]} r={0.022} h={1.2} c="#64748b" />
+          <Cyl p={[0, 1.0, 0]} r={0.03} h={0.1} c="#334155" />
           <group position={[0, 1.3, 0.05]}>
-            <B p={[0, 0, -0.1]} s={[0.16, 0.16, 0.2]} c="#334155" />
+            <B p={[0, 0, -0.12]} s={[0.16, 0.16, 0.22]} c="#334155" r={0.07} />
             <Spin speed={powered ? 18 : 0}>
               {[0, 1, 2].map((i) => (
-                <mesh key={i} rotation={[0, 0, (i * Math.PI * 2) / 3]} position={[0, 0, 0.02]}>
-                  <boxGeometry args={[0.08, 0.5, 0.01]} />
-                  <meshStandardMaterial color="#93c5fd" transparent opacity={0.8} />
-                </mesh>
+                <group key={i} rotation={[0, 0, (i * Math.PI * 2) / 3]}>
+                  <Ball p={[0, 0.14, 0.02]} r={0.1} s={[0.9, 1.5, 0.08]} c="#93c5fd" />
+                </group>
               ))}
+              <Ball p={[0, 0, 0.04]} r={0.04} c="#334155" />
             </Spin>
-            <mesh position={[0, 0, 0.03]}>
-              <torusGeometry args={[0.28, 0.01, 4, 16]} />
-              <meshStandardMaterial color="#cbd5e1" />
+            {/* the guard: a front ring with spokes */}
+            <mesh position={[0, 0, 0.06]}>
+              <torusGeometry args={[0.28, 0.008, 6, 40]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.4} roughness={0.35} />
             </mesh>
+            <mesh position={[0, 0, -0.03]}>
+              <torusGeometry args={[0.28, 0.008, 6, 40]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.4} roughness={0.35} />
+            </mesh>
+            {Array.from({ length: 8 }, (_, i) => (
+              <group key={i} rotation={[0, 0, (i * Math.PI) / 4]}>
+                <B p={[0, 0.14, 0.06]} s={[0.006, 0.28, 0.006]} c="#cbd5e1" />
+              </group>
+            ))}
           </group>
         </group>
       );
     case 'tv':
       return (
         <group>
-          <B p={[0, 0.25, -0.1]} s={[1.8, 0.5, 0.5]} c="#3b2a1a" />
-          <B p={[0, 1.0, -0.12]} s={[1.5, 0.85, 0.05]} c="#0b0f14" />
-          <B p={[0, 1.0, -0.09]} s={[1.42, 0.78, 0.01]} c={powered ? '#2563eb' : '#111827'} e={powered ? '#3b82f6' : undefined} />
-          <B p={[0, 0.58, -0.12]} s={[0.3, 0.1, 0.2]} c="#111" />
-          <B p={[0.6, 0.55, 0]} s={[0.25, 0.1, 0.15]} c="#111" />
+          <B p={[0, 0.27, -0.1]} s={[1.8, 0.44, 0.5]} c="#3b2a1a" r={0.03} />
+          {[-0.45, 0.45].map((x) => <B key={x} p={[x, 0.27, 0.152]} s={[0.86, 0.36, 0.01]} c="#2a1d12" />)}
+          {[-0.82, 0.82].map((x) => <B key={x} p={[x, 0.03, -0.1]} s={[0.08, 0.06, 0.44]} c="#111" />)}
+          {/* screen on a slim stand, a soundbar in front */}
+          <B p={[0, 0.53, -0.14]} s={[0.4, 0.02, 0.18]} c="#1f2937" m />
+          <B p={[0, 0.6, -0.16]} s={[0.06, 0.14, 0.04]} c="#1f2937" m />
+          <B p={[0, 1.08, -0.15]} s={[1.5, 0.86, 0.04]} c="#0b0f14" r={0.012} />
+          <B p={[0, 1.09, -0.128]} s={[1.44, 0.8, 0.005]} c={powered ? '#1e40af' : '#111827'} e={powered ? '#3b82f6' : undefined} />
+          <B p={[0, 0.53, 0.05]} s={[0.8, 0.06, 0.08]} c="#111" r={0.02} />
+          <B p={[0.62, 0.52, 0.05]} s={[0.16, 0.03, 0.1]} c="#111" r={0.01} />
         </group>
       );
     case 'desk':
       return (
         <group>
-          <B p={[0, 0.74, 0]} s={[1.8, 0.05, 0.75]} c="#e5e7eb" />
-          {legs(1.75, 0.7, 0.72, '#374151', 0.05)}
-          <B p={[0, 0.78, 0.05]} s={[0.5, 0.02, 0.35]} c="#9ca3af" />
-          <group position={[0, 0.79, -0.12]} rotation={[-0.25, 0, 0]}>
-            <B p={[0, 0.17, 0]} s={[0.5, 0.33, 0.02]} c="#4b5563" />
-            <B p={[0, 0.17, 0.012]} s={[0.46, 0.29, 0.005]} c={powered ? '#22c55e' : '#111827'} e={powered ? '#16a34a' : undefined} />
+          <B p={[0, 0.74, 0]} s={[1.8, 0.04, 0.75]} c="#e5e7eb" r={0.015} />
+          {/* a steel frame: legs and a rail joining them */}
+          {[-0.84, 0.84].map((x) => (
+            <group key={x}>
+              <B p={[x, 0.36, 0]} s={[0.05, 0.72, 0.62]} c="#374151" m />
+              <B p={[x, 0.02, 0]} s={[0.06, 0.03, 0.7]} c="#374151" m />
+            </group>
+          ))}
+          <B p={[0, 0.66, -0.3]} s={[1.64, 0.06, 0.03]} c="#374151" m />
+          {/* drawer unit */}
+          <B p={[0.55, 0.53, 0.02]} s={[0.4, 0.36, 0.62]} c="#e5e7eb" r={0.01} />
+          <B p={[0.55, 0.53, 0.335]} s={[0.12, 0.02, 0.02]} c="#374151" m />
+          <B p={[0, 0.775, 0.1]} s={[0.46, 0.015, 0.3]} c="#9ca3af" m r={0.007} />
+          <group position={[0, 0.78, -0.06]} rotation={[-0.3, 0, 0]}>
+            <B p={[0, 0.16, 0]} s={[0.46, 0.31, 0.014]} c="#4b5563" m r={0.006} />
+            <B p={[0, 0.16, 0.008]} s={[0.42, 0.27, 0.004]} c={powered ? '#22c55e' : '#111827'} e={powered ? '#16a34a' : undefined} />
           </group>
-          <B p={[0.6, 0.95, -0.15]} s={[0.12, 0.35, 0.12]} c="#16a34a" />
+          <Cyl p={[-0.65, 0.84, -0.15]} r={0.07} rt={0.08} h={0.16} c="#c2410c" />
+          <Ball p={[-0.65, 0.98, -0.15]} r={0.12} c="#16a34a" />
         </group>
       );
     case 'bookshelf':
       return (
         <group>
-          <B p={[0, 0.9, -0.15]} s={[0.9, 1.8, 0.4]} c="#6b4426" />
-          {[0.35, 0.8, 1.25].map((y, row) =>
-            [-0.3, -0.18, -0.06, 0.08, 0.2, 0.3].map((x, i) => (
-              <B key={`${row}-${i}`} p={[x, y + 0.15, -0.08]} s={[0.09, 0.3 - ((i + row) % 3) * 0.04, 0.28]} c={['#b91c1c', '#1d4ed8', '#15803d', '#ca8a04', '#7c3aed', '#0f766e'][(i + row) % 6]} />
-            )),
-          )}
+          <B p={[0, 0.9, -0.33]} s={[0.9, 1.8, 0.03]} c="#6b4426" />
+          {[-0.435, 0.435].map((x) => <B key={x} p={[x, 0.9, -0.15]} s={[0.03, 1.8, 0.4]} c="#6b4426" />)}
+          {[0.04, 0.48, 0.93, 1.38, 1.785].map((y) => <B key={y} p={[0, y, -0.15]} s={[0.9, 0.03, 0.4]} c="#6b4426" />)}
+          {[0.5, 0.95, 1.4].map((y, row) => {
+            let x = -0.4;
+            return Array.from({ length: 7 }, (_, i) => {
+              const w = 0.05 + ((i * 3 + row) % 4) * 0.015;
+              const h = 0.26 + ((i * 5 + row * 2) % 4) * 0.035;
+              const at = x + w / 2;
+              x += w + 0.008;
+              const lean = row === 1 && i === 6;
+              return (
+                <group key={`${row}-${i}`} position={[lean ? at + 0.05 : at, y + 0.015, -0.12]} rotation={[0, 0, lean ? -0.35 : 0]}>
+                  <B p={[0, h / 2, 0]} s={[w, h, 0.26]} c={['#b91c1c', '#1d4ed8', '#15803d', '#ca8a04', '#7c3aed', '#0f766e', '#f8fafc'][(i + row * 2) % 7]} r={0.006} />
+                </group>
+              );
+            });
+          })}
+          <Cyl p={[0.28, 0.1, -0.12]} r={0.08} rt={0.1} h={0.1} c="#c2410c" />
+          <Ball p={[-0.25, 0.14, -0.12]} r={0.09} c="#d4af37" />
         </group>
       );
     case 'prayer_mat':
@@ -731,8 +913,10 @@ export function ItemModel({ type, powered, running }: ModelProps) {
       return (
         <group>
           <Cyl p={[0, 0.2, 0]} r={0.16} rt={0.22} h={0.4} c="#c2410c" />
-          <Ball p={[0, 0.65, 0]} r={0.32} c="#15803d" />
-          <Ball p={[0.12, 0.85, 0.05]} r={0.2} c="#16a34a" />
+          <Cyl p={[0, 0.41, 0]} r={0.235} h={0.05} c="#c2410c" />
+          <Cyl p={[0, 0.42, 0]} r={0.2} h={0.03} c="#3f2a1d" />
+          <Leaves y={0.42} n={9} len={0.62} c1="#15803d" c2="#16a34a" />
+          <Leaves y={0.44} n={5} len={0.5} c1="#16a34a" c2="#15803d" spread={0.4} />
         </group>
       );
 
@@ -1154,10 +1338,12 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'microwave':
       return (
         <group>
-          <B p={[0, 0.2, 0]} s={[0.8, 0.4, 0.55]} c="#d1d5db" />
-          <B p={[-0.1, 0.2, 0.28]} s={[0.5, 0.28, 0.02]} c="#111827" />
-          <B p={[0.28, 0.2, 0.28]} s={[0.12, 0.28, 0.02]} c="#6b7280" />
-          <B p={[0.28, 0.32, 0.29]} s={[0.06, 0.04, 0.01]} c="#4ade80" e={powered ? '#22c55e' : undefined} />
+          <B p={[0, 0.2, 0]} s={[0.8, 0.4, 0.55]} c="#d1d5db" r={0.025} />
+          <B p={[-0.1, 0.2, 0.28]} s={[0.54, 0.32, 0.015]} c="#111827" r={0.01} />
+          <B p={[-0.1, 0.2, 0.288]} s={[0.42, 0.22, 0.005]} c={powered ? '#fbbf24' : '#1f2937'} e={powered ? '#b45309' : undefined} />
+          <B p={[0.28, 0.2, 0.28]} s={[0.14, 0.32, 0.015]} c="#6b7280" />
+          <B p={[0.28, 0.32, 0.29]} s={[0.08, 0.04, 0.01]} c="#4ade80" e={powered ? '#22c55e' : undefined} />
+          {[0.22, 0.14].map((y) => <group key={y} position={[0.28, y, 0.29]} rotation={[Math.PI / 2, 0, 0]}><Cyl p={[0, 0, 0]} r={0.025} h={0.02} c="#d1d5db" /></group>)}
         </group>
       );
     case 'blender':
@@ -1172,14 +1358,25 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'gas_cooker':
       return (
         <group>
-          <B p={[0, 0.4, 0]} s={[1.85, 0.8, 0.85]} c="#e5e7eb" />
-          <B p={[0, 0.82, 0]} s={[1.85, 0.04, 0.85]} c="#111827" />
+          {roundLegs(1.8, 0.8, 0.08, '#111827', 0.03, 0.08)}
+          <B p={[0, 0.44, 0]} s={[1.85, 0.74, 0.85]} c="#e5e7eb" r={0.025} />
+          <B p={[0, 0.83, 0]} s={[1.85, 0.04, 0.85]} c="#111827" r={0.012} />
           {[[-0.45, -0.18], [0.45, -0.18], [-0.45, 0.2], [0.45, 0.2]].map(([x, z], i) => (
-            <Cyl key={i} p={[x, 0.86, z]} r={0.17} h={0.03} c="#4b5563" />
+            <group key={i}>
+              <Cyl p={[x, 0.855, z]} r={0.17} h={0.015} c="#4b5563" />
+              <Cyl p={[x, 0.87, z]} r={0.09} h={0.02} c="#1f2937" />
+              {[0, 1, 2, 3].map((k) => (
+                <group key={k} position={[x, 0.885, z]} rotation={[0, (k * Math.PI) / 4, 0]}>
+                  <B p={[0, 0, 0]} s={[0.36, 0.012, 0.02]} c="#111827" />
+                </group>
+              ))}
+            </group>
           ))}
-          <B p={[0, 0.4, 0.43]} s={[1.5, 0.5, 0.02]} c="#374151" />
+          <B p={[0, 0.4, 0.43]} s={[1.5, 0.48, 0.02]} c="#374151" r={0.008} />
+          <B p={[0, 0.4, 0.442]} s={[1.1, 0.26, 0.005]} c="#111827" />
+          <B p={[0, 0.68, 0.46]} s={[1.3, 0.03, 0.03]} c="#cbd5e1" m />
           {[-0.6, -0.2, 0.2, 0.6].map((x, i) => (
-            <Ball key={i} p={[x, 0.7, 0.45]} r={0.05} c="#f59e0b" />
+            <group key={i} position={[x, 0.76, 0.45]} rotation={[Math.PI / 2, 0, 0]}><Cyl p={[0, 0, 0]} r={0.045} h={0.04} c="#f59e0b" /></group>
           ))}
         </group>
       );
@@ -1280,30 +1477,49 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'bed_single':
       return (
         <group>
-          <B p={[0, 0.15, 0]} s={[0.95, 0.3, 1.95]} c="#8b5a2b" />
-          <B p={[0, 0.36, 0.05]} s={[0.88, 0.16, 1.8]} c="#f5f1e8" />
-          <B p={[0, 0.46, 0.35]} s={[0.9, 0.05, 1.2]} c="#1d4ed8" />
-          <B p={[0, 0.48, -0.75]} s={[0.6, 0.12, 0.35]} c="#fff" />
-          <B p={[0, 0.5, -0.97]} s={[1.0, 0.9, 0.08]} c="#6b4426" />
+          {roundLegs(0.95, 1.95, 0.08, '#6b4426', 0.03, 0.08)}
+          <B p={[0, 0.19, 0]} s={[0.95, 0.22, 1.95]} c="#8b5a2b" />
+          <B p={[0, 0.38, 0.04]} s={[0.86, 0.18, 1.82]} c="#f5f1e8" r={0.07} />
+          <B p={[0, 0.48, 0.34]} s={[0.9, 0.04, 1.24]} c="#1d4ed8" r={0.02} />
+          <B p={[-0.44, 0.4, 0.34]} s={[0.03, 0.17, 1.24]} c="#1d4ed8" />
+          <B p={[0.44, 0.4, 0.34]} s={[0.03, 0.17, 1.24]} c="#1d4ed8" />
+          <B p={[0, 0.4, 0.96]} s={[0.9, 0.17, 0.03]} c="#1d4ed8" />
+          <B p={[0, 0.49, -0.3]} s={[0.9, 0.05, 0.16]} c="#ece6d8" r={0.02} />
+          <Pillow p={[0, 0.53, -0.72]} w={0.62} d={0.36} />
+          <B p={[0, 0.5, -0.95]} s={[1.0, 0.92, 0.08]} c="#6b4426" />
+          <B p={[0, 0.62, -0.9]} s={[0.84, 0.5, 0.04]} c="#8b5a2b" r={0.02} />
         </group>
       );
     case 'wardrobe':
       return (
         <group>
-          <B p={[0, 1.0, 0]} s={[1.9, 2.0, 0.7]} c="#7a4e24" />
-          <B p={[-0.47, 1.0, 0.36]} s={[0.9, 1.85, 0.03]} c="#8b5a2b" />
-          <B p={[0.47, 1.0, 0.36]} s={[0.9, 1.85, 0.03]} c="#8b5a2b" />
-          <B p={[-0.08, 1.0, 0.39]} s={[0.04, 0.35, 0.04]} c="#d4af37" />
-          <B p={[0.08, 1.0, 0.39]} s={[0.04, 0.35, 0.04]} c="#d4af37" />
+          <B p={[0, 0.05, 0.02]} s={[1.84, 0.1, 0.62]} c="#5a3418" />
+          <B p={[0, 1.04, 0]} s={[1.9, 1.88, 0.7]} c="#7a4e24" r={0.02} />
+          <B p={[0, 2.0, 0.01]} s={[1.98, 0.06, 0.76]} c="#7a4e24" r={0.02} />
+          {[-0.47, 0.47].map((x) => (
+            <group key={x}>
+              <B p={[x, 1.04, 0.36]} s={[0.92, 1.78, 0.03]} c="#8b5a2b" r={0.01} />
+              {/* raised panels on each door */}
+              <B p={[x, 1.42, 0.38]} s={[0.7, 0.8, 0.02]} c="#7a4e24" r={0.008} />
+              <B p={[x, 0.55, 0.38]} s={[0.7, 0.6, 0.02]} c="#7a4e24" r={0.008} />
+            </group>
+          ))}
+          <B p={[-0.08, 1.04, 0.4]} s={[0.03, 0.34, 0.03]} c="#d4af37" m />
+          <B p={[0.08, 1.04, 0.4]} s={[0.03, 0.34, 0.03]} c="#d4af37" m />
         </group>
       );
     case 'nightstand':
       return (
         <group>
-          <B p={[0, 0.3, 0]} s={[0.55, 0.6, 0.45]} c="#8b5a2b" />
-          <B p={[0, 0.4, 0.23]} s={[0.45, 0.2, 0.02]} c="#6b4426" />
-          <B p={[0, 0.2, 0.23]} s={[0.45, 0.2, 0.02]} c="#6b4426" />
-          <Cyl p={[0, 0.68, 0]} r={0.09} rt={0.05} h={0.16} c="#fde68a" />
+          {roundLegs(0.52, 0.42, 0.1, '#6b4426', 0.022, 0.05)}
+          <B p={[0, 0.36, 0]} s={[0.55, 0.52, 0.45]} c="#8b5a2b" r={0.02} />
+          <B p={[0, 0.48, 0.23]} s={[0.47, 0.2, 0.02]} c="#6b4426" r={0.008} />
+          <B p={[0, 0.25, 0.23]} s={[0.47, 0.2, 0.02]} c="#6b4426" r={0.008} />
+          {[0.48, 0.25].map((y) => <Ball key={y} p={[0, y, 0.25]} r={0.018} c="#d4af37" />)}
+          {/* a little lamp */}
+          <Cyl p={[0.08, 0.64, -0.04]} r={0.08} rt={0.06} h={0.03} c="#374151" />
+          <Cyl p={[0.08, 0.74, -0.04]} r={0.012} h={0.18} c="#9ca3af" />
+          <Cyl p={[0.08, 0.86, -0.04]} r={0.11} rt={0.07} h={0.12} c="#fde68a" />
         </group>
       );
     case 'freezer':
@@ -1353,11 +1569,15 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'armchair':
       return (
         <group>
-          <B p={[0, 0.25, 0]} s={[0.9, 0.5, 0.85]} c="#9a3412" />
-          <B p={[0, 0.58, 0.08]} s={[0.62, 0.14, 0.62]} c="#c2410c" />
-          <B p={[0, 0.8, -0.37]} s={[0.9, 0.7, 0.14]} c="#9a3412" />
-          <B p={[-0.43, 0.55, 0]} s={[0.14, 0.3, 0.85]} c="#7c2d12" />
-          <B p={[0.43, 0.55, 0]} s={[0.14, 0.3, 0.85]} c="#7c2d12" />
+          {roundLegs(0.86, 0.8, 0.1, '#3b2a1a', 0.03, 0.08)}
+          <B p={[0, 0.27, 0]} s={[0.9, 0.34, 0.85]} c="#9a3412" r={0.05} />
+          <B p={[0, 0.5, 0.07]} s={[0.6, 0.15, 0.66]} c="#c2410c" r={0.07} />
+          <B p={[0, 0.78, -0.36]} s={[0.9, 0.72, 0.16]} c="#9a3412" r={0.07} />
+          <group position={[0, 0.8, -0.24]} rotation={[-0.12, 0, 0]}>
+            <B p={[0, 0, 0]} s={[0.58, 0.48, 0.12]} c="#c2410c" r={0.06} />
+          </group>
+          <B p={[-0.38, 0.55, 0]} s={[0.15, 0.32, 0.85]} c="#7c2d12" r={0.07} />
+          <B p={[0.38, 0.55, 0]} s={[0.15, 0.32, 0.85]} c="#7c2d12" r={0.07} />
         </group>
       );
     case 'ps5':
@@ -1476,27 +1696,35 @@ export function ItemModel({ type, powered, running }: ModelProps) {
     case 'floor_lamp':
       return (
         <group>
-          <Cyl p={[0, 0.03, 0]} r={0.2} h={0.06} c="#374151" />
-          <Cyl p={[0, 0.8, 0]} r={0.025} h={1.5} c="#9ca3af" />
-          <Cyl p={[0, 1.65, 0]} r={0.3} rt={0.18} h={0.35} c={powered ? '#fde68a' : '#fef3c7'} />
+          <Cyl p={[0, 0.025, 0]} r={0.2} rt={0.18} h={0.05} c="#374151" />
+          <Cyl p={[0, 0.8, 0]} r={0.018} h={1.5} c="#9ca3af" />
+          {powered && <Ball p={[0, 1.58, 0]} r={0.06} c="#fff7d6" />}
+          <mesh position={[0, 1.65, 0]} castShadow>
+            <cylinderGeometry args={[0.18, 0.3, 0.36, 32, 1, true]} />
+            <meshStandardMaterial color={powered ? '#fde68a' : '#fef3c7'} emissive={powered ? '#fbbf24' : '#000'} emissiveIntensity={powered ? 0.5 : 0} side={2} />
+          </mesh>
         </group>
       );
     case 'coffee_table':
       return (
         <group>
-          <B p={[0, 0.4, 0]} s={[1.6, 0.05, 0.7]} c="#8b5a2b" />
-          {legs(1.6, 0.7, 0.4, '#5a371e', 0.07)}
-          <Cyl p={[-0.3, 0.46, 0]} r={0.07} h={0.07} c="#f8fafc" />
-          <B p={[0.3, 0.44, 0]} s={[0.3, 0.02, 0.2]} c="#2563eb" />
+          <B p={[0, 0.4, 0]} s={[1.6, 0.05, 0.7]} c="#8b5a2b" r={0.02} />
+          <B p={[0, 0.12, 0]} s={[1.4, 0.03, 0.56]} c="#5a371e" r={0.01} />
+          {roundLegs(1.6, 0.7, 0.38, '#5a371e', 0.035, 0.08)}
+          <Cyl p={[-0.3, 0.47, 0]} r={0.05} rt={0.06} h={0.09} c="#f8fafc" />
+          <B p={[0.3, 0.436, 0]} s={[0.3, 0.02, 0.2]} c="#2563eb" r={0.006} />
+          <B p={[0.32, 0.454, 0.01]} s={[0.26, 0.016, 0.18]} c="#f8fafc" r={0.005} />
         </group>
       );
     case 'tv_cabinet':
       return (
         <group>
-          <B p={[0, 0.3, 0]} s={[1.9, 0.6, 0.5]} c="#6b4426" />
-          <B p={[-0.47, 0.3, 0.26]} s={[0.9, 0.5, 0.02]} c="#7a4e24" />
-          <B p={[0.47, 0.3, 0.26]} s={[0.9, 0.5, 0.02]} c="#7a4e24" />
-          <B p={[0, 0.62, 0]} s={[1.95, 0.04, 0.54]} c="#efe8dc" />
+          {roundLegs(1.86, 0.46, 0.12, '#3b2a1a', 0.025, 0.08)}
+          <B p={[0, 0.38, 0]} s={[1.9, 0.52, 0.5]} c="#6b4426" r={0.02} />
+          <B p={[-0.475, 0.38, 0.252]} s={[0.92, 0.44, 0.02]} c="#7a4e24" r={0.008} />
+          <B p={[0.475, 0.38, 0.252]} s={[0.92, 0.44, 0.02]} c="#7a4e24" r={0.008} />
+          {[-0.08, 0.08].map((x) => <B key={x} p={[x, 0.42, 0.27]} s={[0.02, 0.14, 0.02]} c="#d4af37" m />)}
+          <B p={[0, 0.655, 0]} s={[1.95, 0.04, 0.54]} c="#efe8dc" r={0.015} />
         </group>
       );
     case 'safe_box':

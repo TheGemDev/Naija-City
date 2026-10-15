@@ -107,6 +107,8 @@ export interface CivicSnapshot {
   /** Barred from running after an EFCC vote-buying sting, and when the ban runs out. */
   banned: boolean;
   bannedUntil?: number | null;
+  /** When my account is old enough to vote (VOTER_MIN_AGE_MS after it was made). */
+  voteFrom?: number;
   /** What the government did lately, newest first (worker/gazette.ts). */
   news?: CivicNews[];
 }

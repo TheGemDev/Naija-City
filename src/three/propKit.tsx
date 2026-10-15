@@ -1,27 +1,30 @@
 // The kit place props are built from: cylinders, words on panels, tables of rows, barriers, luggage.
 // Everything is centred on its footprint, sits on y=0 and faces +z, like the models in interiorModels.tsx.
 
-import { useMemo, type ReactNode } from 'react';
+import { useContext, useMemo, type ReactNode } from 'react';
 import { CanvasTexture, SRGBColorSpace } from 'three';
-import { B } from './models';
+import { B, SoftCtx } from './models';
 
 export { B };
 export type V3 = [number, number, number];
 
 export function Cyl({ p, r, h, c, rt, seg = 12, e, o, rot }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number; e?: string; o?: number; rot?: V3 }) {
+  // Up close (place props) round things are drawn round; out in a big yard they stay cheap and faceted.
+  const smooth = useContext(SoftCtx) && seg >= 8;
   return (
     <mesh position={p} rotation={rot} castShadow receiveShadow>
-      <cylinderGeometry args={[rt ?? r, r, h, seg]} />
-      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading transparent={o !== undefined} opacity={o ?? 1} />
+      <cylinderGeometry args={[rt ?? r, r, h, smooth ? Math.max(seg * 2, 20) : seg]} />
+      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading={!smooth} roughness={smooth ? 0.62 : 1} transparent={o !== undefined} opacity={o ?? 1} />
     </mesh>
   );
 }
 
 export function Ball({ p, r, c, s }: { p: V3; r: number; c: string; s?: V3 }) {
+  const smooth = useContext(SoftCtx);
   return (
     <mesh position={p} scale={s} castShadow>
-      <icosahedronGeometry args={[r, 1]} />
-      <meshStandardMaterial color={c} flatShading />
+      <icosahedronGeometry args={[r, smooth ? 3 : 1]} />
+      <meshStandardMaterial color={c} flatShading={!smooth} roughness={smooth ? 0.6 : 1} />
     </mesh>
   );
 }

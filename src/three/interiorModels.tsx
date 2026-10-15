@@ -1,17 +1,20 @@
 // Props used inside town places. Centred on their footprint, sitting on y=0, front facing +z.
 // Anything that is also a house item (dining, plastic_chair, desk...) falls back to ItemModel.
 
-import { B, ItemModel, Keke } from './models';
+import { B, ItemModel, Keke, SoftCtx } from './models';
 import { CityTree } from './cityModels';
 import { PLACE_PROPS } from './placeProps';
+import { useLowPerf } from '../game/quality';
 
 type V3 = [number, number, number];
 
 function Cyl({ p, r, h, c, rt, seg = 10, e, o }: { p: V3; r: number; h: number; c: string; rt?: number; seg?: number; e?: string; o?: number }) {
+  // Posts with a few sides keep their edges; anything rounder is drawn round.
+  const facets = seg < 8;
   return (
     <mesh position={p} castShadow receiveShadow>
-      <cylinderGeometry args={[rt ?? r, r, h, seg]} />
-      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading transparent={o !== undefined} opacity={o ?? 1} />
+      <cylinderGeometry args={[rt ?? r, r, h, facets ? seg : Math.max(seg * 2, 20)]} />
+      <meshStandardMaterial color={c} emissive={e ?? '#000'} emissiveIntensity={e ? 1 : 0} flatShading={facets} roughness={0.62} transparent={o !== undefined} opacity={o ?? 1} />
     </mesh>
   );
 }
@@ -32,8 +35,8 @@ function Stall({ goods }: { goods: 'fabric' | 'food' | 'produce' }) {
       {goods === 'produce' &&
         [-0.6, -0.3, 0, 0.3, 0.6].map((x, i) => (
           <mesh key={x} position={[x, 0.92, 0]} castShadow>
-            <icosahedronGeometry args={[0.16, 0]} />
-            <meshStandardMaterial color={['#dc2626', '#16a34a', '#f97316', '#dc2626', '#facc15'][i]} flatShading />
+            <icosahedronGeometry args={[0.16, 3]} />
+            <meshStandardMaterial color={['#dc2626', '#16a34a', '#f97316', '#dc2626', '#facc15'][i]} />
           </mesh>
         ))}
       {[-0.85, 0.85].map((x) => <B key={x} p={[x, 1.1, -0.35]} s={[0.06, 2.2, 0.06]} c="#5a3418" />)}
@@ -56,7 +59,11 @@ function Seats({ n, c }: { n: number; c: string }) {
   );
 }
 
-export function PropModel({ type, text }: { type: string; text?: string }) {
+export function PropModel(props: { type: string; text?: string }) {
+  return <SoftCtx.Provider value={!useLowPerf()}><PropShape {...props} /></SoftCtx.Provider>;
+}
+
+function PropShape({ type, text }: { type: string; text?: string }) {
   const Place = PLACE_PROPS[type];
   if (Place) return <Place text={text} />;
   switch (type) {
@@ -145,8 +152,8 @@ export function PropModel({ type, text }: { type: string; text?: string }) {
           <B p={[0, 1.2, 0]} s={[1.5, 0.6, 0.6]} c="#e0f2fe" o={0.35} />
           {[-0.45, 0, 0.45].map((x, i) => (
             <mesh key={x} position={[x, 1.08, 0]} scale={[1, 1.3, 0.9]} castShadow>
-              <icosahedronGeometry args={[0.13, 1]} />
-              <meshStandardMaterial color={['#b45309', '#a16207', '#78350f'][i]} flatShading />
+              <icosahedronGeometry args={[0.13, 3]} />
+              <meshStandardMaterial color={['#b45309', '#a16207', '#78350f'][i]} />
             </mesh>
           ))}
         </group>
@@ -241,8 +248,8 @@ export function PropModel({ type, text }: { type: string; text?: string }) {
         <group>
           <B p={[0, 0.5, 0]} s={[0.6, 1, 0.6]} c="#e7e5e4" />
           <mesh position={[0, 1.35, 0]} scale={[1, 1.3, 0.9]} castShadow>
-            <icosahedronGeometry args={[0.3, 1]} />
-            <meshStandardMaterial color="#b45309" flatShading />
+            <icosahedronGeometry args={[0.3, 3]} />
+            <meshStandardMaterial color="#b45309" />
           </mesh>
         </group>
       );
@@ -270,8 +277,8 @@ export function PropModel({ type, text }: { type: string; text?: string }) {
     case 'beanbag':
       return (
         <mesh position={[0, 0.25, 0]} scale={[1, 0.6, 1]} castShadow>
-          <icosahedronGeometry args={[0.4, 1]} />
-          <meshStandardMaterial color="#f97316" flatShading />
+          <icosahedronGeometry args={[0.4, 3]} />
+          <meshStandardMaterial color="#f97316" />
         </mesh>
       );
     case 'coffee':
@@ -302,8 +309,8 @@ export function PropModel({ type, text }: { type: string; text?: string }) {
           <B p={[0, 0.46, 0]} s={[0.7, 0.04, 0.5]} c="#f97316" e="#ea580c" />
           {[-0.2, 0, 0.2].map((x) => (
             <mesh key={x} position={[x, 0.53, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.05, 0.05, 0.35, 6]} />
-              <meshStandardMaterial color="#facc15" flatShading />
+              <cylinderGeometry args={[0.05, 0.05, 0.35, 14]} />
+              <meshStandardMaterial color="#facc15" />
             </mesh>
           ))}
         </group>
@@ -330,8 +337,8 @@ export function PropModel({ type, text }: { type: string; text?: string }) {
     case 'ball':
       return (
         <mesh position={[0, 0.15, 0]} castShadow>
-          <icosahedronGeometry args={[0.15, 1]} />
-          <meshStandardMaterial color="#f8fafc" flatShading />
+          <icosahedronGeometry args={[0.15, 3]} />
+          <meshStandardMaterial color="#f8fafc" />
         </mesh>
       );
     case 'fabric_roll':
