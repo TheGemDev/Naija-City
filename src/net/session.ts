@@ -71,6 +71,28 @@ async function removePushSubscription() {
   await subscription.unsubscribe();
 }
 
+/** On each sign-in, a device that already turned notifications on re-registers with the server. If the server's VAPID key changed, it swaps its old subscription (which the push service now rejects) for one under the new key. */
+async function refreshPushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+  let subscription = await registration?.pushManager.getSubscription();
+  if (!registration || !subscription) return;
+  const keyRes = await fetch('/api/push/key');
+  if (!keyRes.ok) return;
+  const { publicKey } = (await keyRes.json()) as { publicKey: string | null };
+  if (!publicKey) return;
+  const encoded = publicKey.replace(/-/g, '+').replace(/_/g, '/');
+  const key = Uint8Array.from(atob(encoded + '='.repeat((4 - encoded.length % 4) % 4)), (c) => c.charCodeAt(0));
+  const current = subscription.options.applicationServerKey ? new Uint8Array(subscription.options.applicationServerKey) : null;
+  if (!current || current.length !== key.length || current.some((b, i) => b !== key[i])) {
+    await api('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
+    await subscription.unsubscribe();
+    subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key as BufferSource });
+  }
+  const response = await api('/api/push/subscribe', { method: 'PUT', body: JSON.stringify(subscription) });
+  if (!response.ok) throw new Error(`Could not save push subscription (${response.status})`);
+}
+
 let lastPushed = '';
 /** savedAt of the cloud save this device last loaded or wrote; sent so the server can spot another device's newer save. */
 let baseSavedAt = 0;
@@ -377,6 +399,9 @@ export function startSession() {
   const unsubGame = useGame.subscribe((s, p) => {
     if (s.started !== p.started || s.items !== p.items || s.furnitureInventory !== p.furnitureInventory || s.jobId !== p.jobId || s.jobCity !== p.jobCity || s.properties !== p.properties) pushSave();
   });
+  const unsubPush = useSession.subscribe((s, p) => {
+    if (s.status === 'ready' && p.status !== 'ready') refreshPushSubscription().catch((error) => console.error('Could not refresh push subscription', error));
+  });
   const onOnline = () => useSession.getState().offline && retryLater(0);
   window.addEventListener('online', onOnline);
   const onHide = () => document.visibilityState === 'hidden' && onExit();
@@ -385,6 +410,7 @@ export function startSession() {
   return () => {
     unsubAuth();
     unsubGame();
+    unsubPush();
     clearInterval(id);
     document.removeEventListener('visibilitychange', onHide);
     window.removeEventListener('pagehide', onExit);
