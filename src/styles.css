@@ -644,15 +644,23 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .place-label.home { z-index: 2; background: #16a34a; display: inline-flex !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; gap: 5px; padding: 3px 8px 3px 5px; border-radius: 99px; }
 .place-label.home span { font-size: 15px; }
 .place-label.home b { color: #fff; display: inline !important; }
-.region-map-badge { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.8); border-radius: 14px; background: rgba(var(--surface-rgb), .9); color: var(--ink); box-shadow: 0 3px 12px rgba(15,23,42,.18); text-align: center; white-space: nowrap; }
-.region-map-badge b { font-size: 16px; }
-.region-map-badge span { color: var(--fg-475569); font-size: 10px; }
-.region-map-badge .region-leader { font-size: 11px; font-weight: 600; }
-.region-map-badge .region-leader i { font-style: normal; color: var(--ink); }
+.region-map-badge { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 210px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.8); border-radius: 16px; background: rgba(var(--surface-rgb), .92); color: var(--ink); box-shadow: 0 4px 16px rgba(15,23,42,.18); white-space: nowrap; backdrop-filter: blur(8px); }
+.region-map-badge .region-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.region-map-badge .region-head b { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.region-map-badge .region-state { padding: 2px 8px; border-radius: 99px; background: rgba(21,128,61,.12); color: #15803d; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.region-map-badge .region-leaders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.region-map-badge .region-leader { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 5px 8px; border-radius: 10px; background: rgba(15,23,42,.05); }
+.region-map-badge .region-leader small { color: var(--fg-475569); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.region-map-badge .region-leader b { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 700; }
+.region-map-badge .region-leader b.vacant { color: var(--fg-475569); font-weight: 600; }
+.region-map-badge .region-facts { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.region-map-badge .region-goods { display: flex; gap: 3px; }
+.region-map-badge .region-fact { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; color: var(--ink); }
+.region-map-badge .region-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.region-map-badge .region-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 8px; border: 0; border-radius: 10px; background: var(--inverse); color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; transition: transform 0.12s; }
+.region-map-badge .region-actions button + button { background: #15803d; }
+.region-map-badge .region-actions button:active { transform: scale(0.96); }
 /* In the game the card is a button to the Civic app; the pill at its foot says so. */
-button.region-map-badge { cursor: pointer; transition: transform 0.12s; }
-button.region-map-badge:active { transform: scale(0.97); }
-.region-map-badge .region-run { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 3px 10px; border-radius: 99px; background: var(--inverse); color: #fff; font-size: 10px; font-weight: 700; }
 .building-map-badge { width: max-content; max-width: min(520px, 90vw); white-space: normal; padding: 10px 16px; cursor: default; pointer-events: none; user-select: none; background: rgba(var(--surface-rgb), 0.96); border: 1px solid rgba(226, 232, 240, 0.95); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12); color: var(--fg-0f172a); }
 .building-map-badge b { font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--fg-0f172a); }
 .building-map-badge span { font-size: 11px; color: var(--fg-334155); font-weight: 600; }
@@ -2994,5 +3002,3 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .sheet.place-sheet.flight-desk, .sheet.place-sheet.hotel-desk { z-index: 40; }
 
 /* The map's state card: what the state makes, and its treasury. */
-.region-map-badge .region-fact { font-size: 11px; font-weight: 600; color: var(--fg-475569); }
-.region-map-badge .region-fact i { font-style: normal; color: var(--ink); font-weight: 800; }

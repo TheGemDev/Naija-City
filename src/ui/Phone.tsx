@@ -1568,6 +1568,15 @@ function SharedCivic() {
     setTab('treasury');
     useCivic.setState({ wantTreasury: false });
   }, [wantTreasury]);
+  // A state's laws, from its card on the map: the Laws tab, on that state's office.
+  const wantLaws = useCivic((s) => s.wantLaws);
+  const [lawsOf, setLawsOf] = useState<PoliticalOffice | null>(null);
+  useEffect(() => {
+    if (!wantLaws) return;
+    setTab('laws');
+    setLawsOf(wantLaws);
+    useCivic.setState({ wantLaws: null });
+  }, [wantLaws]);
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 30_000);
@@ -1599,7 +1608,7 @@ function SharedCivic() {
           {tab === 'elections' && <ElectionBoard />}
           {tab === 'treasury' && <TreasuryTab uid={uid} repairs={myCity && <><RoadsCard key={myCity} city={myCity} isGovernor governor={nameOf(CITY_HEAD[myCity])} /><LampsCard key={`lamps-${myCity}`} city={myCity} isGovernor governor={nameOf(CITY_HEAD[myCity])} /></>} />}
           {tab === 'news' && <CivicNewsTab />}
-          {tab === 'laws' && <LawsTab uid={uid} />}
+          {tab === 'laws' && <LawsTab key={lawsOf ?? 'all'} uid={uid} start={lawsOf ?? undefined} />}
           <button className="ghost-btn" disabled={loading || busy} onClick={() => void refresh()}>{loading ? 'Refreshing…' : 'Refresh election board'}</button>
         </>
       )}

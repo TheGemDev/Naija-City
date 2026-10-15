@@ -8,7 +8,7 @@ import {
   BRIDGE_RAMP, BRIDGE_Y, cityMap, isOpen, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
 } from '../game/city';
 import { hourOf, nairaShort, useGame } from '../game/store';
-import { producesLine } from '../game/trade';
+import { PRODUCES } from '../game/trade';
 import { STAGES } from '../game/property';
 import { photoHour } from '../game/photo';
 import { LIGHTS_ON, sceneHour } from '../game/theme';
@@ -1080,55 +1080,61 @@ function Leaders({ city }: { city: keyof typeof CITY_HEAD }) {
   const policies = useCivic((s) => s.data?.policies);
   if (!policies) return null;
   const head = CITY_HEAD[city];
-  const line = (office: PoliticalOffice, title: string) => {
+  const chip = (office: PoliticalOffice, title: string) => {
     const holder = policies[office];
-    return <span className="region-leader">{OFFICE_ICON[office]} {title}: <i>{holder?.username ? `@${holder.username}` : holder?.name ?? 'Vacant'}</i></span>;
+    const who = holder?.username ? `@${holder.username}` : holder?.name;
+    return (
+      <span className="region-leader">
+        <small>{title}</small>
+        <b className={who ? '' : 'vacant'}><Emoji char={OFFICE_ICON[office]} size={12} /> {who ?? 'Vacant'}</b>
+      </span>
+    );
   };
-  return <>{line('president', 'President')}{line(head, head === 'minister' ? 'FCT Minister' : 'Governor')}</>;
+  return <div className="region-leaders">{chip('president', 'President')}{chip(head, head === 'minister' ? 'FCT Minister' : 'Governor')}</div>;
 }
 
-/** What this state makes, and how much its treasury holds (once the civic snapshot is in). */
+/** What this state makes, as icons, and how much its treasury holds (once the civic snapshot is in). */
 function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
   const balance = useCivic((s) => s.data?.states?.[city]?.balance);
   return (
-    <>
-      <span className="region-fact">Makes {producesLine(city)}</span>
-      {balance !== undefined && <span className="region-fact"><Emoji char="💰" size={11} /> Treasury <i>{nairaShort(balance)}</i></span>}
-    </>
+    <div className="region-facts">
+      <span className="region-goods" title={`Makes ${PRODUCES[city].map((p) => p.label).join(', ')}`}>
+        {PRODUCES[city].map((p) => <Emoji key={p.label} char={p.icon} size={14} />)}
+      </span>
+      {balance !== undefined && <span className="region-fact" title="State treasury"><Emoji char="💰" size={12} /> {nairaShort(balance)}</span>}
+    </div>
   );
 }
 
 /**
- * The city's name card over the map. In the game it is a button: it opens the phone on the Civic app's election board,
- * where anyone can file to run. On the title screen, where there is no phone yet, it is only a sign.
+ * The state's card over the map: its name, who runs it, what it makes and what it has in the bank. In the game it
+ * carries two ways into the Civic app: the election board, where anyone can file to run, and this state's laws.
+ * On the title screen, where there is no phone yet, it is only a sign.
  */
 function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
   const started = useGame((s) => s.started);
-  const inside = (
-    <>
-      <b>{region.name}</b><span>{region.tagline}</span>
+  const [nickname, state] = region.tagline.split(' · ');
+  const open = (want: Partial<{ wantLaws: PoliticalOffice }>) => {
+    useCivic.setState({ wantOpen: true, ...want });
+    useGame.getState().setPanel('phone');
+  };
+  // Like the place labels: a tap on the card is for the card, not a drag of the map under it.
+  const keep = { onPointerDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onMouseDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onTouchStart: (e: { stopPropagation(): void }) => e.stopPropagation() };
+  return (
+    <div className="region-map-badge" title={nickname} {...(started ? keep : {})}>
+      <div className="region-head">
+        <b>{region.name}</b>
+        {state && <span className="region-state">{state}</span>}
+      </div>
       <Leaders city={region.id} />
       <StateFacts city={region.id} />
-    </>
-  );
-  if (!started) return <div className="region-map-badge">{inside}</div>;
-  return (
-    <button
-      type="button"
-      className="region-map-badge"
-      title="Open Civic: elections and posts"
-      // Like the place labels: the tap is for the card, not a drag of the map under it.
-      onPointerDown={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
-      onClick={() => {
-        useCivic.setState({ wantOpen: true });
-        useGame.getState().setPanel('phone');
-      }}
-    >
-      {inside}
-      <span className="region-run"><Emoji char="🗳️" size={11} /> Run for a post ›</span>
-    </button>
+      {started && (
+        <div className="region-actions">
+          <button type="button" onClick={() => open({})}><Emoji char="🗳️" size={13} /> Run for a post</button>
+          <button type="button" onClick={() => open({ wantLaws: CITY_HEAD[region.id] })}><Emoji char="⚖️" size={13} /> State laws</button>
+        </div>
+      )}
+    </div>
   );
 }
 

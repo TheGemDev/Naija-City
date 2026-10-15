@@ -120,6 +120,8 @@ interface CivicState {
   wantNews: boolean;
   /** ...or on the Treasury tab (the budget chip was tapped). */
   wantTreasury: boolean;
+  /** ...or on the Laws tab, showing this office's laws (a state's card on the map was tapped). */
+  wantLaws: PoliticalOffice | null;
   data: CivicSnapshot | null;
   loading: boolean;
   busy: boolean;
@@ -285,6 +287,7 @@ export const useCivic = create<CivicState>((set) => {
     wantOpen: false,
     wantNews: false,
     wantTreasury: false,
+    wantLaws: null,
     data: null,
     loading: false,
     busy: false,

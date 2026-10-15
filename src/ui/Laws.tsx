@@ -210,13 +210,13 @@ function Gazette({ policies, treasury, allocation, states, caps, only }: { polic
   );
 }
 
-export function LawsTab({ uid }: { uid: string }) {
+export function LawsTab({ uid, start }: { uid: string; start?: PoliticalOffice }) {
   const data = useCivic((s) => s.data);
   const busy = useCivic((s) => s.busy);
   const setPolicy = useCivic((s) => s.setPolicy);
   const holds = (office: PoliticalOffice) => !!uid && data?.policies[office]?.uid === uid;
   // An office holder lands on their own desk, even when the board loads a moment after the tab opens. Until you pick another tab, yours is the one shown.
-  const [picked, setView] = useState<'all' | PoliticalOffice | null>(null);
+  const [picked, setView] = useState<'all' | PoliticalOffice | null>(start ?? null);
   const view: 'all' | PoliticalOffice = picked ?? OFFICES.find(holds) ?? 'all';
   if (!data) return null;
   return (
