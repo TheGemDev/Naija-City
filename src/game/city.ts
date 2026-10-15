@@ -103,7 +103,7 @@ export const ROADS: Road[] = [
   { x: 28, z: 42, w: 2, d: 40, main: true, name: 'Kachia Road' },
   { x: 8, z: 8, w: 2, d: 62, main: true, name: 'Nnamdi Azikiwe Bypass' },
   { x: 48, z: 6, w: 2, d: 58, main: true, name: 'Constitution Road' },
-  { x: 10, z: 6, w: 42, d: 2, main: true, name: 'Kawo Road' },
+  { x: 8, z: 6, w: 44, d: 2, main: true, name: 'Kawo Road' },
   { x: 3, z: 16, w: 54, d: 2, main: true, name: 'Independence Way' },
   { x: 2, z: 27, w: 56, d: 2, main: true, name: 'Ali Akilu Road' },
   { x: 6, z: 52, w: 50, d: 2, main: true, name: 'Aminu Kano Way' },

@@ -2466,48 +2466,8 @@ function itemShape({ type, powered, running }: ModelProps): ReactNode {
 }
 
 /** Bajaj-style Kaduna keke: the roof, short bonnet and three-wheel stance read clearly from above. */
-export function Keke() {
-  return (
-    <group>
-      {/* Narrow chassis, wide passenger cabin and the characteristic single front wheel */}
-      <B p={[0, 0.43, -0.02]} s={[1.02, 0.42, 1.72]} c="#facc15" />
-      <B p={[0, 0.28, -0.02]} s={[1.12, 0.12, 1.78]} c="#263238" />
-      <B p={[0, 0.53, 0.69]} s={[0.72, 0.37, 0.44]} c="#eab308" />
-      <B p={[0, 0.74, -0.18]} s={[1.12, 0.06, 1.1]} c="#15803d" />
-      {/* Black canvas roof, as commonly fitted over Kaduna Bajaj passenger tricycles. */}
-      <B p={[0, 1.17, -0.17]} s={[1.16, 0.12, 1.28]} c="#171717" />
-      <B p={[0, 1.235, -0.17]} s={[0.92, 0.025, 0.78]} c="#262626" />
-      <B p={[0, 1.253, -0.17]} s={[0.34, 0.012, 0.66]} c="#166534" />
-      {/* Open passenger sides, with roof supports and visible seat */}
-      {[-0.52, 0.52].map((x) => (
-        <group key={x}>
-          <B p={[x, 0.91, -0.66]} s={[0.06, 0.5, 0.06]} c="#facc15" />
-          <B p={[x, 0.91, 0.31]} s={[0.06, 0.5, 0.06]} c="#facc15" />
-          <B p={[x, 0.69, -0.16]} s={[0.06, 0.08, 0.82]} c="#eab308" />
-        </group>
-      ))}
-      <B p={[0, 0.67, -0.62]} s={[0.66, 0.12, 0.13]} c="#7c2d12" />
-      {/* Front-facing windscreen, lamp and bumper */}
-      <B p={[0, 0.91, 0.47]} s={[0.76, 0.34, 0.045]} c="#7dd3fc" o={0.72} />
-      <B p={[0, 0.66, 0.93]} s={[0.28, 0.15, 0.04]} c="#fef3c7" e="#fef08a" />
-      {[-0.36, 0.36].map((x) => <B key={x} p={[x, 0.51, 0.92]} s={[0.11, 0.08, 0.04]} c="#ef4444" />)}
-      <B p={[0, 0.3, 0.98]} s={[0.86, 0.08, 0.1]} c="#475569" />
-      {/* Two rear wheels and one front wheel remain visible around the body from above. */}
-      {[[-0.59, -0.52], [0.59, -0.52], [0, 0.81]].map(([x, z], i) => (
-        <group key={i} position={[x, 0.23, z]}>
-          <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
-            <cylinderGeometry args={[0.22, 0.22, 0.16, 12]} />
-            <meshStandardMaterial color="#17202a" flatShading />
-          </mesh>
-          <mesh rotation={[0, Math.PI / 2, 0]}>
-            <torusGeometry args={[0.15, 0.022, 6, 12]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.4} roughness={0.45} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
+// The keke is drawn in KekeModel.tsx.
+export { Keke } from './KekeModel';
 
 /** A round bar at any angle: fork legs, shocks, the exhaust, axles. */
 function Tube({ p, rot, r, h, c: base, rt, metal = false }: { p: V3; rot: V3; r: number; h: number; c: string; rt?: number; metal?: boolean }) {

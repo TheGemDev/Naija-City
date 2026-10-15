@@ -1,41 +1,122 @@
-// Right hand holding the phone (desktop only), drawn as a soft-shaded illustration. Drawn in a
-// 520×560 box where the phone covers x 90–430 and its bottom edge sits at y 360. The palm and
-// fingers are behind the phone, with only the fingertips peeking round the left edge; the thumb
-// rises from the heel of the hand at the bottom right and bends in over the corner of the screen.
+// Right hand holding the phone (desktop only), low-poly like the rest of the game: every part is a
+// faceted surface with a little depth, each facet flat-shaded by one light from the upper left. Drawn in
+// a 520×560 box where the phone covers x 90–430 and its bottom edge sits at y 360. The palm and fingers
+// are behind the phone, with only the fingertips peeking round the left edge; the thumb grows out of the
+// heel of the hand at the bottom right and bends in over the corner of the screen.
+//
+// The hand and thumb are drawn together behind the phone, so the thumb grows out of the palm with no
+// join; the front layer draws the same thumb again, cut to the phone, where it lies over the screen.
 
 type P = [number, number];
+type V = [number, number, number];
+interface Facet { pts: P[]; fill: string }
 
-const SKIN = { hi: '#d39a70', light: '#b47a52', base: '#955e3d', dark: '#6e4229', deep: '#47281a' };
-const NAIL = { base: '#d9a88c', tip: '#f1d9c8', edge: '#a87459', bed: '#c48f72' };
+/** Skin from shadow to highlight; a facet takes its colour from how squarely it faces the light. */
+const SKIN = ['#3d2216', '#5a3321', '#774530', '#93593c', '#ad6f4b', '#c4865d', '#d59c72'];
+const NAIL = ['#8f604a', '#ad7c64', '#c99a83', '#dfb9a4', '#efd6c8'];
+/** Up and to the left of the screen, and toward you. */
+const LIGHT: V = (() => {
+  const v: V = [-0.5, -0.62, 0.78];
+  const l = Math.hypot(...v);
+  return [v[0] / l, v[1] / l, v[2] / l];
+})();
 
-/** Closed smooth outline through the points (Catmull-Rom turned into Béziers). */
-function blob(pts: P[]): string {
-  const n = pts.length;
-  let d = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
-  return d + 'Z';
+function mix(a: string, b: string, k: number) {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * k)).join(',')})`;
+}
+function ramp(colours: string[], k: number) {
+  const x = Math.max(0, Math.min(0.999, k)) * (colours.length - 1);
+  const i = Math.floor(x);
+  return mix(colours[i], colours[i + 1], x - i);
 }
 
-/** Open smooth line through the points. */
-function line(pts: P[]): string {
-  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+/** The same little wobble for the same vertex every time, so the facets never shift. */
+function wobble(i: number, j: number, salt: number) {
+  const s = Math.sin(i * 127.1 + j * 311.7 + salt * 74.7) * 43758.5453;
+  return s - Math.floor(s) - 0.5;
+}
+
+/**
+ * A surface stretched between two edges, `cols` facets across, bulging toward you like a limb: rounder for
+ * a bigger `depth` (one for all of it, or row by row). Each quad is cut into two triangles, the cut alternating so the facets interlock.
+ */
+function surface(left: P[], right: P[], cols: number, depth: number | ((i: number) => number), salt: number, colours = SKIN, tag?: (i: number, j: number) => string[] | null): Facet[] {
+  const rows = left.length;
+  const grid: V[][] = [];
+  for (let i = 0; i < rows; i++) {
+    const [lx, ly] = left[i], [rx, ry] = right[i];
+    const half = Math.hypot(rx - lx, ry - ly) / 2;
+    const bulge = typeof depth === 'number' ? depth : depth(i);
+    const row: V[] = [];
+    for (let j = 0; j <= cols; j++) {
+      const u = j / cols;
+      let x = lx + (rx - lx) * u, y = ly + (ry - ly) * u;
+      // Nudge the inner vertices so the facets are uneven, like cut stone rather than graph paper.
+      if (j > 0 && j < cols && i > 0 && i < rows - 1) {
+        const jit = Math.min(4, half / cols);
+        x += wobble(i, j, salt) * jit;
+        y += wobble(j, i, salt + 1) * jit;
+      }
+      row.push([x, y, Math.sin(Math.PI * u) * half * bulge * (1 + wobble(i, j, salt + 2) * 0.12)]);
+    }
+    grid.push(row);
   }
-  return d;
+  const out: Facet[] = [];
+  const add = (a: V, b: V, c: V, palette: string[], i: number, j: number) => {
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n: V = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const l = Math.hypot(...n);
+    if (l < 1e-6) return;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    if (n[2] < 0) n = [-n[0], -n[1], -n[2]];
+    const lit = n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2];
+    out.push({ pts: [[a[0], a[1]], [b[0], b[1]], [c[0], c[1]]], fill: ramp(palette, 0.12 + lit * 0.82 + wobble(i, j, salt + 3) * 0.05) });
+  };
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols; j++) {
+      const a = grid[i][j], b = grid[i][j + 1], c = grid[i + 1][j + 1], d = grid[i + 1][j];
+      const palette = tag?.(i, j) ?? colours;
+      if ((i + j) % 2) { add(a, b, c, palette, i, j); add(a, c, d, palette, i, j); }
+      else { add(a, b, d, palette, i, j); add(b, c, d, palette, i, j); }
+    }
+  }
+  return out;
+}
+
+/**
+ * A limb along a centre line: its two sides, `rows` steps from root to tip, then a rounded cap over the tip.
+ * `at` gives the centre and direction at t (0 root, 1 tip), `half` the half-width there; `inner` narrows the
+ * left side alone, as a share of that.
+ */
+function limb(at: (t: number) => { at: P; dir: P }, half: (t: number) => number, rows: number, cap = 4, inner: (t: number) => number = () => 1): { left: P[]; right: P[] } {
+  const left: P[] = [], right: P[] = [];
+  let t = 0;
+  const side = (c: P, d: P, h: number) => {
+    const k = inner(t);
+    left.push([c[0] + d[1] * h * (2 * k - 1), c[1] - d[0] * h * (2 * k - 1)]);
+    right.push([c[0] - d[1] * h, c[1] + d[0] * h]);
+  };
+  for (let i = 0; i <= rows; i++) {
+    t = i / rows;
+    const { at: c, dir } = at(t);
+    side(c, dir, half(t));
+  }
+  t = 1;
+  const { at: tip, dir } = at(1);
+  const r = half(1);
+  for (let k = 1; k <= cap; k++) {
+    const a = (k / cap) * (Math.PI / 2);
+    side([tip[0] + dir[0] * r * 0.9 * Math.sin(a), tip[1] + dir[1] * r * 0.9 * Math.sin(a)], dir, Math.max(0.5, r * Math.cos(a)));
+  }
+  return { left, right };
 }
 
 // The thumb's centre line, a cubic Bézier from its root down in the heel of the hand to the tip on the
 // screen, and its half-width along the way: the broad muscle pad at the base, narrowing to the knuckle,
-// a little fuller over the pad. Its outer side is the hand's own outline (HAND), so the two are one shape.
+// a little fuller over the pad. Its outer side is the hand's own outline, so the two are one shape.
 const SPINE: [P, P, P, P] = [[526, 620], [528, 440], [474, 318], [398, 248]];
 const HALF = [82, 64, 48, 37, 32, 32, 31];
 
@@ -58,56 +139,55 @@ function halfAt(t: number): number {
   return HALF[i] + (HALF[i + 1] - HALF[i]) * (x - i);
 }
 
-/** A point `side` half-widths off the centre line at `t` (negative: the side facing the screen). */
-function across(t: number, side: number): P {
-  const { at, dir } = bez(t);
-  const h = halfAt(t) * side;
-  return [at[0] - dir[1] * h, at[1] + dir[0] * h];
-}
+const THUMB_ROWS = 16;
+const THUMB_COLS = 7;
+// At its root the thumb is only the outside edge of the hand; its inner side sweeps out of the palm along
+// the crease at its base.
+const THUMB_EDGES = limb(bez, halfAt, THUMB_ROWS, 5, (t) => {
+  const k = Math.min(1, t / 0.5);
+  return 0.08 + 0.92 * k * k * (3 - 2 * k);
+});
+/** The nail: the middle of the thumb over its last stretch and up onto the cap. */
+const isNail = (i: number, j: number) => i >= THUMB_ROWS - 1 && i <= THUMB_ROWS + 2 && j >= 2 && j <= THUMB_COLS - 3;
+// The nail rides on the back of the thumb; its free edge, over the cap, is the palest.
+// Flat as the back of the hand where it grows out of it, rounding up into the thumb proper.
+const thumbDepth = (i: number) => {
+  const k = Math.max(0, Math.min(1, (i / THUMB_ROWS - 0.12) / 0.35));
+  return 0.32 + 0.63 * k * k * (3 - 2 * k);
+};
+const THUMB = surface(THUMB_EDGES.right, THUMB_EDGES.left, THUMB_COLS, thumbDepth, 11, SKIN, (i, j) =>
+  isNail(i, j) ? (i >= THUMB_ROWS + 2 ? NAIL.slice(1) : NAIL) : null,
+);
+const THUMB_OUTLINE: P[] = [...THUMB_EDGES.left, ...[...THUMB_EDGES.right].reverse()];
 
-/** The thumb's outline: down one side, round the tip, back up the other. */
-function thumbOutline(): P[] {
-  const ts = Array.from({ length: 9 }, (_, i) => i / 8);
-  const left = ts.map((t) => across(t, -1));
-  const right = ts.map((t) => across(t, 1)).reverse();
-  const { at, dir } = bez(1);
-  const r = halfAt(1);
-  // The tip: a rounded cap a little flatter than a half circle, like a real thumb pad.
-  const cap: P[] = [-0.6, -0.2, 0.2, 0.6].map((k) => {
-    const a = (k * Math.PI) / 2;
-    const fwd = Math.cos(a) * r * 0.9, side = Math.sin(a) * r;
-    return [at[0] + dir[0] * fwd - dir[1] * side, at[1] + dir[1] * fwd + dir[0] * side];
+/** Along a smooth line through the points, `n` evenly spaced. */
+function resample(pts: P[], n: number): P[] {
+  const dense: P[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let k = 0; k < 16; k++) {
+      const t = k / 16, t2 = t * t, t3 = t2 * t;
+      dense.push([0, 1].map((a) => 0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3)) as P);
+    }
+  }
+  dense.push(pts[pts.length - 1]);
+  const lens = [0];
+  for (let i = 1; i < dense.length; i++) lens.push(lens[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]));
+  const total = lens[lens.length - 1];
+  return Array.from({ length: n }, (_, k) => {
+    const want = (total * k) / (n - 1);
+    let i = 1;
+    while (i < lens.length - 1 && lens[i] < want) i++;
+    const f = (want - lens[i - 1]) / (lens[i] - lens[i - 1] || 1);
+    return [dense[i - 1][0] + (dense[i][0] - dense[i - 1][0]) * f, dense[i - 1][1] + (dense[i][1] - dense[i - 1][1]) * f];
   });
-  return [...left, ...cap, ...right];
 }
 
-/** A line along the thumb, `side` half-widths off its centre, from `t0` to `t1`. */
-function along(side: number, t0: number, t1: number): P[] {
-  return Array.from({ length: 7 }, (_, i) => across(t0 + ((t1 - t0) * i) / 6, side));
-}
-
-/** A crease across the thumb at `t`, bowed toward the tip, from `from` to `to` half-widths. */
-function crease(t: number, from: number, to: number, bow: number): string {
-  const a = across(t, from), b = across(t, to);
-  const { dir } = bez(t);
-  const m: P = [(a[0] + b[0]) / 2 + dir[0] * bow, (a[1] + b[1]) / 2 + dir[1] * bow];
-  return `M${a[0].toFixed(1)},${a[1].toFixed(1)} Q${m[0].toFixed(1)},${m[1].toFixed(1)} ${b[0].toFixed(1)},${b[1].toFixed(1)}`;
-}
-
-const THUMB = thumbOutline();
-const TIP = bez(1);
-const NAIL_AT = bez(0.95);
-/** The joint the thumb bends at, about two thirds of the way up. */
-const JOINT = 0.75;
-const NAIL_ANGLE = (Math.atan2(TIP.dir[1], TIP.dir[0]) * 180) / Math.PI + 90;
-
-// The hand from the heel of the palm down through the wrist into the forearm, off the bottom-right.
-// Its top is hidden behind the phone; its right side runs down the outside of the thumb.
-const HAND: P[] = [
-  [150, 250], [300, 215], [430, 240], [476, 300],
-  ...[0.6, 0.5, 0.4, 0.3, 0.2, 0.1].map((t) => across(t, 1)),
-  [624, 640], [430, 680], [380, 580], [322, 500], [244, 456], [180, 400], [150, 320],
-];
+// The back of the hand and the wrist, from behind the phone off the bottom right. The little-finger side
+// on the left; on the right, the outside of the thumb.
+const PALM_LEFT: P[] = [[170, 200], [150, 320], [180, 400], [244, 456], [322, 500], [380, 580], [430, 680], [446, 740]];
+const PALM_RIGHT: P[] = [[420, 200], [470, 290], ...[0.62, 0.5, 0.4, 0.3, 0.2, 0.1].map((t) => THUMB_EDGES.right[Math.round(t * THUMB_ROWS)]), [624, 640], [646, 740]];
+const PALM = surface(resample(PALM_LEFT, 13), resample(PALM_RIGHT, 13), 8, 0.32, 3);
 
 // Fingertips curled round the left edge, index at the top. Only the pads past the edge show, each one
 // a little different in size and how far it reaches, like real fingers.
@@ -117,14 +197,21 @@ const TIPS = [
   { y: 240, h: 56, reach: 34, tilt: 3 },
   { y: 290, h: 46, reach: 22, tilt: 10 },
 ];
+const FINGERS = TIPS.map((f, n) => {
+  const a = (f.tilt * Math.PI) / 180;
+  const dir: P = [-Math.cos(a), -Math.sin(a)];
+  const from: P = [134, f.y];
+  const len = 134 - (90 - f.reach) - f.h * 0.45;
+  const edges = limb((t) => ({ at: [from[0] + dir[0] * len * t, from[1] + dir[1] * len * t], dir }), (t) => (f.h / 2) * (0.88 + 0.1 * Math.sin(t * Math.PI)), 3, 4);
+  return surface(edges.left, edges.right, 5, 0.85, 20 + n);
+});
 
-/** A fingertip seen from the front as it wraps round the edge: fuller at the pad, narrowing toward the phone. */
-function fingertip(f: (typeof TIPS)[number]): P[] {
-  const x0 = 90 - f.reach, h = f.h / 2;
-  return [
-    [x0 + h * 0.15, f.y - h * 0.55], [x0 + h * 0.75, f.y - h * 0.98], [x0 + h * 1.6, f.y - h * 0.94], [130, f.y - h * 0.86],
-    [130, f.y + h * 0.86], [x0 + h * 1.6, f.y + h * 0.96], [x0 + h * 0.7, f.y + h * 0.95], [x0 + h * 0.1, f.y + h * 0.5], [x0, f.y],
-  ];
+const poly = (pts: P[]) => pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+const smooth = (pts: P[]) => `M${pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('L')}Z`;
+
+function Facets({ list }: { list: Facet[] }) {
+  // Each facet is outlined in its own colour, so neighbours meet without hairline gaps.
+  return <>{list.map((f, i) => <polygon key={i} points={poly(f.pts)} fill={f.fill} stroke={f.fill} strokeWidth={0.7} strokeLinejoin="round" />)}</>;
 }
 
 export function Hand({ part }: { part: 'back' | 'thumb' }) {
@@ -133,124 +220,40 @@ export function Hand({ part }: { part: 'back' | 'thumb' }) {
   return (
     <svg className={`hand hand-${part}`} viewBox="0 0 520 560" aria-hidden>
       <defs>
-        {/* one light over hand and thumb alike, so where the thumb grows out of the palm the skin is the same */}
-        <linearGradient id={`${id}-arm`} x1="200" y1="250" x2="620" y2="560" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={SKIN.light} />
-          <stop offset="0.5" stopColor={SKIN.base} />
-          <stop offset="1" stopColor={SKIN.dark} />
-        </linearGradient>
-        {/* lit from the upper left; the side of each fingertip turning in behind the phone falls into its shadow */}
-        <linearGradient id={`${id}-tip`} x1="0" y1="0" x2="1" y2="0.35">
-          <stop offset="0" stopColor={SKIN.light} />
-          <stop offset="0.3" stopColor={SKIN.hi} />
-          <stop offset="0.7" stopColor={SKIN.base} />
-          <stop offset="1" stopColor={SKIN.deep} />
-        </linearGradient>
-        <linearGradient id={`${id}-thumb`} x1="340" y1="230" x2="620" y2="560" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={SKIN.hi} />
-          <stop offset="0.35" stopColor={SKIN.light} />
-          <stop offset="0.7" stopColor={SKIN.base} />
-          <stop offset="1" stopColor={SKIN.dark} />
-        </linearGradient>
-        <linearGradient id={`${id}-nail`} x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor={NAIL.bed} />
-          <stop offset="0.75" stopColor={NAIL.base} />
-          <stop offset="1" stopColor={NAIL.tip} />
-        </linearGradient>
         <filter id={`${id}-blur`} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="9" />
         </filter>
         <filter id={`${id}-mid`} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="5" />
         </filter>
-        <filter id={`${id}-soft`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="1.6" />
-        </filter>
-        <clipPath id={`${id}-handclip`}>
-          <path d={blob(HAND)} />
+        <clipPath id={`${id}-palm`}>
+          <path d={smooth([...resample(PALM_LEFT, 13), ...resample(PALM_RIGHT, 13).reverse()])} />
         </clipPath>
-        {/* the thumb's base melts into the palm instead of ending in an edge */}
-        <linearGradient id={`${id}-melt`} x1="0" y1="0" x2="0" y2="560" gradientUnits="userSpaceOnUse">
-          <stop offset="0.8" stopColor="#fff" />
-          <stop offset="0.98" stopColor="#000" />
-        </linearGradient>
-        <mask id={`${id}-fade`} maskUnits="userSpaceOnUse" x="-100" y="0" width="760" height="700">
-          <rect x="-100" width="760" height="700" fill={url('melt')} />
-        </mask>
-        {/* the thumb's shadow falls on the screen, not on the palm it grows out of */}
-        <linearGradient id={`${id}-onscreen`} x1="0" y1="0" x2="0" y2="560" gradientUnits="userSpaceOnUse">
-          <stop offset="0.62" stopColor="#fff" />
-          <stop offset="0.68" stopColor="#000" />
-        </linearGradient>
-        <mask id={`${id}-screen`} maskUnits="userSpaceOnUse" x="-100" y="0" width="760" height="700">
-          <rect x="-100" width="760" height="700" fill={url('onscreen')} />
-        </mask>
-        <clipPath id={`${id}-thumbclip`}>
-          <path d={blob(THUMB)} />
+        {/* the part of the thumb over the phone: the rest is drawn behind, with the hand */}
+        <clipPath id={`${id}-screen`}>
+          <rect x={0} y={0} width={431} height={361} />
         </clipPath>
-        {TIPS.map((f, i) => (
-          <clipPath key={i} id={`${id}-tip${i}`}>
-            <path d={blob(fingertip(f))} />
-          </clipPath>
-        ))}
       </defs>
 
       {part === 'back' ? (
         <>
-          {TIPS.map((f, i) => (
-            <g key={i} transform={`rotate(${f.tilt} 100 ${f.y})`}>
-              <path d={blob(fingertip(f))} fill={url('tip')} />
-              <g clipPath={url(`tip${i}`)}>
-                {/* the rounded pad catching the light, and the shade on its underside */}
-                <ellipse cx={90 - f.reach + f.h * 0.42} cy={f.y - f.h * 0.18} rx={f.h * 0.3} ry={f.h * 0.2} fill={SKIN.hi} opacity={0.6} filter={url('mid')} />
-                <ellipse cx={90 - f.reach + f.h * 0.5} cy={f.y + f.h * 0.5} rx={f.h * 0.7} ry={f.h * 0.22} fill={SKIN.deep} opacity={0.4} filter={url('mid')} />
-                {/* the phone's edge shading the part of the finger that turns behind it */}
-                <rect x={78} y={f.y - f.h} width={60} height={f.h * 2} fill="#000" opacity={0.3} filter={url('mid')} />
-              </g>
-            </g>
-          ))}
-
-          <path d={blob(HAND)} fill={url('arm')} />
-          <g clipPath={url('handclip')}>
-            {/* soft form shading: the far side of the wrist turns away from the light */}
-            <path d={blob([[480, 330], [610, 400], [610, 700], [470, 660], [440, 470]])} fill={SKIN.deep} opacity={0.45} filter={url('blur')} />
-            <path d={blob([[170, 300], [250, 300], [330, 520], [300, 640], [190, 520]])} fill={SKIN.hi} opacity={0.35} filter={url('blur')} />
-            {/* the phone's shadow across the palm */}
-            <rect x={70} y={352} width={380} height={34} fill="#000" opacity={0.38} filter={url('blur')} />
-            {/* wrist creases */}
-            <path d="M326 496 q44 -22 100 -28" stroke={SKIN.deep} strokeOpacity={0.3} strokeWidth={3} fill="none" strokeLinecap="round" filter={url('soft')} />
-            <path d="M342 514 q40 -18 92 -24" stroke={SKIN.deep} strokeOpacity={0.2} strokeWidth={2.5} fill="none" strokeLinecap="round" filter={url('soft')} />
+          {FINGERS.map((f, i) => <Facets key={i} list={f} />)}
+          {/* the phone's edge shading the fingers where they turn in behind it */}
+          <rect x={74} y={90} width={40} height={240} fill="#000" opacity={0.22} filter={url('mid')} />
+          <Facets list={PALM} />
+          {/* the phone's shadow across the palm */}
+          <g clipPath={url('palm')}>
+            <rect x={70} y={350} width={380} height={34} fill="#000" opacity={0.32} filter={url('blur')} />
           </g>
+          {/* where the thumb's pad lies against the palm, a soft fold */}
+          <path d={`M${THUMB_EDGES.left.slice(4, 10).map((p) => `${(p[0] - 3).toFixed(1)},${(p[1] + 2).toFixed(1)}`).join('L')}`} stroke="#000" strokeOpacity={0.28} strokeWidth={9} fill="none" strokeLinecap="round" filter={url('mid')} />
+          <Facets list={THUMB} />
         </>
       ) : (
-        <g mask={url('fade')}>
-          <path d={blob(THUMB)} transform="translate(-5 8)" fill="#000" opacity={0.4} filter={url('mid')} mask={url('screen')} />
-          {/* where the thumb's pad lies against the palm, a soft fold rather than an edge */}
-          <path d={line(along(-1.02, 0.12, 0.5))} stroke={SKIN.deep} strokeWidth={10} strokeOpacity={0.4} fill="none" strokeLinecap="round" filter={url('mid')} />
-          <path d={blob(THUMB)} fill={url('thumb')} />
-          <g clipPath={url('thumbclip')}>
-            {/* shade down the outer side turning away from the light, and a sheen along the top of the thumb */}
-            <path d={line(along(1.15, 0.25, 1))} stroke={SKIN.deep} strokeWidth={34} strokeOpacity={0.5} fill="none" filter={url('blur')} />
-            <path d={line(along(-0.35, 0.3, 0.95))} stroke={SKIN.hi} strokeWidth={16} strokeOpacity={0.5} fill="none" strokeLinecap="round" filter={url('mid')} />
-            {/* the round of the muscle at the base, catching the light */}
-            <ellipse cx={across(0.22, -0.2)[0]} cy={across(0.22, -0.2)[1]} rx={42} ry={58} transform={`rotate(-18 ${across(0.22, -0.2)[0]} ${across(0.22, -0.2)[1]})`} fill={SKIN.light} opacity={0.35} filter={url('blur')} />
-            {/* the knuckle: a soft bump of light above folds of skin */}
-            <ellipse cx={across(JOINT - 0.02, -0.1)[0]} cy={across(JOINT - 0.02, -0.1)[1]} rx={20} ry={15} fill={SKIN.hi} opacity={0.3} filter={url('mid')} />
-            <path d={crease(JOINT, -0.7, 0.55, 6)} stroke={SKIN.deep} strokeOpacity={0.45} strokeWidth={2.4} fill="none" strokeLinecap="round" filter={url('soft')} />
-            <path d={crease(JOINT - 0.02, -0.55, 0.45, 5)} stroke={SKIN.deep} strokeOpacity={0.3} strokeWidth={1.8} fill="none" strokeLinecap="round" filter={url('soft')} />
-            <path d={crease(JOINT + 0.025, -0.5, 0.35, 4)} stroke={SKIN.deep} strokeOpacity={0.25} strokeWidth={1.6} fill="none" strokeLinecap="round" filter={url('soft')} />
-            {/* the tip pressing on the glass is a touch darker where it meets it */}
-            <ellipse cx={TIP.at[0] - TIP.dir[0] * 4} cy={TIP.at[1] - TIP.dir[1] * 4} rx={30} ry={18} transform={`rotate(${NAIL_ANGLE} ${TIP.at[0]} ${TIP.at[1]})`} fill={SKIN.dark} opacity={0.18} filter={url('mid')} />
-          </g>
-          {/* the nail, lying along the thumb, its pale free edge toward the tip */}
-          <g transform={`translate(${NAIL_AT.at[0].toFixed(1)} ${NAIL_AT.at[1].toFixed(1)}) rotate(${NAIL_ANGLE.toFixed(1)})`}>
-            <ellipse cx={0} cy={0} rx={23} ry={27} fill={SKIN.deep} opacity={0.3} filter={url('soft')} />
-            <path d="M-19 16 C-21 -2 -20 -16 -13 -22 C-6 -26 6 -26 13 -22 C20 -16 21 -2 19 16 C10 21 -10 21 -19 16Z" fill={url('nail')} />
-            {/* cuticle, pale free edge, and a glint */}
-            <path d="M-18 16 C-9 21 9 21 18 16" stroke={SKIN.dark} strokeOpacity={0.55} strokeWidth={2.2} fill="none" strokeLinecap="round" />
-            <path d="M-14 -17 C-6 -23 6 -23 14 -17" stroke={NAIL.tip} strokeWidth={5} fill="none" strokeLinecap="round" />
-            <path d="M-9 8 C-10 -2 -8 -9 -4 -13" stroke="#fff" strokeOpacity={0.5} strokeWidth={2.5} fill="none" strokeLinecap="round" />
-          </g>
+        <g clipPath={url('screen')}>
+          {/* its shadow on the glass, then the thumb itself */}
+          <path d={smooth(THUMB_OUTLINE)} transform="translate(-6 9)" fill="#000" opacity={0.38} filter={url('mid')} />
+          <Facets list={THUMB} />
         </g>
       )}
     </svg>
