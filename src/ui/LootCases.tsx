@@ -33,10 +33,11 @@ function Case({ c, uid }: { c: LootCase; uid: string }) {
   return (
     <div className="loot-case">
       <b><Emoji char="🐍" size={16} /> {looter ? `You took ${naira(c.amount)}` : `@${c.looter ?? 'someone'} took ${naira(c.amount)}`} from {where(c)}</b>
+      {looter && c.held && <small>The loot is frozen until the case closes.</small>}
       <small>{time > 0 ? `${left(time)} left` : 'Settling…'}{other ? ` · ${looter ? 'EFCC chair' : 'Looter'} @${other}` : ''}</small>
       {looter && !c.offer && (
         <>
-          <small>Offer the chair a share of the loot. They decide if you go down.</small>
+          <small>Offer the chair a share of the loot. They decide if you go down. If they never answer, the odds decide when time runs out.</small>
           <div className="row-btns">
             {LOOT.shares.map((pct) => (
               <button key={pct} className="btn sm" disabled={busy || time <= 0} onClick={() => void offer(c.id, pct)}>{pct}% · {naira(lootBribe(c.amount, pct))}</button>
@@ -44,7 +45,7 @@ function Case({ c, uid }: { c: LootCase; uid: string }) {
           </div>
         </>
       )}
-      {looter && !!c.offer && <small>Your offer of {naira(c.offer)} is held until the chair decides.</small>}
+      {looter && !!c.offer && <small>Your offer of {naira(c.offer)} is {c.held ? 'set aside from the loot' : 'held'} until the chair decides.</small>}
       {!looter && (
         <>
           <small>{c.offer ? `Offers you ${naira(c.offer)}. Take it and you may be found out and lose your job.` : 'No offer yet.'}</small>

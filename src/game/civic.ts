@@ -110,8 +110,30 @@ export const TREASURY = {
   /** President, governor or FCT Minister: hand out palliatives to everyone active today: the president out of the palliatives budget, a city's government out of its own. Whoever shares picks how much each person gets. */
   palliative: { sizes: [5_000, 25_000, 100_000, 500_000, 1_000_000], cooldownHours: 6, maxPlayers: 100 },
   /** Any office holder: a "snake" swallows part of the treasury. */
-  embezzle: { share: 0.2, cap: 500_000, cooldownHours: 12, catchChance: 0.35, fine: 50_000 },
+  embezzle: { share: 0.2, cap: 50_000_000, cooldownHours: 12, catchChance: 0.35, fine: 50_000 },
 };
+
+/** The other ways an office holder moves public money into their own pocket (worker/schemes.ts). Each has its own risk. */
+export type Scheme = 'front' | 'ghost' | 'divert' | 'bdc' | 'bags';
+export const SCHEMES = {
+  /**
+   * Front company: the treasury pays one of your businesses for "supplies" that never arrive. Pick the invoice; the
+   * bigger it is, the likelier an EFCC raid: the money back, a fine, and every shelf you own emptied.
+   */
+  front: { sizes: [1_000_000, 5_000_000, 20_000_000, 50_000_000], cooldownHours: 8, fine: 100_000, raid: (amount: number) => Math.min(0.6, 0.12 + (amount / 50_000_000) * 0.4) },
+  /**
+   * Ghost workers, governors only: names on the state payroll that nobody has ever seen. Every hourly round pays you a
+   * slice of the state's money, and every round the auditors are likelier to look: caught, it all goes back and you are out.
+   */
+  ghost: { share: 0.01, cap: 2_000_000, audit: (rounds: number) => Math.min(0.6, 0.04 + rounds * 0.04) },
+  /** Palliative diversion: keep a share of what you share. VDM may get the warehouse video: the money back and a fine. */
+  divert: { shares: [25, 50], fine: 100_000, exposed: (pct: number) => (pct / 100) * 0.8 },
+  /** Mallam's BDC: the treasury's money changed into dollars for you. No EFCC, but Mallam keeps a fat cut, and sometimes vanishes with the lot. */
+  bdc: { sizes: [1_000_000, 5_000_000, 20_000_000, 50_000_000], fee: 0.35, vanish: 0.12, cooldownHours: 6 },
+  /** Ghana Must Go: bags of the treasury's cash on the state jet. The biggest haul, but customs may search the plane: caught, you are out. */
+  bags: { share: 0.3, cap: 50_000_000, search: 0.3, cooldownHours: 24 },
+};
+
 
 /**
  * The president can impeach whoever runs a state for a few hours: the governor keeps the seat but loses its powers and
@@ -200,8 +222,11 @@ export const OFFICE_DEPARTMENT: Partial<Record<PoliticalOffice, Department>> = {
  * decides whether the looter goes down for it. A chair who takes the money may be found out and lose the job.
  */
 export const LOOT = {
-  /** How long the chair has to decide. After that the old odds of being caught decide. */
-  windowMs: 30 * 60_000,
+  /**
+   * How long the chair has to decide: long enough for a chair who is offline to come back. The loot is frozen until
+   * then, so the looter can't spend it, and any offer comes out of it. After that the old odds of being caught decide.
+   */
+  windowMs: 3 * 60 * 60_000,
   /** The shares of the loot a looter can offer, in percent. */
   shares: [10, 25, 50, 75],
   /** The chance a chair who takes a bribe is caught and removed. */
@@ -221,6 +246,8 @@ export interface LootCase {
   city: CivicCity | null;
   amount: number;
   offer: number | null;
+  /** The loot is frozen in the case until it closes (cases from before it was: already paid out). */
+  held?: boolean;
   status: 'open' | 'accepted' | 'refused' | 'expired';
   expiresAt: number;
   decidedAt: number | null;
@@ -241,7 +268,7 @@ export function banLeft(ms: number): string {
 
 
 /** The powers with a waiting time, and when I last used each (worker/civic.ts). */
-export type CivicCooldown = 'contract' | 'pardon' | 'impeach';
+export type CivicCooldown = 'contract' | 'pardon' | 'impeach' | 'front' | 'bdc' | 'bags';
 
 /** What kind of government notice a line of the gazette is (worker/gazette.ts). */
 export type GazetteKind = 'law' | 'project' | 'palliative' | 'scandal' | 'elected';

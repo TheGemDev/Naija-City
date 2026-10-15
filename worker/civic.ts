@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, SCHEMES, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -13,6 +13,7 @@ import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, REPAIR, repairC
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
 import { lootAction, lootBoard, openLootCase, settleLoot, type LootAction } from './loot';
+import { myGhosts, potStmt, runScheme, setGhosts } from './schemes';
 import { gazette, OFFICE_NAME, official, recentNews, type Notice } from './gazette';
 import { syncForum } from './groups';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
@@ -348,6 +349,8 @@ async function snapshot(db: D1Database, uid: string) {
     posters: posters.results.filter((p) => p.username),
     roadBlockUntil: me?.road_block_until && me.road_block_until > Date.now() ? me.road_block_until : null,
     embezzledAt: me?.embezzled_at ?? null,
+    /** Ghost workers I have on a state payroll (worker/schemes.ts). */
+    ghosts: await myGhosts(db, uid),
     /** When I last awarded a contract or granted a pardon. */
     cooldowns: Object.fromEntries(used.results.map((r) => [r.action, r.at])),
     /** The one post I'm running for right now, and until when I'm barred from running for buying votes. */
@@ -444,6 +447,8 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     vehicle?: string;
     to?: string;
     hours?: number;
+    divert?: number;
+    scheme?: string;
   } | null;
   if (!body) return err(400, 'Invalid JSON');
 
@@ -686,6 +691,9 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     // A game from before the amount could be chosen sends none: it shares what it always did.
     const size = body.amount ?? 5_000;
     if (!p.sizes.includes(size)) return err(400, 'Choose how much each person gets');
+    // The share of it the one sharing keeps for themselves (game/civic.ts SCHEMES.divert): none unless they ask.
+    const divert = body.divert ?? 0;
+    if (divert && !SCHEMES.divert.shares.includes(divert)) return err(400, 'Choose how much to divert');
     if (policy.palliative_at && now - policy.palliative_at < p.cooldownHours * 3600_000) return err(429, 'Palliatives were shared recently');
     const { results: people } = await db
       .prepare('SELECT uid FROM players WHERE last_seen > ? AND username IS NOT NULL ORDER BY last_seen DESC LIMIT ?')
@@ -707,13 +715,30 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     if (!locked) return err(409, 'The treasury changed. Try again');
     if (city) await db.prepare('UPDATE civic_policies SET palliative_at = ? WHERE id = 1').bind(now).run();
     const who = (await usernames(db, [user.uid])).get(user.uid);
+    // What each person really gets once the diverted share is gone, and what lands in the warehouse.
+    const given = each - Math.floor((each * divert) / 100);
+    const diverted = (each - given) * people.length;
     await db.batch([
-      ...people.flatMap((x) => applyStmts(db, x.uid, `palliative:${now}`, 'palliative', 'state', each)),
-      feedStmt(db, user.uid, 'politics', '🍚', `${official(sharedAs, who)} shared ${naira(each)} palliatives to ${people.length} people. Some say it was rice, some say it was noodles, everybody says it was small. 😅`, OFFICE_RULES[sharedAs].city),
-      ...vdmGov(db, user.uid, 'palliative', { who: official(sharedAs, who), amount: naira(each) }, OFFICE_RULES[sharedAs].city),
+      ...people.flatMap((x) => applyStmts(db, x.uid, `palliative:${now}`, 'palliative', 'state', given)),
+      ...(diverted ? applyStmts(db, user.uid, `divert:${now}`, 'embezzle', sharedAs, diverted) : []),
+      feedStmt(db, user.uid, 'politics', '🍚', `${official(sharedAs, who)} shared ${naira(given)} palliatives to ${people.length} people. Some say it was rice, some say it was noodles, everybody says it was small. 😅`, OFFICE_RULES[sharedAs].city),
+      ...vdmGov(db, user.uid, 'palliative', { who: official(sharedAs, who), amount: naira(given) }, OFFICE_RULES[sharedAs].city),
     ]);
-    await gazette(env, ctx, [{ uid: user.uid, office: sharedAs, kind: 'palliative', icon: '🍚', text: `${official(sharedAs, who)} shared palliatives: ${naira(each)} each to ${people.length} ${people.length === 1 ? 'person' : 'people'}.` }]);
-    return json({ each, people: people.length, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+    await gazette(env, ctx, [{ uid: user.uid, office: sharedAs, kind: 'palliative', icon: '🍚', text: `${official(sharedAs, who)} shared palliatives: ${naira(given)} each to ${people.length} ${people.length === 1 ? 'person' : 'people'}.` }]);
+    // VDM may get the video of the rest in a warehouse: it all goes back, with a fine on top.
+    let exposed = false;
+    if (diverted && rand() < SCHEMES.divert.exposed(divert)) {
+      exposed = true;
+      const back = await transfer(db, user.uid, null, diverted, 'loot_return', '', `divert-back:${user.uid}:${now}`);
+      const fine = await transfer(db, user.uid, null, SCHEMES.divert.fine, 'fine', '', `divert-fine:${user.uid}:${now}`);
+      await db.batch([
+        potStmt(db, city ?? null, back),
+        feedStmt(db, user.uid, 'politics', '📹', `EXPOSED: a video shows ${naira(diverted)} of palliatives from ${official(sharedAs, who)} stacked in a private warehouse. ${naira(back)} recovered and a ${naira(fine)} fine. The rice was “for safekeeping”. 📹`, OFFICE_RULES[sharedAs].city),
+        ...vdmGov(db, user.uid, 'palliative', { who: official(sharedAs, who), amount: naira(given) }, OFFICE_RULES[sharedAs].city, true),
+      ]);
+      await gazette(env, ctx, [{ uid: user.uid, office: sharedAs, kind: 'scandal', icon: '📹', text: `${official(sharedAs, who)} was caught diverting ${naira(diverted)} of palliatives and paid it back.` }]);
+    }
+    return json({ each: given, diverted, exposed, people: people.length, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
   }
 
   if (body.action === 'contract') {
@@ -810,14 +835,46 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       : await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first();
     if (!taken) return err(409, 'The treasury changed. Try again');
     await db.batch([
-      ...applyStmts(db, user.uid, `embezzle:${now}`, 'embezzle', office, amount),
+      // With a chair in office the loot is frozen in their case until it closes (worker/loot.ts); without one it is yours now.
+      ...(chairUid ? [] : applyStmts(db, user.uid, `embezzle:${now}`, 'embezzle', office, amount)),
       feedStmt(db, null, 'politics', '🐍', `${naira(amount)} has gone missing from the state treasury. Officials say a snake swallowed it. Investigations ongoing. 🐍`),
       ...vdmGov(db, null, 'snake', { amount: naira(amount) }),
     ]);
     // Nobody is named: they got away with it.
     await gazette(env, ctx, [{ uid: null, office: null, kind: 'scandal', icon: '🐍', text: `${naira(amount)} is missing from the treasury. A snake swallowed it.` }]);
-    const caseId = chairUid ? await openLootCase(env, ctx, user.uid, chairUid, office, stateCity ?? null, amount, now) : null;
+    const caseId = chairUid ? await openLootCase(env, ctx, user.uid, chairUid, office, stateCity ?? null, amount, now).catch(() => null) : null;
+    // No case could be opened to hold it: the loot is theirs after all.
+    if (chairUid && !caseId) await db.batch(applyStmts(db, user.uid, `embezzle:${now}`, 'embezzle', office, amount));
     return json({ caught: false, amount, caseId, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+  }
+
+  // The other ways into the treasury (worker/schemes.ts). Like the snake, each reaches the schemer's own pot: their
+  // state's treasury for whoever runs a state, the federal one for everyone else.
+  if (body.action === 'scheme') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const office = OFFICE_LIST.find((o) => policy?.[`${o}_uid`] === user.uid && !suspendedUntil(policy, o));
+    if (!office || !policy) return err(403, 'Only office holders can reach the treasury');
+    const city = cityOf(policy, user.uid) ?? null;
+    if (body.scheme === 'ghost' || body.scheme === 'noGhost') {
+      if (!city) return err(403, 'Only a governor has a state payroll to pad');
+      const out = await setGhosts(db, user.uid, city, body.scheme === 'ghost', now);
+      if ('error' in out) return err(out.status, out.error);
+      return json({ outcome: out.outcome, amount: out.amount, snapshot: await snapshot(db, user.uid) });
+    }
+    const scheme = body.scheme === 'front' || body.scheme === 'bdc' || body.scheme === 'bags' ? body.scheme : null;
+    if (!scheme) return err(400, 'Unknown scheme');
+    if (scheme === 'bags' && !executiveOf(policy, user.uid)) return err(403, 'Only the president and the governors have a state jet');
+    if (city && !(await houseOpen(db, city))) return err(403, 'Government House is in ruins. Repair it before you can work');
+    const wait = SCHEMES[scheme].cooldownHours * 3600_000 - (now - (await lastUsed(db, user.uid, scheme)));
+    if (wait > 0) return err(429, `Lie low for another ${banLeft(wait)}`);
+    await usedStmt(db, user.uid, scheme, now).run();
+    const out = await runScheme(env, ctx, { uid: user.uid, office, city }, scheme, body.amount, now);
+    if ('error' in out) {
+      // Nothing happened: the waiting time is not used up.
+      await db.prepare('DELETE FROM civic_cooldowns WHERE uid = ? AND action = ? AND at = ?').bind(user.uid, scheme, now).run();
+      return err(out.status, out.error);
+    }
+    return json({ outcome: out.outcome, amount: out.amount, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
   }
 
   // The looter offers the EFCC chair a share of the loot, or the chair decides (worker/loot.ts).

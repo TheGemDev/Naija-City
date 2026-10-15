@@ -4,7 +4,7 @@
 // The header card (TreasuryHero) shows the federal balance and, tapped open, every state's.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
+import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
 import { naira, nairaShort, useGame } from '../game/store';
 import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
@@ -444,6 +444,11 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const [contractor, setContractor] = useState('');
   const [prisoner, setPrisoner] = useState('');
   const [sure, setSure] = useState(false);
+  const [sureBags, setSureBags] = useState(false);
+  // The share of a palliative round the one sharing keeps (SCHEMES.divert).
+  const [divert, setDivert] = useState(0);
+  const scheme = useCivic((s) => s.scheme);
+  const ghosts = useCivic((s) => s.ghosts);
   // Which treasury the money strip is showing: the federal one or a state's.
   const [sel, setSel] = useState<'federal' | CivicCity | null>(null);
   const repairsAt = useRef<HTMLDivElement>(null);
@@ -492,6 +497,15 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const snakeWait = data.embezzledAt ? data.embezzledAt + snake.cooldownHours * HOUR - now : 0;
   const snakeTake = Math.min(snake.cap, Math.floor(snakePot * snake.share));
   const blockLeft = data.roadBlockUntil ? data.roadBlockUntil - now : 0;
+  const { front, bdc, bags, ghost, divert: skim } = SCHEMES;
+  const potName = myCity ? 'your state’s treasury' : 'the federal treasury';
+  const waitOf = (key: 'front' | 'bdc' | 'bags') => (data.cooldowns?.[key] ?? 0) + SCHEMES[key].cooldownHours * HOUR - now;
+  const frontWait = waitOf('front');
+  const bdcWait = waitOf('bdc');
+  const bagsWait = waitOf('bags');
+  const bagsTake = Math.min(bags.cap, Math.floor(snakePot * bags.share));
+  const odds = (p: number) => `${Math.round(p * 100)}%`;
+  const mine = data.ghosts;
 
   return (
     <>
@@ -572,11 +586,22 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
               ready={palWait <= 0 && !palLow && !(locked && !!actCity)}
             >
               {isExec && (
-                <div className="row-btns" role="group" aria-label="How much each person gets">
-                  {pal.sizes.map((size) => (
-                    <button key={size} className="btn sm" disabled={busy || palWait > 0 || palBudget < size || (locked && !!actCity)} onClick={() => void palliative(size, standIn)}>{nairaShort(size)}</button>
-                  ))}
-                </div>
+                <>
+                  <div className="row-btns" role="group" aria-label="How much each person gets">
+                    {pal.sizes.map((size) => (
+                      <button key={size} className="btn sm" disabled={busy || palWait > 0 || palBudget < size || (locked && !!actCity)} onClick={() => void palliative(size, standIn, divert)}>{nairaShort(size)}</button>
+                    ))}
+                  </div>
+                  {/* Diverting a share is a scheme like any other: VDM may get the warehouse video. */}
+                  <div className="row-btns" role="group" aria-label="Keep a share for yourself">
+                    <small className="muted">Divert to your warehouse:</small>
+                    {[0, ...skim.shares].map((share) => (
+                      <button key={share} className={`btn sm ${share ? 'danger' : ''} ${divert === share ? 'on' : ''}`} aria-pressed={divert === share} disabled={busy} onClick={() => setDivert(share)}>
+                        {share ? `${share}% · ${odds(skim.exposed(share))} exposed` : 'None'}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </Spend>
             <Spend
@@ -679,6 +704,73 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
                   </div>
                 ) : (
                   <button className="btn sm danger" disabled={busy || snakeWait > 0 || snakeTake < 1_000} onClick={() => setSure(true)}>Take {naira(snakeTake)}</button>
+                )}
+              </Spend>
+            )}
+            {office && (
+              <Spend
+                shady
+                icon="📦"
+                title="Front company"
+                blurb={`${potName[0].toUpperCase()}${potName.slice(1)} pays one of your businesses for “supplies” that never come. The bigger the invoice, the likelier an EFCC raid: the money back, a ${naira(front.fine)} fine, and every shelf you own emptied.`}
+                who="Office holders with a business"
+                status={frontWait > 0 ? `Lie low for ${left(frontWait)}` : `Raid odds ${odds(front.raid(front.sizes[0]))} to ${odds(front.raid(front.sizes[front.sizes.length - 1]))}`}
+              >
+                <div className="row-btns">
+                  {front.sizes.map((size) => (
+                    <button key={size} className="btn sm danger" disabled={busy || frontWait > 0 || snakePot < size} onClick={() => void scheme('front', size)}>{nairaShort(size)} · {odds(front.raid(size))}</button>
+                  ))}
+                </div>
+              </Spend>
+            )}
+            {office && (
+              <Spend
+                shady
+                icon="💱"
+                title="Mallam’s BDC"
+                blurb={`Change money from ${potName} into dollars. No EFCC and no record, but Mallam keeps ${odds(bdc.fee)}, and ${odds(bdc.vanish)} of the time he vanishes with the lot.`}
+                who="Office holders only"
+                status={bdcWait > 0 ? `Lie low for ${left(bdcWait)}` : `You keep ${odds(1 - bdc.fee)}`}
+              >
+                <div className="row-btns">
+                  {bdc.sizes.map((size) => (
+                    <button key={size} className="btn sm danger" disabled={busy || bdcWait > 0 || snakePot < size} onClick={() => void scheme('bdc', size)}>{nairaShort(size)} → {nairaShort(Math.floor(size * (1 - bdc.fee)))}</button>
+                  ))}
+                </div>
+              </Spend>
+            )}
+            {office && isExec && (
+              <Spend
+                shady
+                icon="🧳"
+                title="Ghana Must Go"
+                blurb={`Fly ${naira(bagsTake)} of ${potName} out in bags on the state jet. ${odds(bags.search)} of the time customs search the plane: you are out of office, fined and jailed.`}
+                who="President · Governors"
+                status={bagsWait > 0 ? `Lie low for ${left(bagsWait)}` : bagsTake < 1_000 ? 'Nothing to pack' : `${odds(bags.search)} search odds`}
+              >
+                {sureBags ? (
+                  <div className="row-btns">
+                    <button className="btn sm danger" disabled={busy} onClick={() => { setSureBags(false); void scheme('bags'); }}>Yes, load the jet</button>
+                    <button className="btn sm" onClick={() => setSureBags(false)}>No</button>
+                  </div>
+                ) : (
+                  <button className="btn sm danger" disabled={busy || bagsWait > 0 || bagsTake < 1_000} onClick={() => setSureBags(true)}>Pack {naira(bagsTake)}</button>
+                )}
+              </Spend>
+            )}
+            {myCity && (
+              <Spend
+                shady
+                icon="👻"
+                title="Ghost workers"
+                blurb={`Put workers nobody has met on ${CITY_NAME[myCity]}’s payroll. Every hour they pay you ${odds(ghost.share)} of the state’s money, up to ${nairaShort(ghost.cap)}. Every hour the audit odds rise: caught, it all goes back and you are out of office.`}
+                who="Governors"
+                status={mine ? `${mine.rounds} round${mine.rounds === 1 ? '' : 's'} · ${naira(mine.taken)} · next audit ${odds(ghost.audit(mine.rounds))}` : `First audit ${odds(ghost.audit(0))}`}
+              >
+                {mine ? (
+                  <button className="btn sm" disabled={busy} onClick={() => void ghosts(false)}>Take them off the payroll</button>
+                ) : (
+                  <button className="btn sm danger" disabled={busy} onClick={() => void ghosts(true)}>Add ghost workers</button>
                 )}
               </Spend>
             )}

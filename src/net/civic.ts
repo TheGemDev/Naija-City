@@ -108,6 +108,8 @@ export interface CivicSnapshot {
   /** The governor dug up my street until then. */
   roadBlockUntil: number | null;
   embezzledAt: number | null;
+  /** Ghost workers I have on a state payroll: where, how many hourly rounds they have paid, and the total. */
+  ghosts?: { city: string; rounds: number; taken: number } | null;
   /** When I last awarded a contract or granted a pardon. */
   cooldowns?: Partial<Record<CivicCooldown, number>>;
   /** The one post I'm running for right now. */
@@ -148,7 +150,12 @@ interface CivicState {
   roadProject(target: string, city?: string): Promise<void>;
   contract(target: string, amount: number, city?: string): Promise<void>;
   pardon(target: string): Promise<void>;
-  palliative(amount: number, city?: string): Promise<void>;
+  /** `divert` is the share (percent) of it the one sharing keeps (game/civic.ts SCHEMES.divert). */
+  palliative(amount: number, city?: string, divert?: number): Promise<void>;
+  /** Front company, Mallam's BDC or Ghana Must Go bags (game/civic.ts SCHEMES): `amount` is the invoice or the sum to change. */
+  scheme(scheme: 'front' | 'bdc' | 'bags', amount?: number): Promise<void>;
+  /** A governor puts ghost workers on the state payroll, or takes them off. */
+  ghosts(on: boolean): Promise<void>;
   embezzle(): Promise<void>;
   /** The governor sets how much of an asset's bill the state pays. */
   upkeep(asset: StateAsset, level: number, city?: string): Promise<void>;
@@ -184,6 +191,8 @@ interface CivicResult {
   caseId?: number | null;
   each?: number;
   people?: number;
+  diverted?: number;
+  exposed?: boolean;
 }
 
 /** The election opening or closing, pushed to everyone online (worker/civic.ts). */
@@ -278,12 +287,34 @@ function report(body: Record<string, unknown>, r: CivicResult) {
   if (body.action === 'reinstate') g.toast('🤝🏾 Reinstated. The state is theirs to run again.');
   if (body.action === 'allocate') g.toast('📊 New budget signed. The departments have their shares.');
   if (body.action === 'salaries') g.toast('💼 New pay list signed. The whole country can read it, VDM too.');
-  if (body.action === 'palliative' && r.each) g.toast(`🍚 Palliatives shared: ${naira(r.each)} each to ${r.people} people.`);
+  if (body.action === 'palliative' && r.each) {
+    g.toast(r.exposed
+      ? `📹 EXPOSED! VDM got the warehouse video. The ${naira(r.diverted ?? 0)} you diverted went back, with a fine on top.`
+      : r.diverted
+        ? `🍚 ${naira(r.each)} each to ${r.people} people, and ${naira(r.diverted)} quietly into your warehouse.`
+        : `🍚 Palliatives shared: ${naira(r.each)} each to ${r.people} people.`);
+    if (r.exposed) void refreshBalance();
+  }
+  if (body.action === 'scheme') {
+    const sum = naira(r.amount ?? 0);
+    const line: Record<string, string> = {
+      paid: `📦 ${sum} paid to your company for “supplies”. The paperwork is on the gazette, for anyone who reads it.`,
+      raided: '🚨 EFCC RAID! Your company was stormed: the money is back in the treasury, you were fined, and your shelves were emptied.',
+      washed: `💱 Mallam changed it. ${sum} is yours, clean as a whistle.`,
+      vanished: '💱 Mallam’s shop is locked and his phone is off. The money is gone, and you can’t exactly report him.',
+      flown: `🧳 Wheels up. ${sum} in Ghana Must Go bags landed safely in your account.`,
+      searched: '🧳 CAUGHT! Customs opened the bags on the tarmac. You are out of office and in a cell.',
+      ghosts: '👻 The ghosts are on the payroll. They get paid every hour, and so do you. The auditors will come eventually.',
+      noGhosts: `👻 The ghosts are gone. They paid you ${sum} in all.`,
+    };
+    if (r.outcome && line[r.outcome]) g.toast(line[r.outcome]);
+    if (r.outcome === 'searched') void loadPolice();
+  }
   if (body.action === 'embezzle') {
     if (r.caught) {
       g.toast('🐍 CAUGHT! The EFCC traced the money. You are out of office and in a cell.');
       void loadPolice();
-    } else if (r.caseId) g.toast(`🐍 ${naira(r.amount ?? 0)} is yours, but the EFCC chair has a case on you. Message them and offer a share.`);
+    } else if (r.caseId) g.toast(`🐍 ${naira(r.amount ?? 0)} is out of the treasury, but frozen: the EFCC chair has a case on you. Offer them a share, or wait it out.`);
     else if (r.amount) g.toast(`🐍 ${naira(r.amount)} quietly moved to your account. A snake swallowed it, officially.`);
   }
 }
@@ -338,7 +369,9 @@ export const useCivic = create<CivicState>((set) => {
     roadProject: (target, city) => act({ action: 'roadProject', target, city }),
     contract: (target, amount, city) => act({ action: 'contract', target, amount, city }),
     pardon: (target) => act({ action: 'pardon', target }),
-    palliative: (amount, city) => act({ action: 'palliative', amount, city }),
+    palliative: (amount, city, divert) => act({ action: 'palliative', amount, city, divert: divert || undefined }),
+    scheme: (scheme, amount) => act({ action: 'scheme', scheme, amount }),
+    ghosts: (on) => act({ action: 'scheme', scheme: on ? 'ghost' : 'noGhost' }),
     embezzle: () => act({ action: 'embezzle' }),
     upkeep: (asset, level, city) => act({ action: 'upkeep', asset, level, city }),
     payShare: (step) => act({ action: 'payShare', pct: step }),

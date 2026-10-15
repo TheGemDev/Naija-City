@@ -15,6 +15,7 @@ import { sceneFor } from '../game/streetScenes';
 import { driveState } from '../game/driveState';
 import { CATCH } from '../game/crime';
 import { injured } from '../game/injury';
+import { flyHeli } from '../game/heli';
 
 export const TARGET_HEIGHT = 1.7;
 const WALK_SPEED = 2.4; // tiles per second
@@ -129,7 +130,12 @@ export function Avatar() {
 
     // A street story stops you in your tracks until you have dealt with it.
     const stopped = !!s.streetStory;
-    if (a.path.length && !stopped) {
+    // A helicopter flies its own way there (game/heli.ts): up, across in a straight line, and down at the door.
+    const flying = s.view === 'city' && s.task?.actionId === 'enter' && s.task.phase === 'walking' && s.task.travelMode === 'helicopter';
+    if (flying && a.path.length) {
+      if (!stopped) flyHeli(Math.min(dt, 0.1));
+      moving = true;
+    } else if (a.path.length && !stopped) {
       const next = a.path[0];
       const tx = next.x + 0.5;
       const tz = next.z + 0.5;
@@ -138,8 +144,7 @@ export function Avatar() {
       const dist = Math.hypot(dx, dz);
       const visiting = !!useVisit.getState().current;
       const ride = s.task?.actionId === 'enter' && s.task.phase === 'walking' && (s.task.travelMode ?? 'walk') !== 'walk';
-      const rideSpeed = s.task?.travelMode === 'helicopter' ? 5 : 1.7;
-      const step = Math.min(dt, 0.1) * (!visiting && onMap(s.view) ? MAP_SPEED * (ride ? rideSpeed : 1) : WALK_SPEED) * (injured() ? CATCH.slowFactor : 1);
+      const step = Math.min(dt, 0.1) * (!visiting && onMap(s.view) ? MAP_SPEED * (ride ? 1.7 : 1) : WALK_SPEED) * (injured() ? CATCH.slowFactor : 1);
       if (dist <= step) {
         a.x = tx;
         a.z = tz;

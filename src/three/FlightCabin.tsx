@@ -11,6 +11,7 @@ import { useLowPerf } from '../game/quality';
 import { encodeLook, randomAppearance } from '../game/wardrobe';
 import { Person, seatDrop, type Clip } from './Person';
 import { Cap, Engine, Fin, Gear, Lamp, ringsBetween, Skin, smoothRings, Wing, type Ring } from './planeKit';
+import { FlightTerrain, type FlightMotion } from './FlightTerrain';
 
 type Kind = 'ticket' | 'jet';
 
@@ -644,11 +645,11 @@ function PrivateJet({ myLook }: { myLook: string }) {
 }
 
 const PUFFS: [number, number, number, number][] = [[0, 0, 0, 1.6], [1.5, -0.2, 0.4, 1.2], [-1.4, -0.1, -0.3, 1.3], [0.4, 0.5, -0.2, 1.1]];
-/** How far the runway lies over the ground the fields are on. */
+/** How far the runway lies over the ground the land is on. */
 const RUNWAY = 0.74;
 const DASHES = Array.from({ length: 12 }, (_, i) => -82.5 + i * 15);
 
-/** Cloud streaming past, the runway under the wheels, and the land dropping away below on the climb and coming back up to land. */
+/** Cloud streaming past, the runway under the wheels, and the land (three/FlightTerrain.tsx) dropping away below on the climb and coming back up to land. */
 function Sky({ floor }: { floor: number }) {
   const clouds = useRef<Group>(null!);
   const ground = useRef<Group>(null!);
@@ -661,10 +662,7 @@ function Sky({ floor }: { floor: number }) {
     const near = i % 2 === 1;
     return { x: (near ? 1 : -1) * (12 + Math.random() * 34), y: near ? -13 + Math.random() * 8 : -9 + Math.random() * 9, z: -70 + Math.random() * 140, s: 0.9 + Math.random() * 1.6 };
   }), [low]);
-  const fields = useMemo(() => Array.from({ length: 26 }, () => ({
-    x: -90 + Math.random() * 180, z: -90 + Math.random() * 180, w: 8 + Math.random() * 22, d: 8 + Math.random() * 22,
-    colour: ['#6b8f3a', '#8aa64a', '#a3894f', '#587c33', '#b9a05c'][Math.floor(Math.random() * 5)],
-  })), []);
+  const motion = useRef<FlightMotion>({ travel: 0, alt: 0, progress: 0 });
   useFrame((_, dt) => {
     const p = progress();
     const alt = altitude(p);
@@ -676,10 +674,12 @@ function Sky({ floor }: { floor: number }) {
       if (c.position.z < -70) c.position.z += 140;
     }
     clouds.current.visible = alt > 0.25;
-    // Fields lie just over the ground, each at its own height so they never flicker where they overlap, and the runway
-    // over them all: on the ground the wheels stand on it.
+    // The land slides back under you, and the runway lies over it: on the ground the wheels stand on it.
     ground.current.position.y = floor - RUNWAY - alt * 48;
-    for (const f of [...ground.current.children, ...runway.current.children]) {
+    motion.current.travel += speed * 1.6 * step;
+    motion.current.alt = alt;
+    motion.current.progress = p;
+    for (const f of runway.current.children) {
       if (!f.userData.field) continue;
       f.position.z -= speed * 1.6 * step;
       if (f.position.z < -90) f.position.z += 180;
@@ -705,16 +705,7 @@ function Sky({ floor }: { floor: number }) {
         ))}
       </group>
       <group ref={ground}>
-        <mesh rotation-x={-Math.PI / 2}>
-          <planeGeometry args={[420, 420]} />
-          <meshStandardMaterial color="#7da453" />
-        </mesh>
-        {fields.map((f, i) => (
-          <mesh key={i} userData={{ field: true }} position={[f.x, 0.6 + i * 0.004, f.z]} rotation-x={-Math.PI / 2}>
-            <planeGeometry args={[f.w, f.d]} />
-            <meshStandardMaterial color={f.colour} />
-          </mesh>
-        ))}
+        <FlightTerrain motion={motion} />
         <group ref={runway} position={[0, RUNWAY - 0.006, 0]}>
           <mesh rotation-x={-Math.PI / 2}>
             <planeGeometry args={[18, 420]} />

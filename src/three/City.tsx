@@ -15,7 +15,9 @@ import { LIGHTS_ON, sceneHour } from '../game/theme';
 import { regionLandmarks, regionOf, regionPlaces } from '../game/regions';
 import { CAR_BY_ID } from '../game/cars';
 import { avatar } from '../game/avatar';
-import { B, Bike, Helicopter, Keke } from './models';
+import { B, Bike, Keke } from './models';
+import { Helicopter } from './aircraft';
+import { heli } from '../game/heli';
 import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat } from './cityModels';
 import { Slab } from './Slab';
 import { brokenAsset, useRoads } from '../net/roads';
@@ -856,6 +858,9 @@ function Traffic({ map }: { map: CityMap }) {
   );
 }
 
+/** Height of the helicopter's cabin off its skids: it pitches and banks about there. */
+const HELI_PIVOT = 0.8;
+
 /** Renders the selected ride around the avatar while their route is in progress. */
 function PlayerRide() {
   const ride = useGame((s) =>
@@ -867,49 +872,44 @@ function PlayerRide() {
   // The state's fleet (game/civic.ts STATE_FLEET): a green-and-white helicopter, a black convoy car.
   const official = useGame((s) => !!s.task?.official);
   const ref = useRef<Group>(null);
+  const tilt = useRef<Group>(null);
   const shadow = useRef<Mesh>(null);
   const car = carId ? CAR_BY_ID[carId] : null;
-  // A helicopter lifts off, cruises above the roofs, tilts into its speed, banks into turns and settles at the end.
-  const flight = useRef({ total: 0, yaw: 0, bank: 0 });
-  useEffect(() => { flight.current = { total: 0, yaw: avatar.yaw, bank: 0 }; }, [ride]);
 
-  useFrame((_, dt) => {
+  useFrame(({ clock }) => {
     if (!ref.current) return;
     const groundY = mapGroundY(avatar.x, avatar.z);
     ref.current.position.set(avatar.x, groundY, avatar.z);
     ref.current.rotation.set(0, avatar.yaw, 0);
-    if (ride !== 'helicopter') return;
-    const f = flight.current;
-    const left = avatar.path.length;
-    if (left > f.total) f.total = left;
-    const progress = f.total ? 1 - left / f.total : 0;
-    // Up over the first stretch, down over the last: smooth, never a pop.
-    const edge = Math.min(1, Math.min(progress, 1 - progress) / 0.18);
-    const lift = edge * edge * (3 - 2 * edge);
-    const height = 0.4 + lift * 8;
-    ref.current.position.y = groundY + height;
-    // Turn rate of the heading, smoothed, becomes the bank.
-    let turn = avatar.yaw - f.yaw;
-    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    f.yaw = avatar.yaw;
-    const want = Math.max(-0.45, Math.min(0.45, (turn / Math.max(dt, 0.001)) * 0.35));
-    f.bank += (want - f.bank) * Math.min(1, dt * 4);
-    ref.current.rotation.order = 'YXZ';
-    ref.current.rotation.set(lift * 0.16, avatar.yaw, -f.bank);
+    if (ride !== 'helicopter' || !tilt.current) return;
+    // Flown in game/heli.ts (Avatar.tsx steps it); until its first frame it sits on the ground where you stand.
+    const h = heli.trip === avatar.path ? heli : null;
+    const alt = h ? h.alt : 0;
+    // A slow, slight drift up and down in the air, none on the ground.
+    const hover = Math.sin(clock.elapsedTime * 1.6) * 0.05 * Math.min(1, alt / 1.5);
+    ref.current.position.y = (h ? h.base : groundY) + alt + hover;
+    ref.current.rotation.y = h ? h.yaw : avatar.yaw;
+    // Pitch and bank about the cabin, not the skids.
+    tilt.current.rotation.set(h ? h.pitch : 0, 0, h ? -h.bank : 0);
     if (shadow.current) {
       shadow.current.position.set(avatar.x, groundY + 0.04, avatar.z);
+      const lift = Math.min(1, alt / 7.5);
       const spread = 1 + lift * 0.9;
       shadow.current.scale.set(spread, spread, spread);
-      (shadow.current.material as MeshStandardMaterial).opacity = 0.34 - lift * 0.16;
+      (shadow.current.material as MeshStandardMaterial).opacity = 0.34 - lift * 0.18;
     }
   });
 
   if (!ride) return null;
   return (
     <>
-      <group ref={ref} scale={ride === 'helicopter' ? 1.1 : ride === 'okada' ? 0.82 : ride === 'keke' ? 0.72 : 1}>
+      <group ref={ref} scale={ride === 'helicopter' ? 0.95 : ride === 'okada' ? 0.82 : ride === 'keke' ? 0.72 : 1}>
         {ride === 'helicopter' ? (
-          <Helicopter official={official} />
+          <group ref={tilt} position-y={HELI_PIVOT}>
+            <group position-y={-HELI_PIVOT}>
+              <Helicopter official={official} power={heli} />
+            </group>
+          </group>
         ) : (
           <StaticBatch key={`${ride}|${carId}|${official}`}>
             {ride === 'keke' ? <Keke /> : ride === 'okada' ? <Bike colour="#facc15" /> : <Car c={ride === 'car' ? car?.color ?? '#2563eb' : official ? '#0a0a0a' : '#facc15'} />}

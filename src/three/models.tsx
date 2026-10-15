@@ -2593,49 +2593,6 @@ function BikeRider() {
   );
 }
 
-/** Low-poly helicopter facing +z: fuselage, tail boom, skids, and a spinning main rotor. `official` is the state's: green and white, with the flag on the tail. */
-export function Helicopter({ official }: { official?: boolean }) {
-  const trim = official ? '#15803d' : '#dc2626';
-  return (
-    <group>
-      {/* Fuselage */}
-      <B p={[0, 0.62, 0.1]} s={[0.9, 0.7, 1.4]} c="#f5f5f4" />
-      <B p={[0, 0.72, 0.7]} s={[0.7, 0.5, 0.3]} c="#bae6fd" o={0.7} />
-      {/* Tail boom */}
-      <B p={[0, 0.6, -0.9]} s={[0.28, 0.28, 1.0]} c="#e7e5e4" />
-      {/* Tail fin */}
-      <B p={[0, 0.82, -1.34]} s={[0.06, 0.36, 0.2]} c={trim} />
-      {official && <B p={[0, 0.82, -1.34]} s={[0.07, 0.36, 0.07]} c="#ffffff" />}
-      {/* Tail rotor */}
-      <group position={[0.06, 0.82, -1.34]}>
-        <Spin speed={18}>
-          <B p={[0, 0, 0]} s={[0.04, 0.32, 0.04]} c="#a8a29e" />
-        </Spin>
-      </group>
-      {/* Main rotor mast */}
-      <Cyl p={[0, 1.04, 0.1]} r={0.06} h={0.14} c="#78716c" />
-      {/* Main rotor blades */}
-      <group position={[0, 1.12, 0.1]}>
-        <Spin speed={12}>
-          <B p={[0, 0, 0]} s={[2.8, 0.03, 0.14]} c="#a8a29e" />
-          <B p={[0, 0, 0]} s={[0.14, 0.03, 2.8]} c="#a8a29e" />
-        </Spin>
-      </group>
-      {/* Skids */}
-      {[-0.34, 0.34].map((x) => (
-        <group key={x}>
-          <B p={[x, 0.1, 0.1]} s={[0.06, 0.06, 1.3]} c="#57534e" />
-          <B p={[x, 0.24, 0.4]} s={[0.05, 0.22, 0.05]} c="#57534e" />
-          <B p={[x, 0.24, -0.2]} s={[0.05, 0.22, 0.05]} c="#57534e" />
-        </group>
-      ))}
-      {/* Stripe */}
-      <B p={[0, 0.62, 0.1]} s={[0.92, 0.12, 1.42]} c={trim} />
-      {official && <B p={[0, 0.45, 0.1]} s={[0.92, 0.06, 1.42]} c={trim} />}
-    </group>
-  );
-}
-
 export function Tree({ s = 1 }: { s?: number }) {
   return (
     <group scale={s}>

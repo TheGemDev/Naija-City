@@ -7,6 +7,7 @@ import { feedStmt } from './feed';
 import { gazette } from './gazette';
 import { runStateRound } from './state';
 import { settleLoot } from './loot';
+import { settleGhosts } from './schemes';
 import { settleSeasons } from './community';
 import { sweep as sweepManhunts } from './crime';
 import { settleDueCases } from './efcc';
@@ -44,6 +45,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     }],
     // Looting cases the EFCC chair left alone are settled by the old odds.
     ['loot', () => settleLoot(env, ctx, now)],
+    // Ghost workers on a state payroll are paid, or audited, once an hour.
+    ['ghosts', () => settleGhosts(env, ctx, now)],
     // Elections seat the Government Forum themselves; this catches a seat that changed any other way.
     ['forum', () => syncForum(env.DB, now)],
     ['seasons', () => settleSeasons(env.DB, now)],
