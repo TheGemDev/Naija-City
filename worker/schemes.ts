@@ -9,6 +9,8 @@ import { rand, transfer, usernames } from './crime';
 import { feedStmt, naira } from './feed';
 import { gazette, official } from './gazette';
 import { removeFromOffice } from './loot';
+import { fineItem, recordExhibits } from './exhibits';
+import { MARKET_PRODUCT_BY_ID } from '../src/game/career';
 import { vdmGov } from './news';
 import { spendState } from './state';
 import { applyStmts, ensureWallet } from './wallet';
@@ -65,7 +67,17 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
     if (rand() >= f.raid(amount)) return { outcome: 'paid', amount };
     // Raided: the money goes back, a fine on top, and every shelf they own is carried off as evidence.
     const back = await transfer(db, s.uid, null, amount, 'loot_return', '', `front-back:${s.uid}:${now}`);
-    const fine = await transfer(db, s.uid, null, f.fine, 'fine', '', `front-fine:${s.uid}:${now}`);
+    const fine = await transfer(db, s.uid, null, f.fine, 'efcc_fine', '', `front-fine:${s.uid}:${now}`);
+    // Everything on the shelves goes as evidence: written down shelf by shelf before it is carried off.
+    const { results: shelves } = await db
+      .prepare('SELECT b.name AS shop, bp.product, bp.price, bp.stock FROM business_products bp JOIN businesses b ON b.id = bp.business_id WHERE b.uid = ? AND bp.stock > 0')
+      .bind(s.uid)
+      .all<{ shop: string; product: string; price: number; stock: number }>();
+    await recordExhibits(db, s.uid, `front:${now}`, `EFCC raid on ${biz.name}`, [
+      { kind: 'loot', icon: '📦', label: '“Supplies” money taken back', value: back },
+      ...shelves.map((r) => ({ kind: 'stock' as const, icon: MARKET_PRODUCT_BY_ID[r.product]?.icon ?? '🏷️', label: `${MARKET_PRODUCT_BY_ID[r.product]?.name ?? r.product} · ${r.shop}`, value: r.price * r.stock, qty: r.stock })),
+      fineItem(fine),
+    ], now);
     await db.batch([
       potStmt(db, s.city, back),
       db.prepare('UPDATE business_products SET stock = 0 WHERE business_id IN (SELECT id FROM businesses WHERE uid = ?)').bind(s.uid),
@@ -102,6 +114,7 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
       env, ctx, s.uid, s.office, `Caught at the airport with ${naira(haul)} in Ghana Must Go bags`, now,
       `CAUGHT AT THE AIRPORT: customs opened the “diplomatic baggage” on ${me}’s jet and found ${naira(haul)} from ${where(s.city)} in Ghana Must Go bags. Out of office, {fine} fine, and a cell. 🧳`,
       haul,
+      [{ kind: 'loot', icon: '🧳', label: 'Ghana Must Go bags', value: haul }],
     );
     return { outcome: 'searched', amount: haul };
   }
@@ -172,6 +185,7 @@ export async function settleGhosts(env: Env, ctx: Ctx, now: number) {
         env, ctx, g.ghost_uid, office, `Ran ghost workers on the ${CITY_NAME[g.city]} payroll`, now,
         `PAYROLL AUDIT: ${CITY_NAME[g.city]}’s payroll had workers nobody has ever met, and every one of them was paid into ${OFFICE_RULES[office].title} {who}’s account. ${naira(back)} recovered. Out of office, {fine} fine, and a cell. 👻`,
         g.ghost_taken,
+        [{ kind: 'loot', icon: '👻', label: 'Ghost workers’ pay taken back', value: back }],
       );
       continue;
     }

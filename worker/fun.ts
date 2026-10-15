@@ -15,6 +15,7 @@ import { drawVenueBet, VENUE_BETS, type BetVenue } from '../src/game/betting';
 import { NEWS_KINDS, VDM_NEWS_ICONS } from '../src/game/news';
 import { CIVIC_CITIES } from '../src/game/civic';
 import { notifyPlayer, whereIs } from './shards';
+import { fineItem, recordExhibits } from './exhibits';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -418,7 +419,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
     const soap = await usePerk(db, me, 'soap');
     if (!soap && rand() < SCAM_RULES.catchChance + laws.finePct / 1000) {
       const fine = SCAM_RULES.fine + tpl.amount;
-      const paid = await transfer(db, me, null, fine, 'fine', '', `scamfine:${me}:${now}`);
+      const paid = await transfer(db, me, null, fine, 'efcc_fine', '', `scamfine:${me}:${now}`);
+      await recordExhibits(db, me, `scam:${now}`, 'Caught sending a Yahoo scam', [fineItem(paid)], now);
       await jail(db, me, laws.jailMinutes, `Yahoo fraud · caught sending a “${tpl.title}” scam`);
       const { until } = await searchPhone(env, me, 'efcc', laws.jailMinutes);
       await db.batch([

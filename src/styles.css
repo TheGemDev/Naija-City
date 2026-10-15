@@ -3014,3 +3014,12 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .sheet.place-sheet.flight-desk, .sheet.place-sheet.hotel-desk { z-index: 40; }
 
 /* The map's state card: what the state makes, and its treasury. */
+
+/* EFCC app, Seized tab: what it all came to, then an exhibit list per arrest or raid (src/ui/Efcc.tsx). */
+.efcc-seized-sum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.efcc-seized-sum > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 8px; border-radius: 12px; background: var(--bg-ffffff); border: 1px solid var(--line); }
+.efcc-seized-sum b { overflow: hidden; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.efcc-seized-sum small { color: var(--muted); font-size: 10px; }
+.efcc-exhibits .law-line > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.efcc-returned { opacity: 0.55; }
+.efcc-returned > span { text-decoration: line-through; }

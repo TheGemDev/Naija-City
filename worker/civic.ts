@@ -14,6 +14,7 @@ import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
 import { lootAction, lootBoard, openLootCase, settleLoot, type LootAction } from './loot';
 import { myGhosts, potStmt, runScheme, setGhosts } from './schemes';
+import { fineItem, recordExhibits } from './exhibits';
 import { gazette, OFFICE_NAME, official, recentNews, type Notice } from './gazette';
 import { syncForum } from './groups';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
@@ -587,7 +588,8 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
           db.prepare('DELETE FROM civic_candidates WHERE election_id = ? AND uid = ?').bind(race.id, user.uid),
           db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, user.uid),
         ]);
-        const fine = await transfer(db, user.uid, null, CHAOS.stingFine, 'fine', '', `sting:${race.id}:${user.uid}`);
+        const fine = await transfer(db, user.uid, null, CHAOS.stingFine, 'efcc_fine', '', `sting:${race.id}:${user.uid}`);
+        await recordExhibits(db, user.uid, `sting:${race.id}:${now}`, `EFCC sting · buying votes in the ${title} race`, [fineItem(fine)], now);
         await jail(db, user.uid, laws.jailMinutes, `Vote buying · caught in an EFCC sting in the ${title} race`);
         const { until } = await searchPhone(env, user.uid, 'efcc', laws.jailMinutes);
         await postFeed(db, user.uid, 'election', '🧧', `EFCC STING! ${title} candidate ${handle(who)} was caught sharing ₦ notes and bags of rice to voters. Disqualified, barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a free ride in a Black Maria. 🚓`, OFFICE_RULES[office].city);
@@ -730,7 +732,11 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     if (diverted && rand() < SCHEMES.divert.exposed(divert)) {
       exposed = true;
       const back = await transfer(db, user.uid, null, diverted, 'loot_return', '', `divert-back:${user.uid}:${now}`);
-      const fine = await transfer(db, user.uid, null, SCHEMES.divert.fine, 'fine', '', `divert-fine:${user.uid}:${now}`);
+      const fine = await transfer(db, user.uid, null, SCHEMES.divert.fine, 'efcc_fine', '', `divert-fine:${user.uid}:${now}`);
+      await recordExhibits(db, user.uid, `divert:${now}`, 'Caught diverting palliatives', [
+        { kind: 'loot', icon: '🍚', label: 'Diverted palliatives taken back', value: back },
+        fineItem(fine),
+      ], now);
       await db.batch([
         potStmt(db, city ?? null, back),
         feedStmt(db, user.uid, 'politics', '📹', `EXPOSED: a video shows ${naira(diverted)} of palliatives from ${official(sharedAs, who)} stacked in a private warehouse. ${naira(back)} recovered and a ${naira(fine)} fine. The rice was “for safekeeping”. 📹`, OFFICE_RULES[sharedAs].city),
@@ -818,7 +824,8 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const chairUid = policy.efcc_uid && policy.efcc_uid !== user.uid ? (policy.efcc_uid as string) : null;
     if (!chairUid && rand() < chance) {
       const laws = await loadLaws(db);
-      const fine = await transfer(db, user.uid, null, e.fine, 'fine', '', `embezzle:${user.uid}:${now}`);
+      const fine = await transfer(db, user.uid, null, e.fine, 'efcc_fine', '', `embezzle:${user.uid}:${now}`);
+      await recordExhibits(db, user.uid, `embezzle:${now}`, `Caught taking ${naira(amount)} from the treasury`, [fineItem(fine)], now);
       await jail(db, user.uid, laws.jailMinutes * 2, `Embezzlement · ${naira(amount)} from the treasury as ${OFFICE_RULES[office].title}`);
       const { until } = await searchPhone(env, user.uid, 'efcc', laws.jailMinutes * 2);
       await db.batch([

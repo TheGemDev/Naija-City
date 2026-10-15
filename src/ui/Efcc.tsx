@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { EFCC, EFCC_RECORD_MS, efccDirty, efccTimeLeft, type EfccCase, type EfccStatus } from '../game/efcc';
-import { naira } from '../game/store';
+import { EFCC, EFCC_RECORD_MS, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
+import { naira, nairaShort } from '../game/store';
 import { useEfcc, loadEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
 import { searchPlayers, type PlayerRef } from '../net/social';
 import { useSession } from '../net/session';
@@ -42,7 +42,59 @@ const FILTERS: { id: Filter; icon: string; label: string; match: (s: EfccStatus)
   { id: 'cleared', icon: '✅', label: 'Cleared', match: (s) => s === 'cleared' || s === 'bribed' },
 ];
 
-type Tab = 'cases' | 'report' | 'rules';
+type Tab = 'cases' | 'seized' | 'report' | 'rules';
+
+/** One arrest or raid, written up like an exhibit list: every thing taken, what it was worth, and the total. */
+function SeizureCard({ s }: { s: EfccSeizure }) {
+  const held = s.items.filter((i) => !i.returnedAt);
+  const total = held.reduce((n, i) => n + i.value, 0);
+  return (
+    <div className="law-receipt efcc-exhibits">
+      <div className="law-receipt-head">
+        <b>{s.title}</b>
+        <small>{dateLabel(s.at)}</small>
+      </div>
+      <div className="law-section">
+        {s.items.map((item, n) => (
+          <div className={`law-line ${item.returnedAt ? 'efcc-returned' : ''}`} key={n}>
+            <span><Emoji char={item.icon} size={14} /> {item.label}{item.qty > 1 ? ` ×${item.qty}` : ''}</span>
+            <i />
+            <b>{item.returnedAt ? 'Bought back' : item.value ? naira(item.value) : 'Seized'}</b>
+          </div>
+        ))}
+      </div>
+      <div className="law-total"><span>TAKEN</span><b>{naira(total)}</b></div>
+    </div>
+  );
+}
+
+/** Everything the EFCC has taken from me: what it all came to, then each arrest or raid, newest first. */
+function Seized() {
+  const seizures = useEfcc((s) => s.seizures);
+  if (!seizures.length) {
+    return (
+      <div className="list-card civic-empty">
+        <span><Emoji char="🗄️" size={28} /></span>
+        <b>Nothing seized</b>
+        <small className="muted">When the EFCC takes cash, a house, furniture, apps or stock from you, every item is listed here.</small>
+      </div>
+    );
+  }
+  const items = seizures.flatMap((s) => s.items.filter((i) => !i.returnedAt));
+  const sum = (kinds: string[]) => items.filter((i) => kinds.includes(i.kind)).reduce((n, i) => n + i.value, 0);
+  const things = items.filter((i) => i.kind === 'house' || i.kind === 'furniture' || i.kind === 'app' || i.kind === 'stock').reduce((n, i) => n + i.qty, 0);
+  return (
+    <>
+      <div className="efcc-seized-sum">
+        <span><b>{nairaShort(sum(['cash', 'savings', 'loot']))}</b><small>cash</small></span>
+        <span><b>{nairaShort(sum(['house', 'furniture', 'stock']))}</b><small>property</small></span>
+        <span><b>{nairaShort(sum(['fine']))}</b><small>fines</small></span>
+        <span><b>{things}</b><small>items</small></span>
+      </div>
+      {seizures.map((s) => <SeizureCard key={s.event} s={s} />)}
+    </>
+  );
+}
 
 /** The commission's rules printed like the Civic gazette: what it costs, what gets you convicted, what you lose. */
 function RulesReceipt() {
@@ -59,10 +111,12 @@ function RulesReceipt() {
       <div className="law-section">
         <div className="law-signer"><span>Chairman</span><span>{chair?.username ? `@${chair.username}` : chair?.name ?? 'Vacant'}</span></div>
         {line('Filing a case', naira(EFCC.filingFee))}
-        {line('Incomes audited', `last ${EFCC.auditSize}`)}
+        {line('Incomes audited', `last ${EFCC.auditSize}, new since their last case`)}
+        {line('Next case on the same person', `after ${EFCC.caseCooldownMs / 3_600_000}h`)}
         {line('Time to respond', `${EFCC.investigationMs / 1000}s`)}
         {line('Unmask your accuser', naira(EFCC.revealFee))}
         {line('Bribe', `${naira(EFCC.bribeAmount)} · ${Math.round(EFCC.bribeChance * 100)}% works`)}
+        {line('Bribe goes to', 'the EFCC chair')}
       </div>
       <div className="law-section">
         <div className="law-signer"><span>Verdict</span><span>From the audit</span></div>
@@ -70,6 +124,7 @@ function RulesReceipt() {
         {line('...or flagged money of', naira(EFCC.dirtyFloor))}
         {line('Wallet and savings seized', `${EFCC.walletSeizurePercent}%`)}
         {line('Property seized', 'one, can be bought back')}
+        {line('Seized money goes to', 'federal treasury')}
         {line('Big clean income', 'never evidence')}
       </div>
       <div className="law-section">
@@ -84,6 +139,7 @@ function RulesReceipt() {
 export function EfccApp() {
   const user = useSession((s) => s.user);
   const [tab, setTab] = useState<Tab>('cases');
+  const seizedCount = useEfcc((s) => s.seizures.length);
   const { cases, loading, busy, error } = useEfcc();
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<PlayerRef[]>([]);
@@ -233,6 +289,7 @@ export function EfccApp() {
       </div>
       <div className="tabs">
         <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}><Emoji char="🗂️" size={14} /> Cases</button>
+        <button className={tab === 'seized' ? 'on' : ''} onClick={() => setTab('seized')}><Emoji char="🗄️" size={14} /> Seized{seizedCount ? ` · ${seizedCount}` : ''}</button>
         <button className={tab === 'report' ? 'on' : ''} onClick={() => setTab('report')}><Emoji char="⚖️" size={14} /> Report</button>
         <button className={tab === 'rules' ? 'on' : ''} onClick={() => setTab('rules')}><Emoji char="📜" size={14} /> Rules</button>
       </div>
@@ -287,6 +344,8 @@ export function EfccApp() {
           )}
         </>
       )}
+
+      {tab === 'seized' && <Seized />}
 
       {tab === 'rules' && <RulesReceipt />}
     </div>

@@ -23,6 +23,7 @@ import {
   type GoodId, type OpDef,
 } from '../src/game/vice';
 import { notifyPlayer, whereIs } from './shards';
+import { fineItem, recordExhibits } from './exhibits';
 
 /** A hospital bill, dearer when the state the patient lives in has let its hospital run down. */
 const hospitalPrice = async (db: D1Database, uid: string, bill: number) => {
@@ -111,7 +112,8 @@ async function bust(env: Env, ctx: ExecutionContext, uid: string, agency: 'polic
   const db = env.DB;
   const now = Date.now();
   const mins = Math.max(1, Math.round(minutes));
-  const fine = fineBase > 0 ? await transfer(db, uid, null, fineBase, 'fine', '', `vice-fine:${uid}:${now}`) : 0;
+  const fine = fineBase > 0 ? await transfer(db, uid, null, fineBase, agency === 'efcc' ? 'efcc_fine' : 'fine', '', `vice-fine:${uid}:${now}`) : 0;
+  if (agency === 'efcc') await recordExhibits(db, uid, `vice:${now}`, `Busted by the EFCC · ${charge}`, [fineItem(fine)], now);
   await jail(db, uid, mins, charge);
   const search = await searchPhone(env, uid, agency, mins);
   if (feed) await postFeed(db, uid, 'arrest', agency === 'efcc' ? '🕵🏾' : '🚔', feed);

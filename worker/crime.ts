@@ -30,7 +30,7 @@ import { cameraSpotting } from '../src/game/security';
 import { camerasPowered, type PowerSave } from '../src/game/power';
 import { gridOn } from '../src/game/live';
 import { sendPush } from './push';
-import { STATE_KINDS } from '../src/game/treasury';
+import { FEDERAL_KINDS, STATE_KINDS } from '../src/game/treasury';
 import {
   ACCUSE, bailFor, BOUNTY, CATCH, VDM, CRIME, unsolved, DEFAULT_LAWS, POLICE, CATCHERS,
   type CatcherKind, type CrimeKind, type CrimeLaws, type CrimeReport, type Prisoner, type Protection, type WantedPerson,
@@ -334,6 +334,7 @@ export async function transfer(db: D1Database, from: string, to: string | null, 
   const paid = results[7].results[0]?.amount ?? 0;
   // Fines, bail and the like are paid to nobody: that nobody is the state, so the treasury keeps them.
   if (!to && paid > 0 && STATE_KINDS.has(kindOut)) await stateRevenue(db, from, paid).run();
+  else if (!to && paid > 0 && FEDERAL_KINDS.has(kindOut)) await db.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(paid).run();
   return paid;
 }
 

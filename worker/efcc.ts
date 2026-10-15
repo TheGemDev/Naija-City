@@ -2,10 +2,11 @@ import { EFCC, EFCC_DIRTY_KINDS, EFCC_RECORD_MS, efccConvicts, efccSource, type 
 import { DESIGN_BY_ID, STAGES, type Property } from '../src/game/property';
 import { syncEstate } from './estate';
 import { sendPush } from './push';
-import { ensureWallet } from './wallet';
+import { applyStmts, ensureWallet } from './wallet';
 import { notifyPlayer } from './shards';
 import { loadLaws } from './crime';
 import { jail } from './fun';
+import { furnitureOf, houseReturned, recordExhibits, seizuresOf } from './exhibits';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -34,7 +35,8 @@ interface SaveData {
 
 const isIllicit = (kind: string, scam: number) => EFCC_DIRTY_KINDS.includes(kind) || scam > 0;
 
-async function audit(db: D1Database, uid: string): Promise<EfccIncome[]> {
+/** The target's latest incomes since `since` (the last case filed on them): money already judged is not read again. */
+async function audit(db: D1Database, uid: string, since = 0): Promise<EfccIncome[]> {
   const { results } = await db.prepare(
     `SELECT l.created_at AS at, l.kind, l.amount,
        CASE WHEN l.kind = 'transfer_in' AND EXISTS (
@@ -46,9 +48,9 @@ async function audit(db: D1Database, uid: string): Promise<EfccIncome[]> {
          WHERE s.scammer_uid = l.uid AND s.status IN ('paid', 'reported') AND s.amount = l.amount
        ) THEN 1 ELSE 0 END AS scam
      FROM ledger l
-     WHERE l.uid = ? AND l.applied = 1 AND l.amount > 0
+     WHERE l.uid = ? AND l.applied = 1 AND l.amount > 0 AND l.created_at > ?
      ORDER BY l.created_at DESC, l.id DESC LIMIT ?`,
-  ).bind(uid, EFCC.auditSize).all<IncomeRow>();
+  ).bind(uid, since, EFCC.auditSize).all<IncomeRow>();
   return results.map((row) => ({
     at: row.at,
     kind: row.kind,
@@ -111,6 +113,8 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
     .first<{ data: string; saved_at: number }>();
   let save: SaveData | null = null;
   let seized: Property | null = null;
+  // A seized house that wasn't the one they live in goes with its furniture; the one they live in leaves it behind.
+  let withFurniture = false;
   if (saveRow) {
     try {
       save = JSON.parse(saveRow.data) as SaveData;
@@ -121,6 +125,7 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
         .sort((a, b) => b.spent - a.spent)[0] ?? null;
       if (!convicted) seized = null;
       if (seized) {
+        withFurniture = save.activeHouseId !== seized.id;
         save.properties = properties.filter((p) => p.id !== seized!.id);
         const fallback = save.properties?.find((p) => p.stage >= STAGES.length) ?? null;
         if (save.homePropertyId === seized.id) save.homePropertyId = fallback?.id ?? null;
@@ -186,7 +191,24 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
   // A conviction is an arrest: the EFCC lock the accused up for longer than the police would. Only the call that closed the case does it.
   if (convicted) {
     const closed = await db.prepare("SELECT 1 AS ok FROM efcc_cases WHERE id = ? AND status = 'convicted' AND resolved_at = ?").bind(row.id, now).first();
-    if (closed) await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes * 1.5, 'Proceeds of crime · convicted by the EFCC');
+    if (closed) {
+      await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes * 1.5, 'Proceeds of crime · convicted by the EFCC');
+      // The exhibit book: what came out of the wallet and the bank, and the house with whatever was in it.
+      const { results: taken } = await db
+        .prepare("SELECT client_id, -amount AS amount FROM ledger WHERE uid = ? AND client_id IN (?, ?)")
+        .bind(row.target_uid, `efcc-fine:${row.id}`, `efcc-fine-savings:${row.id}`)
+        .all<{ client_id: string; amount: number }>();
+      const took = (id: string) => taken.find((t) => t.client_id === id)?.amount ?? 0;
+      // What the EFCC recovered goes to the federal treasury.
+      const recovered = took(`efcc-fine:${row.id}`) + took(`efcc-fine-savings:${row.id}`);
+      if (recovered > 0) await db.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(recovered).run();
+      await recordExhibits(db, row.target_uid, `case:${row.id}`, 'Convicted by the EFCC', [
+        { kind: 'cash', icon: '💵', label: `${EFCC.walletSeizurePercent}% of your wallet`, value: took(`efcc-fine:${row.id}`) },
+        { kind: 'savings', icon: '🏦', label: `${EFCC.walletSeizurePercent}% of your savings`, value: took(`efcc-fine-savings:${row.id}`) },
+        ...(seized ? [{ kind: 'house' as const, icon: '🏠', label: DESIGN_BY_ID[seized.design ?? '']?.name ?? 'Your house', value: seized.spent }] : []),
+        ...(seized && withFurniture ? furnitureOf(seized.items) : []),
+      ], now);
+    }
   }
 }
 
@@ -227,7 +249,7 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
         for (const property of parsed.properties ?? []) if (property.id) ownedPropertyIds.add(property.id);
       }
     }
-    return json({ cases: rows.map((row) => fromRow(row, row.target, row.accuser, uid, ownedPropertyIds)) });
+    return json({ cases: rows.map((row) => fromRow(row, row.target, row.accuser, uid, ownedPropertyIds)), seizures: await seizuresOf(env.DB, uid) });
   }
 
   if (path === '/api/efcc/cases' && req.method === 'POST') {
@@ -238,7 +260,7 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
       return err(400, 'Invalid filing request id');
     }
     const id = typeof body?.requestId === 'string' ? body.requestId : crypto.randomUUID();
-    const target = await env.DB.prepare('SELECT uid FROM players WHERE LOWER(username) = LOWER(?)').bind(username).first<{ uid: string }>();
+    const target = await env.DB.prepare('SELECT uid, efcc_case_at FROM players WHERE LOWER(username) = LOWER(?)').bind(username).first<{ uid: string; efcc_case_at: number | null }>();
     if (!target) return err(404, 'No player has that username');
     if (target.uid === uid) return err(400, 'You cannot accuse yourself');
     const prior = await env.DB.prepare('SELECT id FROM efcc_cases WHERE id = ? AND accuser_uid = ? AND target_uid = ?')
@@ -250,7 +272,16 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
     const expired = await env.DB.prepare("SELECT * FROM efcc_cases WHERE target_uid = ? AND status = 'investigating' AND resolves_at <= ?")
       .bind(target.uid, Date.now()).all<CaseRow>();
     for (const row of expired.results) await settle(env.DB, row, Date.now());
-    const evidence = await audit(env.DB, target.uid);
+    // One case at a time per person, and then a rest: the same player can't be reported over and over.
+    const since = target.efcc_case_at ?? 0;
+    const rest = since + EFCC.caseCooldownMs - Date.now();
+    if (rest > 0) {
+      const hours = Math.ceil(rest / 3_600_000);
+      return err(429, `@${username} was investigated recently. A new case can be filed in ${hours} hour${hours === 1 ? '' : 's'}`);
+    }
+    const evidence = await audit(env.DB, target.uid, since);
+    // Everything older was already judged in their last case.
+    if (!evidence.length) return err(409, `@${username} has earned nothing since their last case. There is nothing new to investigate`);
     const now = Date.now();
     const filing = await env.DB.batch([
       ensureWallet(env.DB, uid),
@@ -274,6 +305,8 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
       ).bind(EFCC.filingFee, now, uid, EFCC.filingFee, uid, `efcc-file:${id}`),
       // The filing fee is the state's.
       env.DB.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1 AND changes() = 1').bind(EFCC.filingFee),
+      // The case is on their record from now: the cooldown starts, and the next audit reads only what comes after.
+      env.DB.prepare('UPDATE players SET efcc_case_at = ?1 WHERE uid = ?2 AND EXISTS (SELECT 1 FROM efcc_cases WHERE id = ?3 AND filed_at = ?1)').bind(now, target.uid, id),
     ]);
     if (!filing[3].meta.changes) {
       const retry = await env.DB.prepare('SELECT id FROM efcc_cases WHERE id = ? AND accuser_uid = ? AND target_uid = ?')
@@ -370,6 +403,11 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
     ]);
     const wallet = batch[2].meta.changes;
     if (!wallet) return err(402, `A bribe costs ${EFCC.bribeAmount.toLocaleString()} naira`);
+    // A bribe goes to whoever chairs the EFCC; with nobody in the chair, the desk officers hand it to the treasury.
+    const chair = (await env.DB.prepare('SELECT efcc_uid FROM civic_policies WHERE id = 1').first<{ efcc_uid: string | null }>())?.efcc_uid;
+    await env.DB.batch(chair && chair !== uid
+      ? [ensureWallet(env.DB, chair), ...applyStmts(env.DB, chair, `efcc-bribe-take:${current.id}`, 'bribe', current.id, EFCC.bribeAmount)]
+      : [env.DB.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(EFCC.bribeAmount)]);
     return json({ balance: await balance(env.DB, uid), succeeded: succeeds });
   }
 
@@ -417,6 +455,11 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
          WHERE id = ? AND target_uid = ? AND bought_back_at IS NULL AND changes() = 1`,
       ).bind(now, current.id, uid),
     ]);
+    if (bought[3].meta.changes) {
+      // Buying it back pays the federal treasury.
+      await env.DB.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1').bind(current.buyback_price).run();
+      await houseReturned(env.DB, uid, `case:${current.id}`, now).run().catch(() => {});
+    }
     if (!bought[3].meta.changes) {
       const currentBalance = await balance(env.DB, uid);
       return currentBalance < current.buyback_price

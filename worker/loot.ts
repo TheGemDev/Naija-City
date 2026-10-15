@@ -14,6 +14,7 @@ import { vdmGov } from './news';
 import { searchPhone } from './phoneSearch';
 import { sendCaseNote } from './social';
 import { applyStmts, ensureWallet, getBalance } from './wallet';
+import { fineItem, recordExhibits, type ExhibitItem } from './exhibits';
 
 type Ctx = ExecutionContext | undefined;
 interface CaseRow {
@@ -53,11 +54,13 @@ export async function lootBoard(db: D1Database, uid: string, now: number): Promi
 }
 
 /** Take a seat away from whoever holds it, lock them up, and tell everyone. Returns the minutes served. */
-export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number) {
+export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number, taken: ExhibitItem[] = []) {
   const db = env.DB;
   const laws = await loadLaws(db);
   const who = (await usernames(db, [uid])).get(uid);
-  const fine = await transfer(db, uid, null, TREASURY.embezzle.fine, 'fine', '', `case:${office}:${uid}:${now}`);
+  const fine = await transfer(db, uid, null, TREASURY.embezzle.fine, 'efcc_fine', '', `case:${office}:${uid}:${now}`);
+  // The exhibit book: the fine, and whatever the caller took back (the loot, the bags, the ghosts' pay).
+  await recordExhibits(db, uid, `office:${office}:${now}`, why, [...taken, fineItem(fine)], now);
   await jail(db, uid, laws.jailMinutes * 2, why);
   await searchPhone(env, uid, 'efcc', laws.jailMinutes * 2);
   await db.batch([
@@ -96,6 +99,7 @@ async function convict(env: Env, ctx: Ctx, c: CaseRow, now: number) {
     `Looting ${naira(c.amount)} from the ${c.city ? `${CITY_NAME[c.city]} ` : 'federal '}treasury`, now,
     `SCANDAL: ${OFFICE_RULES[c.office].title} {who} looted ${naira(c.amount)} and the EFCC chair would not look away. Out of office, {fine} fine, ${naira(back)} taken back, and a cell. 🐍`,
     c.amount,
+    [{ kind: 'loot', icon: '🐍', label: c.held ? 'The frozen loot' : 'Loot taken back', value: back }],
   );
 }
 
@@ -145,11 +149,12 @@ export async function lootAction(env: Env, ctx: Ctx, uid: string, body: LootActi
   await sendCaseNote(env, ctx, uid, c.looter_uid, '🤝 Understood. It never happened.');
   if (rand() < LOOT.chairCaught) {
     // Found out: the chair loses the job and the bribe goes to the state.
-    await transfer(db, uid, null, c.offer, 'fine', '', `bribe-back:${c.id}:${now}`);
+    const bribe = await transfer(db, uid, null, c.offer, 'efcc_fine', '', `bribe-back:${c.id}:${now}`);
     await removeFromOffice(
       env, ctx, uid, 'efcc', 'Took a bribe to look away from a looted treasury', now,
       `SCANDAL: EFCC chair {who} was caught taking a bribe to look away from a looted treasury. Out of office, {fine} fine, and a cell. 🕵🏾`,
       c.offer,
+      [{ kind: 'loot', icon: '💼', label: 'The bribe, taken back', value: bribe }],
     );
     return { done: 'accepted-caught' };
   }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EFCC, type EfccCase } from '../game/efcc';
+import { EFCC, type EfccCase, type EfccSeizure } from '../game/efcc';
 import { STAGES } from '../game/property';
 import { naira, useGame } from '../game/store';
 import { api, serial, useSession } from './session';
@@ -8,12 +8,14 @@ import { flushWalletNow } from './wallet';
 
 interface EfccState {
   cases: EfccCase[];
+  /** Everything the EFCC has taken from me lately, one entry per arrest or raid (worker/exhibits.ts). */
+  seizures: EfccSeizure[];
   loading: boolean;
   busy: boolean;
   error: string | null;
 }
 
-export const useEfcc = create<EfccState>(() => ({ cases: [], loading: false, busy: false, error: null }));
+export const useEfcc = create<EfccState>(() => ({ cases: [], seizures: [], loading: false, busy: false, error: null }));
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await api(path, init);
@@ -25,8 +27,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export async function loadEfcc() {
   useEfcc.setState({ loading: true, error: null });
   try {
-    const data = await call<{ cases: EfccCase[] }>('/api/efcc');
-    useEfcc.setState({ cases: data.cases });
+    const data = await call<{ cases: EfccCase[]; seizures?: EfccSeizure[] }>('/api/efcc');
+    useEfcc.setState({ cases: data.cases, seizures: data.seizures ?? [] });
     const uid = useSession.getState().user?.uid;
     if (uid) {
       const updates = data.cases.filter((item) => item.targetUid === uid && item.seizedProperty);

@@ -5,6 +5,7 @@ import { notifyPlayer } from './shards';
 import { rand, transfer, usernames } from './crime';
 import { handle, naira, postFeed } from './feed';
 import { PHONE_SEARCH, type Agency, type PhoneSearchResult } from '../src/game/phoneSearch';
+import { fineItem, recordExhibits } from './exhibits';
 
 
 /** Search the phone of someone who has just been jailed for baseMinutes. Tells them what was found. */
@@ -35,7 +36,7 @@ export async function searchPhone(env: Env, uid: string, agency: Agency, baseMin
       result.lines.push(ev.line);
     }
     if (!result.found.length) result.lines.push(PHONE_SEARCH.clean[agency]);
-    if (fineDue) result.fine = await transfer(db, uid, null, fineDue, 'fine', '', `phonesearch:${uid}:${now}`);
+    if (fineDue) result.fine = await transfer(db, uid, null, fineDue, agency === 'efcc' ? 'efcc_fine' : 'fine', '', `phonesearch:${uid}:${now}`);
     result.extraMinutes = Math.round((baseMinutes * extraPct) / 100);
     const stmts = [];
     if (result.extraMinutes) {
@@ -47,6 +48,12 @@ export async function searchPhone(env: Env, uid: string, agency: Agency, baseMin
       stmts.push(db.prepare('UPDATE saves SET data = ? WHERE uid = ?').bind(JSON.stringify(save), uid));
     }
     if (stmts.length) await db.batch(stmts);
+    if (agency === 'efcc') {
+      await recordExhibits(db, uid, `phone:${now}`, 'Phone searched by the EFCC', [
+        fineItem(result.fine, 'Fine for what was on your phone'),
+        ...result.seized.map((id) => ({ kind: 'app' as const, icon: '📱', label: (PHONE_SEARCH.labels[id] ?? id).replace(/^the /, ''), value: 0 })),
+      ], now);
+    }
     if (result.found.length) {
       const who = (await usernames(db, [uid])).get(uid);
       const list = result.found.map((id) => PHONE_SEARCH.labels[id] ?? id).join(', ');

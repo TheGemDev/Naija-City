@@ -8,6 +8,12 @@ export const EFCC = {
   /** What the accused pays to learn who filed the investigation. */
   revealFee: 150_000,
   investigationMs: 90_000,
+  /**
+   * Once a case is filed on someone, nobody can file another on them for this long. And a new case only audits income
+   * that landed after the last one: nobody is judged twice for the same money.
+   */
+  caseCooldownMs: 12 * 60 * 60_000,
+  /** What the EFCC takes on a conviction. It goes to the federal treasury, as does a seized house bought back. */
   walletSeizurePercent: 80,
   /** How many of the target's latest income events the audit reads. */
   auditSize: 10,
@@ -104,3 +110,22 @@ export const efccTimeLeft = (ms: number) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 };
+
+/** One thing the EFCC (or customs) took: cash, a house, a sofa, an app, a shelf of stock, a fine (worker/exhibits.ts). */
+export interface EfccExhibit {
+  kind: 'cash' | 'savings' | 'house' | 'furniture' | 'app' | 'stock' | 'loot' | 'fine';
+  icon: string;
+  label: string;
+  /** What it was worth in naira; 0 for something with no price (an app). */
+  value: number;
+  qty: number;
+  /** When it came back: a house bought back. */
+  returnedAt?: number | null;
+}
+/** Everything one arrest, conviction or raid took, as the EFCC app lists it. */
+export interface EfccSeizure {
+  event: string;
+  title: string;
+  at: number;
+  items: EfccExhibit[];
+}
