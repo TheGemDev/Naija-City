@@ -19,9 +19,14 @@ const UPPER_ARM = 0.29;
 const FOREARM = 0.25;
 /** Torso height above the hips, where the neck starts. */
 const NECK_Y = 0.55;
-const HEAD_Y = 0.71;
+const HEAD_Y = 0.7;
 /** The head turns about the top of the neck, not about its own middle. */
 const NECK_PIVOT = 0.6;
+/**
+ * The head, with its hair, hats and glasses, is drawn as a round egg and then squeezed: narrower than it is deep
+ * and a little smaller overall, so it reads as a head on a body rather than a ball on a stick.
+ */
+const HEAD_SHAPE: [number, number, number] = [0.8, 0.88, 0.87];
 
 /** Seated (thighs level, shins down), the soles are this far above the body's own origin. */
 const SEATED_SOLE = HIP_Y - SHIN - 0.08;
@@ -125,13 +130,32 @@ const taper = (rTop: number, rBot: number, len: number) =>
     }
     return new LatheGeometry(pts, 24);
   });
+/**
+ * A limb like `taper`, but swelling to `rMid` a share `at` of the way down before narrowing again: a calf below
+ * the knee, a forearm below the elbow. Without it every limb is a straight tube and the body reads as blocks.
+ */
+const bulge = (rTop: number, rMid: number, rBot: number, len: number, at: number) =>
+  geo(`bulge:${rTop}:${rMid}:${rBot}:${len}:${at}`, () => {
+    const pts: Vector2[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = -Math.PI / 2 + (i / 8) * (Math.PI / 2);
+      pts.push(new Vector2(Math.max(0.0001, rBot * Math.cos(a)), -len / 2 + rBot * Math.sin(a)));
+    }
+    const side = new SplineCurve([new Vector2(rBot, -len / 2), new Vector2(rMid, len / 2 - at * len), new Vector2(rTop, len / 2)]).getPoints(14);
+    pts.push(...side.slice(1, -1));
+    for (let i = 0; i <= 10; i++) {
+      const a = (i / 10) * (Math.PI / 2);
+      pts.push(new Vector2(Math.max(0.0001, rTop * Math.cos(a)), len / 2 + rTop * Math.sin(a)));
+    }
+    return new LatheGeometry(pts, 24);
+  });
 const sphere = (r: number) => geo(`sph:${r}`, () => new SphereGeometry(r, 28, 20));
 /**
  * A limb segment from its joint at y=0 down to the next joint at y=-len, rounded at both. Neighbouring
  * segments share the sphere at the joint between them, so a bent elbow or knee stays one smooth surface.
  */
-function Seg({ rTop, rBot, len, ...rest }: { rTop: number; rBot: number; len: number } & Omit<Parameters<typeof M>[0], 'geometry'>) {
-  return <M geometry={taper(rTop, rBot, len)} position={[0, -len / 2, 0]} {...rest} />;
+function Seg({ rTop, rBot, len, mid, ...rest }: { rTop: number; rBot: number; len: number; mid?: readonly [r: number, at: number] } & Omit<Parameters<typeof M>[0], 'geometry'>) {
+  return <M geometry={mid ? bulge(rTop, mid[0], rBot, len, mid[1]) : taper(rTop, rBot, len)} position={[0, -len / 2, 0]} {...rest} />;
 }
 /**
  * Cloth round the top of a limb segment (a sleeve, a shorts leg): domed over the joint, a hair
@@ -161,8 +185,9 @@ const lathe = (key: string, pts: [number, number][], seg = 32) =>
 const smoothOutline = (pts: [number, number][], per = 4): [number, number][] =>
   new SplineCurve(pts.map(([r, y]) => new Vector2(r, y))).getPoints((pts.length - 1) * per).map((v) => [Math.max(0, v.x), v.y]);
 const TORSO_RAW: Record<Body, [number, number][]> = {
-  m: [[0, -0.05], [0.166, -0.048], [0.168, -0.02], [0.16, 0.04], [0.148, 0.17], [0.162, 0.3], [0.182, 0.4], [0.19, 0.45], [0.165, 0.5], [0.09, 0.545], [0, 0.55]],
-  f: [[0, -0.05], [0.175, -0.048], [0.176, -0.02], [0.172, 0.04], [0.124, 0.19], [0.142, 0.29], [0.152, 0.36], [0.148, 0.43], [0.152, 0.46], [0.12, 0.51], [0.07, 0.54], [0, 0.545]],
+  // Shoulders slope down from the neck (the trapezius) instead of meeting it in a flat shelf.
+  m: [[0, -0.05], [0.171, -0.048], [0.172, -0.02], [0.162, 0.04], [0.148, 0.17], [0.162, 0.3], [0.182, 0.39], [0.19, 0.43], [0.18, 0.47], [0.145, 0.51], [0.095, 0.538], [0, 0.55]],
+  f: [[0, -0.05], [0.175, -0.048], [0.176, -0.02], [0.172, 0.04], [0.124, 0.19], [0.142, 0.29], [0.152, 0.36], [0.15, 0.42], [0.152, 0.445], [0.136, 0.485], [0.1, 0.518], [0.066, 0.536], [0, 0.545]],
 };
 const TORSO: Record<Body, [number, number][]> = { m: smoothOutline(TORSO_RAW.m), f: smoothOutline(TORSO_RAW.f) };
 const TORSO_DEPTH = 0.66;
@@ -224,16 +249,19 @@ type Rig = Record<'root' | 'hips' | 'skirt' | 'torso' | 'head' | 'armL' | 'armR'
 
 /** Seconds to melt from one clip into the next. */
 const FADE = 0.3;
-const SHOULDER_Y = 0.45;
+/** Set into the top of the torso, so the round of the shoulder is part of it rather than a ball beside it. */
+const SHOULDER_Y = 0.435;
 /** Shoulder to elbow, elbow to the middle of the hand, hip to ankle. */
 const ARM_U = UPPER_ARM - 0.03;
 const ARM_F = FOREARM + 0.015;
 const LEG = THIGH + SHIN;
 /** Elbow to wrist (the hand hangs below it), and how thick a knee is. */
 const WRIST = FOREARM - 0.02;
-const KNEE_R = 0.058;
-/** The top of each thigh (men, women), kept inside the hem of whatever is worn above it. */
-const THIGH_R = [0.07, 0.076];
+const KNEE_R = 0.053;
+/** The top of each thigh (men, women), kept inside the hem of whatever is worn above it. Full enough that they meet under the hips. */
+const THIGH_R = [0.072, 0.08];
+/** The calf, swelling out a little below the knee. */
+const CALF = [KNEE_R + 0.008, 0.3] as const;
 
 /** The pose being composed this frame; clips write straight into it. */
 const P = newPose();
@@ -676,6 +704,8 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
     footR: useRef<Group>(null!),
   };
   const state = useRef<{ t: number; clip: Clip | null; seated: boolean; fade: number; from: Pose; now: Pose }>(null!);
+  /** The robe's cloth over each shin, shown only while seated in an abaya or wrapper. */
+  const drape = useRef<(Group | null)[]>([]);
   // Everyone starts at a different point in their clip, so a crowd never moves in step.
   if (!state.current) state.current = { t: Math.random() * 10, clip: null, seated: false, fade: 1, from: newPose(), now: newPose() };
 
@@ -713,8 +743,13 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
     if (hem) {
       const both = Math.max(0, Math.min(Math.PI / 2, st.now.legLFwd, st.now.legRFwd));
       const part = Math.max(Math.abs(st.now.legLFwd - both), Math.abs(st.now.legRFwd - both));
-      const swing = hem[2] ? both : 0;
+      // A long robe (an abaya, a wrapper, a gown) hangs straight while you stand, but on a seat it would go through the
+      // chair to the floor: there it swings onto the lap like a skirt and is cut to the knee, and the cloth drapes
+      // down the shins instead (the drape groups below).
+      const lapOnly = !hem[2] && seated;
+      const swing = hem[2] || lapOnly ? both : 0;
       sk.rotation.x = -swing;
+      sk.scale.y = lapOnly ? Math.min(1, (THIGH + 0.06) / hem[0]) : 1;
       const drop = Math.min(hem[0], THIGH);
       sk.scale.z = Math.max(1, (drop * Math.sin(Math.min(part, 1.2)) + 0.115) / (hem[1] * 0.72)) * (1 - 0.3 * (swing / (Math.PI / 2)));
       const wide = Math.max(st.now.legLOut, st.now.legROut, 0) + Math.abs(st.now.hipsZ);
@@ -723,6 +758,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
       const flare = (0.18 + (hem[1] - 0.18) * Math.min(1, 0.075 / hem[0])) * sk.scale.x;
       armOut = Math.min(0.3, Math.max(0, (flare + 0.04 - shoulderX) / (UPPER_ARM + FOREARM)));
     }
+    for (const d of drape.current) if (d) d.visible = !!hem && !hem[2] && seated;
     applyPose(rig, st.now, armOut);
   });
 
@@ -733,8 +769,8 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
   const bottom = !full && a.outfit.bottom ? GARMENT_BY_ID[a.outfit.bottom] : undefined;
   const shoes = a.outfit.shoes ? GARMENT_BY_ID[a.outfit.shoes] : undefined;
   const topColor = top?.color ?? skin;
-  const shoulderX = f ? 0.175 : 0.205;
-  const hipX = f ? 0.088 : 0.085;
+  const shoulderX = f ? 0.166 : 0.188;
+  const hipX = f ? 0.087 : 0.081;
   const longBottom = bottom && LONG_BOTTOMS.has(bottom.shape);
   const thighColor = bottom && !SKIRTS.has(bottom.shape) && bottom.shape !== 'wrapper' ? bottom.color : skin;
   const topPat = patOf(top);
@@ -742,6 +778,9 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
   const botPat = bottom && !SKIRTS.has(bottom.shape) && bottom.shape !== 'wrapper' ? patOf(bottom) : undefined;
   const shinColor = longBottom ? bottom.color : skin;
   const legsHidden = top?.shape === 'abaya' || bottom?.shape === 'wrapper';
+  // The cloth that drapes down the shins when someone in an abaya or wrapper sits.
+  const robeColor = top?.shape === 'abaya' ? top.color : bottom?.color ?? skin;
+  const robePat = patOf(top?.shape === 'abaya' ? top : bottom);
   const hem = HEMS[top?.shape ?? ''] ?? HEMS[bottom?.shape ?? ''];
   // A wrapper or an abaya only allows short steps; a long skirt or kaftan trims them a little.
   const stride = legsHidden ? 0.6 : top?.shape === 'dress' || top?.shape === 'kaftan' || (bottom && SKIRTS.has(bottom.shape)) ? 0.8 : 1;
@@ -772,7 +811,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
         <group ref={rig.torso}>
           <Torso a={a} top={top} color={topColor} skin={skin} bag={bagG} />
           <group ref={rig.head} position={[0, NECK_PIVOT, 0]} rotation-order="YXZ" scale={headScale}>
-            <group position={[0, HEAD_Y - NECK_PIVOT, 0]}>
+            <group position={[0, HEAD_Y - NECK_PIVOT, 0]} scale={HEAD_SHAPE}>
               <Head a={a} skin={skin} />
             </group>
           </group>
@@ -782,7 +821,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
               <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[0]} rBot={arm[1]} len={ARM_U} />
               {sleeve === 'short' && <M color={topColor} pat={topPat} geometry={sleeveGeo(arm[0], arm[1], ARM_U, 0.12, 0.01)} />}
               <group ref={side < 0 ? rig.elbowL : rig.elbowR} position={[0, -ARM_U, 0]}>
-                <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[1]} rBot={arm[2]} len={WRIST} />
+                <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[1]} rBot={arm[2]} mid={[arm[1] * 1.08, 0.24]} len={WRIST} />
                 <HandModel skin={skin} f={f} side={side} />
                 {side < 0 && a.outfit.wrist && <Wrist g={GARMENT_BY_ID[a.outfit.wrist]} />}
                 {side > 0 && bagG && HAND_BAGS.has(bagG.shape) && <HandBag g={bagG} />}
@@ -802,7 +841,12 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
           {!legsHidden && <Seg color={thighSkin ? skin : thighColor} pat={thighSkin ? undefined : botPat} rTop={legR(THIGH_R[+f], !thighSkin)} rBot={legR(KNEE_R, !thighSkin)} len={THIGH} />}
           {!legsHidden && shortsLen > 0 && <M color={thighColor} pat={botPat} geometry={sleeveGeo(THIGH_R[+f] - 0.008, KNEE_R, THIGH, shortsLen, 0.014)} />}
           <group ref={side < 0 ? rig.kneeL : rig.kneeR} position={[0, -THIGH, 0]}>
-            {!legsHidden && <Seg color={full ? skin : shinColor} pat={full ? undefined : longBottom ? botPat : undefined} rTop={legR(KNEE_R, !!longBottom)} rBot={legR(0.04, !!longBottom)} len={SHIN} />}
+            {!legsHidden && <Seg color={full ? skin : shinColor} pat={full ? undefined : longBottom ? botPat : undefined} rTop={legR(KNEE_R, !!longBottom)} rBot={legR(0.038, !!longBottom)} mid={[legR(CALF[0], !!longBottom), CALF[1]]} len={SHIN} />}
+            {legsHidden && (
+              <group ref={(g) => { drape.current[side < 0 ? 0 : 1] = g; }} visible={false}>
+                <Seg color={robeColor} pat={robePat} rTop={KNEE_R + 0.035} rBot={0.07} len={SHIN} />
+              </group>
+            )}
             {/* Ankle */}
             <group ref={side < 0 ? rig.footL : rig.footR} position={[0, -SHIN, 0]}>
               <group position={[0, SHIN, 0]}>
@@ -837,7 +881,7 @@ function Torso({ a, top, color, skin, bag }: { a: Appearance; top?: Garment; col
       <M color={color} pat={patOf(top)} geometry={lathe(a.body, TORSO[a.body])} scale={[1, 1, TORSO_DEPTH]} />
       {f && ([-1, 1] as const).map((s) => <M key={s} color={color} geometry={sphere(0.055)} position={[s * 0.052, 0.355, 0.045]} scale={[1, 0.85, 0.6]} />)}
       {/* Neck */}
-      <M color={skin} geometry={capsule(f ? 0.043 : 0.05, 0.06)} position={[0, NECK_Y + 0.04, 0]} />
+      <M color={skin} geometry={capsule(f ? 0.046 : 0.056, 0.06)} position={[0, NECK_Y + 0.04, 0]} scale={[1, 1, 0.92]} />
       {/* Open neckline on tops that have one */}
       {(shape === 'tee' || shape === 'tank' || shape === 'blouse' || shape === 'dress' || shape === 'jersey' || shape === 'polo' || shape === 'shirt') && (
         <M color={skin} geometry={sphere(0.05)} position={[0, NECK_Y - 0.035, 0.045]} scale={[1, 0.8, 0.5]} />
@@ -1048,11 +1092,11 @@ function headRows(f: boolean): HeadRow[] {
     [0.028, 0.127, f ? 0.13 : 0.133, -0.136, 2.2],
     [0.008, 0.125, 0.12, -0.136, 2.4],
     [-0.022, 0.126, 0.123, -0.13, 2.6],
-    [-0.052, 0.119 * (f ? 0.96 : 1), 0.12, -0.113, 2.7],
-    [-0.082, 0.11 * jaw, 0.113, -0.086, f ? 2.5 : 3.2],
-    [-0.108, 0.091 * jaw, 0.107, -0.056, f ? 2.4 : 3.2],
-    [-0.13, f ? 0.048 : 0.064, f ? 0.1 : 0.103, -0.018, f ? 2.4 : 3],
-    [-0.145, f ? 0.022 : 0.032, f ? 0.088 : 0.092, 0.025, 2.2],
+    [-0.052, 0.113 * (f ? 0.96 : 1), 0.12, -0.113, 2.7],
+    [-0.082, 0.1 * jaw, 0.114, -0.084, f ? 2.5 : 3.2],
+    [-0.108, 0.08 * jaw, 0.109, -0.052, f ? 2.4 : 3.2],
+    [-0.13, f ? 0.042 : 0.054, f ? 0.103 : 0.107, -0.014, f ? 2.4 : 3],
+    [-0.145, f ? 0.02 : 0.028, f ? 0.09 : 0.095, 0.028, 2.2],
     [-0.15, 0, 0.068, 0.068, 2],
   );
   return rows;

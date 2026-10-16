@@ -1,5 +1,5 @@
-// Snap: one feed with two tabs, Friends and Global. The camera button takes a snap (photo mode over the scene,
-// ui/PhotoMode.tsx) and posts it for the whole city. Everything is gone after a day.
+// Snap: one feed with two tabs, Friends and Global. The Take a snap pill at the top opens the camera (photo mode over the
+// scene, ui/PhotoMode.tsx) and posts it for the whole city. Everything is gone after a day.
 
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -39,14 +39,17 @@ const ICON = {
   me: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
   back: <path d="M15 5l-7 7 7 7" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
-  heart: <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" />,
-  comment: <path d="M4 5h16v11H9l-5 4z" />,
-  share: <><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" /><path d="M12 3v12M7 8l5-5 5 5" /></>,
+  heart: <path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z" />,
+  comment: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />,
+  share: <><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4z" /></>,
   trash: <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />,
   eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
   camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
   play: <path d="M8 5v14l11-7z" />,
 };
+
+/** The player's right-hand rail: every icon this size and weight, so they read as one set. */
+const RAIL_ICON = 28;
 
 /** Who is open in the full-screen player: groups of snaps (one per friend's story, or one each in Spotlight). */
 interface Playing {
@@ -85,6 +88,11 @@ export function SnapApp() {
       }}
     >
       {me && (
+        <div className="snap-take-row">
+          <button type="button" className="snap-take" onClick={() => openSnapCamera()}>{svg(ICON.camera, 18, 2.2)}<span>Take a snap</span></button>
+        </div>
+      )}
+      {me && (
         <nav className="snap-tabs" role="tablist">
           {(['friends', 'global'] as const).map((id) => (
             <button key={id} type="button" role="tab" aria-selected={feed === id} className={feed === id ? 'on' : ''} onClick={() => (feed === id ? document.querySelector('.snap-scroll')?.scrollTo({ top: 0, behavior: 'smooth' }) : setFeed(id))}>
@@ -100,9 +108,6 @@ export function SnapApp() {
           <FeedTab key={feed} scope={feed} play={setPlaying} />
         )}
       </div>
-      {me && (
-        <button type="button" className="snap-fab" aria-label="Take a snap" onClick={() => openSnapCamera()}>{svg(ICON.camera, 24, 2.2)}</button>
-      )}
       {playing && (host ? createPortal(<Player start={playing} myUid={me?.uid} onClose={close} />, host) : <Player start={playing} myUid={me?.uid} onClose={close} />)}
     </div>
   );
@@ -283,11 +288,11 @@ function Player({ start, myUid, onClose }: { start: Playing; myUid?: string; onC
       {mode === 'spotlight' && (
         <div className="snap-player-rail">
           <button type="button" className={snap.liked ? 'liked' : ''} aria-label={snap.liked ? 'Unlike' : 'Like'} onClick={() => { void likeSnap(snap.id); if (!snap.liked) burst('❤️'); }}>
-            {svg(ICON.heart, 30, 2.2)}<small>{count(snap.likes)}</small>
+            {svg(ICON.heart, RAIL_ICON, 2)}<small>{count(snap.likes)}</small>
           </button>
-          <button type="button" aria-label="Comments" onClick={() => setSheet('comments')}>{svg(ICON.comment, 28)}<small>{count(snap.comments)}</small></button>
-          <button type="button" aria-label="Share" onClick={() => void shareLink(snapLink(snap.id), `@${snap.username ?? 'someone'}'s snap on Naija City`)}>{svg(ICON.share, 28)}<small>Share</small></button>
-          <span className="snap-player-views">{svg(ICON.play, 14, 0)} {count(snap.views)}</span>
+          <button type="button" aria-label="Comments" onClick={() => setSheet('comments')}>{svg(ICON.comment, RAIL_ICON, 2)}<small>{count(snap.comments)}</small></button>
+          <button type="button" aria-label="Share" onClick={() => void shareLink(snapLink(snap.id), `@${snap.username ?? 'someone'}'s snap on Naija City`)}>{svg(ICON.share, RAIL_ICON, 2)}<small>Share</small></button>
+          <span className="snap-player-views" aria-label={`${snap.views} views`}>{svg(ICON.eye, RAIL_ICON, 2)}<small>{count(snap.views)}</small></span>
         </div>
       )}
       <div className="snap-player-foot">

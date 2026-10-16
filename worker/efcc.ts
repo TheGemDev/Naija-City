@@ -1,6 +1,7 @@
-import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, efccConvicts, efccSource, electionConvicts, voteIllicit, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type VoteFlag } from '../src/game/efcc';
+import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, efccConvicts, efccSource, electionConvicts, voteIllicit, voteTied, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type VoteFlag } from '../src/game/efcc';
 import { banLeft, CHAOS, OFFICE_RULES, VOTE_BUYING_BAN_MS, type PoliticalOffice } from '../src/game/civic';
-import { linkedSql, sharedIpSql } from './links';
+import { linkedSql, sharedIpSql, twinSql } from './links';
+import { syncForum } from './groups';
 import { transfer, usernames } from './crime';
 import { handle, naira, postFeed } from './feed';
 import { DESIGN_BY_ID, STAGES, type Property } from '../src/game/property';
@@ -20,7 +21,7 @@ function notify(env: Env, ctx: ExecutionContext, uid: string, event: object) {
   ctx.waitUntil(notifyPlayer(env, uid, event));
 }
 
-interface IncomeRow { at: number; kind: string; amount: number; scam: number; fresh: number; linked: number }
+interface IncomeRow { at: number; kind: string; amount: number; scam: number; fresh: number; near: number; linked: number }
 interface SaveRow { data: string; saved_at: number; balance: number }
 interface CaseRow {
   id: string; accuser_uid: string; target_uid: string; status: EfccStatus; filed_at: number; resolves_at: number;
@@ -41,7 +42,8 @@ interface SaveData {
   [key: string]: unknown;
 }
 
-const isIllicit = (row: IncomeRow) => EFCC_DIRTY_KINDS.includes(row.kind) || row.scam > 0 || row.fresh > 0 || row.linked > 0;
+// A new account's money only counts when it came from the receiver's own network: anyone can send money to frame someone.
+const isIllicit = (row: IncomeRow) => EFCC_DIRTY_KINDS.includes(row.kind) || row.scam > 0 || row.linked > 0 || (row.fresh > 0 && row.near > 0);
 
 /**
  * SQL: the player ?u was new when the money left them at ?at. New means the account was made, or a life was born or
@@ -73,6 +75,15 @@ async function audit(db: D1Database, uid: string, since = 0): Promise<EfccIncome
            WHERE gm.id = l.ref AND gp.value != l.uid AND ${freshAt('st.uid', 'st.created_at')})
          ELSE ${freshAt('l.ref', 'l.created_at')}
        END AS fresh,
+       -- ...played on the receiver's network (a game pot: any new player at the table who was).
+       CASE
+         WHEN l.kind NOT IN (${FRESH_KINDS_SQL}) THEN 0
+         WHEN l.kind = 'game_win' THEN EXISTS (
+           SELECT 1 FROM game_matches nm, json_each(nm.players) np
+           JOIN ledger ns ON ns.uid = np.value AND ns.ref = nm.id AND ns.kind = 'game_stake'
+           WHERE nm.id = l.ref AND np.value != l.uid AND ${freshAt('ns.uid', 'ns.created_at')} AND ${sharedIpSql('ns.uid', 'l.uid')})
+         ELSE ${sharedIpSql('l.ref', 'l.uid')}
+       END AS near,
        -- Money from another account on the target's own device: passing it between their own accounts.
        CASE
          WHEN l.kind NOT IN (${FRESH_KINDS_SQL}) THEN 0
@@ -87,7 +98,9 @@ async function audit(db: D1Database, uid: string, since = 0): Promise<EfccIncome
   return results.map((row) => ({
     at: row.at,
     kind: row.kind,
-    source: row.linked ? `${efccSource(row.kind)} from an account on their device` : row.fresh ? `${efccSource(row.kind)} from a new account` : efccSource(row.kind),
+    source: row.linked ? `${efccSource(row.kind)} from an account on their device`
+      : row.fresh && row.near ? `${efccSource(row.kind)} from a new account on their network`
+      : row.fresh ? `${efccSource(row.kind)} from a new account` : efccSource(row.kind),
     amount: row.amount,
     illicit: isIllicit(row),
   }));
@@ -103,12 +116,13 @@ async function electionAudit(db: D1Database, electionId: number, candidate: stri
        EXISTS (SELECT 1 FROM ledger pl WHERE pl.uid = v.voter_uid AND pl.ref = ?2 AND pl.kind IN ('transfer_in', 'spray_in')
                  AND pl.created_at BETWEEN v.updated_at - ?3 AND v.updated_at) AS paid,
        ${freshAt('v.voter_uid', 'v.updated_at')} AS fresh,
-       ${sharedIpSql('v.voter_uid', '?2')} AS ip
+       ${sharedIpSql('v.voter_uid', '?2')} AS ip,
+       ${twinSql('v.voter_uid', '?2')} AS twin
      FROM civic_votes v WHERE v.election_id = ?1 AND v.candidate_uid = ?2
      ORDER BY v.updated_at DESC`,
   ).bind(electionId, candidate, ELECTION_FRAUD.paidWindowMs, EFCC.freshAccountMs).all<Row>();
   return results.map((row) => {
-    const flags = (['device', 'ring', 'paid', 'fresh', 'ip'] as VoteFlag[]).filter((f) => row[f]);
+    const flags = (['device', 'ring', 'paid', 'fresh', 'ip', 'twin'] as VoteFlag[]).filter((f) => row[f]);
     return { voter: row.voter, at: row.at, flags, illicit: voteIllicit(flags) };
   });
 }
@@ -171,8 +185,10 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
 }
 
 /**
- * A rigged election: the flagged votes are struck off, and a convicted candidate is disqualified, barred from running,
- * fined and jailed, as if caught in a vote-buying sting (worker/civic.ts).
+ * A rigged election. Every fake vote is struck off, whatever the verdict. The candidate is convicted only on votes traced
+ * to them (src/game/efcc.ts voteTied): disqualified if the race is still on, barred from running, fined and jailed, as if
+ * caught in a vote-buying sting (worker/civic.ts). A race already over is recounted, and the seat goes to whoever won it
+ * without the struck votes.
  */
 async function settleElection(db: D1Database, row: CaseRow, now: number) {
   const votes = JSON.parse(row.audit_json) as StoredVote[];
@@ -180,28 +196,64 @@ async function settleElection(db: D1Database, row: CaseRow, now: number) {
   const closed = await db.prepare(
     `UPDATE efcc_cases SET status = ?, resolved_at = ? WHERE id = ? AND status = 'investigating' AND resolves_at <= ?`,
   ).bind(convicted ? 'convicted' : 'cleared', now, row.id, now).run();
-  // Only the call that closed the case hands out the sentence.
-  if (!convicted || !closed.meta.changes) return;
-  const race = await db.prepare('SELECT office, status FROM civic_elections WHERE id = ?').bind(row.election_id).first<{ office: PoliticalOffice; status: string }>();
+  // Only the call that closed the case strikes the votes and hands out the sentence.
+  if (!closed.meta.changes) return;
+  const race = await db.prepare('SELECT office, status, winner_uid FROM civic_elections WHERE id = ?').bind(row.election_id)
+    .first<{ office: PoliticalOffice; status: string; winner_uid: string | null }>();
   const struck = votes.filter((v) => v.illicit).map((v) => v.voter);
+  const tied = votes.filter((v) => voteTied(v.flags)).length;
   await db.batch([
     db.prepare('DELETE FROM civic_votes WHERE election_id = ?1 AND candidate_uid = ?2 AND voter_uid IN (SELECT value FROM json_each(?3))')
       .bind(row.election_id, row.target_uid, JSON.stringify(struck)),
-    // Disqualified while the race is still on (their remaining votes go with them); a race already over keeps its result.
-    db.prepare(`DELETE FROM civic_candidates WHERE election_id = ? AND uid = ? AND EXISTS (SELECT 1 FROM civic_elections WHERE id = ? AND status = 'open')`)
-      .bind(row.election_id, row.target_uid, row.election_id),
-    db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, row.target_uid),
+    // Disqualified while the race is still on (their remaining votes go with them).
+    ...(convicted
+      ? [
+          db.prepare(`DELETE FROM civic_candidates WHERE election_id = ? AND uid = ? AND EXISTS (SELECT 1 FROM civic_elections WHERE id = ? AND status = 'open')`)
+            .bind(row.election_id, row.target_uid, row.election_id),
+          db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, row.target_uid),
+        ]
+      : []),
   ]);
+  const title = race ? OFFICE_RULES[race.office].title : 'election';
+  const city = race ? OFFICE_RULES[race.office].city : undefined;
+  const who = (await usernames(db, [row.target_uid])).get(row.target_uid);
+  // They won a race that is over: recount it without the struck votes (or without them at all, when convicted).
+  let unseated = false;
+  if (race && race.status !== 'open' && race.winner_uid === row.target_uid && struck.length) {
+    const leader = await db.prepare(
+      `SELECT c.uid FROM civic_candidates c
+       LEFT JOIN civic_votes v ON v.election_id = c.election_id AND v.candidate_uid = c.uid
+       WHERE c.election_id = ?1 AND (?3 = 0 OR c.uid != ?2)
+       GROUP BY c.uid ORDER BY COUNT(v.voter_uid) DESC, c.support DESC, c.uid ASC LIMIT 1`,
+    ).bind(row.election_id, row.target_uid, convicted ? 1 : 0).first<{ uid: string }>();
+    const next = leader?.uid ?? null;
+    if (next !== row.target_uid) {
+      // Only the seat they still hold from this race: a term that has since moved on is left alone.
+      const moved = await db.prepare(
+        `UPDATE civic_policies SET ${race.office}_uid = ?1, updated_at = ?3 WHERE id = 1 AND ${race.office}_uid = ?2`,
+      ).bind(next, row.target_uid, now).run();
+      if (moved.meta.changes) {
+        unseated = true;
+        await db.prepare('UPDATE civic_elections SET winner_uid = ? WHERE id = ?').bind(next, row.election_id).run();
+        await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
+        const heir = next ? (await usernames(db, [next])).get(next) : null;
+        await postFeed(
+          db, next ?? row.target_uid, 'election', '⚖️',
+          `RESULT OVERTURNED: after the EFCC struck ${struck.length} fake vote${struck.length === 1 ? '' : 's'}, ${handle(who)} is no longer ${title}. ${next ? `${handle(heir)} takes the seat.` : 'The seat is vacant.'}`,
+          city,
+        );
+      }
+    }
+  }
+  if (!convicted) return;
   const fine = await transfer(db, row.target_uid, null, CHAOS.stingFine, 'efcc_fine', '', `election-fraud:${row.id}`);
   await db.prepare('UPDATE efcc_cases SET fine = ? WHERE id = ?').bind(fine, row.id).run();
-  const title = race ? OFFICE_RULES[race.office].title : 'election';
   await recordExhibits(db, row.target_uid, `case:${row.id}`, `EFCC · rigging the ${title} race`, [fineItem(fine)], now);
-  await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes, `Election fraud · ${struck.length} fake vote${struck.length === 1 ? '' : 's'} in the ${title} race`);
-  const who = (await usernames(db, [row.target_uid])).get(row.target_uid);
+  await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes, `Election fraud · ${tied} fake vote${tied === 1 ? '' : 's'} in the ${title} race`);
   await postFeed(
     db, row.target_uid, 'election', '🗳️',
-    `EFCC: ${struck.length} of ${title} candidate ${handle(who)}’s ${votes.length} votes came from their own phones, fake accounts or paid voters. ${race?.status === 'open' ? 'Disqualified, ' : ''}barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a cell. 🚓`,
-    race ? OFFICE_RULES[race.office].city : undefined,
+    `EFCC: ${tied} of ${title} candidate ${handle(who)}’s ${votes.length} votes came from their own phone, fake accounts on their network, or voters they paid. ${race?.status === 'open' ? 'Disqualified, ' : unseated ? 'Removed from office, ' : ''}barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a cell. 🚓`,
+    city,
   );
 }
 
@@ -376,10 +428,12 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
     let evidence: EfccIncome[] | StoredVote[];
     let electionId: number | null = null;
     if (kind === 'election') {
+      // The race they are running in, or one they ran in that ended a short while ago.
       const race = await env.DB.prepare(
-        `SELECT c.election_id AS id FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id WHERE c.uid = ? AND e.status = 'open'`,
-      ).bind(target.uid).first<{ id: number }>();
-      if (!race) return err(409, `@${username} is not running in any election right now`);
+        `SELECT c.election_id AS id FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id
+         WHERE c.uid = ? AND (e.status = 'open' OR e.ends_at > ?) ORDER BY e.ends_at DESC LIMIT 1`,
+      ).bind(target.uid, Date.now() - ELECTION_FRAUD.reportAfterMs).first<{ id: number }>();
+      if (!race) return err(409, `@${username} is not running in an election, and has not run in one in the last ${ELECTION_FRAUD.reportAfterMs / 3_600_000} hours`);
       electionId = race.id;
       // A cleared candidate can be looked at again once more votes may have come in.
       const last = await env.DB.prepare(`SELECT MAX(filed_at) AS at FROM efcc_cases WHERE target_uid = ? AND kind = 'election' AND election_id = ?`)

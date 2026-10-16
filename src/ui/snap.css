@@ -36,7 +36,7 @@
 .snap-me { flex-shrink: 0; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--sn-yellow); cursor: pointer; }
 .snap-me .convo-avatar, .snap-ring .convo-avatar, .snap-profile-face .convo-avatar { width: 100%; height: 100%; }
 
-.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 0 88px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
+.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 0 24px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
 .snap-scroll::-webkit-scrollbar { display: none; }
 .snap-h { margin: 14px 2px 8px; font-size: 15px; font-weight: 800; }
 
@@ -147,13 +147,15 @@
 .snap-player-head .snap-streak { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 /* Snapchat's caption: a bar of smoked glass across the picture. */
 .snap-player-cap { position: absolute; left: 0; right: 0; top: 62%; margin: 0; padding: 8px 14px; background: rgba(0, 0, 0, 0.55); font-size: 15px; font-weight: 600; line-height: 1.35; text-align: center; overflow-wrap: anywhere; pointer-events: none; }
-.snap-player-rail { position: absolute; right: 8px; bottom: 132px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.snap-player-rail button { display: flex; flex-direction: column; align-items: center; gap: 2px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
-.snap-player-rail button:active { transform: scale(0.85); }
-.snap-player-rail small { font-size: 12px; font-weight: 800; }
+/* The right-hand rail: one column of equal slots, every icon the same size (RAIL_ICON in SnapApp.tsx), every count the same type. */
+.snap-player-rail { position: absolute; right: 6px; bottom: 132px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.snap-player-rail > button, .snap-player-rail > .snap-player-views { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 48px; padding: 0; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.snap-player-rail > button:active { transform: scale(0.85); }
+.snap-player-rail svg { display: block; flex-shrink: 0; }
+.snap-player-rail small { font-size: 12px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .snap-player-rail .liked svg { fill: var(--sn-red, #f23c57); stroke: #f23c57; animation: snap-like 0.35s ease-out; }
-.snap-player-views { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 800; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); }
-.snap-player-views svg { fill: currentColor; }
+/* Views can't be tapped: the same slot, a touch quieter. */
+.snap-player-views { opacity: 0.85; }
 .snap-player-foot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 8px; padding: 30px 10px 28px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); }
 .snap-reacts { display: flex; justify-content: center; gap: 6px; }
 .snap-reacts button { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); backdrop-filter: blur(8px); transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
@@ -274,8 +276,10 @@
 .shared-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 
 /* The camera button, where Twitter has its + button. */
-.snap-fab { position: absolute; right: 16px; bottom: 18px; z-index: 6; display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: var(--sn-yellow); color: #111; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18); cursor: pointer; transition: transform 0.15s; }
-.snap-fab:active { transform: scale(0.92); }
+/* Take a snap: the yellow pill at the top that opens the camera. */
+.snap-take-row { display: flex; justify-content: center; flex-shrink: 0; padding: 10px 12px 8px; background: var(--sn-bg); }
+.snap-take { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: var(--sn-yellow); color: #111; font: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14); cursor: pointer; transition: transform 0.15s; }
+.snap-take:active { transform: scale(0.95); }
 
 /* Friends and Global: flush tabs along the top, like the other apps'. */
 .snap-tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--sn-line); background: var(--sn-bg); }

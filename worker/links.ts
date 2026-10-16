@@ -3,8 +3,9 @@
 // raw values (migrations/0111_player_links.sql). The EFCC reads them: money passed between linked accounts, and votes
 // from a candidate's own accounts (worker/efcc.ts).
 //
-// Linked means the same device id, or the same fingerprint seen from the same IP address. A fingerprint alone is not
-// enough (plenty of players have the same phone model), and neither is an IP (homes, campuses and mobile networks share them).
+// Linked means the same device id: one browser on one phone. The same fingerprint from the same IP is only a lookalike:
+// two of one phone model on one Wi-Fi (two iPhone 12s at home) look exactly alike, so it is evidence, never proof. Neither
+// is an IP (homes, campuses and mobile networks share them).
 
 declare global {
   interface Env {
@@ -66,9 +67,14 @@ const shares = (a: string, b: string, kind: string) =>
   `EXISTS (SELECT 1 FROM player_links la JOIN player_links lb ON lb.kind = la.kind AND lb.hash = la.hash AND lb.uid = ${b}
            WHERE la.uid = ${a} AND la.kind = '${kind}')`;
 
-/** SQL: a and b are two accounts on one device (the same device id, or the same fingerprint from the same IP). */
-export const linkedSql = (a: string, b: string) =>
-  `(${a} != ${b} AND (${shares(a, b, 'device')} OR (${shares(a, b, 'print')} AND ${shares(a, b, 'ip')})))`;
+/** SQL: a and b are two accounts on one device (the same device id). */
+export const linkedSql = (a: string, b: string) => `(${a} != ${b} AND ${shares(a, b, 'device')})`;
+
+/**
+ * SQL: a and b look like one phone: the same fingerprint, seen from the same IP. That is also two of the same model on
+ * one network, or one phone in a private window, so only ever evidence alongside something else.
+ */
+export const twinSql = (a: string, b: string) => `(${a} != ${b} AND ${shares(a, b, 'print')} AND ${shares(a, b, 'ip')})`;
 
 /** SQL: a and b have used the same IP address. Weak on its own: only ever evidence alongside something else. */
 export const sharedIpSql = (a: string, b: string) => `(${a} != ${b} AND ${shares(a, b, 'ip')})`;

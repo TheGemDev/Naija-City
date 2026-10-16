@@ -24,7 +24,7 @@ const count = Number(q.get('n') ?? 24);
 
 function Idle({ look }: { look: string }) {
   const clip = useRef<Clip>((q.get('clip') as Clip) ?? 'idle');
-  return <Person look={look} clipRef={clip} />;
+  return <group rotation-y={Number(q.get('rot') ?? 0)}><Person look={look} clipRef={clip} /></group>;
 }
 
 type Cell = { name: string; node: ReactNode; size: number };
@@ -33,7 +33,7 @@ function cells(): Cell[] {
     case 'people': {
       const out: Cell[] = [];
       for (const body of ['m', 'f'] as const) for (let skin = 0; skin < 6; skin += 2) {
-        const a = { ...defaultAppearance(body), skin, hair: HAIRS.filter((h) => !h.body || h.body === body)[skin % 4].id };
+        const a = { ...defaultAppearance(body), skin, hair: (q.get('hair') as typeof HAIRS[number]['id']) ?? HAIRS.filter((h) => !h.body || h.body === body)[skin % 4].id };
         out.push({ name: `${body} skin${skin} ${a.hair}`, node: <Idle look={encodeLook(a)} />, size: 1.1 });
       }
       return out;
@@ -83,8 +83,13 @@ function App() {
   const span = Math.max(cols, rows * 1.6) * size;
   const h = set === 'people' ? 0.9 : size * 0.15;
   const tilt = Number(q.get('tilt') ?? 0.45);
+  // ?dist=1.8&cy=1.2: look straight at that height from that far away, for close-ups.
+  const dist = q.get('dist') ? Number(q.get('dist')) : 0;
+  const cy = Number(q.get('cy') ?? h);
+  // Close-ups look at the first model, which sits left of centre when there are several columns.
+  const cx = dist ? -((cols - 1) / 2) * size : 0;
   return (
-    <Canvas shadows camera={{ position: [0, h + span * tilt, span * 0.95], fov: 34, near: 0.05, far: 5000 }} gl={{ preserveDrawingBuffer: true }}>
+    <Canvas shadows camera={{ position: dist ? [cx, cy, dist] : [0, h + span * tilt, span * 0.95], fov: 34, near: 0.05, far: 5000 }} gl={{ preserveDrawingBuffer: true }}>
       <color attach="background" args={['#cfe3ef']} />
       {ENV && <Env intensity={Number(ENV)} />}
       <hemisphereLight args={GAME ? ['#fff8ec', '#6b5a3a', Number(q.get('hemi') ?? 1.25)] : ['#ffffff', '#8a7a60', 1.1]} />
@@ -101,7 +106,7 @@ function App() {
           </group>
         );
       })}
-      <OrbitControls target={[0, h, 0]} />
+      <OrbitControls target={[cx, dist ? cy : h, 0]} />
     </Canvas>
   );
 }

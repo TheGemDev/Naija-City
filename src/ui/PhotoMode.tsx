@@ -41,14 +41,6 @@ export const openSnapCamera = (to: string[] = []) => {
   if (to.length) usePhoto.setState({ sendTo: to });
 };
 
-/** Snap opens on its camera, like Snapchat does. False (and nothing happens) when the camera can't come out right now,
- *  and the app opens on its other screens instead. */
-export function openSnapFirst() {
-  if (useDrive.getState().vehicle || !freeToPose(useGame.getState()) || !useNet.getState().connected) return false;
-  openSnapCamera();
-  return true;
-}
-
 /** From the Snap camera to the app on the phone (its ✕ button). */
 function goSnap() {
   usePhoto.getState().close();

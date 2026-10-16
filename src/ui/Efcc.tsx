@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { EFCC, EFCC_RECORD_MS, ELECTION_FRAUD, VOTE_FLAGS, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
+import { EFCC, EFCC_RECORD_MS, ELECTION_FRAUD, VOTE_FLAGS, voteTied, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
 import { OFFICE_RULES, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort } from '../game/store';
 import { useEfcc, loadEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
@@ -135,15 +135,18 @@ function RulesReceipt() {
       <div className="law-section">
         <div className="law-signer"><span>Fake votes</span><span>Report a candidate</span></div>
         {line('Votes audited', 'every vote they have in the race')}
-        {line('Convicted at', `${Math.round(ELECTION_FRAUD.flaggedShare * 100)}% fake, or ${ELECTION_FRAUD.flaggedFloor} fake votes`)}
-        {line('Sentence', 'fake votes struck, disqualified, barred, fined, jailed')}
-        {line('Paid voter', `paid by them within ${ELECTION_FRAUD.paidWindowMs / 3_600_000}h before voting`)}
-        {line('Same device as them or each other', 'fake')}
-        {line('New account on their network', 'fake')}
+        {line('Report until', `${ELECTION_FRAUD.reportAfterMs / 3_600_000}h after the result`)}
+        {line('Every fake vote', 'struck off')}
+        {line('Convicted at', `${Math.round(ELECTION_FRAUD.flaggedShare * 100)}%, or ${ELECTION_FRAUD.flaggedFloor} votes, traced to them`)}
+        {line('Traced to them', 'their phone, voters they paid, new accounts on their network')}
+        {line('Paid voter', 'paid by them in the 12 game hours before voting')}
+        {line('Several accounts on one phone', 'struck, never held against the candidate')}
+        {line('Sentence', 'disqualified or unseated, barred, fined, jailed')}
+        {line('Struck votes change the winner', 'the seat moves')}
       </div>
       <div className="law-section">
         <div className="law-signer"><span>Flagged money</span><span /></div>
-        <small className="law-foot" style={{ textAlign: 'left' }}>Scams, theft, heists, fencing, embezzlement and every vice hustle: drugs, rackets, contracts, ransoms, forgery, fake notes, bunkering, pirate ads, betting shops and jailbreaks. Also money from a brand-new account, or from another account played on the same phone.</small>
+        <small className="law-foot" style={{ textAlign: 'left' }}>Scams, theft, heists, fencing, embezzlement and every vice hustle: drugs, rackets, contracts, ransoms, forgery, fake notes, bunkering, pirate ads, betting shops and jailbreaks. Also money from another account played on the same phone, or from a brand-new account on the same network. Money a stranger sends you never counts against you.</small>
       </div>
       <small className="law-foot">Closed cases are struck off the record after {Math.round(EFCC_RECORD_MS / 86_400_000)} days. A seized property stays on file until it is bought back.</small>
     </div>
@@ -219,8 +222,10 @@ export function EfccApp() {
     const election = item.kind === 'election';
     const votes = item.votes ?? [];
     const flagged = election ? votes.filter((v) => v.illicit).length : item.audit.filter((entry) => entry.illicit).length;
+    // Fake votes are all struck; only the ones traced to the candidate count towards convicting them.
+    const tied = votes.filter((v) => voteTied(v.flags)).length;
     const dirty = election
-      ? Math.round((votes.length ? flagged / votes.length : 0) * 100)
+      ? Math.round((votes.length ? tied / votes.length : 0) * 100)
       : Math.round(efccDirty(item.audit).share * 100);
     const race = election && item.office ? OFFICE_RULES[item.office as PoliticalOffice]?.title : null;
     const status = STATUS[item.status];
@@ -255,12 +260,17 @@ export function EfccApp() {
             {item.seizedProperty && <span>🏠 {item.seizedProperty.boughtBack ? 'Bought back ✓' : 'Property seized'}</span>}
           </div>
         )}
-        {item.status === 'cleared' && <div className="efcc-verdict good"><span>{election ? '✅ Votes look genuine' : '✅ Clean audit'}</span></div>}
+        {item.status === 'cleared' && (
+          <div className="efcc-verdict good">
+            <span>{election ? (flagged ? '✅ Not traced to the candidate' : '✅ Votes look genuine') : '✅ Clean audit'}</span>
+            {election && flagged > 0 && <span>🗳️ {flagged} fake vote{flagged === 1 ? '' : 's'} struck</span>}
+          </div>
+        )}
         {item.status === 'bribed' && <div className="efcc-verdict good"><span>🤝 Bribe accepted</span></div>}
         {election ? (
           <details className="efcc-audit">
             <summary>
-              <span><b>🗳️ {votes.length} votes</b><b className={flagged ? 'bad' : 'good'}>{flagged ? `🚩 ${flagged} fake · ${dirty}%` : '✓ Nothing flagged'}</b></span>
+              <span><b>🗳️ {votes.length} votes</b><b className={flagged ? 'bad' : 'good'}>{flagged ? `🚩 ${flagged} fake · ${tied} traced to them` : '✓ Nothing flagged'}</b></span>
               <span className="efcc-meter"><i style={{ width: `${dirty}%` }} /><u style={{ left: `${ELECTION_FRAUD.flaggedShare * 100}%` }} /></span>
             </summary>
             {votes.map((vote, index) => (
@@ -268,7 +278,7 @@ export function EfccApp() {
                 <i aria-hidden>{vote.flags.length ? VOTE_FLAGS[vote.flags[0]].icon : '🗳️'}</i>
                 <span>
                   <b>{vote.flags.length ? vote.flags.map((f) => VOTE_FLAGS[f].label).join(' · ') : 'Nothing unusual'}</b>
-                  <small title={dateLabel(vote.at)}>Vote {votes.length - index} · {ago(vote.at, now)}{vote.illicit ? ' · 🚩 fake' : ''}</small>
+                  <small title={dateLabel(vote.at)}>Vote {votes.length - index} · {ago(vote.at, now)}{voteTied(vote.flags) ? ' · 🚩 traced to them' : vote.illicit ? ' · 🚩 fake, not theirs' : ''}</small>
                 </span>
               </div>
             ))}
@@ -392,7 +402,7 @@ export function EfccApp() {
                 <span><b>@{c.username}</b><small>{OFFICE_RULES[c.office].title} · {c.votes} vote{c.votes === 1 ? '' : 's'}</small></span>
                 <button className="btn sm danger" disabled={busy || !c.votes} onClick={() => reportVotes(c.username!)}>🗳️ Audit votes</button>
               </div>
-            )) : <small className="efcc-note">Nobody is running in an election right now. Candidates show here once a race is on.</small>;
+            )) : <small className="efcc-note">Nobody is running in an election right now. To report the winner of a race that just ended, search for them below.</small>;
           })()}
           <form className="efcc-search" onSubmit={submitSearch}>
             <i aria-hidden>{searching ? '⏳' : '🔍'}</i>
@@ -417,7 +427,7 @@ export function EfccApp() {
             </div>
           ))}
           {!query.trim() && reportKind === 'election' && (
-            <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits every vote the candidate has: votes from their own phone, from one phone running several accounts, from voters they paid, and from brand-new accounts on their network. See Rules for what gets them convicted.</small>
+            <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits every vote the candidate has, during the race or up to {ELECTION_FRAUD.reportAfterMs / 3_600_000}h after the result. Fake votes are struck off; they are convicted only for votes traced to them: from their own phone, voters they paid, or brand-new accounts on their network. See Rules.</small>
           )}
           {!query.trim() && reportKind === 'money' && (
             <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits their last {EFCC.auditSize} incomes and gives them {EFCC.investigationMs / 1000}s to answer. See Rules for what gets someone convicted.</small>
