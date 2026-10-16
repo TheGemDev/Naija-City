@@ -62,9 +62,10 @@ export function goToWork() {
   if (flightOf(g)) {
     // In the air there is nowhere to go: leaving for the map would call the flight off.
     const trip = useTrip.getState().going;
-    if (trip?.city === work.city && trip.place?.id === work.place.id) return g.toast('✈️ You are on your way to work');
+    const train = flightOf(g) === 'train';
+    if (trip?.city === work.city && trip.place?.id === work.place.id) return g.toast(`${train ? '🚆' : '✈️'} You are on your way to work`);
     onLanding = true;
-    return g.toast('✈️ You are in the air. The way to work comes up when you land');
+    return g.toast(train ? '🚆 You are on the train. The way to work comes up when you pull in' : '✈️ You are in the air. The way to work comes up when you land');
   }
   const clock = shiftClock(work.job, g.minutes);
   if (clock.phase === 'off') return g.toast(`Your shift is ${shiftHours(work.job)}`);

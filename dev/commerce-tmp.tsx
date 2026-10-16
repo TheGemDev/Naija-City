@@ -39,7 +39,7 @@ function Info() {
 const span = Math.max(w, d * 1.3);
 const dist = Math.max(14, span * 2.4);
 const n = Math.hypot(1, 0.38);
-const pos: [number, number, number] = cam === 'close' ? [span * 0.55, span * 0.45, span * 0.85] : cam === 'back' ? [-span * 0.6, span * 0.5, -span * 0.8] : [0, dist / n, (dist * 0.38) / n];
+const pos: [number, number, number] = cam === 'close' ? [span * 0.6, span * 0.5 + 0.8, span * 0.95] : cam === 'back' ? [-span * 0.6, span * 0.5, -span * 0.8] : [0, dist / n, (dist * 0.38) / n];
 function App() {
   return (
     <Canvas shadows camera={{ position: pos, fov: 35 }} gl={{ preserveDrawingBuffer: true }}>

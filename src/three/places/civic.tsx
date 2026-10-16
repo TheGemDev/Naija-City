@@ -223,14 +223,17 @@ function person(kit: Kit, rand: () => number, x: number, z: number) {
 function lamp(kit: Kit, glow: Glow, x: number, z: number, h = 0.5, pool = true) {
   kit.post(STEEL, [x, 0, z], 0.012, h, 4);
   kit.box('lampPost', [x, h + 0.02, z], [0.06, 0.035, 0.06]);
-  if (pool) glowDisc(glow, x, 0.07, z, 0.38, scale(WARM, 0.22));
+  if (pool) glowDisc(glow, x, 0.07, z, 0.6, scale(WARM, 0.14));
 }
 
-/** A soft round patch of light: bright in the middle, nothing at the rim. */
+/** A soft round patch of light: bright in the middle, fading to nothing at the rim. */
 function glowDisc(glow: Glow, x: number, y: number, z: number, r: number, c: RGB, seg = 8) {
+  const mid = scale(c, 0.45);
+  const at = (a: number, k: number): V3 => [x + Math.cos(a) * r * k, y, z + Math.sin(a) * r * k];
   for (let i = 0; i < seg; i++) {
     const a = (i / seg) * TAU, b = ((i + 1) / seg) * TAU;
-    glow.tri([x, y, z], [x + Math.cos(a) * r, y, z + Math.sin(a) * r], [x + Math.cos(b) * r, y, z + Math.sin(b) * r], c, [0, 0, 0]);
+    glow.tri([x, y, z], at(a, 0.4), at(b, 0.4), c, mid);
+    glow.quad(at(a, 0.4), at(a, 1), at(b, 1), at(b, 0.4), mid, [0, 0, 0], [0, 0, 0], mid);
   }
 }
 
@@ -337,7 +340,7 @@ function govHouse(w: number, d: number, low: boolean): Built {
     kit.box(CREAM, [s * (gate / 2 + 0.06), 0.24, fz], [0.14, 0.48, 0.14]);
     kit.box(GREEN_DEEP, [s * (gate / 2 + 0.06), 0.49, fz], [0.16, 0.03, 0.16]);
     kit.box('lampGate', [s * (gate / 2 + 0.06), 0.54, fz], [0.06, 0.07, 0.06]);
-    glowDisc(glow, s * (gate / 2 + 0.06), 0.07, fz + 0.15, 0.35, scale(WARM, 0.2));
+    glowDisc(glow, s * (gate / 2 + 0.06), 0.07, fz - 0.1, 0.45, scale(WARM, 0.12));
   }
   // The gate itself, half open, and the guard house and boom just inside.
   kit.box(DARK, [-gate / 4 - 0.05, 0.2, fz - 0.12], [gate / 2, 0.32, 0.015], [0, 0.5, 0]);
@@ -482,35 +485,32 @@ function asoRock(w: number, d: number, low: boolean): Built {
     H.push([]);
     for (let j = 0; j <= nz; j++) H[i].push(height(x0 + i * cw, z0 + j * cd));
   }
-  const streak = (x: number, z: number) => {
-    const v = (x * 2.2 + Math.sin(z * 3.1 + x) * 0.35 + 10) % 1;
-    return v < 0.22;
-  };
-  const face = (a: V3, b: V3, c: V3) => {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    let nx2 = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz2 = ux * vy - uy * vx;
-    if (ny < 0) { nx2 = -nx2; ny = -ny; nz2 = -nz2; }
-    const l = Math.hypot(nx2, ny, nz2) || 1;
-    const up = ny / l;
-    const y = (a[1] + b[1] + c[1]) / 3, mx = (a[0] + b[0] + c[0]) / 3, mz = (a[2] + b[2] + c[2]) / 3;
-    let key: string;
-    if (y < 0.3 && up > 0.55) key = '#6e8f4a'; // scrub on the gentle foot
-    else if (up < 0.75 && streak(mx, mz) && y > 0.4) key = up < 0.45 ? '#4e4943' : '#5f5951';
-    else if (up > 0.9) key = y > 2.5 ? '#b2ab9f' : '#a39b8f';
-    else if (up > 0.7) key = '#968e82';
-    else key = (Math.floor(mx * 3) + Math.floor(y * 2)) % 3 ? '#8a8378' : '#7f786e';
-    kit.tri(key, a, b, c, [0, 1, 0]);
+  // Each cell takes one colour from its slope and height, so the facets read as rock rather than noise. Rain
+  // streaks run down whole columns of cells on the faces turned north or south (whole rows on the ends).
+  const hash = (k: number) => {
+    const v = Math.sin(k * 12.9898 + 4.1) * 43758.5453;
+    return v - Math.floor(v);
   };
   for (let i = 0; i < nx; i++) {
     for (let j = 0; j < nz; j++) {
       const h00 = H[i][j], h10 = H[i + 1][j], h01 = H[i][j + 1], h11 = H[i + 1][j + 1];
       if (Math.max(h00, h10, h01, h11) < 0.05) continue;
+      const gx = (h10 - h00 + h11 - h01) / (2 * cw), gz = (h01 - h00 + h11 - h10) / (2 * cd);
+      const up = 1 / Math.hypot(gx, 1, gz);
+      const y = (h00 + h10 + h01 + h11) / 4;
+      const line = Math.abs(gz) > Math.abs(gx) ? hash(i) < 0.24 : hash(j + 100) < 0.24;
+      let key: string;
+      if (y < 0.3 && up > 0.5) key = '#6e8f4a'; // scrub on the gentle foot
+      else if (up < 0.8 && y > 0.3 && line) key = up < 0.5 ? '#4e4943' : '#5c564e';
+      else if (up > 0.88) key = y > 2.8 ? '#aea79b' : '#a39b8f';
+      else if (up > 0.65) key = '#958d81';
+      else if (up > 0.4) key = '#877f74';
+      else key = '#7a736a';
       const p = (ii: number, jj: number, h: number): V3 => [x0 + ii * cw, Math.max(h, 0.03), z0 + jj * cd];
       const a = p(i, j, h00), b = p(i + 1, j, h10), c = p(i + 1, j + 1, h11), e = p(i, j + 1, h01);
       // Split each cell along the diagonal that follows the rock rather than cutting across it.
-      if (Math.abs(h00 - h11) < Math.abs(h10 - h01)) { face(a, b, c); face(a, c, e); }
-      else { face(a, b, e); face(b, c, e); }
+      if (Math.abs(h00 - h11) < Math.abs(h10 - h01)) { kit.tri(key, a, b, c, [0, 1, 0]); kit.tri(key, a, c, e, [0, 1, 0]); }
+      else { kit.tri(key, a, b, e, [0, 1, 0]); kit.tri(key, b, c, e, [0, 1, 0]); }
     }
   }
   // Boulders tumbled at the foot, then bush and trees round the rock.
@@ -545,22 +545,22 @@ function zumaRock(w: number, d: number, low: boolean): Built {
   const kit = new Kit();
   const rand = rng(Math.round(w * 53 + d * 11));
   kit.box('#8fb963', [0, 0.02, 0], [w, 0.04, d]);
-  const RX = Math.min(w / 2 - 0.55, 2.4), RZ = Math.min(d / 2 - 0.45, 1.55), HT = 4.4, cz = -0.12;
+  const RX = Math.min(w / 2 - 0.55, 2.4), RZ = Math.min(d / 2 - 0.45, 1.55), HT = 4.8, cz = -0.12;
   // Radius (as a share of the ellipse) at height share t: a flared foot, sheer sides, a domed crown.
-  const prof = (t: number) => (t < 0.08 ? 1.06 - t * 0.6 : t < 0.7 ? 1.01 - (t - 0.08) * 0.12 : 0.936 * Math.sqrt(Math.max(0, 1 - ((t - 0.7) / 0.3) ** 2)));
+  const prof = (t: number) => (t < 0.06 ? 1.06 - t : t < 0.55 ? 1.0 - (t - 0.06) * 0.1 : 0.951 * Math.sqrt(Math.max(0, 1 - ((t - 0.55) / 0.45) ** 2)));
   const bump = (a: number, t: number) => 1 + 0.035 * Math.sin(a * 5 + t * 4) + 0.025 * Math.sin(a * 9 - t * 7 + 1) + 0.02 * Math.sin(a * 2 + 0.7);
   const surf = (a: number, t: number, out = 0): V3 => {
     const r = prof(t) * bump(a, t) + out;
     return [Math.cos(a) * RX * r, t * HT, cz + Math.sin(a) * RZ * r];
   };
   const seg = low ? 20 : 32;
-  const ts = low ? [0, 0.06, 0.2, 0.4, 0.6, 0.72, 0.84, 0.93, 1] : [0, 0.04, 0.1, 0.2, 0.3, 0.42, 0.54, 0.64, 0.72, 0.8, 0.87, 0.93, 0.97, 1];
+  const ts = low ? [0, 0.06, 0.25, 0.45, 0.6, 0.74, 0.86, 0.95, 1] : [0, 0.03, 0.08, 0.18, 0.3, 0.42, 0.52, 0.6, 0.68, 0.76, 0.83, 0.89, 0.94, 0.98, 1];
   for (let j = 0; j < ts.length - 1; j++) {
     for (let i = 0; i < seg; i++) {
       const a0 = (i / seg) * TAU, a1 = ((i + 1) / seg) * TAU, t0 = ts[j], t1 = ts[j + 1];
       const am = (a0 + a1) / 2;
-      const key = t0 > 0.8 ? (i % 3 ? '#a89e8f' : '#9d9384') : (i * 7 + j * 3) % 5 === 0 ? '#8c8273' : (i + j) % 2 ? '#988d7d' : '#a09585';
-      const out: V3 = [Math.cos(am), t0 > 0.7 ? 0.8 : 0.1, Math.sin(am)];
+      const key = t0 > 0.7 ? (i % 3 ? '#a89e8f' : '#9d9384') : (i * 7 + j * 3) % 5 === 0 ? '#8c8273' : (i + j) % 2 ? '#988d7d' : '#a09585';
+      const out: V3 = [Math.cos(am), t0 > 0.55 ? 0.8 : 0.1, Math.sin(am)];
       if (t1 === 1) kit.tri(key, surf(a0, t0), surf(a1, t0), surf(am, 1), out);
       else kit.quad(key, surf(a0, t0), surf(a1, t0), surf(a1, t1), surf(a0, t1), out);
     }
@@ -581,19 +581,19 @@ function zumaRock(w: number, d: number, low: boolean): Built {
   for (let k = 0; k < streaks; k++) {
     const a = (k / streaks) * TAU + rand() * 0.2;
     const wid = 0.04 + rand() * 0.05;
-    const top = 0.7 + rand() * 0.15, bot = 0.12 + rand() * 0.3;
-    patch(k % 3 ? '#5a534b' : '#4a443e', a - wid, a + wid, bot, top, low ? 2 : 3);
+    const top = 0.6 + rand() * 0.18, bot = 0.1 + rand() * 0.25;
+    patch(k % 3 ? '#5d564d' : '#534c45', a - wid, a + wid, bot, top, low ? 2 : 3);
   }
   // The face, on the south side: eyes, the long nose between them, and a wide mouth.
   const s = Math.PI / 2;
-  patch('#3f3a35', s - 0.36, s - 0.2, 0.6, 0.72);
-  patch('#3f3a35', s + 0.17, s + 0.33, 0.61, 0.74);
-  patch('#4a443e', s - 0.05, s + 0.05, 0.4, 0.62);
-  patch('#3f3a35', s - 0.26, s + 0.26, 0.24, 0.31, low ? 3 : 4);
-  patch('#5a534b', s - 0.42, s - 0.36, 0.42, 0.66, 2);
+  patch('#423d37', s - 0.36, s - 0.2, 0.52, 0.63);
+  patch('#423d37', s + 0.17, s + 0.33, 0.53, 0.65);
+  patch('#4a443e', s - 0.05, s + 0.05, 0.34, 0.54);
+  patch('#423d37', s - 0.26, s + 0.26, 0.2, 0.27, low ? 3 : 4);
+  patch('#5d564d', s - 0.42, s - 0.36, 0.36, 0.58, 2);
   // Scrub on the crown and at the foot.
   for (let k = 0; k < (low ? 5 : 11); k++) {
-    const a = rand() * TAU, t = 0.84 + rand() * 0.1;
+    const a = rand() * TAU, t = 0.78 + rand() * 0.14;
     const p = surf(a, t, 0.01);
     kit.shape(k % 2 ? '#6b7f45' : '#5a6f3a', ICO, p, [0.16, 0.06, 0.16], [0, rand() * 3, 0]);
   }
@@ -677,7 +677,7 @@ function cityGate(w: number, d: number, low: boolean): Built {
   // Guard posts and lamps on the verge.
   if (!low) {
     for (const s of [-1, 1]) {
-      const x = s * (w / 2 - 0.2), z = s * (pz - PZ / 2 - 0.25);
+      const x = s * (w / 2 - 0.2), z = s * (pz - 0.3);
       kit.box(WHITE, [x, 0.13, z], [0.2, 0.26, 0.2]);
       kit.box(GREEN, [x, 0.28, z], [0.26, 0.03, 0.26]);
       panel(kit, glassKey(rand), wallsOf(x, z, 0.2, 0.2).front, -0.06, 0.06, 0.12, 0.21);
@@ -831,10 +831,10 @@ function cbn(w: number, d: number, low: boolean): Built {
   panel(kit, DOOR, pod.front, -0.18, 0.18, 0.04, 0.3, 0.04);
   kit.box(STONE, [0, 0.33, pz + PD / 2 + 0.16], [0.7, 0.03, 0.3]);
   // The tower: an octagon in plan, stone piers between strips of dark glass.
-  const TW = Math.min(1.7, PW - 0.6), TD = Math.min(1.35, PD - 0.35), TH = 4.4, ch = 0.22;
+  const TW = Math.min(1.7, PW - 0.6), TD = Math.min(1.35, PD - 0.35), TH = 4.0, ch = 0.22;
   const tz = pz - 0.05;
   const oct: [number, number][] = [[-TW / 2 + ch, TD / 2], [TW / 2 - ch, TD / 2], [TW / 2, TD / 2 - ch], [TW / 2, -TD / 2 + ch], [TW / 2 - ch, -TD / 2], [-TW / 2 + ch, -TD / 2], [-TW / 2, -TD / 2 + ch], [-TW / 2, TD / 2 - ch]];
-  const floors = low ? 9 : 14;
+  const floors = low ? 8 : 13;
   const fh = (TH - PH) / floors;
   for (let k = 0; k < 8; k++) {
     const [ax, az] = oct[k], [bx, bz] = oct[(k + 1) % 8];
@@ -969,19 +969,19 @@ function wtc(w: number, d: number, low: boolean): Built {
   kit.box(LINE, [0, PH - 0.02, pz + PD / 2 + 0.12], [PW * 0.6, 0.03, 0.25]);
   const BODY = '#2c5878';
   // The tall tower, back left.
-  const AW = Math.min(1.15, PW * 0.48), AD = Math.min(1.15, PD * 0.48), ax = -PW / 2 + AW / 2 + 0.1, az = pz - PD / 2 + AD / 2 + 0.1, AH = 5.4;
+  const AW = Math.min(1.15, PW * 0.48), AD = Math.min(1.15, PD * 0.48), ax = -PW / 2 + AW / 2 + 0.1, az = pz - PD / 2 + AD / 2 + 0.1, AH = 4.8;
   tower(kit, rand, ax, az, AW, AD, PH, AH - PH, { body: BODY, band: '#e2e8f0', floor: 0.26, bay: 0.16, low, pier: 0.1 });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) kit.box('#e2e8f0', [ax + sx * (AW / 2 - 0.015), (PH + AH) / 2, az + sz * (AD / 2 - 0.015)], [0.05, AH - PH, 0.05]);
   // Its crown: a wedge of glass rising from the front edge to the back, framed in white, the spire above.
   const c = (sx: number, sz: number, y: number): V3 => [ax + sx * AW / 2, y, az + sz * AD / 2];
-  const CR = 0.8;
+  const CR = 0.6;
   kit.quad(BODY, c(-1, 1, AH), c(1, 1, AH), c(1, -1, AH + CR), c(-1, -1, AH + CR), [0, 1, 1]);
   kit.quad(BODY, c(-1, -1, AH), c(1, -1, AH), c(1, -1, AH + CR), c(-1, -1, AH + CR), [0, 0, -1]);
   for (const sx of [-1, 1]) kit.tri(BODY, c(sx, 1, AH), c(sx, -1, AH), c(sx, -1, AH + CR), [sx, 0, 0]);
   for (const sx of [-1, 1]) kit.bar('#e2e8f0', c(sx, 1, AH + 0.02), c(sx, -1, AH + CR + 0.02), 0.04);
   kit.bar('#e2e8f0', c(-1, -1, AH + CR + 0.02), c(1, -1, AH + CR + 0.02), 0.04);
-  kit.bar(STEEL, [ax, AH + CR, az - AD / 2 + 0.08], [ax, AH + CR + 0.9, az - AD / 2 + 0.08], 0.03);
-  kit.box('lampBeacon', [ax, AH + CR + 0.92, az - AD / 2 + 0.08], [0.04, 0.04, 0.04]);
+  kit.bar(STEEL, [ax, AH + CR, az - AD / 2 + 0.08], [ax, AH + CR + 0.7, az - AD / 2 + 0.08], 0.03);
+  kit.box('lampBeacon', [ax, AH + CR + 0.72, az - AD / 2 + 0.08], [0.04, 0.04, 0.04]);
   // The shorter tower, front right.
   const BW = Math.min(0.95, PW * 0.42), BD = Math.min(0.95, PD * 0.4), bx = PW / 2 - BW / 2 - 0.08, bz = pz + PD / 2 - BD / 2 - 0.1, BH = 3.5;
   tower(kit, rand, bx, bz, BW, BD, PH, BH - PH, { body: '#3b6f94', band: '#e2e8f0', floor: 0.26, bay: 0.16, low, pier: 0.1 });
@@ -1025,13 +1025,17 @@ function ecowas(w: number, d: number, low: boolean): Built {
   const glow = new Glow();
   const rand = rng(Math.round(w * 29 + d * 59));
   kit.box(LAWN, [0, 0.02, 0], [w, 0.04, d]);
-  // The block curves round a centre out in front of it, so it bows back, hugging the plaza.
-  const cz = d / 2 - 0.55, R0 = Math.min(d - 0.95, w * 0.52), R1 = R0 + 0.62;
-  const span = Math.min(1.25, Math.asin(Math.min(0.98, (w / 2 - 0.2) / R1)));
+  // The block curves round a centre at the front edge, so it bows back, hugging a fan-shaped plaza.
+  const cz = d / 2 - 0.25, R1 = d - 0.5, R0 = R1 - 0.62;
+  const span = Math.min(1.1, Math.asin(Math.min(0.98, (w / 2 - 0.2) / R1)));
   const H = 1.7, floors = 5, fh = (H - 0.15) / floors;
   const segs = low ? 10 : 16;
   const at = (a: number, r: number, y: number): V3 => [Math.sin(a) * r, y, cz - Math.cos(a) * r];
-  disc(kit, PAVING, 0, cz, R0 - 0.02, 0.045, 24);
+  for (let i = 0; i < 16; i++) {
+    const a0 = -span + (i / 16) * span * 2, a1 = -span + ((i + 1) / 16) * span * 2;
+    kit.tri(PAVING, [0, 0.045, cz], at(a0, R0 - 0.02, 0.045), at(a1, R0 - 0.02, 0.045), [0, 1, 0]);
+  }
+  kit.flat(PAVING, -0.3, cz, 0.3, d / 2, 0.045);
   for (let i = 0; i < segs; i++) {
     const a0 = -span + (i / segs) * span * 2, a1 = -span + ((i + 1) / segs) * span * 2, am = (a0 + a1) / 2;
     const inN: V3 = [-Math.sin(am), 0, Math.cos(am)], outN: V3 = [Math.sin(am), 0, -Math.cos(am)];
@@ -1061,27 +1065,29 @@ function ecowas(w: number, d: number, low: boolean): Built {
   panel(kit, glassKey(rand), { x: 0, z: ez + 0.13, ax: 'x', n: 1 }, -0.35, 0.35, 0.05, 0.58);
   for (const s of [-1, 1]) column(kit, WHITE, s * 0.4, 0, ez + 0.15, 0.6, 0.03, low);
   // The emblem: a green disc with the yellow ring and the member states' link.
-  disc(kit, '#e5e7eb', 0, cz, 0.38, 0.05, 20);
-  disc(kit, GREEN, 0, cz, 0.3, 0.06, 20);
-  disc(kit, '#facc15', 0, cz, 0.24, 0.065, 20, 0.18);
-  disc(kit, GREEN_DEEP, 0, cz, 0.12, 0.07, 12);
+  const mz = cz - R0 * 0.48;
+  disc(kit, '#e5e7eb', 0, mz, 0.34, 0.05, 20);
+  disc(kit, GREEN, 0, mz, 0.27, 0.06, 20);
+  disc(kit, '#facc15', 0, mz, 0.22, 0.065, 20, 0.16);
+  disc(kit, GREEN_DEEP, 0, mz, 0.1, 0.07, 12);
   // Fifteen flags in an arc round the plaza (eight in low mode).
   const n = low ? 8 : 15;
   for (let i = 0; i < n; i++) {
-    const a = -1.15 + (i / (n - 1)) * 2.3;
-    const p = at(a, R0 - 0.35, 0);
+    const a = -span * 0.86 + (i / (n - 1)) * span * 1.72;
+    const p = at(a, R0 - 0.3, 0);
     flag(kit, p[0], p[2], 0.8, ECOWAS_FLAGS[i % ECOWAS_FLAGS.length], 0.75);
   }
   // Trees behind and round the sides, a couple of diplomatic cars on the drive.
   for (const s of [-1, 1]) {
     tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.9);
     tree(kit, rand, s * (w / 2 - 0.25), d / 2 - 0.3, 0.8);
-    lamp(kit, glow, s * (R0 - 0.1), cz + 0.2, 0.42);
+    const lp = at(s * span * 0.5, R0 * 0.55, 0);
+    lamp(kit, glow, lp[0], lp[2], 0.42);
   }
   if (!low) {
-    car(kit, -0.55, d / 2 - 0.2, Math.PI / 2, '#111827');
-    car(kit, 0.2, d / 2 - 0.2, Math.PI / 2, '#e5e7eb');
-    for (let i = 0; i < 3; i++) person(kit, rand, (rand() - 0.5) * 0.9, cz + 0.45 + rand() * 0.1);
+    car(kit, -0.12, d / 2 - 0.25, Math.PI, '#111827');
+    car(kit, 0.12, cz - 0.1, Math.PI, '#e5e7eb');
+    for (let i = 0; i < 4; i++) person(kit, rand, (rand() - 0.5) * 0.9, mz + 0.4 + rand() * 0.25);
   }
   // Night: the curve floodlit from the plaza.
   for (let i = 0; i < segs; i++) {
@@ -1103,10 +1109,17 @@ function nass(w: number, d: number, low: boolean): Built {
   const rand = rng(Math.round(w * 23 + d * 67));
   kit.box(PAVING, [0, 0.02, 0], [w, 0.04, d]);
   const zc = -d / 2 + 1.35;
-  const B = Math.min(2.3, w * 0.38), BH = 0.95;
+  const B = Math.min(2.5, w * 0.42), BH = 0.95;
   // Lawns at the front corners, the pool up the middle of the forecourt.
   const zf = zc + B / 2;
-  for (const s of [-1, 1]) kit.flat(LAWN, s * 0.5, zf + 0.55, s * (w / 2 - 0.1), d / 2 - 0.1, 0.045);
+  for (const s of [-1, 1]) {
+    kit.flat(LAWN, s * 0.5, zf + 0.55, s * (w / 2 - 0.1), d / 2 - 0.1, 0.045);
+    // Hedged lawns with rows of trees down the pool's sides.
+    kit.box(HEDGE, [s * 0.52, 0.07, (zf + 0.55 + d / 2 - 0.1) / 2], [0.06, 0.08, d / 2 - 0.65 - zf]);
+    const rows = Math.max(1, Math.floor((d / 2 - 0.3 - zf - 0.7) / 0.42));
+    for (let i = 0; i <= rows; i++) tree(kit, rand, s * 0.72, zf + 0.75 + i * 0.42, 0.75);
+    if (!low) for (let i = 0; i <= rows; i++) tree(kit, rand, s * (w / 2 - 0.35), zf + 0.75 + i * 0.42, 0.8);
+  }
   kit.box(KERB, [0, 0.055, (zf + 0.6 + d / 2 - 0.15) / 2], [0.6, 0.05, d / 2 - 0.15 - zf - 0.6]);
   kit.flat(WATER, -0.26, zf + 0.62, 0.26, d / 2 - 0.17, 0.085);
   for (let i = 0; i < (low ? 2 : 4); i++) kit.post(LINE, [0, 0.08, zf + 0.75 + i * ((d / 2 - zf - 1) / 3)], 0.02, 0.1, 5, 0.3);
@@ -1120,9 +1133,9 @@ function nass(w: number, d: number, low: boolean): Built {
     const wl = wallsOf(x, zc, WW, WD);
     windows(kit, rand, wl.front, WW - 0.1, { y0: 0.06, rows: 2, fh: 0.3, cols: Math.round(WW / (low ? 0.3 : 0.2)), pw: 0.1, ph: 0.2, sill: low ? undefined : TRIM });
     windows(kit, rand, s > 0 ? wl.right : wl.left, WD - 0.2, { y0: 0.06, rows: 2, fh: 0.3, cols: Math.round(WD / (low ? 0.36 : 0.24)), pw: 0.1, ph: 0.2 });
-    // The chambers' skylights.
-    kit.box(s > 0 ? '#166534' : '#991b1b', [x, WH + 0.1, zc], [WW * 0.5, 0.06, WD * 0.4]);
-    tree(kit, rand, x, d / 2 - 0.3, 0.8);
+    // The chambers' roof lights over the Senate's red and the House's green.
+    kit.box('#cbd5e1', [x, WH + 0.09, zc], [WW * 0.56, 0.04, WD * 0.46]);
+    kit.box(s > 0 ? '#14532d' : '#7f1d1d', [x, WH + 0.115, zc], [WW * 0.46, 0.02, WD * 0.36]);
     if (!low) tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.8);
   }
   // The base: white, a pointed-arch arcade on every side.
@@ -1296,7 +1309,6 @@ function nationalMosque(w: number, d: number, low: boolean): Built {
     kit.post(TRIM, [x, MH * 0.96 + 0.2, z], 0.11, 0.05, 8);
     kit.shape(GOLD, unitCyl(8, 0), [x, MH + 0.2 + 0.25, z], [0.1, 0.5, 0.1]);
     kit.post(GOLD, [x, MH + 0.7, z], 0.012, 0.18, 4);
-    glowDisc(glow, x, MH * 0.78 + 0.13, z, 0.5, scale(WARM, 0.18));
   }
   // Palms along the front and round the hall, worshippers in the courtyard.
   for (const s of [-1, 1]) {
