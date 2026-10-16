@@ -36,7 +36,11 @@ function rayAt(clientX: number, clientY: number): Ray | null {
   return toHouseRay(caster.ray.origin, caster.ray.direction);
 }
 
-/** Keeps the camera, canvas and orbit controls at hand for drags. Renders nothing and does nothing per frame. */
+/**
+ * Keeps the camera, canvas and orbit controls at hand for drags, and while something is being placed, points it with
+ * the mouse and puts it down on a click (or moves the preview on a tap). Listens to the canvas itself: the floor's
+ * click plane can't see a wall or a table top. Nothing is attached, and nothing runs, while you are not placing.
+ */
 export function DecorRig() {
   const camera = useThree((s) => s.camera);
   const el = useThree((s) => s.gl.domElement);
@@ -46,6 +50,50 @@ export function DecorRig() {
     rig.el = el;
     rig.controls = controls;
   }, [camera, el, controls]);
+  useEffect(() => {
+    let down: { x: number; y: number; id: number } | null = null;
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || press) return;
+      const r = rayAt(e.clientX, e.clientY);
+      if (r) aimAt(r);
+    };
+    const onDown = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    };
+    const onUp = (e: PointerEvent) => {
+      const d = down;
+      down = null;
+      if (!d || d.id !== e.pointerId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
+      const s = useGame.getState();
+      if (!s.placing || useDecor.getState().dragging || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const r = rayAt(e.clientX, e.clientY);
+      if (!r) return;
+      aimAt(r);
+      // A click puts it down; on a phone a tap only moves the preview, and the bar's ✓ confirms (so you can turn it first).
+      const pose = useDecor.getState().pose;
+      if (e.pointerType === 'mouse' && pose) s.placeAt({ x: pose.x, z: pose.z });
+    };
+    let on = false;
+    const sync = () => {
+      const want = !!useGame.getState().placing && !useVisit.getState().current;
+      if (want === on) return;
+      on = want;
+      const f = want ? el.addEventListener.bind(el) : el.removeEventListener.bind(el);
+      f('pointermove', onMove as EventListener);
+      f('pointerdown', onDown as EventListener);
+      f('pointerup', onUp as EventListener);
+    };
+    sync();
+    const unsub = useGame.subscribe(sync);
+    return () => {
+      unsub();
+      if (on) {
+        el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerdown', onDown);
+        el.removeEventListener('pointerup', onUp);
+      }
+    };
+  }, [el]);
   return null;
 }
 

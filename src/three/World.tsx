@@ -353,8 +353,6 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
   );
 }
 
-const coarsePointer = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
-
 export function World({ readOnly = false, items = [], origin, design, walls, paint, finish: visitFinish, visitCars }: { readOnly?: boolean; items?: PlacedItem[]; origin?: string; design?: string | null; walls?: string[]; paint?: HousePaint; finish?: HouseFinish; visitCars?: string[] }) {
   const ownedCars = useGame((s) => readOnly ? null : s.ownedCars);
   const parked = parkedCars(visitCars ?? ownedCars ?? []);
