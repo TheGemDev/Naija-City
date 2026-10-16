@@ -13,6 +13,8 @@ import { encodeLook, randomAppearance } from '../game/wardrobe';
 import { Person, seatDrop, type Clip } from './Person';
 import { Cap, Engine, Fin, Gear, Lamp, ringsBetween, Skin, smoothRings, Wing, type Ring } from './planeKit';
 import { FlightTerrain, type FlightMotion } from './FlightTerrain';
+import { Baked, KitMeshes } from './cabinKit';
+import { airlinerFittings, jetFittings } from './cabinFittings';
 
 type Kind = 'ticket' | 'jet';
 
@@ -230,10 +232,13 @@ function FlightDeck({ L, rings, axis, deck, seats, carpet }: { L: number; rings:
         <shapeGeometry args={[floor]} />
         <meshStandardMaterial color={carpet} />
       </mesh>
+      {/* The pilots never leave their seats: baked (cabinKit) at the controls, a few draw calls for the pair. */}
+      <Baked>
+        {[-1, 1].map((side) => <Seated key={side} x={side * spread} z={front + seats} look={side > 0 ? CAPTAIN : FIRST_OFFICER} clip="type" />)}
+      </Baked>
       {[-1, 1].map((side) => (
         <group key={side}>
           <Seat x={side * spread} z={front + seats} colour="#1f2937" />
-          <Seated x={side * spread} z={front + seats} look={side > 0 ? CAPTAIN : FIRST_OFFICER} clip="type" />
           {/* Control column */}
           <mesh position={[side * spread, 0.62, front + seats + 0.5]} rotation-x={0.5}>
             <boxGeometry args={[0.3, 0.05, 0.05]} />
@@ -350,9 +355,6 @@ const GROUND: Record<Kind, number> = { ticket: -3.0, jet: -2.25 };
 function Hull() {
   const L = CABIN_LENGTH.ticket;
   const R = AIR_R;
-  const windows = useMemo(() => Array.from({ length: Math.floor(L / 1.2) }, (_, i) => -L / 2 + 0.9 + i * 1.2), [L]);
-  const tilt = Math.asin((1.25 - AIR_AXIS) / (R - 0.06));
-  const half = Math.sqrt(R * R - AIR_AXIS * AIR_AXIS);
   const finAt = (y: number): [number, number] => [lerp(-L / 2 - 2.2, -L / 2 - 5.2, (y - 3.3) / 3.3), lerp(-L / 2 - 6.3, -L / 2 - 6.7, (y - 2.8) / 3.8)];
   return (
     <group>
@@ -361,41 +363,7 @@ function Hull() {
         <Partition z={L / 2} r={R - 0.03} axis={AIR_AXIS} cut={AIR_CUT} door={0.5} colour="#e2e8f0" trim="#94a3b8" />
       </group>
       <FlightDeck L={L} rings={AIR_RINGS} axis={AIR_AXIS} deck={3.0} seats={1.25} carpet="#1e293b" />
-      <mesh position={[0, -0.06, 0]} receiveShadow>
-        <boxGeometry args={[half * 2 - 0.04, 0.12, L]} />
-        <meshStandardMaterial color="#334155" />
-      </mesh>
-      {/* Aisle carpet */}
-      <mesh position={[0, 0.005, 0]} rotation-x={-Math.PI / 2}>
-        <planeGeometry args={[0.8, L - 0.4]} />
-        <meshStandardMaterial color="#1d4ed8" />
-      </mesh>
-      {/* Windows set into the curve of the far wall, and the lockers over them */}
-      {windows.map((z) => (
-        <group key={z} position={[-(R - 0.06) * Math.cos(tilt), AIR_AXIS + (R - 0.06) * Math.sin(tilt), z]} rotation-z={-tilt}>
-          <mesh rotation-y={Math.PI / 2}>
-            <planeGeometry args={[0.44, 0.5]} />
-            <meshStandardMaterial color="#bae6fd" emissive="#7dd3fc" emissiveIntensity={0.7} />
-          </mesh>
-        </group>
-      ))}
-      <mesh position={[-1.98, 2.02, 0]} rotation-z={0.5}>
-        <boxGeometry args={[0.62, 0.36, L - 0.3]} />
-        <meshStandardMaterial color="#e2e8f0" />
-      </mesh>
-      {windows.map((z) => (
-        <mesh key={z} position={[-1.8, 1.9, z + 0.6]} rotation-z={0.5}>
-          <boxGeometry args={[0.02, 0.3, 0.03]} />
-          <meshStandardMaterial color="#94a3b8" />
-        </mesh>
-      ))}
-      {/* Back wall: the two toilets */}
-      {[-1.25, 1.25].map((x) => (
-        <mesh key={x} position={[x, 0.85, -L / 2 + 0.02]}>
-          <planeGeometry args={[0.8, 1.7]} />
-          <meshStandardMaterial color="#cbd5e1" />
-        </mesh>
-      ))}
+      {/* The floor, the windows, the bins and everything else inside are the Airliner's fittings. */}
       {/* Wings, swept back, with an engine slung under each and a green winglet */}
       <mesh position={[0, -1.0, 0.2]} scale={[2.7, 0.85, 4.4]}>
         <sphereGeometry args={[1, 24, 14]} />
@@ -467,10 +435,19 @@ function Airliner({ myLook }: { myLook: string }) {
       .map((s) => ({ ...s, look: encodeLook(randomAppearance()), clip: clips[Math.floor(Math.random() * clips.length)] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [low]);
+  const fittings = useMemo(() => airlinerFittings({
+    L, R: AIR_R, axis: AIR_AXIS, rows, cols, business: 2, seatY: SEAT_Y,
+    windows: Array.from({ length: Math.floor(L / 1.2) }, (_, i) => -L / 2 + 0.9 + i * 1.2),
+    tilt: Math.asin((1.25 - AIR_AXIS) / (AIR_R - 0.06)), windowR: AIR_R - 0.06,
+  }, low), [L, rows, low]);
   return (
     <>
-      {rows.map((z, r) => cols.map((x, c) => <Seat key={`${r}:${c}`} x={x} z={z} colour={r < 2 ? '#1e3a8a' : '#15803d'} />))}
-      {others.map((o) => <Seated key={`${o.r}:${o.c}`} x={o.x} z={o.z} look={o.look} clip={o.clip} />)}
+      <KitMeshes kit={fittings} />
+      {/* Everyone else stays put the whole flight: baked into a few meshes (cabinKit), not a few dozen each. Their
+          shadows are left out: hidden under them and the seats, and a full plane of them was a lot to draw twice. */}
+      <Baked key={others.length} shadows={false}>
+        {others.map((o) => <Seated key={`${o.r}:${o.c}`} x={o.x} z={o.z} look={o.look} clip={o.clip} />)}
+      </Baked>
       <Seated x={FLIGHT_SEAT.ticket.x} z={FLIGHT_SEAT.ticket.z} look={myLook} me />
       <Attendant length={L} />
     </>
@@ -486,16 +463,6 @@ const STATE_GREEN = '#15803d';
 const WALNUT = '#5b3a1e';
 const LEATHER = '#ead9b8';
 const LEATHER_DARK = '#cdb588';
-
-/** One box of the jet's fittings. */
-function Block({ at, size, colour, rot, gold }: { at: V3; size: V3; colour?: string; rot?: V3; gold?: boolean }) {
-  return (
-    <mesh position={at} rotation={rot ?? [0, 0, 0]} castShadow>
-      <boxGeometry args={size} />
-      {gold ? <meshStandardMaterial color={GOLD} metalness={0.6} roughness={0.3} /> : <meshStandardMaterial color={colour} />}
-    </mesh>
-  );
-}
 
 const JET_CUT: Cut = [-2.4, 1.46];
 const JET_FLOOR_EDGE = -Math.acos(JET_AXIS / JET_R);
@@ -513,7 +480,6 @@ const WINDOW_R = JET_R - 0.06;
 /** The jet with its roof off: a long pointed nose over the flight deck, a navy belly under a gold line, low swept wings with winglets, engines on the tail and a T-tail. */
 function JetHull({ official }: { official?: boolean }) {
   const L = CABIN_LENGTH.jet;
-  const windows = useMemo(() => Array.from({ length: Math.floor((L - 1) / 1.25) }, (_, i) => -L / 2 + 0.9 + i * 1.25), [L]);
   const dark = official ? STATE_GREEN : NAVY;
   const line = official ? '#e2e8f0' : GOLD;
   const paint = useMemo(() => [{ arc: [-1.12, 1.12] as Cut, colour: dark }, { arc: [1.17, 1.23] as Cut, colour: line }], [dark, line]);
@@ -525,31 +491,7 @@ function JetHull({ official }: { official?: boolean }) {
         <Partition z={L / 2} r={JET_R - 0.03} axis={JET_AXIS} cut={JET_CUT} door={0.45} colour="#f3e9d6" trim={WALNUT} />
       </group>
       <FlightDeck L={L} rings={JET_RINGS} axis={JET_AXIS} deck={2.7} seats={1.0} carpet="#3f2a1d" />
-      <mesh position={[0, -0.04, 0]} receiveShadow>
-        <boxGeometry args={[3.38, 0.08, L]} />
-        <meshStandardMaterial color="#6b4a2f" />
-      </mesh>
-      <mesh position={[0, 0.004, 0]} rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[3.0, L - 0.3]} />
-        <meshStandardMaterial color="#efe2c6" />
-      </mesh>
-      <mesh position={[0, 0.008, 0]} rotation-x={-Math.PI / 2}>
-        <planeGeometry args={[0.8, L - 0.8]} />
-        <meshStandardMaterial color="#d9c49a" />
-      </mesh>
-      {/* Tall oval windows, set into the curve of the wall */}
-      {windows.map((z) => (
-        <group key={z} position={[-WINDOW_R * Math.cos(WINDOW_TILT), JET_AXIS + WINDOW_R * Math.sin(WINDOW_TILT), z]} rotation-z={-WINDOW_TILT}>
-          <mesh rotation-y={Math.PI / 2} scale={[1, 1.3, 1]}>
-            <circleGeometry args={[0.2, 20]} />
-            <meshStandardMaterial color="#bae6fd" emissive="#7dd3fc" emissiveIntensity={0.8} />
-          </mesh>
-          <mesh rotation-y={Math.PI / 2} scale={[1, 1.3, 1]}>
-            <ringGeometry args={[0.2, 0.26, 20]} />
-            <meshStandardMaterial color="#e2d3b1" />
-          </mesh>
-        </group>
-      ))}
+      {/* The floor and the windows are the jet's fittings (PrivateJet). */}
       {/* The door to the tail, in the rear bulkhead */}
       <mesh position={[0.9, 0.8, tail + 0.01]}>
         <planeGeometry args={[0.7, 1.6]} />
@@ -600,118 +542,22 @@ function JetHull({ official }: { official?: boolean }) {
   );
 }
 
-/** A leather club seat: plinth, deep cushion, a reclined back with a headrest, and padded arms. */
-function Recliner({ x, z, aft }: { x: number; z: number; aft?: boolean }) {
-  return (
-    <group position={[x, 0, z]} rotation-y={aft ? Math.PI : 0}>
-      <Block at={[0, 0.1, 0]} size={[0.66, 0.2, 0.6]} colour="#3f2a1d" />
-      <Block at={[0, 0.325, 0.02]} size={[0.9, 0.25, 0.78]} colour={LEATHER} />
-      <Block at={[0, 0.88, -0.36]} size={[0.9, 0.95, 0.16]} rot={[-0.12, 0, 0]} colour={LEATHER} />
-      <Block at={[0, 1.4, -0.4]} size={[0.56, 0.22, 0.18]} rot={[-0.12, 0, 0]} colour={LEATHER_DARK} />
-      {[-1, 1].map((side) => <Block key={side} at={[side * 0.5, 0.56, 0.02]} size={[0.14, 0.24, 0.78]} colour={LEATHER_DARK} />)}
-    </group>
-  );
-}
-
 /**
- * Your own jet, nose to tail: four club seats round walnut tables, a lounge with a divan, a bar and a television,
- * and a bedroom at the back. Only you on board.
+ * Your own jet, nose to tail: four leather club seats round walnut tables, a lounge with a divan, a bar and a television,
+ * and a bedroom at the back, in walnut, cream leather and soft light (three/cabinFittings.ts). Only you on board.
  */
 function PrivateJet({ myLook }: { myLook: string }) {
-  const bottles = ['#14532d', '#7c2d12', '#1e3a8a', '#a16207'];
+  const low = useLowPerf();
+  const L = CABIN_LENGTH.jet;
+  const fittings = useMemo(() => jetFittings({
+    L, R: JET_R, axis: JET_AXIS,
+    windows: Array.from({ length: Math.floor((L - 1) / 1.25) }, (_, i) => -L / 2 + 0.9 + i * 1.25),
+    tilt: WINDOW_TILT, windowR: WINDOW_R,
+    colours: { navy: NAVY, gold: GOLD, walnut: WALNUT, leather: LEATHER, leatherDark: LEATHER_DARK },
+  }, low), [L, low]);
   return (
     <>
-      {/* Club four: two seats facing two, a table between each pair */}
-      {[-1.0, 1.0].map((x) => (
-        <group key={x}>
-          <Recliner x={x} z={3.6} aft />
-          <Recliner x={x} z={1.9} />
-          <Block at={[x * 1.12, 0.62, 2.75]} size={[0.86, 0.06, 0.62]} colour={WALNUT} />
-          <Block at={[x * 1.12, 0.585, 2.75]} size={[0.9, 0.02, 0.66]} gold />
-          <Block at={[x * 1.45, 0.3, 2.75]} size={[0.1, 0.6, 0.3]} colour="#3f2a1d" />
-        </group>
-      ))}
-      {/* Your table: champagne on ice, a glass and a plate of jollof */}
-      <mesh position={[0.88, 0.75, 2.92]} castShadow>
-        <cylinderGeometry args={[0.1, 0.08, 0.2, 14]} />
-        <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.2} />
-      </mesh>
-      <mesh position={[0.88, 0.9, 2.92]} rotation-z={0.2}>
-        <cylinderGeometry args={[0.025, 0.045, 0.3, 10]} />
-        <meshStandardMaterial color="#14532d" />
-      </mesh>
-      <mesh position={[1.3, 0.74, 2.9]}>
-        <cylinderGeometry args={[0.045, 0.03, 0.18, 10]} />
-        <meshStandardMaterial color="#fde68a" transparent opacity={0.8} />
-      </mesh>
-      <mesh position={[1.1, 0.66, 2.6]}>
-        <cylinderGeometry args={[0.16, 0.14, 0.02, 18]} />
-        <meshStandardMaterial color="#ffffff" />
-      </mesh>
-      <mesh position={[1.1, 0.69, 2.6]} scale={[1, 0.45, 1]}>
-        <sphereGeometry args={[0.1, 12, 8]} />
-        <meshStandardMaterial color="#ea580c" />
-      </mesh>
-      {/* Galley by the door */}
-      <Block at={[-1.28, 0.45, 4.85]} size={[0.6, 0.9, 0.9]} colour={WALNUT} />
-      <Block at={[-1.28, 0.92, 4.85]} size={[0.64, 0.04, 0.94]} gold />
-
-      {/* Lounge: a divan with cushions along the far wall, a coffee table, and the bar opposite */}
-      <Block at={[-1.2, 0.225, -0.6]} size={[0.9, 0.45, 2.6]} colour={LEATHER} />
-      <Block at={[-1.55, 0.72, -0.6]} size={[0.2, 0.6, 2.6]} colour={LEATHER} />
-      {[0.72, -1.92].map((z) => <Block key={z} at={[-1.2, 0.5, z]} size={[0.9, 0.3, 0.16]} colour={LEATHER_DARK} />)}
-      {[[0.25, NAVY], [-0.6, GOLD], [-1.45, NAVY]].map(([z, colour]) => (
-        <Block key={z} at={[-1.36, 0.66, z as number]} size={[0.16, 0.4, 0.42]} rot={[0, 0, 0.25]} colour={colour as string} />
-      ))}
-      <mesh position={[-0.25, 0.2, -0.6]} castShadow>
-        <cylinderGeometry args={[0.08, 0.2, 0.4, 16]} />
-        <meshStandardMaterial color={GOLD} metalness={0.6} roughness={0.3} />
-      </mesh>
-      <mesh position={[-0.25, 0.42, -0.6]}>
-        <cylinderGeometry args={[0.36, 0.36, 0.04, 24]} />
-        <meshStandardMaterial color={WALNUT} />
-      </mesh>
-      <Block at={[1.25, 0.475, -0.6]} size={[0.7, 0.95, 1.9]} colour={WALNUT} />
-      <Block at={[1.25, 0.97, -0.6]} size={[0.76, 0.05, 1.96]} gold />
-      {bottles.map((colour, i) => (
-        <group key={colour} position={[1.3, 1.0, -0.05 - i * 0.3]}>
-          <mesh position={[0, 0.12, 0]}>
-            <cylinderGeometry args={[0.055, 0.055, 0.24, 10]} />
-            <meshStandardMaterial color={colour} />
-          </mesh>
-          <mesh position={[0, 0.3, 0]}>
-            <cylinderGeometry args={[0.02, 0.04, 0.14, 8]} />
-            <meshStandardMaterial color={colour} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* The wall before the bedroom, with the television on it */}
-      <Block at={[-1.1, 0.95, -2.4]} size={[1.2, 1.9, 0.1]} colour="#f3e9d6" />
-      <Block at={[1.15, 0.25, -2.4]} size={[1.1, 0.5, 0.1]} colour="#f3e9d6" />
-      <Block at={[-1.05, 1.2, -2.34]} size={[1.0, 0.6, 0.04]} colour="#0f172a" />
-      <mesh position={[-1.05, 1.2, -2.315]}>
-        <planeGeometry args={[0.9, 0.5]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#0ea5e9" emissiveIntensity={0.9} />
-      </mesh>
-
-      {/* Bedroom: a real bed, made up, and a lamp on the nightstand */}
-      <Block at={[-0.7, 0.175, -4.2]} size={[1.9, 0.35, 2.3]} colour={WALNUT} />
-      <Block at={[-0.7, 0.45, -4.2]} size={[1.8, 0.2, 2.2]} colour="#ffffff" />
-      <Block at={[-0.7, 0.57, -3.85]} size={[1.84, 0.08, 1.5]} colour={NAVY} />
-      <Block at={[-0.7, 0.62, -4.56]} size={[1.84, 0.03, 0.12]} gold />
-      {[-1.12, -0.28].map((x) => <Block key={x} at={[x, 0.62, -5.0]} size={[0.7, 0.14, 0.4]} colour="#ffffff" />)}
-      <Block at={[-0.7, 0.65, -5.38]} size={[1.9, 1.0, 0.1]} colour={LEATHER_DARK} />
-      <Block at={[1.2, 0.25, -5.05]} size={[0.5, 0.5, 0.5]} colour={WALNUT} />
-      <mesh position={[1.2, 0.62, -5.05]}>
-        <cylinderGeometry args={[0.03, 0.08, 0.24, 10]} />
-        <meshStandardMaterial color={GOLD} metalness={0.6} roughness={0.3} />
-      </mesh>
-      <mesh position={[1.2, 0.84, -5.05]}>
-        <cylinderGeometry args={[0.1, 0.16, 0.22, 14]} />
-        <meshStandardMaterial color="#fff7e0" emissive="#fde68a" emissiveIntensity={0.9} />
-      </mesh>
-
+      <KitMeshes kit={fittings} />
       <Seated x={FLIGHT_SEAT.jet.x} z={FLIGHT_SEAT.jet.z} look={myLook} me />
     </>
   );

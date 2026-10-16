@@ -1089,7 +1089,7 @@ function MapEffects() {
     windowsLit.value = litShare(h) * (gridOn() ? 1 : 0.4);
     lampMat.emissiveIntensity = night * 2.5;
     // Wet tarmac throws more of the lamplight back.
-    poolMat.opacity = night * (0.5 + 0.35 * sky.wet);
+    poolMat.opacity = night * (0.42 + 0.35 * sky.wet);
     roadMat.color.copy(ROAD).lerp(ROAD_WET, sky.wet * 0.85);
     roadMat.roughness = 1 - sky.wet * 0.6;
     const isFar = camera.position.y > 48;

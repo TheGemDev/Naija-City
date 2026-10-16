@@ -5,7 +5,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import {
-  AdditiveBlending, BufferGeometry, CanvasTexture, Color, CustomBlending, Float32BufferAttribute, MathUtils, Object3D, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor,
+  AdditiveBlending, BufferGeometry, CanvasTexture, Color, CustomBlending, Float32BufferAttribute, MathUtils, Object3D, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor, ZeroFactor,
   Vector2, Vector3,
   type InstancedMesh, type LineSegments, type Mesh, type MeshBasicMaterial, type PerspectiveCamera, type Points, type PointsMaterial,
 } from 'three';
@@ -145,7 +145,8 @@ export function SkyBodies() {
   // island, and nothing else (the sea round it is the sky, three/Billboard.tsx, drawn just before these). They stay
   // in the opaque pass for that, blending by hand.
   const common = { depthTest: false, depthWrite: false, fog: false, toneMapped: false } as const;
-  const over = { ...common, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor } as const;
+  // The canvas's own alpha is left alone (it is composited over the page): only the colour blends.
+  const over = { ...common, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor } as const;
   return (
     <group>
       {!low && (

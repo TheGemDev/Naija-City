@@ -46,7 +46,7 @@ const SHADE_FRAG = /* glsl */ `
 `;
 
 /** Tiles past the walls the shade reaches. */
-const FADE = 0.55;
+const FADE = 0.7;
 const box = new Box3();
 
 /** Ground-standing blocks big enough to be a building (not a fence, post, tree trunk or flat paving). */
@@ -71,7 +71,7 @@ function footprints(root: Group) {
  * sun's shadows miss (and low mode, which has no shadows, never had). Footprints are read off the buildings' own
  * blocks once, so new models get it for free. Mount it after the buildings, keyed the same way.
  */
-export function GroundShade({ source, strength = 0.42 }: { source: RefObject<Group | null>; strength?: number }) {
+export function GroundShade({ source, strength = 0.6 }: { source: RefObject<Group | null>; strength?: number }) {
   const ref = useRef<InstancedMesh>(null!);
   const mat = useMemo(() => new ShaderMaterial({
     vertexShader: SHADE_VERT,
@@ -106,7 +106,8 @@ export function GroundShade({ source, strength = 0.42 }: { source: RefObject<Gro
     mesh.count = n;
     mesh.geometry.setAttribute('aHalf', new InstancedBufferAttribute(half, 2));
     mesh.instanceMatrix.needsUpdate = true;
-  }, [source]);
+    // A new material makes a new mesh, which needs filling again.
+  }, [source, mat]);
 
   return (
     <instancedMesh ref={ref} args={[undefined, mat, 2048]} frustumCulled={false} raycast={() => null} renderOrder={1}>
