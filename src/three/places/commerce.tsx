@@ -419,7 +419,7 @@ function buildMarket(w: number, d: number, low: boolean) {
     }
     return true;
   };
-  crowd(c, low ? 10 : 32, -w / 2 + 0.3, z1 + 0.25, w / 2 - 0.3, front + 0.1, 0.04, aisleFree);
+  crowd(c, low ? 10 : 26, -w / 2 + 0.3, z1 + 0.25, w / 2 - 0.3, front + 0.1, 0.04, aisleFree);
 
   // Along the street: umbrellas over the women's tables, a barrow, a keke and an okada.
   const uz = d / 2 - 0.42;

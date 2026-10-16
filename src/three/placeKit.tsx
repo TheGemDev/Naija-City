@@ -17,6 +17,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useLowPerf } from '../game/quality';
 import { lampMat, windowMat } from './cityModels';
+import { seedAt } from './StaticBatch';
 
 export type V3 = [number, number, number];
 export type RGB = [number, number, number];
@@ -52,8 +53,16 @@ export const frame = (p: V3, r: V3, order: EulerOrder = 'XYZ') => new Matrix4().
 export class Kit {
   private parts = new Map<string, BufferGeometry[]>();
   private raw = new Map<string, number[]>();
+  private rawSeed = new Map<string, number[]>();
 
   private put(key: string, g: BufferGeometry) {
+    // Glass gets a seed per pane, from where the pane is, so windowMat lights some rooms and not others at night
+    // (cityModels.tsx): one seed for the whole merged mesh would light every window of a building at once.
+    if (key.startsWith('glass') && !g.getAttribute('seed')) {
+      g.computeBoundingBox();
+      g.boundingBox!.getCenter(_a);
+      g.setAttribute('seed', new Float32BufferAttribute(new Array(g.attributes.position.count).fill(seedAt(_a.x, _a.y, _a.z)), 1));
+    }
     let list = this.parts.get(key);
     if (!list) this.parts.set(key, (list = []));
     list.push(g);
@@ -91,7 +100,7 @@ export class Kit {
   }
 
   /** One triangle, wound so it faces along `out`. */
-  tri(key: string, a: V3, b: V3, c: V3, out: V3) {
+  tri(key: string, a: V3, b: V3, c: V3, out: V3, seed?: number) {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
@@ -99,11 +108,19 @@ export class Kit {
     let list = this.raw.get(key);
     if (!list) this.raw.set(key, (list = []));
     list.push(...a, ...(flip ? c : b), ...(flip ? b : c));
+    if (key.startsWith('glass')) {
+      let seeds = this.rawSeed.get(key);
+      if (!seeds) this.rawSeed.set(key, (seeds = []));
+      const s = seed ?? seedAt((a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3);
+      seeds.push(s, s, s);
+    }
   }
 
   quad(key: string, a: V3, b: V3, c: V3, d: V3, out: V3) {
-    this.tri(key, a, b, c, out);
-    this.tri(key, a, c, d, out);
+    // Both halves of a pane share one seed, so a window is lit or dark as a whole.
+    const s = key.startsWith('glass') ? seedAt((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2) : undefined;
+    this.tri(key, a, b, c, out, s);
+    this.tri(key, a, c, d, out, s);
   }
 
   /** A flat rectangle on the ground, x0..x1 by z0..z1, at height y. */
@@ -115,6 +132,8 @@ export class Kit {
     for (const [key, pos] of this.raw) {
       const g = new BufferGeometry();
       g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      const seeds = this.rawSeed.get(key);
+      if (seeds) g.setAttribute('seed', new Float32BufferAttribute(seeds, 1));
       g.computeVertexNormals();
       this.put(key, g);
     }

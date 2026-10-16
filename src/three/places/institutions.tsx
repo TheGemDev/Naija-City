@@ -16,6 +16,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { IcosahedronGeometry, Matrix4, SphereGeometry, Vector3, type BufferGeometry, type Group } from 'three';
 import { clamp, frame, Glow, Kit, KitModel, prep, rng, scale, unitCyl, type Built, type RGB, type V3 } from '../placeKit';
+import { seedAt } from '../StaticBatch';
 
 /* ---------- Colours shared across the group ---------- */
 
@@ -80,8 +81,8 @@ function nd(f: Matrix4 | undefined, n: V3): V3 {
 function quad(k: Kit, key: string, a: V3, b: V3, c: V3, d: V3, out: V3, f?: Matrix4) {
   k.quad(key, pt(f, a), pt(f, b), pt(f, c), pt(f, d), nd(f, out));
 }
-function tri(k: Kit, key: string, a: V3, b: V3, c: V3, out: V3, f?: Matrix4) {
-  k.tri(key, pt(f, a), pt(f, b), pt(f, c), nd(f, out));
+function tri(k: Kit, key: string, a: V3, b: V3, c: V3, out: V3, f?: Matrix4, seed?: number) {
+  k.tri(key, pt(f, a), pt(f, b), pt(f, c), nd(f, out), seed);
 }
 /** A box standing on y0 (its foot), centred on x and z. */
 function bx(k: Kit, key: string, x: number, y0: number, z: number, sx: number, sy: number, sz: number, f?: Matrix4) {
@@ -104,6 +105,15 @@ function fl(k: Kit, key: string, x0: number, z0: number, x1: number, z1: number,
 
 function glowZ(g: Glow, x0: number, y0: number, x1: number, y1: number, z: number, c: RGB, f?: Matrix4, cTop: RGB = c) {
   g.quad(pt(f, [x0, y0, z]), pt(f, [x1, y0, z]), pt(f, [x1, y1, z]), pt(f, [x0, y1, z]), c, c, cTop, cTop);
+}
+/** A point of light (a lamp seen from afar): a small glowing cross, readable from above and from the side. */
+function spark(g: Glow, x: number, y: number, z: number, s: number, c: RGB) {
+  g.quad([x - s, y, z], [x + s, y, z], [x + s, y, z + 0.001], [x - s, y, z + 0.001], c);
+  for (const [a, b] of [[[x - s, y, z], [x + s, y, z]], [[x, y, z - s], [x, y, z + s]]] as [V3, V3][]) {
+    g.tri(a, b, [x, y + s, (a[2] + b[2]) / 2], [0, 0, 0], [0, 0, 0], c);
+    g.tri(a, b, [x, y - s, (a[2] + b[2]) / 2], [0, 0, 0], [0, 0, 0], c);
+  }
+  g.quad([x - s, y, z], [x, y, z - s], [x + s, y, z], [x, y, z + s], c, [0, 0, 0], [0, 0, 0], [0, 0, 0]);
 }
 /** A pool of light on the ground, bright in the middle and fading to nothing at `r`. */
 function pool(g: Glow, x: number, z: number, r: number, c: RGB, y = 0.06, seg = 10) {
@@ -139,14 +149,29 @@ function winX(k: Kit, n: number, a0: number, a1: number, y0: number, y1: number,
     rx(k, 'glass', z0, y0, z1, y1, x + 0.006 * s, s, f);
   }
 }
-/** A run of glass (a ribbon window or a curtain wall) on a ±z face, mullions every `every` in full detail. */
+/** Where the bays of a run of glass a0..a1 fall, about `every` wide. */
+function bays(a0: number, a1: number, every: number) {
+  const n = Math.max(1, Math.round((a1 - a0) / every)), out: number[] = [];
+  for (let i = 0; i <= n; i++) out.push(a0 + ((a1 - a0) * i) / n);
+  return out;
+}
+/**
+ * A run of glass (a ribbon window or a curtain wall) on a ±z face: a pane per bay, so each lights up on its own at
+ * night (a room at a time), and mullions between them in full detail.
+ */
 function bandZ(k: Kit, a0: number, a1: number, y0: number, y1: number, z: number, s: number, mull: string, every: number, low: boolean, f?: Matrix4) {
-  rz(k, 'glass', a0, y0, a1, y1, z + 0.005 * s, s, f);
-  if (!low) for (let x = a0 + every; x < a1 - every / 2; x += every) rz(k, mull, x - 0.012, y0, x + 0.012, y1, z + 0.009 * s, s, f);
+  const b = bays(a0, a1, every);
+  for (let i = 0; i < b.length - 1; i++) {
+    rz(k, 'glass', b[i], y0, b[i + 1], y1, z + 0.005 * s, s, f);
+    if (!low && i > 0) rz(k, mull, b[i] - 0.012, y0, b[i] + 0.012, y1, z + 0.009 * s, s, f);
+  }
 }
 function bandX(k: Kit, a0: number, a1: number, y0: number, y1: number, x: number, s: number, mull: string, every: number, low: boolean, f?: Matrix4) {
-  rx(k, 'glass', a0, y0, a1, y1, x + 0.005 * s, s, f);
-  if (!low) for (let z = a0 + every; z < a1 - every / 2; z += every) rx(k, mull, z - 0.012, y0, z + 0.012, y1, x + 0.009 * s, s, f);
+  const b = bays(a0, a1, every);
+  for (let i = 0; i < b.length - 1; i++) {
+    rx(k, 'glass', b[i], y0, b[i + 1], y1, x + 0.005 * s, s, f);
+    if (!low && i > 0) rx(k, mull, b[i] - 0.012, y0, b[i] + 0.012, y1, x + 0.009 * s, s, f);
+  }
 }
 
 /**
@@ -399,7 +424,7 @@ interface Row { len: number; dep: number; ver: number; h: number; wall: string; 
  * A single-storey row block: classrooms or barrack rooms in a line, each with a door and louvred windows, a
  * verandah along the front (+z in `f`) on square pillars, and a hipped zinc roof over the lot.
  */
-function rowBlock(k: Kit, b: Row, f: Matrix4, low: boolean) {
+function rowBlock(k: Kit, b: Row, f: Matrix4, low: boolean, g?: Glow) {
   const { len, dep, ver, h } = b;
   const hl = len / 2, fz = dep / 2;
   k.box(SLAB, [0, 0.04, ver / 2], [len + 0.04, 0.08, dep + ver], undefined, f);
@@ -414,6 +439,15 @@ function rowBlock(k: Kit, b: Row, f: Matrix4, low: boolean) {
   for (let i = 0; i <= rooms; i++) {
     const x = -hl + rw * i + (i === 0 ? 0.04 : i === rooms ? -0.04 : 0);
     k.box(b.pillar, [x, h / 2 + 0.04, fz + ver - 0.05], [0.065, h - 0.08, 0.065], undefined, f);
+  }
+  // A bulb under the eaves outside each room, lighting the verandah after dark.
+  for (let i = 0; i < rooms; i++) {
+    const x = -hl + rw * (i + 0.5);
+    k.box('lamp', [x, h - 0.05, fz + 0.04], [0.06, 0.04, 0.04], undefined, f);
+    if (g) {
+      const c = pt(f, [x, 0, fz + ver]);
+      pool(g, c[0], c[2], 0.55, scale(WARM, 0.14), 0.09, 8);
+    }
   }
   hipRoof(k, b.roof, len + 0.24, dep + ver + 0.22, h, 0.3, shift(f, 0, 0, ver / 2), low ? undefined : b.rib);
   k.box(b.trim, [0, h - 0.025, fz + ver + 0.11], [len + 0.24, 0.05, 0.02], undefined, f);
@@ -472,9 +506,9 @@ function school(w: number, d: number, low: boolean): Built {
   const dep = 0.8, ver = 0.3, h = 0.78;
   const blk = { dep, ver, h, wall: SCH_WALL, dado: SCH_BLUE, roof: SCH_ROOF, rib: SCH_RIB, trim: LINE, door: SCH_DOOR, pillar: LINE };
   const backZ = -hd + 0.2 + dep / 2;
-  rowBlock(k, { ...blk, len: w - 0.5 }, F(0, backZ), low);
+  rowBlock(k, { ...blk, len: w - 0.5 }, F(0, backZ), low, g);
   const wz0 = backZ + dep / 2 + ver + 0.04, wz1 = hd - 0.85;
-  for (const s of [-1, 1]) rowBlock(k, { ...blk, len: wz1 - wz0 }, F(s * (hw - 0.25 - dep / 2), (wz0 + wz1) / 2, (-s * Math.PI) / 2), low);
+  for (const s of [-1, 1]) rowBlock(k, { ...blk, len: wz1 - wz0 }, F(s * (hw - 0.25 - dep / 2), (wz0 + wz1) / 2, (-s * Math.PI) / 2), low, g);
 
   // The assembly ground: swept sand, the flag on a little dais, the pupils in their lines in blue and white.
   const ax = hw - 0.25 - dep - ver - 0.08;
@@ -648,12 +682,12 @@ function nda(w: number, d: number, low: boolean): Built {
   const dep = 0.8, ver = 0.28, h = 0.82;
   const blk = { dep, ver, h, wall: NDA_WALL, dado: KHAKI, roof: NDA_ROOF, rib: NDA_RIB, trim: LINE, door: '#3f4a2c', pillar: LINE };
   const backZ = -hd + 0.2 + dep / 2;
-  rowBlock(k, { ...blk, len: w - 0.5 }, F(0, backZ), low);
+  rowBlock(k, { ...blk, len: w - 0.5 }, F(0, backZ), low, g);
   const pz0 = backZ + dep / 2 + ver + 0.2;
   let px0 = -hw + 0.4;
   if (d >= 5) {
     const z0 = pz0 - 0.16, z1 = hd - 1.0;
-    rowBlock(k, { ...blk, len: z1 - z0 }, F(-hw + 0.25 + dep / 2, (z0 + z1) / 2, Math.PI / 2), low);
+    rowBlock(k, { ...blk, len: z1 - z0 }, F(-hw + 0.25 + dep / 2, (z0 + z1) / 2, Math.PI / 2), low, g);
     px0 = -hw + 0.25 + dep + ver + 0.25;
   }
   const px1 = hw - 0.35, pz1 = hd - 0.55;
@@ -850,8 +884,9 @@ function church(w: number, d: number, low: boolean): Built {
   for (const s of [-1, 1]) {
     for (let i = 0; i < bays; i++) {
       const z0 = zt + td / 2 + 0.1 + i * 0.42, x = (s * nw) / 2;
+      // The pointed head takes the pane's own night-light seed, so the window lights as one.
       rx(k, 'glass', z0, 0.25, z0 + 0.18, 0.66, x + s * 0.005, s);
-      tri(k, 'glass', [x + s * 0.005, 0.66, z0], [x + s * 0.005, 0.66, z0 + 0.18], [x + s * 0.005, 0.78, z0 + 0.09], [s, 0, 0]);
+      tri(k, 'glass', [x + s * 0.005, 0.66, z0], [x + s * 0.005, 0.66, z0 + 0.18], [x + s * 0.005, 0.78, z0 + 0.09], [s, 0, 0], undefined, seedAt(x + s * 0.005, 0.455, z0 + 0.09));
       if (!low) bx(k, CH_TRIM, x + s * 0.035, 0, z0 - 0.06, 0.07, 0.7, 0.07);
     }
     k.shape('glass', unitCyl(low ? 8 : 12, 1), [(s * tw) / 2 + s * 0.01, 0.58, zt], [0.2, 0.02, 0.2], [0, 0, Math.PI / 2]);
@@ -957,7 +992,7 @@ function mosque(w: number, d: number, low: boolean): Built {
     for (let i = 0; i < n; i++) {
       const z0 = hz0 + 0.2 + i * ((hdz - 0.4) / n), z1 = z0 + 0.16, x = s * hx + s * 0.005;
       rx(k, 'glass', z0, 0.35, z1, 0.68, x, s);
-      tri(k, 'glass', [x, 0.68, z0], [x, 0.68, z1], [x, 0.8, (z0 + z1) / 2], [s, 0, 0]);
+      tri(k, 'glass', [x, 0.68, z0], [x, 0.68, z1], [x, 0.8, (z0 + z1) / 2], [s, 0, 0], undefined, seedAt(x, 0.515, (z0 + z1) / 2));
     }
   }
   // The arcade along the front: piers, pointed arches, shade behind.
@@ -1680,9 +1715,12 @@ function refinery(w: number, d: number, low: boolean): Built {
     bx(k, CONCRETE, x, 0, z, r * 2.6, 0.1, r * 2.6);
     k.post(COLUMN, [x, 0.1, z], r, h, low ? 8 : 10);
     k.shape(COLUMN, HEMI(true), [x, h + 0.1, z], [r, r * 0.6, r]);
+    // Platforms ringed with lamps: a refinery at night is all little lights.
     for (let y = 0.8; y < h; y += 0.75) {
-      k.post(AMBER, [x, y, z], r + 0.07, 0.03, 8);
+      if (!low) k.post(AMBER, [x, y, z], r + 0.07, 0.03, 8);
       bx(k, 'lamp', x + r + 0.04, y + 0.03, z, 0.04, 0.04, 0.04);
+      spark(g, x + r + 0.06, y + 0.05, z, 0.12, [0.7, 0.6, 0.35]);
+      spark(g, x - r - 0.06, y + 0.05, z, 0.1, [0.6, 0.5, 0.3]);
     }
     if (!low) k.bar(STEEL, [x + r + 0.04, 0.1, z + 0.05], [x + r + 0.04, h, z + 0.05], 0.025);
   }
@@ -1721,16 +1759,16 @@ function refinery(w: number, d: number, low: boolean): Built {
   if (!low) for (const a of [0.8, 2.9, 4.9]) k.bar('#6b7280', [fl0.x, fl0.h * 0.7, fl0.z], [fl0.x + Math.cos(a) * 1.0, 0.05, fl0.z + Math.sin(a) * 0.9], 0.012);
   // Its glow at night: a halo round the flame and an orange wash on the ground under it.
   const fy = fl0.h + 0.35;
+  pool(g, fl0.x, fl0.z, 0.9, [0.7, 0.34, 0.06], fy, 12);
   for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
     const cx = Math.cos(a) * 0.55, cz = Math.sin(a) * 0.55;
-    g.quad([fl0.x - cx, fy - 0.55, fl0.z - cz], [fl0.x + cx, fy - 0.55, fl0.z + cz], [fl0.x + cx, fy + 0.6, fl0.z + cz], [fl0.x - cx, fy + 0.6, fl0.z - cz], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]);
     g.tri([fl0.x - cx, fy - 0.55, fl0.z - cz], [fl0.x + cx, fy - 0.55, fl0.z + cz], [fl0.x, fy, fl0.z], [0, 0, 0], [0, 0, 0], [0.6, 0.28, 0.05]);
     g.tri([fl0.x + cx, fy + 0.6, fl0.z + cz], [fl0.x - cx, fy + 0.6, fl0.z - cz], [fl0.x, fy, fl0.z], [0, 0, 0], [0, 0, 0], [0.6, 0.28, 0.05]);
     g.tri([fl0.x - cx, fy - 0.55, fl0.z - cz], [fl0.x, fy, fl0.z], [fl0.x - cx, fy + 0.6, fl0.z - cz], [0, 0, 0], [0.6, 0.28, 0.05], [0, 0, 0]);
     g.tri([fl0.x + cx, fy + 0.6, fl0.z + cz], [fl0.x, fy, fl0.z], [fl0.x + cx, fy - 0.55, fl0.z + cz], [0, 0, 0], [0.6, 0.28, 0.05], [0, 0, 0]);
   }
-  pool(g, fl0.x, fl0.z + 0.3, 2.4, [0.32, 0.14, 0.03], 0.06, 14);
-  for (const [x, z] of [[0.9, -1.0], [2.6, -1.0], [1.5, 0.6]]) pool(g, x, z, 0.9, scale(WARM, 0.14));
+  pool(g, fl0.x, fl0.z + 0.3, 2.6, [0.45, 0.2, 0.04], 0.06, 14);
+  for (const [x, z] of [[0.9, -1.0], [2.6, -1.0], [1.5, 0.6], [-2.6, -0.6]]) pool(g, x, z, 1.1, scale(WARM, 0.2));
 
   // The control building by the gate, NNPC's green and yellow on its board.
   const cx = 3.05, cz = 1.95;
@@ -1804,7 +1842,7 @@ function mill(w: number, d: number, low: boolean): Built {
   for (let i = 0; i < teeth; i++) {
     const za = z0 + i * td, zb = za + td;
     quad(k, MILL_ROOF, [x0 - 0.04, h, za], [x1 + 0.04, h, za], [x1 + 0.04, h + rise, zb], [x0 - 0.04, h + rise, zb], [0, td, -rise]);
-    rz(k, 'glass', x0, h, x1, h + rise - 0.02, zb, 1);
+    for (const [a, b] of bays(x0, x1, 0.6).map((v, j, all) => [v, all[j + 1]]).slice(0, -1)) rz(k, 'glass', a, h, b, h + rise - 0.02, zb, 1);
     for (const x of [x0, x1]) tri(k, MILL_WALL, [x, h, za], [x, h, zb], [x, h + rise, zb], [x === x0 ? -1 : 1, 0, 0]);
     if (!low) for (let x = x0 + 0.1; x < x1; x += 0.2) quad(k, MILL_RIB, [x - 0.008, h + 0.005, za], [x + 0.008, h + 0.005, za], [x + 0.008, h + rise + 0.005, zb], [x - 0.008, h + rise + 0.005, zb], [0, td, -rise]);
   }

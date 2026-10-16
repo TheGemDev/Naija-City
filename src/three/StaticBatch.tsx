@@ -17,7 +17,7 @@ const v = new Vector3();
 const n = new Vector3();
 
 /** A steady number from 0 to 1 for a spot in the world: the same window always gets the same one. */
-function seedAt(x: number, y: number, z: number) {
+export function seedAt(x: number, y: number, z: number) {
   const h = Math.sin(x * 12.9898 + y * 4.1414 + z * 78.233) * 43758.5453;
   return h - Math.floor(h);
 }
@@ -81,6 +81,8 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       const flip = rel.determinant() < 0;
       const { r, g: gr, b: bl } = mat.color ?? { r: 1, g: 1, b: 1 };
       const seed = shared ? seedAt(v.x, v.y, v.z) : 0;
+      // A merged model (placeKit) carries a seed per pane: shifted by where the model stands, so two copies differ.
+      const own = shared ? geo.getAttribute('seed') : undefined;
       for (let i = 0; i < count; i++) {
         // Mirrored meshes wind the other way; swap two corners so faces still point out.
         const k = flip ? i - (i % 3) + [0, 2, 1][i % 3] : i;
@@ -91,7 +93,7 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
         else n.set(0, 1, 0);
         b.nor.push(n.x, n.y, n.z);
         b.col.push(r, gr, bl);
-        if (shared) b.seed.push(seed);
+        if (shared) b.seed.push(own ? (own.getX(j) + seed) % 1 : seed);
       }
     }
 

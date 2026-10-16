@@ -58,7 +58,7 @@ function App() {
         shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-12} />
       <mesh rotation-x={-Math.PI / 2} position-y={-0.01} receiveShadow><planeGeometry args={[60, 60]} /><meshStandardMaterial color="#b9a27a" /></mesh>
       <mesh rotation-x={-Math.PI / 2} position={[0, -0.005, d / 2 + 0.6]}><planeGeometry args={[60, 1.2]} /><meshStandardMaterial color="#4b5057" /></mesh>
-      <group position={[-8, 0, -8]}><StaticBatch><group position={[8, 0, 8]} name="model"><M model={model} w={w} d={d} /></group></StaticBatch></group>
+      <group position={[-8, 0, -8]}><StaticBatch><mesh position={[30, -5, 30]} material={windowMat}><boxGeometry /></mesh><mesh position={[30, -5, 31]} material={lampMat}><boxGeometry /></mesh><group position={[8, 0, 8]} name="model"><M model={model} w={w} d={d} /></group></StaticBatch></group>
       <Info />
       <OrbitControls target={[0, cam === 'map' || cam === 'top' ? 0 : 0.6, 0]} />
     </Canvas>
