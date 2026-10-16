@@ -3163,27 +3163,24 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 /* Keep the house in view above the Finishes tab, so a finish can be tried on live. */
 .sheet.catalogue.on-finishes { max-height: 42vh; }
 
-/* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, Phone alone in the bottom right corner, Map on its left, chat above it. */
-.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 180px); pointer-events: none; }
+/* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, then along the bottom right: chat, Map, Phone (Phone in the corner). Icons alone, in the chat button's own look. */
+.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 250px); pointer-events: none; }
 .corner-left > * { pointer-events: auto; }
 .corner-ctx { display: flex; flex-wrap: wrap; gap: 8px; }
-.corner-ctx button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 52px; height: 52px; padding: 0 6px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
+/* Left of the row: square buttons with their names. */
+.corner-ctx button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 52px; height: 52px; padding: 0 8px; border-radius: 16px; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
 .corner-ctx button span { font-size: 22px; line-height: 1; display: grid; }
-.corner-ctx button.on { background: var(--inverse); color: #fff; }
-.corner-ctx button.leave { background: #dc2626; color: #fff; }
-.corner-ctx button:disabled { opacity: 0.35; }
-.corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 12px; }
-.corner-right button { display: grid; place-items: center; gap: 0; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
-.corner-right button span { font-size: 22px; display: grid; }
-.corner-right button[data-k="phone"] { width: 64px; height: 64px; }
+.corner-ctx button.on, .corner-right button.on { background: var(--inverse); color: #fff; }
+.corner-ctx button.leave { background: #dc2626; border-color: #dc2626; color: #fff; }
+.corner-ctx button:disabled, .corner-right button:disabled { opacity: 0.35; }
+/* Right: Map and Phone are round icons alone, centred the way the chat icon is, in its own look. */
+.corner-right button { font-size: 0; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); }
+.corner-right button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
+.corner-right button span > * { display: block; }
+.corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.corner-right button[data-k="phone"] { width: 60px; height: 60px; }
 .corner-right button[data-k="map"] { width: 52px; height: 52px; }
-.corner-right button.on { background: var(--inverse); color: #fff; }
-.corner-right button:disabled { opacity: 0.35; }
 body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
-body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 64px + 12px); }
-.wiz-handle { border-width: 2px; border-radius: 14px; background: var(--bg-f8fafc); }
-.wiz-handle input { padding: 13px 8px 13px 4px; font-size: 16px; font-weight: 600; outline: none; background: transparent; }
-.wiz-handle b { padding-right: 14px; font-size: 14px; }
-.wiz-handle.ok b { color: #16a34a; }
-.wiz-handle.bad { border-color: #dc2626; }
-.wiz-handle.bad b { color: #dc2626; }
+/* The chat button is third in the row: left of Map, which is left of Phone. Its box still opens to the screen edge. */
+body.corner-hud .chat-fab { right: calc(12px + 60px + 10px + 52px + 10px); bottom: calc(24px + var(--safe-b)); }
+body.corner-hud .chat-fab .chat-form { margin-right: calc(-1 * (60px + 10px + 52px + 10px)); }

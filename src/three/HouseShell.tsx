@@ -200,11 +200,11 @@ function DoorLeaf({ w, h, c = DOOR_WOOD }: { w: number; h: number; c?: string })
   );
 }
 
-/** An open inside door in a gap, cut down with the walls round it: frame both sides, the leaf swung back to the wall. */
+/** An open inside door in a gap: frame both sides, the leaf swung back to the wall. It keeps its full height when the walls round it are cut down. */
 function InnerDoor({ e }: { e: { dir: 'h' | 'v'; x: number; z: number } }) {
   const horiz = e.dir === 'h';
-  const jamb: V3 = horiz ? [0.07, SHORT, T + 0.05] : [T + 0.05, SHORT, 0.07];
-  const p = (a: number): V3 => (horiz ? [e.x + a, SHORT / 2, e.z] : [e.x, SHORT / 2, e.z + a]);
+  const jamb: V3 = horiz ? [0.07, DOOR_H, T + 0.05] : [T + 0.05, DOOR_H, 0.07];
+  const p = (a: number): V3 => (horiz ? [e.x + a, DOOR_H / 2, e.z] : [e.x, DOOR_H / 2, e.z + a]);
   // Hinged on the low end, standing open a little past square into the high side (+z or +x).
   const yaw = horiz ? -Math.PI * 0.6 : Math.PI * 0.1;
   const hinge: V3 = horiz ? [e.x + 0.06, 0, e.z + T / 2 + 0.02] : [e.x + T / 2 + 0.02, 0, e.z + 0.06];
@@ -219,7 +219,7 @@ function InnerDoor({ e }: { e: { dir: 'h' | 'v'; x: number; z: number } }) {
         <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
       </mesh>
       <group position={hinge} rotation={[0, yaw, 0]}>
-        <DoorLeaf w={0.84} h={SHORT - 0.04} />
+        <DoorLeaf w={0.84} h={DOOR_H - 0.04} />
       </group>
     </group>
   );
