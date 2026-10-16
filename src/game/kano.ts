@@ -399,5 +399,5 @@ export const KANO = addCityMap({
   walls: ['#d9b48a', '#c9a074', '#e6cfa5', '#bf9566', '#efe2c6', '#d4a373', '#e8d9b8'],
   roofs: ['#8a5a44', '#9c6b4a', '#7a6652', '#a47551', '#6b7280', '#b08d6a', '#8f5d3b'],
 });
-// Arrested in Kano, you are held at Kurmawa, the old prison inside the city wall. Like Kaduna's it is not on the map.
-KANO.placeById.prison = { ...PRISON_PLACE, name: 'Kurmawa Central Prison', area: 'Kurmawa' };
+// Arrested in Kano, you are locked in the cells at the back of the police station (game/cells.ts).
+KANO.placeById.prison = { ...PRISON_PLACE, area: KANO.placeById.police.name, door: KANO.placeById.police.door };

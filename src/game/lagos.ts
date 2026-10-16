@@ -397,5 +397,5 @@ export const LAGOS = addCityMap({
   walls: ['#f4e1b0', '#e8c98a', '#f1d6c2', '#d9e4ec', '#f6f1e3', '#e3c7a0', '#cfe0c8', '#f0d98c'],
   roofs: ['#8a5a44', '#9a5b3c', '#6b7280', '#7f8c8d', '#a0442c', '#2f6f6a', '#b0553a'],
 });
-// Arrested in Lagos, you are held at Kirikiri. Like Kaduna's prison it is not on the map.
-LAGOS.placeById.prison = { ...PRISON_PLACE, name: 'Kirikiri Maximum Security Prison', area: 'Kirikiri' };
+// Arrested in Lagos, you are locked in the cells at the back of the police station (game/cells.ts).
+LAGOS.placeById.prison = { ...PRISON_PLACE, area: LAGOS.placeById.police.name, door: LAGOS.placeById.police.door };

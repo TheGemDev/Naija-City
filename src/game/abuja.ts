@@ -382,5 +382,5 @@ export const ABUJA = addCityMap({
   walls: ['#f8f5ee', '#f4efe4', '#efe6d4', '#f1e4c8', '#e8e0cc', '#fafaf9', '#ecdcc0'],
   roofs: ['#a0442c', '#8f3b28', '#9a5b3c', '#7b3f2a', '#5b6b7a', '#3b5f43', '#b0553a'],
 });
-// Arrested in Abuja, you are held at Kuje. Like Kaduna's prison it is not on the map.
-ABUJA.placeById.prison = { ...PRISON_PLACE, name: 'Kuje Prison', area: 'Kuje' };
+// Arrested in Abuja, you are locked in the cells at the back of the police station (game/cells.ts).
+ABUJA.placeById.prison = { ...PRISON_PLACE, area: ABUJA.placeById.police.name, door: ABUJA.placeById.police.door };

@@ -485,8 +485,12 @@ export function interiorPathToProp(it: Interior, start: Cell, prop: Prop) {
 // import.meta.env only exists under Vite; the Worker bundle imports this file too.
 if (import.meta.env?.DEV) {
   for (const [id, it] of Object.entries(INTERIORS))
-    for (const prop of it.props)
-      if (prop.actions.length && !interiorPathToProp(it, exitCell(it), prop)) console.warn(`[interior] ${id}: can't reach ${prop.name ?? prop.type}`);
+    for (const prop of it.props) {
+      // What is inside a cell is reached from inside it.
+      const cell = it.cells?.find((r) => prop.x >= r.x && prop.x < r.x + r.w && prop.z >= r.z && prop.z < r.z + r.d);
+      const from = cell ? { x: cell.x + Math.floor(cell.w / 2), z: cell.z + cell.d - 1 } : exitCell(it);
+      if (prop.actions.length && !interiorPathToProp(it, from, prop)) console.warn(`[interior] ${id}: can't reach ${prop.name ?? prop.type}`);
+    }
 }
 
 /** A place's props as they are in the city the player is in: some are left out of one city's version. */

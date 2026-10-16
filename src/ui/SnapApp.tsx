@@ -88,11 +88,6 @@ export function SnapApp() {
       }}
     >
       {me && (
-        <div className="snap-take-row">
-          <button type="button" className="snap-take" onClick={() => openSnapCamera()}>{svg(ICON.camera, 18, 2.2)}<span>Take a snap</span></button>
-        </div>
-      )}
-      {me && (
         <nav className="snap-tabs" role="tablist">
           {(['friends', 'global'] as const).map((id) => (
             <button key={id} type="button" role="tab" aria-selected={feed === id} className={feed === id ? 'on' : ''} onClick={() => (feed === id ? document.querySelector('.snap-scroll')?.scrollTo({ top: 0, behavior: 'smooth' }) : setFeed(id))}>
@@ -108,6 +103,12 @@ export function SnapApp() {
           <FeedTab key={feed} scope={feed} play={setPlaying} />
         )}
       </div>
+      {/* Take a snap sits at the bottom, under the feed, where a thumb reaches it. */}
+      {me && (
+        <div className="snap-take-row">
+          <button type="button" className="snap-take" onClick={() => openSnapCamera()}><CameraGlyph /><span>Take a snap</span></button>
+        </div>
+      )}
       {playing && (host ? createPortal(<Player start={playing} myUid={me?.uid} onClose={close} />, host) : <Player start={playing} myUid={me?.uid} onClose={close} />)}
     </div>
   );
@@ -128,7 +129,7 @@ function FeedTab({ scope, play }: { scope: 'friends' | 'global'; play: (p: Playi
     <>
       {!live.length && (
         <div className="snap-empty big">
-          <Emoji char="⭐" size={40} />
+          <StarGlyph />
           <b>{loading ? 'Loading snaps…' : scope === 'friends' ? 'Nothing from your friends today' : 'Nothing posted today'}</b>
           <span>{scope === 'friends' ? 'Text someone in Messages: once they reply you are friends, and their snaps show here.' : 'Post a snap and the whole city sees it.'}</span>
         </div>
@@ -286,13 +287,9 @@ function Player({ start, myUid, onClose }: { start: Playing; myUid?: string; onC
       {snap.caption && <p className="snap-player-cap">{snap.caption}</p>}
       {bursts.map((b) => <span key={b.k} className="snap-burst" aria-hidden>{b.e}</span>)}
       {mode === 'spotlight' && (
+        // Only Share on the side: liking (the ❤️ reaction), commenting and the comments list are all along the bottom.
         <div className="snap-player-rail">
-          <button type="button" className={snap.liked ? 'liked' : ''} aria-label={snap.liked ? 'Unlike' : 'Like'} onClick={() => { void likeSnap(snap.id); if (!snap.liked) burst('❤️'); }}>
-            {svg(ICON.heart, RAIL_ICON, 2)}<small>{count(snap.likes)}</small>
-          </button>
-          <button type="button" aria-label="Comments" onClick={() => setSheet('comments')}>{svg(ICON.comment, RAIL_ICON, 2)}<small>{count(snap.comments)}</small></button>
           <button type="button" aria-label="Share" onClick={() => void shareLink(snapLink(snap.id), `@${snap.username ?? 'someone'}'s snap on Naija City`)}>{svg(ICON.share, RAIL_ICON, 2)}<small>Share</small></button>
-          <span className="snap-player-views" aria-label={`${snap.views} views`}>{svg(ICON.eye, RAIL_ICON, 2)}<small>{count(snap.views)}</small></span>
         </div>
       )}
       <div className="snap-player-foot">
@@ -308,7 +305,7 @@ function Player({ start, myUid, onClose }: { start: Playing; myUid?: string; onC
             {!typing && (
               <div className="snap-reacts">
                 {REACTIONS.map((e) => <button key={e} type="button" aria-label={`React ${e}`} onClick={() => react(e)}><Emoji char={e} size={24} /></button>)}
-                {mode === 'story' && <button type="button" className="snap-react-more" aria-label="Comments" onClick={() => setSheet('comments')}>{svg(ICON.comment, 20)}<small>{snap.comments}</small></button>}
+                <button type="button" className="snap-react-more" aria-label="Comments" onClick={() => setSheet('comments')}>{svg(ICON.comment, 20)}<small>{snap.comments}</small></button>
               </div>
             )}
             <form className="snap-reply" onSubmit={(e) => { e.preventDefault(); void send(reply); }}>
@@ -407,5 +404,27 @@ function ViewersSheet({ id, onClose }: { id: number; onClose: () => void }) {
         ))}
       </ul>
     </Sheet>
+  );
+}
+
+/** A solid camera for the "Take a snap" button: body, the bump the shutter sits on, and a big lens. */
+function CameraGlyph() {
+  return (
+    <svg className="snap-take-cam" viewBox="0 0 24 24" width="26" height="26" aria-hidden>
+      <path d="M8.2 4.5h7.6l1.5 2.2H20a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.7a2 2 0 0 1 2-2h2.7z" fill="currentColor" />
+      <circle cx="12" cy="13.2" r="4.6" fill="#fffc00" />
+      <circle cx="12" cy="13.2" r="3" fill="currentColor" />
+      <circle cx="13.1" cy="12.1" r="0.9" fill="#fffc00" />
+      <rect x="17.6" y="8.6" width="2" height="1.4" rx="0.5" fill="#fffc00" />
+    </svg>
+  );
+}
+
+/** The empty feed's star: drawn, in Snap yellow with a soft dark edge, so it sits right on light and dark alike. */
+function StarGlyph() {
+  return (
+    <svg className="snap-empty-star" viewBox="0 0 24 24" width="44" height="44" aria-hidden>
+      <path d="M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" fill="#fffc00" stroke="#111" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
   );
 }

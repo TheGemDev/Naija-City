@@ -155,6 +155,8 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
     if (target === me) return err(400, 'Not yourself');
     const victim = await playerOf(db, target);
     if (!victim?.username) return err(404, 'No such player');
+    // A prisoner is behind the bars of a police cell (src/game/cells.ts), with a warder at the desk.
+    if (await jailedUntil(db, target)) return err(409, 'They are behind bars');
     const scene = await closeEnough(env, me, target);
     if (scene) return err(409, scene);
     const shield = await db.prepare('SELECT 1 FROM crimes WHERE victim_uid = ? AND armed IS NOT NULL AND success = 1 AND created_at > ?').bind(target, now - GUN_RULES.victimShieldMs).first();

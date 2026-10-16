@@ -478,6 +478,61 @@ export const CIVIC_PROPS: Record<string, Model> = {
       {[-0.42, -0.21, 0, 0.21, 0.42].map((x) => <B key={x} p={[x, 0, -0.05]} s={[0.04, 0.42, 0.03]} c="#1f2937" />)}
     </group>
   ),
+  /* ---------- Police cells (game/cells.ts) ---------- */
+
+  // The barred gate in the back wall of the charge room that leads through to the cells (rot 2 puts it on the wall).
+  cellblock_gate: ({ text = 'CELLS' }) => (
+    <group position={[0, 0, 0.44]}>
+      <B p={[0, 1.12, 0.05]} s={[1.24, 2.24, 0.02]} c="#1f2937" />
+      {[-0.66, 0.66].map((x) => <B key={x} p={[x, 1.2, 0]} s={[0.16, 2.4, 0.16]} c="#9ca3af" />)}
+      <B p={[0, 2.36, 0]} s={[1.48, 0.16, 0.16]} c="#9ca3af" />
+      {[0.08, 1.1, 2.18].map((y) => <B key={y} p={[0, y, -0.02]} s={[1.16, 0.07, 0.06]} c="#334155" />)}
+      <Bars xs={[-0.5, -0.375, -0.25, -0.125, 0, 0.125, 0.25, 0.375, 0.5]} h={2.2} />
+      <B p={[0.38, 1.0, -0.07]} s={[0.12, 0.18, 0.06]} c="#ca8a04" />
+      <B p={[0, 2.62, -0.02]} s={[1.44, 0.3, 0.04]} c="#111827" />
+      <Label p={[0, 2.62, -0.045]} w={1.38} h={0.24} text={text} bg="#facc15" fg="#111827" ry={Math.PI} />
+      <B p={[0, 0.006, -0.62]} s={[1.6, 0.012, 0.08]} c="#facc15" />
+    </group>
+  ),
+  // A concrete ledge built out from the back wall, with a thin foam mattress and a folded blanket at the head.
+  cell_bunk: () => (
+    <group>
+      <B p={[0, 0.22, 0]} s={[0.92, 0.44, 1.94]} c="#9ca3af" />
+      <B p={[0, 0.45, 0]} s={[0.96, 0.03, 1.98]} c="#cbd5e1" />
+      <B p={[0, 0.49, 0.03]} s={[0.78, 0.06, 1.78]} c="#a8a29e" />
+      <B p={[0, 0.54, -0.68]} s={[0.62, 0.06, 0.32]} c="#57534e" />
+    </group>
+  ),
+  // A slit of sky high in the back wall (rot 2), three bars across it.
+  cell_window: () => (
+    <group position={[0, 2.05, 0.42]}>
+      <B p={[0, 0, 0]} s={[0.74, 0.4, 0.06]} c="#475569" />
+      <B p={[0, 0, -0.035]} s={[0.62, 0.28, 0.01]} c="#bfe6f5" e="#7dd3fc" />
+      {[-0.18, 0, 0.18].map((x) => <B key={x} p={[x, 0, -0.05]} s={[0.04, 0.3, 0.03]} c="#1f2937" />)}
+    </group>
+  ),
+  // The front of a cell: bars either side of the doorway, the frame, and the cell's number over it. The door itself
+  // slides, so three/CellBlock.tsx draws it.
+  cell_front: ({ text = 'CELL' }) => (
+    <group>
+      {[0.06, 1.15].map((y) => [-1, 1].map((sx) => <B key={`${y}${sx}`} p={[sx, y, 0]} s={[1.0, 0.07, 0.07]} c="#334155" />))}
+      <B p={[0, 2.36, 0]} s={[3, 0.1, 0.1]} c="#334155" />
+      <Bars xs={[-1.44, -1.24, -1.04, -0.84, -0.64, 0.64, 0.84, 1.04, 1.24, 1.44]} h={2.34} />
+      {[-0.52, 0.52].map((x) => <B key={x} p={[x, 1.2, 0]} s={[0.1, 2.4, 0.12]} c="#1f2937" />)}
+      <B p={[0, 2.5, 0.02]} s={[0.84, 0.24, 0.04]} c="#111827" />
+      <Label p={[0, 2.5, 0.045]} w={0.78} h={0.19} text={text} bg="#facc15" fg="#111827" />
+      <B p={[0, 0.006, 0.47]} s={[3, 0.012, 0.06]} c="#facc15" />
+    </group>
+  ),
+  // The block wall between two cells, from the back wall to the bars, with a pillar where it meets them.
+  cell_partition: () => (
+    <group>
+      <B p={[0, 1.3, -0.25]} s={[0.3, 2.6, 4.5]} c="#cbd5e1" />
+      <B p={[0, 2.63, -0.25]} s={[0.34, 0.06, 4.5]} c="#1f4e3d" />
+      <B p={[0, 1.3, 2.0]} s={[1.0, 2.6, 0.36]} c="#94a3b8" />
+      <B p={[0, 0.08, -0.25]} s={[0.34, 0.16, 4.5]} c="#64748b" />
+    </group>
+  ),
   // Scratched into the plaster: days counted in fives.
   prison_tally: () => (
     <group position={[0, 1.3, 0.425]}>

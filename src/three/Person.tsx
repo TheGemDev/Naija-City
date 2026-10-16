@@ -860,13 +860,52 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
   );
 }
 
-/** A relaxed hand below the wrist: a flat palm, fingers curling in towards the body, and the thumb in front. */
+/** Each finger, index to little: how far forward it sits on the palm, its length, thickness, and how it fans out. */
+const FINGERS: [z: number, len: number, r: number, fan: number][] = [
+  [0.0158, 0.035, 0.0074, -0.05],
+  [0.0053, 0.039, 0.0077, -0.015],
+  [-0.0053, 0.036, 0.0074, 0.025],
+  [-0.0155, 0.029, 0.0066, 0.07],
+];
+
+/**
+ * A relaxed hand in one mesh (one draw call): a palm, four fingers of two joints each curling in towards the body,
+ * and a thumb in front. Built for its own side rather than mirrored, so its faces keep pointing outwards.
+ */
+const handGeo = (side: -1 | 1) =>
+  geo(`hand:${side}`, () => {
+    // Towards the body: where the palm faces and the fingers curl.
+    const m = -side;
+    const parts: BufferGeometry[] = [];
+    const one = new Vector3(1, 1, 1);
+    /** A rounded segment hanging from `start` along `euler`; returns where it ends, for the next joint. */
+    const bone = (start: Vector3, euler: Euler, len: number, r: number) => {
+      const dir = new Vector3(0, -1, 0).applyEuler(euler);
+      const g = new CapsuleGeometry(r, len, 3, 8);
+      g.deleteAttribute('uv');
+      parts.push(g.applyMatrix4(new Matrix4().compose(start.clone().addScaledVector(dir, len / 2), new Quaternion().setFromEuler(euler), one)));
+      return start.clone().addScaledVector(dir, len);
+    };
+    // The palm: a rounded slab, thin across and wide from front to back.
+    const palm = new CapsuleGeometry(0.023, 0.03, 4, 12);
+    palm.deleteAttribute('uv');
+    parts.push(palm.applyMatrix4(new Matrix4().compose(new Vector3(m * 0.002, -0.037, 0.001), new Quaternion(), new Vector3(0.56, 1, 1.12))));
+    // Fingers from the knuckles: nearly straight at first, then the last joint curls in.
+    for (const [z, len, r, fan] of FINGERS) {
+      const mid = bone(new Vector3(m * 0.001, -0.062, z), new Euler(fan, 0, m * 0.28), len * 0.55, r);
+      bone(mid, new Euler(fan * 1.3, 0, m * 0.9), len * 0.45, r * 0.88);
+    }
+    // The thumb, from the heel of the palm in front: down, forward and in.
+    const thumb = bone(new Vector3(m * 0.007, -0.034, 0.019), new Euler(-0.38, 0, m * 0.28), 0.02, 0.0085);
+    bone(thumb, new Euler(-0.12, 0, m * 0.5), 0.016, 0.0078);
+    return mergeGeometries(parts)!;
+  });
+
+/** A relaxed hand below the wrist: a palm, four fingers curling in towards the body, and the thumb in front. */
 function HandModel({ skin, f, side }: { skin: string; f: boolean; side: -1 | 1 }) {
   return (
     <group position={[0, -WRIST, 0]} scale={f ? 0.9 : 1}>
-      <M color={skin} geometry={capsule(0.028, 0.03)} position={[0, -0.036, 0.002]} scale={[0.6, 1, 1.15]} />
-      <M color={skin} geometry={capsule(0.025, 0.034)} position={[-side * 0.004, -0.074, 0]} rotation={[0, 0, -side * 0.22]} scale={[0.56, 1, 1.1]} />
-      <M color={skin} geometry={capsule(0.012, 0.03)} position={[-side * 0.008, -0.04, 0.03]} rotation={[-0.45, 0, -side * 0.15]} />
+      <M color={skin} geometry={handGeo(side)} />
     </group>
   );
 }
@@ -884,7 +923,7 @@ function Torso({ a, top, color, skin, bag }: { a: Appearance; top?: Garment; col
       <M color={skin} geometry={capsule(f ? 0.046 : 0.056, 0.06)} position={[0, NECK_Y + 0.04, 0]} scale={[1, 1, 0.92]} />
       {/* Open neckline on tops that have one */}
       {(shape === 'tee' || shape === 'tank' || shape === 'blouse' || shape === 'dress' || shape === 'jersey' || shape === 'polo' || shape === 'shirt') && (
-        <M color={skin} geometry={sphere(0.05)} position={[0, NECK_Y - 0.035, 0.045]} scale={[1, 0.8, 0.5]} />
+        <M color={skin} geometry={sphere(0.05)} position={[0, NECK_Y - 0.03, 0.04]} scale={[1, 0.75, 0.34]} />
       )}
       {(shape === 'polo' || shape === 'shirt') && (
         <>
@@ -1187,18 +1226,58 @@ const headGeo = (f: boolean) =>
       g.deleteAttribute('uv');
       return g.applyMatrix4(new Matrix4().compose(new Vector3(...p), new Quaternion().setFromEuler(new Euler(...r)), new Vector3(...sc)));
     };
-    // Nose: a bridge from between the eyes down to a rounded tip, with a nostril wing either side.
-    const k = f ? 0.88 : 1;
-    const tipZ = faceZ(f, 0, -0.026) + 0.016 * k;
     const parts = [
-      part(new CapsuleGeometry(0.009 * k, 0.034 * k, 3, 8), [0, -0.004, (faceZ(f, 0, -0.004) + tipZ) / 2 - 0.004], [-0.42, 0, 0], [1.25, 1, 1]),
-      part(new SphereGeometry(0.0145 * k, 10, 8), [0, -0.026, tipZ - 0.006], [0, 0, 0], [1.1, 0.95, 1]),
-      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.0115 * k, 8, 6), [sd * 0.0155 * k, -0.031, tipZ - 0.016], [0, 0, 0], [1, 0.85, 1])),
+      noseGeo(f),
       // Ears: flat ovals standing off the side of the head, tipped back a little at the top.
       ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.032, 12, 10), [sd * 0.127, -0.006, -0.01], [-0.15, sd * -0.35, 0], [0.4, 1, 0.66])),
     ];
     return mergeGeometries([skull, ...parts])!;
   });
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * The nose as one smooth piece grown out of the face: lofted down from between the eyes, a soft bridge widening to a
+ * broad, rounded tip with a nostril wing either side, then turning back under into the face. Its edges lie just under
+ * the face's own surface, so it has no seam where it meets it.
+ */
+function noseGeo(f: boolean) {
+  const k = f ? 0.88 : 1;
+  const top = 0.014, bot = -0.037;
+  /** Where the tip sticks out furthest, as a share of the way down. */
+  const TIP = 0.8;
+  const rows = 16, cols = 14;
+  const pos: number[] = [];
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows;
+    const y = top + (bot - top) * t;
+    // Out from the face: nothing at the bridge's top, the most at the tip, back to nothing underneath.
+    const out = 0.021 * k * (t <= TIP ? Math.sin((t / TIP) * (Math.PI / 2)) ** 1.25 : Math.cos(((t - TIP) / (1 - TIP)) * (Math.PI / 2)) ** 0.6);
+    // Half its width: a narrow bridge, then the wings flaring at the base.
+    const half = (0.0082 + 0.0138 * smoothstep(0.3, 0.92, t)) * k;
+    // The wings are fuller at the base, so the sides stand out there rather than sloping away.
+    const p = 1.7 - 0.9 * smoothstep(0.55, 1, t);
+    for (let j = 0; j <= cols; j++) {
+      const a = -Math.PI / 2 + (j / cols) * Math.PI;
+      const x = half * Math.sin(a);
+      pos.push(x, y, faceZ(f, x, y) - 0.0025 + out * Math.cos(a) ** p);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < rows; i++)
+    for (let j = 0; j < cols; j++) {
+      const a = i * (cols + 1) + j, b = a + cols + 1;
+      index.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
 
 /** The mouth: a short arc turned up at the corners, so faces at rest look friendly rather than glum. */
 const SMILE = 1.5;
@@ -1216,13 +1295,12 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
       <M color={skin} geometry={headGeo(f)} />
       {/* Eyes, set into the sockets under the brow */}
       {([-1, 1] as const).map((s) => (
-        <group key={s} position={[s * EYE_X, EYE_Y, eyeZ]}>
-          <M color="#f8fafc" geometry={sphere(0.022)} scale={[1, 0.8, 0.5]} rough={0.3} />
-          <M color="#1c1917" geometry={sphere(0.013)} position={[0, 0, 0.009]} scale={[1, 1, 0.5]} rough={0.2} />
-          {/* Brow, following the ridge above */}
-          <M color={hairColor} position={[0, 0.032, browZ - eyeZ]} rotation={[-0.25, 0, s * 0.06]}>
-            <boxGeometry args={[0.044, f ? 0.007 : 0.011, 0.01]} />
-          </M>
+        <group key={s} position={[s * EYE_X, EYE_Y, eyeZ - 0.003]}>
+          <M color="#f8fafc" geometry={sphere(0.02)} scale={[1.05, 0.74, 0.46]} rough={0.3} />
+          {/* The iris, dark brown, a little smaller than the white so the white shows round it */}
+          <M color="#24140d" geometry={sphere(0.0098)} position={[0, -0.0005, 0.0078]} scale={[1, 1, 0.45]} rough={0.2} />
+          {/* Brow, a soft stroke following the ridge above */}
+          <M color={hairColor} geometry={capsule(f ? 0.0035 : 0.0052, 0.034)} position={[0, 0.03, browZ - eyeZ + 0.003]} rotation={[-0.25, 0, Math.PI / 2 + s * 0.08]} scale={[1, 1, 0.7]} />
           {f && (
             <M color="#111827" position={[s * 0.004, 0.015, 0.009]} rotation={[0, 0, s * 0.12]}>
               <boxGeometry args={[0.046, 0.0035, 0.006]} />

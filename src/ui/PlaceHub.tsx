@@ -13,6 +13,7 @@ import { STALLS } from '../game/career';
 import { loadPlaceShops, usePlaceShops } from '../net/market';
 import { PlaceShopsPanel } from './Market';
 import { oddJobPay } from '../game/gigs';
+import { cellActionShown, CELLS_ID } from '../game/cells';
 
 
 export type ActivityTab = 'all' | 'wild' | 'spend' | 'social' | 'work' | 'shops';
@@ -65,13 +66,15 @@ export function PlaceActivityTabs({ place, insideVenue, onClose }: PlaceActivity
 
   // What only an office holder can do (the President's desk at Aso Villa) is listed for that office holder alone.
   const office = useHeldOffice();
+  // In the police cells a prisoner gets the cell's things and a visitor the corridor's (game/cells.ts).
+  const lockedIn = useGame((s) => place.id === CELLS_ID && !!s.jailedUntil);
   const categorizedActions = useMemo(() => {
     // Flights are booked at the flight desk and trains at the ticket desk (ui/TrainDesk.tsx), not listed among the activities.
-    return place.actions.filter((a) => (!a.office || a.office === office) && !(a.effect === 'travel' && (place.id === 'airport' || a.rail))).map((a) => ({
+    return place.actions.filter((a) => (!a.office || a.office === office) && !(a.effect === 'travel' && (place.id === 'airport' || a.rail)) && (place.id !== CELLS_ID || cellActionShown(a.id, lockedIn))).map((a) => ({
       ...a,
       effectiveCat: getActionCategory(a),
     }));
-  }, [place.actions, office]);
+  }, [place.actions, place.id, office, lockedIn]);
 
   const counts = useMemo(() => {
     return {

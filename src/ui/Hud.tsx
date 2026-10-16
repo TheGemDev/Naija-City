@@ -731,6 +731,8 @@ function TaskChip() {
   // A street story (game/stories.ts) holds you up where you stand until you have dealt with it.
   const stopped = useGame((s) => !!s.streetStory);
   const cancel = useGame((s) => s.cancelTask);
+  // The warder walking you out of a cell is not yours to stop.
+  const walkingOut = useGame((s) => !!s.cellExit);
   const { pct, secs } = useTaskReading();
   const trip = useTripLine();
   // Between the legs of a trip (the search at the gate, the moment after landing) there is no task: the trip still shows.
@@ -761,9 +763,11 @@ function TaskChip() {
         <small>{stopped && task.phase === 'walking' ? 'Stopped on the way' : secs !== null ? timeLeft(secs) : task.phase === 'walking' ? 'On the way…' : 'Almost done'}</small>
         {trip && <small className="task-trip">{trip.text}</small>}
       </div>
-      <button className="x" onClick={cancel} aria-label="Cancel">
-        ✕
-      </button>
+      {!walkingOut && (
+        <button className="x" onClick={cancel} aria-label="Cancel">
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -1016,7 +1020,8 @@ function Nav() {
   const goHome = useGame((s) => s.goHome);
   const streetStart = useGame((s) => s.started && s.origin === 'almajiri' && !s.properties.some((p) => p.stage >= STAGES.length));
   const visiting = useVisit((v) => !!v.current);
-  const jailed = useGame((s) => !!s.jailedUntil);
+  // Being walked out of a cell counts: the HUD stays the cell's until you are out in the charge room.
+  const jailed = useGame((s) => !!s.jailedUntil || !!s.cellExit);
   // Taken by kidnappers: no home, activities or map to go to.
   const kidnapped = useGame((s) => !!s.heldUntil || (s.view === 'place' && s.insideId === 'camp'));
   const inRoom = useGame((s) => s.view === 'place' && isPrivateRoom(s.insideId));

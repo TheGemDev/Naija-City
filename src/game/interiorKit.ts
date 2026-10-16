@@ -53,8 +53,10 @@ export interface Interior {
   blockedColour?: string;
   /** Floor patches of another finish (bathroom tiles, a terrace). Only looks: you walk on them as normal. */
   tiles?: { x: number; z: number; w: number; d: number; colour: string }[];
-  /** A private room up a lift: no ground round it, no crowd, no ads (game/hotel.ts). */
+  /** A room inside another place (a hotel room up the lift, the cells behind the charge room): no ground round it, no crowd, no ads. */
   room?: boolean;
+  /** Barred cells (the police cells, game/cells.ts): only somebody locked in one can reach what is in it. */
+  cells?: { x: number; z: number; w: number; d: number }[];
   /** Every prop is kept as placed, instead of thinning repeats down to two of a kind. */
   dense?: boolean;
   /** Stretches of the back wall that are glass, as [from, to] in x: you see what is outside through them. */

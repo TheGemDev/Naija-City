@@ -13,7 +13,7 @@ export interface Region {
   id: RegionId;
   name: string;
   airport: string;
-  /** Where its police lock you up. */
+  /** Where its police lock you up, as a sentence says it ("taken to …"): the cells at the back of its police station. */
   prison: string;
   tagline: string;
   ground: string;
@@ -26,7 +26,7 @@ export const REGIONS: Record<RegionId, Region> = {
     id: 'kaduna',
     name: 'Kaduna',
     airport: 'Kaduna International Airport',
-    prison: 'Kaduna Central Prison',
+    prison: 'the cells at Kaduna Police HQ',
     tagline: 'The Crocodile City · Kaduna State',
     ground: '#a9c46a',
     accent: '#3f7d2a',
@@ -36,7 +36,7 @@ export const REGIONS: Record<RegionId, Region> = {
     id: 'abuja',
     name: 'Abuja',
     airport: 'Nnamdi Azikiwe International Airport',
-    prison: 'Kuje Prison',
+    prison: 'the cells at Force Headquarters',
     tagline: 'Centre of Unity · Federal Capital Territory',
     ground: '#9fcb7c',
     accent: '#2f7d3b',
@@ -46,7 +46,7 @@ export const REGIONS: Record<RegionId, Region> = {
     id: 'lagos',
     name: 'Lagos',
     airport: 'Murtala Muhammed International Airport',
-    prison: 'Kirikiri Prison',
+    prison: 'the cells at the Lagos State Police Command',
     tagline: 'Centre of Excellence · Lagos State',
     ground: '#b5c98a',
     accent: '#2f8a5a',
@@ -56,7 +56,7 @@ export const REGIONS: Record<RegionId, Region> = {
     id: 'kano',
     name: 'Kano',
     airport: 'Mallam Aminu Kano International Airport',
-    prison: 'Kurmawa Central Prison',
+    prison: 'the cells at the Kano State Police Command',
     tagline: 'Centre of Commerce · Kano State',
     ground: '#cdbb80',
     accent: '#6f8f3a',

@@ -45,7 +45,27 @@ export const CIVIC_SIZES: Record<string, PropDef> = {
   // Prison
   prison_window: { w: 2, d: 1, floor: true },
   prison_tally: { w: 1, d: 1, floor: true },
+  // Police cells (game/cells.ts)
+  cellblock_gate: { w: 2, d: 1, floor: true },
+  cell_bunk: { w: 1, d: 2, bed: { y: 0.5, z: 0 } },
+  cell_window: { w: 1, d: 1, floor: true },
+  cell_front: { w: 3, d: 1 },
+  cell_partition: { w: 1, d: 5 },
 };
+
+/** Where each cell of the police cells starts along the back wall: three tiles of cell, one of wall between. */
+const CELL_X = [0, 4, 8, 12];
+
+/** One cell: a concrete bunk under the tally marks, a slit of window, the toilet and bucket, a bench, and the bars. */
+const cellProps = (x: number, i: number) => [
+  p('cell_bunk', x, 0, ['cell_sleep'], 0, 'Concrete bunk'),
+  p('prison_tally', x, 0, [], 2),
+  p('cell_window', x + 1, 0, [], 2),
+  p('toilet', x + 2, 0, ['cell_toilet'], 0, 'Cell toilet'),
+  p('bucket', x + 2, 1, ['cell_wash'], 0, 'Bucket bath'),
+  p('bench', x + 2, 2, ['cell_eat', 'cell_gist', 'cell_exercise'], 1, 'Bench'),
+  p('cell_front', x, 4, [], 0, `Cell ${i + 1}`, `CELL ${i + 1}`),
+];
 
 const COURSES = ['course_cooking', 'course_mechanic', 'course_tailoring', 'course_trading'];
 
@@ -144,25 +164,25 @@ export const CIVIC: Record<string, Interior> = {
       exit(7, 9),
     ],
   },
-  // Holding cell in the back corner, the charge-room counter facing the door, desks and case files behind it.
+  // The gate to the cells in the back corner, the charge-room counter facing the door, desks and case files behind it.
   police: {
     w: 14, h: 10, dense: true, floor: ['#d6d3d1', '#c7c5c4'], wall: '#f5f5f4', doorX: 7,
     tiles: [
-      { x: 0, z: 0, w: 3, d: 4, colour: '#8f96a3' },
+      { x: 0, z: 0, w: 2, d: 2, colour: '#8f96a3' },
       { x: 3, z: 0, w: 11, d: 3, colour: '#c9d3e0' },
     ],
     staff: [
       { x: 6.2, z: 3.55, yaw: 0, look: 'police' },
       { x: 7.8, z: 3.55, yaw: 0, look: 'police' },
       { x: 10, z: 1.75, yaw: 0, look: 'police' },
-      { x: 3.6, z: 2.5, yaw: -Math.PI / 2, look: 'police' },
+      // The duty officer at the desk by the gate to the cells
+      { x: 3.1, z: 1.5, yaw: -Math.PI / 2, look: 'police' },
     ],
     props: [
-      // Holding cell
-      p('bench', 0, 0, [], 3, 'Detainees’ bench'),
-      p('bucket', 0, 2),
-      p('police_cell_door', 2, 0, [], 1, 'Cell door'),
-      p('police_bars', 0, 3, [], 0, 'Holding cell', 'CELL'),
+      // The gate through to the cells (game/cells.ts), and a bench for whoever is waiting on somebody inside
+      p('cellblock_gate', 0, 0, ['visit_cells'], 2, 'Door to the cells', 'CELLS · DETENTION'),
+      p('security_desk', 2, 1, ['visit_cells'], 3, 'Cells duty desk'),
+      p('bench', 0, 2, ['station_tea'], 3, 'Visitors’ bench'),
       // Offices along the back
       p('flag_stand', 4, 0),
       p('office_desk', 5, 1, ['work'], 2, 'Duty officer’s desk'),
@@ -326,21 +346,26 @@ export const CIVIC: Record<string, Interior> = {
       exit(6, 9),
     ],
   },
-  // No exit: the barred gate only opens when your time is up or someone pays your bail.
+  // The police cells, through the gate at the back of the charge room: four barred cells along the back wall, the
+  // visitors' corridor in front of the bars, and the warder's desk. Nobody leaves a cell until their time is up.
   prison: {
-    w: 10, h: 8, dense: true, floor: ['#9ca3af', '#8f96a3'], wall: '#cbd5e1', doorX: 5,
-    staff: [{ x: 7.2, z: 8.7, look: 'warder' }],
+    w: 15, h: 10, room: true, dense: true, floor: ['#b4aea6', '#aaa49c'], wall: '#d6d3d1', doorX: 7,
+    cells: CELL_X.map((x) => ({ x, z: 0, w: 3, d: 4 })),
+    tiles: [
+      ...CELL_X.map((x) => ({ x, z: 0, w: 3, d: 4, colour: '#8f96a3' })),
+      { x: 6, z: 6, w: 3, d: 4, colour: '#9ca3af' },
+    ],
+    staff: [{ x: 14.5, z: 7, yaw: -Math.PI / 2, look: 'warder' }],
     props: [
-      ...[0, 1, 2, 3].map((x) => p('prison_mat', x, 0, ['cell_sleep'], 0, 'Thin mattress')),
-      p('pot_counter', 5, 0, ['cell_eat'], 0, 'Ration pot'),
-      p('prison_window', 7, 0, [], 2),
-      p('toilet', 9, 0, ['cell_toilet'], 0, 'Cell toilet'),
-      p('bucket', 9, 2, ['cell_wash'], 0, 'Bucket bath'),
-      p('prison_tally', 0, 3, [], 1),
-      p('prison_tally', 0, 4, [], 1),
-      p('bench', 1, 5, ['cell_gist'], 0, 'Bench'),
-      p('bench', 6, 5, ['cell_gist', 'cell_exercise'], 0, 'Bench'),
-      p('cell_door', 5, 7, [], 0, 'Cell gate'),
+      ...CELL_X.flatMap(cellProps),
+      ...[3, 7, 11].map((x) => p('cell_partition', x, 0)),
+      // The corridor
+      p('notice_board', 0, 6, [], 1),
+      p('bench', 1, 9, ['cells_wait'], 2, 'Visitors’ bench'),
+      p('bench', 10, 9, ['cells_wait'], 2, 'Visitors’ bench'),
+      p('office_desk', 13, 6, [], 1, 'Warder’s desk'),
+      p('wall_clock', 14, 9, [], 3),
+      p('exit', 7, 9, ['leave_cells'], 0, 'Door to the front desk'),
     ],
   },
 };

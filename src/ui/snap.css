@@ -288,3 +288,10 @@
 .snap-tabs button.on { color: var(--sn-ink); font-weight: 800; }
 .snap-tabs button.on span::after { content: ''; position: absolute; left: -2px; right: -2px; bottom: 0; height: 4px; border-radius: 4px; background: var(--sn-yellow); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
 .snap-more { width: calc(100% - 24px); margin: 12px; }
+/* "Take a snap": a full-width block (rounded corners, not a pill) with dark text in every theme (dark mode's button
+   styles were turning the words white on yellow, which you could hardly read). */
+.snap-app .snap-take, :root[data-theme='dark'] .snap-app .snap-take { width: 100%; height: 56px; justify-content: center; border-radius: 12px; padding: 0 16px; gap: 10px; font-size: 16px; color: #111 !important; background: var(--sn-yellow) !important; }
+.snap-app .snap-take svg, .snap-app .snap-take span { color: #111 !important; }
+.snap-app .snap-take .snap-take-cam { flex: none; }
+/* At the bottom of the app now: a little room under it for the phone's home bar. */
+.snap-app > .snap-take-row { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--sn-line, rgba(0, 0, 0, 0.08)); }

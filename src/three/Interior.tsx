@@ -18,9 +18,12 @@ import { RefineryYard } from './RefineryYard';
 import { Person, type Clip } from './Person';
 import { Slab } from './Slab';
 import { StaticBatch } from './StaticBatch';
+import { DESK_HALO, SelectHalo } from './SelectHalo';
 import { Emoji } from '../ui/Icons';
 import { offHover, onHover } from './HoverOutline';
 import { JailMates } from './JailMates';
+import { CellDoors } from './CellBlock';
+import { CELLS_ID } from '../game/cells';
 import { RoomFx, type FxSource } from './RoomFx';
 
 const TALL = 2.6;
@@ -326,9 +329,11 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
   const { cx, cz, yaw } = propTransform(prop);
   const { w, d } = propSize(prop);
   const usable = prop.actions.length > 0;
+  const body = useRef<Group>(null);
   return (
     <group>
       <group
+        ref={body}
         position={[cx, 0, cz]}
         rotation={[0, yaw, 0]}
         onClick={(e) => {
@@ -346,6 +351,7 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
       >
         <PropModel type={prop.type} text={prop.text} />
       </group>
+      {DESK_HALO && usable && !selected && <SelectHalo x={cx} z={cz} w={w} d={d} yaw={yaw} target={body} />}
       {selected && (
         <mesh position={[cx, 0.03, cz]} rotation={[-Math.PI / 2, 0, 0]} userData={{ dynamic: true }}>
           <planeGeometry args={[w, d]} />
@@ -384,7 +390,7 @@ function ClickPlane({ it }: { it: InteriorDef }) {
   );
 }
 
-/** A hotel room: just the room, with no ground round it, no crowd and no ads. Its name and time left are on the room card (ui/Hotel.tsx). */
+/** A room inside a place (a hotel room, the police cells): just the room, with no ground round it, no crowd and no ads. A hotel room's name and time left are on the room card (ui/Hotel.tsx). */
 function Room({ it, place }: { it: InteriorDef; place: Place }) {
   const selectedId = useGame((s) => s.selectedId);
   return (
@@ -393,6 +399,8 @@ function Room({ it, place }: { it: InteriorDef; place: Place }) {
       <Floor it={it} />
       <Walls it={it} />
       {staffOf(place.id, it).map((member, i) => <StaffMember key={i} {...member} />)}
+      {place.id === CELLS_ID && <CellDoors />}
+      {place.id === CELLS_ID && <JailMates />}
       <StaticBatch>
         {propsHere(it).map((p) => (
           <PropMesh key={p.id} prop={p} selected={p.id === selectedId} />
@@ -435,7 +443,6 @@ export function Interior() {
       {staffOf(place.id, it).map((member, i) => <StaffMember key={i} {...member} />)}
       {!it.jungle && <Patrons placeId={place.id} it={it} taken={staffOf(place.id, it)} />}
       {place.id === 'camp' && <KidnapCamp />}
-      {place.id === 'prison' && <JailMates />}
       {place.id === 'murtala' && <MurtalaEvents />}
       {Outside && <Outside it={it} />}
       <StaticBatch>

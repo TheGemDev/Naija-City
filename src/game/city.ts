@@ -336,6 +336,7 @@ export const PLACES: Place[] = [
       { id: 'spiritual_report', label: 'Report neighbor for spiritual/juju attack', icon: '🧙‍♂️', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 150, social: 90 }, tagline: 'Explain to DPO why their rooster only crows at your window' },
       { id: 'snitch_bounty', label: 'Snitch on wanted street fugitive', icon: '🤠', category: 'social', minutes: 45, pose: 'stand', perHour: { fun: 100, social: 60 }, tagline: 'Give intelligence to the sergeant on local thieves' },
       { id: 'station_tea', label: 'Drink bitter police station tea & wait', icon: '☕', category: 'social', minutes: 30, pose: 'sit', perHour: { social: 30, fun: 10 }, tagline: 'Listen to the counter sergeant yell into crackling radio' },
+      { id: 'visit_cells', label: 'Visit the cells', icon: '⛓️', category: 'social', minutes: 0, effect: 'cellBlock', tagline: 'See who is locked up, and talk to them through the bars' },
     ],
   },
   {
@@ -1020,11 +1021,16 @@ export const placeHere = (id: string): Place | undefined => active.placeById[id]
 export const MARKET_AREAS = [...new Set(PLACES.map((p) => p.area))].sort((a, b) => a.localeCompare(b));
 export const HOME_PLACE = PLACE_BY_ID.home;
 
-/** Not on the map: you only end up here in handcuffs (src/net/crime.ts), and can't walk out. */
+/**
+ * The police cells, through the gate at the back of the police station (game/cells.ts). Not on the map: visitors walk
+ * through from the charge room, and the arrested are put in a cell (src/net/crime.ts) they can't walk out of.
+ */
 export const PRISON_PLACE: Place = {
-  id: 'prison', name: 'Kaduna Central Prison', area: 'Kaduna', icon: '⛓️', model: 'prison', blurb: 'Where thieves wait out their sentence or their bail.',
-  x: 0, z: 0, w: 0, d: 0, door: HOME_PLACE.door,
+  id: 'prison', name: 'Police Cells', area: 'Kaduna Police HQ', icon: '⛓️', model: 'prison', blurb: 'Where thieves wait out their sentence or their bail.',
+  x: 0, z: 0, w: 0, d: 0, door: PLACE_BY_ID.police.door,
   actions: [
+    { id: 'cells_wait', label: 'Sit on the visitors’ bench', icon: '🪑', minutes: 30, pose: 'sit', perHour: { social: 12, fun: 2 } },
+    { id: 'leave_cells', label: 'Back to the front desk', icon: '🚪', minutes: 0, effect: 'leaveCells' },
     { id: 'cell_sleep', label: 'Sleep on the mattress', icon: '😴', minutes: 240, pose: 'lie', untilFull: 'energy', perHour: { energy: 18, fun: -3 } },
     { id: 'cell_eat', label: 'Eat the prison ration (beans & garri)', icon: '🫘', minutes: 30, pose: 'stand', untilFull: 'hunger', perHour: { hunger: 90, fun: -6 } },
     { id: 'cell_toilet', label: 'Use the cell toilet', icon: '🚽', minutes: 15, pose: 'stand', untilFull: 'bladder', perHour: { bladder: 300, fun: -4 } },

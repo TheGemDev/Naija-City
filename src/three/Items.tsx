@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useFrame } from '@react-three/fiber';
-import type { Mesh, MeshBasicMaterial } from 'three';
+import type { Group, Mesh, MeshBasicMaterial } from 'three';
+import { DESK_HALO, SelectHalo } from './SelectHalo';
 import { Html } from '@react-three/drei';
 import { ITEMS } from '../game/catalog';
 import { ITEM_MODELS } from '../game/assets';
@@ -86,9 +87,11 @@ function Item({ item, powered, running, selected, picked, readOnly }: { item: Pl
   // Wall pieces sit at their height on the wall, table-top ones on their table, and any piece can be at a free angle.
   const { cx, cz, yaw, cy } = itemTransform(item);
   const mode = useGame((s) => s.mode);
+  const body = useRef<Group>(null);
   return (
     <group>
       <group
+        ref={body}
         position={[cx, cy, cz]}
         rotation={[0, yaw, 0]}
         onPointerDown={readOnly ? undefined : (e) => pressItem(item.id, e)}
@@ -129,6 +132,9 @@ function Item({ item, powered, running, selected, picked, readOnly }: { item: Pl
       {ITEMS[item.type]?.camera && <CameraCone x={cx} z={cz} yaw={yaw} />}
       {item.type === 'speaker' && powered && !item.broken && <SpeakerLabel x={cx} z={cz} />}
       {(selected || picked) && <PickMark item={item} group={!!picked} />}
+      {DESK_HALO && !readOnly && !selected && !picked && mode === 'live' && !item.broken && !!ITEMS[item.type]?.actions.length && mountOf(item) === 'floor' && (
+        <SelectHalo x={cx} z={cz} w={ITEMS[item.type].w} d={ITEMS[item.type].d} yaw={yaw} target={body} />
+      )}
       {TOUCH && !readOnly && !selected && !picked && mode === 'live' && !item.broken && !!ITEMS[item.type]?.actions.length && mountOf(item) === 'floor' && (
         <InteractHint x={cx} z={cz} r={Math.max(ITEMS[item.type].w, ITEMS[item.type].d) * 0.5 + 0.12} phase={cx * 1.7 + cz} />
       )}

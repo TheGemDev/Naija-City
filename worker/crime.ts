@@ -712,6 +712,8 @@ export async function handleCrime(req: Request, env: Env, ctx: ExecutionContext,
     if (!victim?.username) return err(404, 'No such player');
     if (await jailedUntil(db, me)) return err(403, 'You are in a police cell');
     if (await injuredUntil(db, me)) return err(403, 'You are still hurting from the beating. Rest first');
+    // Visitors walk right up to the bars of the police cells (src/game/cells.ts), but nobody's pockets reach through them.
+    if (kind === 'pickpocket' && await jailedUntil(db, target)) return err(409, 'They are behind bars');
 
     const now = Date.now();
     const recent = await db

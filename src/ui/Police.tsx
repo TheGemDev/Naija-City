@@ -4,7 +4,8 @@
 import { Icon } from './Icons';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ITEMS } from '../game/catalog';
-import { cityMap } from '../game/city';
+import { cityMap, placeHere } from '../game/city';
+import { CELLS_PARENT } from '../game/cells';
 import { regionHere, regionOf } from '../game/regions';
 import { ACCUSE, bailFor, BOUNTY, CATCHERS, VDM, CRIME, POLICE, type CrimeReport, type WantedPerson, unsolved } from '../game/crime';
 import { avatar } from '../game/avatar';
@@ -363,6 +364,7 @@ function BountyButton({ id, disabled, max }: { id: number; disabled: boolean; ma
 /** Panel over the prison while you're locked in: time left, bail, and asking someone to bail you out. */
 export function Jail() {
   const until = useGame((s) => s.jailedUntil);
+  const cell = useGame((s) => s.jailCell);
   const money = useGame((s) => s.money);
   const paying = usePolice((s) => s.busy);
   const now = useNow(!!until);
@@ -404,8 +406,8 @@ export function Jail() {
       <div className="jail-panel-head">
         <span className="jail-icon"><Icon name="break-in" size={20} /></span>
         <div>
-          <b>{regionHere().prison}</b>
-          <small>Locked in until your time is up or someone pays bail</small>
+          <b>{cell === null ? 'Police cells' : `Cell ${cell + 1}`} · {placeHere(CELLS_PARENT)?.name ?? 'Police station'}</b>
+          <small>Locked in until your time is up or someone pays bail. Visitors can talk to you through the bars.</small>
         </div>
         <div className="jail-timer" aria-label="Time left">{clock(until - now)}</div>
       </div>

@@ -13,6 +13,7 @@ import { startCaughtScene, useCaught } from '../game/caughtScenes';
 import { useVisit } from '../game/visits';
 import { injury } from '../game/injury';
 import { leaveHouseVisit } from './visit';
+import { assignCells, cellHooks, inCellNow } from '../game/cells';
 import { api, serial, useSession } from './session';
 import { revokeHomeVisit } from './social';
 import { flushWalletNow, refreshBalance, setServerBalance, walletPending } from './wallet';
@@ -207,13 +208,22 @@ function dropVisit() {
   if (useVisit.getState().current) void revokeHomeVisit().catch(() => {});
 }
 
-/** Lock the game in the prison while the server says so, and let it out when it doesn't. */
+/** Which cell I go in when arrested: worked out from everybody in custody, the same way every phone works it out (game/cells.ts). */
+cellHooks.pick = () => {
+  const me = useSession.getState().user?.uid ?? 'me';
+  const now = Date.now();
+  const others = usePolice.getState().custody.filter((p) => p.until > now).map((p) => p.uid);
+  return assignCells([...others, me]).get(me) ?? 0;
+};
+
+/** Lock the game in a police cell while the server says so, and let it out when it doesn't. */
 function syncJail(until: number | null) {
   const g = useGame.getState();
   if (useCaught.getState().active) return; // the caught scene plays first; it applies the arrest when it ends
   if (until && until > Date.now()) {
-    if (g.jailedUntil !== until || g.insideId !== 'prison' || useVisit.getState().current) { dropVisit(); g.arrest(until); }
-  } else if (g.jailedUntil || (g.view === 'place' && g.insideId === 'prison')) {
+    if (g.jailedUntil !== until || !inCellNow(g) || useVisit.getState().current) { dropVisit(); g.arrest(until); }
+  } else if (g.jailedUntil || inCellNow(g)) {
+    // Still in a cell from before (the game reopened after release): you start outside it (store.release).
     g.release();
   }
 }

@@ -44,6 +44,9 @@ export function onHover(e: ThreeEvent<PointerEvent>, target?: Object3D | null) {
   if (CAN_HOVER) useHover.setState({ target: target === undefined ? e.eventObject : target });
 }
 
+/** What the pointer is on right now (null: nothing, or a touch screen). */
+export const hoverTarget = () => useHover.getState().target;
+
 /** Pointer left it. Cleared a frame later: crossing from one mesh of a model to the next fires out then over, and
  *  clearing at once made the outline blink at every seam. An over in between cancels it, and the same target is a no-op. */
 export function offHover() {

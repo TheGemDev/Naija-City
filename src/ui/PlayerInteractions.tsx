@@ -315,7 +315,8 @@ export function PlayerInteractions() {
             </button>
             <button
               className="player-steal"
-              disabled={!me || !connected || busyStealing}
+              disabled={!me || !connected || busyStealing || !!jailed}
+              title={jailed ? 'They are behind bars' : undefined}
               onClick={() => void steal(player.uid, username, 'pickpocket')}
             >
               🥷 Pickpocket
@@ -324,14 +325,14 @@ export function PlayerInteractions() {
               <>
                 <button
                   className="player-steal"
-                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds}
+                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds || !!jailed}
                   onClick={() => { close(); void robAtGunpoint(player.uid, username); }}
                 >
                   🔫 Rob at gunpoint
                 </button>
                 <button
                   className="player-steal"
-                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds}
+                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds || !!jailed}
                   onClick={() => { close(); void shootPlayer(player.uid, username); }}
                 >
                   💥 Shoot{gun.ammo < GUNS[gun.id].rounds ? ' · no rounds' : ''}

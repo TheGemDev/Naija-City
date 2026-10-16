@@ -22,6 +22,7 @@ import { activeMap, cityMap, cityPathToCell, cityPathToPlace, cityStraightPath, 
 import { exitCell, frontCell, interiorPathToCell, interiorPathToProp, INTERIORS, propDef, propTransform } from './interiors';
 import { CHECKOUT_WARNING, HOTEL_ID, isHotelRoom, MAX_NIGHTS, NIGHT, nightlyIn, nightsFree, ROOM_BY_ID, roomNumber, roomPlaceId, stayActive, stayCountdown, stayIn, type HotelStay, type HotelStays, type RoomTypeId } from './hotel';
 import { isPrivateRoom, isVillaSuite, roomParent, SUITE_ID, VILLA_ID } from './villa';
+import { cellAt, cellHooks, CELLS, CELLS_ID, CELLS_PARENT, inCellNow } from './cells';
 import { heldOffice, lostOffice } from '../net/office';
 import { SKIP_MIN_TASK, SKIP_RATE, TASK_RATE, TIME_RATE, WORK_RATE } from './timeRates';
 import { INVESTMENT_BY_ID, LIQUIDATION_FACTOR, MAX_TRADE_UNITS, paidFor, priceOf, type Holding } from './investments';
@@ -381,6 +382,10 @@ export interface GameState {
   leaveRoom(): void;
   /** Through the door behind the President's office at Aso Villa (game/villa.ts): the President only. */
   enterSuite(): void;
+  /** Through the gate at the back of the police station to the cells (game/cells.ts): anybody can visit. */
+  enterCells(): void;
+  /** Back out of the cells to the charge room. */
+  leaveCells(): void;
   begin(name: string, look: string, origin: OriginId, state?: string): void;
   tick(dtMinutes: number): void;
   toast(text: string, chatUid?: string): void;
@@ -419,13 +424,17 @@ export interface GameState {
   goHome(travelMode?: TravelMode, carId?: string, homeId?: string): void;
   /** In a house you built: step out of the door onto its estate's road. */
   leaveHome(): void;
-  /** In a prison cell until this time (ms), or null. The server keeps the real time (src/net/crime.ts). */
+  /** In a police cell until this time (ms), or null. The server keeps the real time (src/net/crime.ts). */
   jailedUntil: number | null;
+  /** The cell you are locked in (game/cells.ts CELLS), while you are. */
+  jailCell: number | null;
+  /** Released: the warder has opened this cell's door and is walking you out to the charge room. Nothing else until you are out. */
+  cellExit: { cell: number } | null;
   /** Held by kidnappers until this time (src/ui/Vice.tsx moves you to their camp). */
   heldUntil: number | null;
-  /** Taken to prison until `until`: whatever you were doing stops and you're locked in a cell. */
+  /** Arrested until `until`: whatever you were doing stops and you're locked in a cell at the police station of the city you're in. */
   arrest(until: number): void;
-  /** Out of the cell (time served or bail paid): you step out at the police station door. */
+  /** Out of the cell (time served, bail, a pardon, a jailbreak): the door opens and the warder walks you out to the charge room. */
   release(): void;
   /** Kidnapped until `until`: dragged to the bush camp, no leaving until freed. */
   abduct(until: number): void;
@@ -707,6 +716,8 @@ const fresh = () => ({
   bankTab: null,
   lightTab: null,
   jailedUntil: null as number | null,
+  jailCell: null as number | null,
+  cellExit: null as { cell: number } | null,
   heldUntil: null as number | null,
   estateId: null as string | null,
   estateNo: 0,
@@ -1226,6 +1237,45 @@ export const useGame = create<GameState>((set, get) => {
     avatar.yaw = suite ? Math.PI : 0;
     set((s) => ({ view: 'place', insideId: id, panel: null, placeId: null, selectedId: null, placeHubOpen: false, hotelDesk: false, flightDesk: false, teleportId: s.teleportId + 1 }));
   };
+  /** In the cells' corridor at the gate in from the charge room, or back in the charge room in front of that gate. */
+  const enterCellBlock = (cells: boolean) => {
+    const id = cells ? CELLS_ID : CELLS_PARENT;
+    resetAvatar(cells ? exitCell(INTERIORS[id]) : frontCell(INTERIORS[id], 'cellblock_gate'));
+    avatar.yaw = cells ? Math.PI : 0;
+    set((s) => ({ view: 'place', insideId: id, panel: null, placeId: null, selectedId: null, placeHubOpen: false, hotelDesk: false, flightDesk: false, teleportId: s.teleportId + 1 }));
+  };
+  /** Locked in a cell in the cells right now (not visiting, not out in the corridor). */
+  const lockedIn = () => inCellNow(get());
+  /** How long the cell door takes to slide open before the warder walks you through it (three/CellBlock.tsx draws it). */
+  const DOOR_OPEN_MS = 900;
+  let walkOutTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Released while in the cell: the door slides open, then you are walked out of it, down the corridor and out to the charge room. */
+  const walkOut = (cell: number) => {
+    const inside = INTERIORS[CELLS_ID];
+    const c = CELLS[cell];
+    const toDoor = interiorPathToCell(inside, avatarCell(), c.inside) ?? [];
+    const toGate = interiorPathToCell(inside, c.outside, exitCell(inside)) ?? [];
+    avatar.snap = null;
+    avatar.pose = 'stand';
+    avatar.path = [];
+    avatar.onArrive = null;
+    set({
+      cellExit: { cell }, jailCell: null, placeHubOpen: false, panel: null, selectedId: null, queuedMove: null,
+      task: { itemId: null, actionId: 'walk', label: 'The warder is walking you out', icon: '🔓', phase: 'walking', remaining: 0, total: 0 },
+    });
+    clearTimeout(walkOutTimer);
+    walkOutTimer = setTimeout(() => {
+      if (get().cellExit?.cell !== cell) return;
+      avatar.path = [...toDoor, c.door, c.outside, ...toGate];
+      avatar.onArrive = () => {
+        if (get().cellExit?.cell !== cell) return;
+        set({ cellExit: null, task: null });
+        enterCellBlock(false);
+        toast('🚶🏾 You are out. Behave yourself!');
+      };
+    }, DOOR_OPEN_MS);
+  };
+
   /** The hotel's name in that city: Hamdala in Kaduna, the Hilton in Abuja. */
   const hotelName = (city: string) => cityMap(city).placeById[HOTEL_ID]?.name ?? 'the hotel';
   /** Some things are for whoever holds an office (the President's desk and suite). */
@@ -1235,8 +1285,12 @@ export const useGame = create<GameState>((set, get) => {
     return true;
   };
 
-  /** Locked in a cell: no leaving, no travel, no work. */
+  /** Locked in a cell: no leaving, no travel, no work. Being walked out of one counts too, until you are out. */
   const jailed = () => {
+    if (get().cellExit) {
+      toast('🔓 The warder is walking you out. One moment.');
+      return true;
+    }
     const until = get().jailedUntil;
     if (!until || until <= Date.now()) {
       const held = get().heldUntil;
@@ -1301,6 +1355,14 @@ export const useGame = create<GameState>((set, get) => {
     if (def.effect === 'villaSuite') {
       set({ task: null });
       return get().enterSuite();
+    }
+    if (def.effect === 'cellBlock') {
+      set({ task: null });
+      return get().enterCells();
+    }
+    if (def.effect === 'leaveCells') {
+      set({ task: null });
+      return get().leaveCells();
     }
     if (def.effect === 'phoneShop') {
       set({ task: null, panel: 'phoneShop' });
@@ -1532,6 +1594,23 @@ export const useGame = create<GameState>((set, get) => {
       if (s.task) get().cancelTask();
       enterVilla(true);
       toast('👑 Welcome home, Your Excellency. Tap anything in the suite to use it.');
+    },
+
+    enterCells() {
+      const s = get();
+      if (s.view !== 'place' || s.insideId !== CELLS_PARENT) return toast('⛓️ The cells are at the back of the police station. Go to the station first.');
+      if (jailed()) return;
+      if (avatar.exhausted) return toast('You are too exhausted to move. Rest a little longer 😵');
+      if (s.task) get().cancelTask();
+      enterCellBlock(true);
+      toast('⛓️ The warder lets you through. Tap anybody behind the bars to talk to them, or pay their bail.');
+    },
+
+    leaveCells() {
+      const s = get();
+      if (s.view !== 'place' || s.insideId !== CELLS_ID || lockedIn() || jailed()) return;
+      if (s.task) get().cancelTask();
+      enterCellBlock(false);
     },
 
     begin(name, look, origin, state) {
@@ -2129,7 +2208,7 @@ export const useGame = create<GameState>((set, get) => {
     walkTo(c) {
       const s = get();
       if (avatar.exhausted) return toast('You are too exhausted to move. Rest a little longer 😵');
-      if (s.view === 'city') return;
+      if (s.view === 'city' || s.cellExit) return;
       if (s.task) {
         if (s.task.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
         if (s.task.phase === 'doing' && !s.task.auto) {
@@ -2159,7 +2238,7 @@ export const useGame = create<GameState>((set, get) => {
       const def = findAction(itemId, actionId, taskItems(s), placeId);
       if (!def) return;
       if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
-      if ((!itemId || def.effect === 'work' || def.effect === 'travel') && jailed()) return;
+      if ((!itemId || def.effect === 'work' || def.effect === 'travel' || s.cellExit) && jailed()) return;
       if (itemId && !placeId && taskItems(s).find((i) => i.id === itemId)?.broken) return toast(visitItemOf(itemId) ? 'This one don spoil. E no dey work 🔧' : 'E don spoil. Tap the 🔧 on it to call the repairer');
       if (def.needsPower && !litFor(s, itemId)) return toast(visitItemOf(itemId) ? `🕯️ No light in @${useVisit.getState().current?.ownerUsername}'s house right now` : 'No light! NEPA has taken it. Fuel the gen? ⛽');
       if (def.needsPower && itemId && !placeId && !visitItemOf(itemId)) {
@@ -2294,14 +2373,18 @@ export const useGame = create<GameState>((set, get) => {
       if (!def) return;
       if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
       // A cell has its own things to do (sleep, eat, wash, gist, exercise); everything else stays locked.
-      const inCell = s.view === 'place' && s.insideId === placeId && (placeId === 'prison' || placeId === 'camp');
+      const inCell = s.view === 'place' && s.insideId === placeId && (placeId === CELLS_ID ? actionId.startsWith('cell_') : placeId === 'camp') && !s.cellExit;
       if (!inCell && jailed()) return;
       if (notInOffice(def)) return;
       if (s.money < actionCost(def)) return toast(`You need ${naira(actionCost(def))} for that`);
       if (s.view === 'place' && s.insideId === placeId) {
         if (boardingStop(def, () => get().startPlaceAction(placeId, actionId))) return;
         const inside = INTERIORS[placeId];
-        const prop = inside?.props.find((p) => p.actions.includes(actionId));
+        // The nearest one you can get to: in the cells, every cell has its own toilet, and only yours is in reach.
+        const props = inside?.props.filter((p) => p.actions.includes(actionId)) ?? [];
+        const prop = props.length > 1
+          ? props.map((p) => ({ p, path: interiorPathToProp(inside, avatarCell(), p) })).filter((o) => o.path).sort((a, b) => a.path!.length - b.path!.length)[0]?.p ?? props[0]
+          : props[0];
         if (prop) return get().startAction(prop.id, actionId);
         if (s.task) finish(true);
         if (!inside) return;
@@ -2378,16 +2461,22 @@ export const useGame = create<GameState>((set, get) => {
     },
 
     arrest(until) {
+      clearTimeout(walkOutTimer);
+      set({ cellExit: null });
       const s = get();
       if (s.task) get().cancelTask();
       set({ jailedUntil: until, panel: null, placing: null, selectedId: null, placeId: null, shopId: null });
-      // Caught inside someone's house: the visit ends here, and the prison replaces the house on screen.
+      // Caught inside someone's house: the visit ends here, and the cells replace the house on screen.
       const visiting = !!useVisit.getState().current;
       if (visiting) useVisit.setState({ current: null, returnSave: null });
-      if (!visiting && s.view === 'place' && s.insideId === 'prison') return;
-      resetAvatar({ x: 4, z: 3 });
+      // Already behind bars (a longer sentence, or the game opening where you left it): you stay in the cell you're in.
+      const here = !visiting && lockedIn() ? cellAt(avatarCell()) : -1;
+      if (here >= 0) return set({ jailCell: here });
+      // A free cell at the police station of the city you're in (game/cells.ts assignCells), shared when they're all taken.
+      const cell = Math.min(CELLS.length - 1, Math.max(0, cellHooks.pick?.() ?? 0));
+      resetAvatar(CELLS[cell].spot);
       avatar.yaw = Math.PI;
-      set((st) => ({ view: 'place', insideId: 'prison', estateId: null, mode: 'live', placeHubOpen: true, teleportId: st.teleportId + 1 }));
+      set((st) => ({ view: 'place', insideId: CELLS_ID, jailCell: cell, estateId: null, mode: 'live', placeHubOpen: true, teleportId: st.teleportId + 1 }));
     },
 
     abduct(until) {
@@ -2462,13 +2551,22 @@ export const useGame = create<GameState>((set, get) => {
 
     release() {
       const s = get();
-      set({ jailedUntil: null });
-      if (s.view !== 'place' || s.insideId !== 'prison') return;
+      // Seen live (the server said so while you sat in the cell) you are walked out; let go while you were away, you
+      // simply start outside your cell.
+      const live = !!s.jailedUntil;
+      set({ jailedUntil: null, jailCell: null });
+      if (s.cellExit || !lockedIn()) return;
+      const cell = cellAt(avatarCell());
       if (s.task) get().cancelTask();
-      enterCity(doorOf('police'));
+      if (live) return walkOut(cell);
+      resetAvatar(CELLS[cell].outside);
+      avatar.yaw = 0;
+      set((st) => ({ placeHubOpen: false, teleportId: st.teleportId + 1 }));
     },
 
     cancelTask() {
+      // Being walked out of a cell runs to the end (store.walkOut): only a new arrest stops it.
+      if (get().cellExit) return;
       avatar.path = [];
       avatar.onArrive = null;
       // Snap back to the cell centre so the avatar is on the grid again.

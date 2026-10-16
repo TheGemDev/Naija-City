@@ -69,7 +69,7 @@ export interface ActionDef {
   cookingPerHour?: number;
   /** Finishing this course trains a career skill (the server charges the fee and checks the cooldown). */
   skill?: 'cooking' | 'mechanic' | 'tailoring' | 'trading';
-  effect?: 'fuelGen' | 'toggleGen' | 'work' | 'goHome' | 'goCity' | 'enterPlace' | 'goodDeed' | 'durbar' | 'buyRam' | 'feedRam' | 'shareRam' | 'shop' | 'phoneShop' | 'travel' | 'bank' | 'bankHeist' | 'sprayMoney' | 'hotelDesk' | 'hotelLift' | 'leaveRoom' | 'villaSuite' | 'kidCare';
+  effect?: 'fuelGen' | 'toggleGen' | 'work' | 'goHome' | 'goCity' | 'enterPlace' | 'goodDeed' | 'durbar' | 'buyRam' | 'feedRam' | 'shareRam' | 'shop' | 'phoneShop' | 'travel' | 'bank' | 'bankHeist' | 'sprayMoney' | 'hotelDesk' | 'hotelLift' | 'leaveRoom' | 'villaSuite' | 'kidCare' | 'cellBlock' | 'leaveCells';
   /** Only whoever holds this office can do it (game/villa.ts). */
   office?: PoliticalOffice;
   /** Destination region for effect 'travel'. */
