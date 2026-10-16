@@ -1,4 +1,6 @@
-import { lazy, Suspense, useMemo, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useFrame } from '@react-three/fiber';
+import type { Mesh, MeshBasicMaterial } from 'three';
 import { Html } from '@react-three/drei';
 import { ITEMS } from '../game/catalog';
 import { ITEM_MODELS } from '../game/assets';
@@ -61,9 +63,28 @@ function SpeakerLabel({ x, z }: { x: number; z: number }) {
   );
 }
 
+/** No hover on a touch screen, so nothing says what can be tapped: a soft ring pulses on the floor under every piece you can use. */
+const TOUCH = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+function InteractHint({ x, z, r, phase }: { x: number; z: number; r: number; phase: number }) {
+  const ring = useRef<Mesh>(null!);
+  const mat = useRef<MeshBasicMaterial>(null!);
+  useFrame(({ clock }) => {
+    const t = (Math.sin(clock.elapsedTime * 2.6 + phase) + 1) / 2;
+    mat.current.opacity = 0.2 + 0.5 * t;
+    ring.current.scale.setScalar(1 + 0.1 * t);
+  });
+  return (
+    <mesh ref={ring} position={[x, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={3} raycast={() => null}>
+      <ringGeometry args={[r * 0.86, r, 40]} />
+      <meshBasicMaterial ref={mat} color="#ffffff" transparent opacity={0.3} depthWrite={false} />
+    </mesh>
+  );
+}
+
 function Item({ item, powered, running, selected, picked, readOnly }: { item: PlacedItem; powered: boolean; running: boolean; selected: boolean; picked?: boolean; readOnly: boolean }) {
   // Wall pieces sit at their height on the wall, table-top ones on their table, and any piece can be at a free angle.
   const { cx, cz, yaw, cy } = itemTransform(item);
+  const mode = useGame((s) => s.mode);
   return (
     <group>
       <group
@@ -107,6 +128,9 @@ function Item({ item, powered, running, selected, picked, readOnly }: { item: Pl
       {ITEMS[item.type]?.camera && <CameraCone x={cx} z={cz} yaw={yaw} />}
       {item.type === 'speaker' && powered && !item.broken && <SpeakerLabel x={cx} z={cz} />}
       {(selected || picked) && <PickMark item={item} group={!!picked} />}
+      {TOUCH && !readOnly && !selected && !picked && mode === 'live' && !item.broken && !!ITEMS[item.type]?.actions.length && mountOf(item) === 'floor' && (
+        <InteractHint x={cx} z={cz} r={Math.max(ITEMS[item.type].w, ITEMS[item.type].d) * 0.5 + 0.12} phase={cx * 1.7 + cz} />
+      )}
     </group>
   );
 }

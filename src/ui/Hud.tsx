@@ -106,6 +106,8 @@ function TopBar() {
 
   return (
     <div className="topbar">
+      {/* You, first in the row, so you always stand beside your money (the money tucks behind your picture). */}
+      {CORNER_HUD && <Needs />}
       <div className={`hud-card time-card ${day ? 'day' : 'night'}`}>
         <span className="sky"><Emoji char={day ? '☀️' : '🌙'} size={26} /></span>
         <div className="time-text">
@@ -1109,8 +1111,8 @@ export function Hud() {
       <LobbyShoutout />
       <GazetteBanner />
       {!CORNER_HUD && <ChatButton />}
+      {!CORNER_HUD && <Needs />}
       <MoneyRain />
-      <Needs />
       <GameTips />
       {/* In someone's house you are still "inside" the venue you came from: its card, pills and desks wait until you are back. */}
       {!visiting && <RoomCard />}

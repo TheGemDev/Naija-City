@@ -3330,3 +3330,8 @@ body.corner-hud .needs { margin-top: env(safe-area-inset-top, 0px); }
 body.corner-hud .needs { top: 14px !important; }
 body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--me) + 8px); }
 body.corner-hud .need-alerts { top: calc(14px + var(--hud-h) + 12px); }
+
+/* You live in the top row now: same height line as the money and clock, same notch gap, nothing to drift. */
+body.corner-hud .topbar { left: 12px; }
+body.corner-hud .topbar .needs { position: relative; left: auto; top: auto !important; bottom: auto !important; margin: 0 calc(var(--me) / -2) 0 0 !important; flex: none; order: -1; z-index: 21; }
+body.corner-hud .topbar .money-card-top { padding-left: calc(var(--me) / 2 + 12px); }
