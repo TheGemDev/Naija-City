@@ -11,6 +11,8 @@ import {
 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { hourOf, useGame } from '../game/store';
+import { activeMap } from '../game/city';
+import { useVisit } from '../game/visits';
 import { photoHour } from '../game/photo';
 import { sceneHour } from '../game/theme';
 import { sky } from '../game/weather';
@@ -72,11 +74,14 @@ const SUN_LOW = new Color('#ffb36b');
 const SUN_DUST = new Color('#f6d7b0');
 /** Distance in front of the camera the sky is drawn at: behind the island, inside the camera's far plane. */
 const SKY_DEPTH = 300;
+/** How far (in screen halves) the sky slides when the camera pans from the middle of the map to its edge. */
+const PARALLAX = 0.2;
 
 /**
  * The sun and moon. The camera always looks down on the world, so the open sky is the space round the floating
- * island: they are drawn far behind it, on an arc that matches the sun light (three/Scene.tsx). The sun rises on
- * the right (east, where the light comes from in the morning), peaks at the top and sets on the left; the moon
+ * island: they are drawn far behind it, on an arc that matches the sun light (three/Scene.tsx), and slide a little
+ * as the map pans (parallax). The sun rises in the east (the right of the map, where the light comes from in the
+ * morning), peaks at the top and sets in the west; the moon
  * does the same through the night. The arc keeps to the top and sides of the screen, where the island leaves sky
  * showing; zoomed right in, the island fills the screen and hides them.
  */
@@ -92,7 +97,7 @@ export function SkyBodies() {
   const starGeo = useMemo(() => {
     // Scattered over the whole view, in camera space (x and y from -1 to 1 of the screen).
     const pos: number[] = [];
-    for (let i = 0; i < 160; i++) pos.push(Math.random() * 2.2 - 1.1, Math.random() * 2.2 - 1.1, 0);
+    for (let i = 0; i < 200; i++) pos.push(Math.random() * 2.6 - 1.3, Math.random() * 2.6 - 1.3, 0);
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute(pos, 3));
     return g;
@@ -100,22 +105,56 @@ export function SkyBodies() {
   useLayoutEffect(() => () => { glow.dispose(); moonMap.dispose(); starGeo.dispose(); }, [glow, moonMap, starGeo]);
 
   const at = useMemo(() => new Vector3(), []);
-  useFrame(() => {
+  const right = useMemo(() => new Vector3(), []);
+  const ahead = useMemo(() => new Vector3(), []);
+  // Where the view started, for parallax off the map: each room or yard has its own.
+  const anchor = useRef({ key: '', x: 0, z: 0 });
+  useFrame(({ controls }) => {
     const h = hourNow();
     const angle = ((h - 6) / 12) * Math.PI;
     const halfH = SKY_DEPTH * Math.tan(MathUtils.degToRad(camera.fov / 2));
     const halfW = halfH * camera.aspect;
-    // A point on the sky, x and y from -1 to 1 across the screen.
+
+    // The camera's right and straight ahead, flat along the ground: which side of the screen east is on.
+    right.set(1, 0, 0).applyQuaternion(camera.quaternion).setY(0).normalize();
+    ahead.set(0, 0, -1).applyQuaternion(camera.quaternion).setY(0);
+    if (ahead.lengthSq() < 1e-6) ahead.set(0, 0, -1);
+    ahead.normalize();
+    // Parallax: panning the map slides the sky a little the other way, a fifth of the way at most from one end of
+    // the map to the other, so the sun and moon feel far off without sliding out of view.
+    const s = useGame.getState();
+    const t = (controls as OrbitControlsImpl | null)?.target ?? { x: 0, z: 0 };
+    let cx: number, cz: number, span: number;
+    if (s.view === 'city' && !useVisit.getState().current) {
+      const map = activeMap();
+      cx = map.w / 2;
+      cz = map.h / 2;
+      span = Math.max(map.w, map.h) / 2;
+    } else {
+      const key = `${s.view}|${s.teleportId}|${s.insideId ?? ''}`;
+      if (anchor.current.key !== key) anchor.current = { key, x: t.x, z: t.z };
+      cx = anchor.current.x;
+      cz = anchor.current.z;
+      span = 14;
+    }
+    const dx = t.x - cx, dz = t.z - cz;
+    const px = -PARALLAX * MathUtils.clamp((dx * right.x + dz * right.z) / span, -1, 1);
+    const py = -PARALLAX * MathUtils.clamp((dx * ahead.x + dz * ahead.z) / span, -1, 1);
+    // A point on the sky, x and y from -1 to 1 across the screen, shifted by the parallax and kept on screen.
     const place = (m: Object3D, x: number, y: number, depth = SKY_DEPTH) => {
-      at.set(x * halfW * (depth / SKY_DEPTH), y * halfH * (depth / SKY_DEPTH), -depth).applyMatrix4(camera.matrixWorld);
+      const sx = MathUtils.clamp(x + px, -0.95, 0.95), sy = MathUtils.clamp(y + py, -0.95, 0.95);
+      at.set(sx * halfW * (depth / SKY_DEPTH), sy * halfH * (depth / SKY_DEPTH), -depth).applyMatrix4(camera.matrixWorld);
       m.position.copy(at);
       m.quaternion.copy(camera.quaternion);
     };
+    // East is +x in the world, where the morning light comes from (three/Scene.tsx): turn the camera round and the
+    // sun's path turns with it.
+    const east = right.x;
     // Clouds and dust hide the sky; the harmattan sun is a pale disc you can look straight at, with no glare.
     const clear = (1 - sky.cloud * 0.8) * (1 - sky.haze * 0.35);
     const up = Math.sin(angle);
     const sunUp = MathUtils.smoothstep(up, -0.12, 0.06);
-    place(sun.current, Math.cos(angle) * 0.9, 0.55 + up * 0.38);
+    place(sun.current, Math.cos(angle) * east * 0.9, 0.55 + up * 0.38);
     sun.current.scale.setScalar(halfH * 0.06);
     const sm = sun.current.material as MeshBasicMaterial;
     sm.color.copy(SUN).lerp(SUN_LOW, 1 - MathUtils.smoothstep(up, 0, 0.35)).lerp(SUN_DUST, sky.haze * 0.7);
@@ -129,12 +168,15 @@ export function SkyBodies() {
 
     const mAngle = angle + Math.PI;
     const mUp = Math.sin(mAngle);
-    place(moon.current, Math.cos(mAngle) * 0.9, 0.55 + mUp * 0.38);
+    place(moon.current, Math.cos(mAngle) * east * 0.9, 0.55 + mUp * 0.38);
     moon.current.scale.setScalar(halfH * 0.055);
     (moon.current.material as MeshBasicMaterial).opacity = MathUtils.smoothstep(mUp, -0.12, 0.06) * clear;
 
     if (stars.current) {
       place(stars.current, 0, 0, SKY_DEPTH + 10);
+      // The star field drifts with the parallax too: its middle is not clamped like the sun's.
+      at.set(px * halfW * ((SKY_DEPTH + 10) / SKY_DEPTH), py * halfH * ((SKY_DEPTH + 10) / SKY_DEPTH), -(SKY_DEPTH + 10)).applyMatrix4(camera.matrixWorld);
+      stars.current.position.copy(at);
       stars.current.scale.set(halfW * ((SKY_DEPTH + 10) / SKY_DEPTH), halfH * ((SKY_DEPTH + 10) / SKY_DEPTH), 1);
       const night = MathUtils.smoothstep(-up, 0.05, 0.4);
       (stars.current.material as PointsMaterial).opacity = night * (1 - sky.cloud) * (1 - sky.haze) * 0.9;

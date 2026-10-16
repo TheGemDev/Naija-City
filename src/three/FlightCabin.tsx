@@ -445,7 +445,7 @@ function Airliner({ myLook }: { myLook: string }) {
       <KitMeshes kit={fittings} />
       {/* Everyone else stays put the whole flight: baked into a few meshes (cabinKit), not a few dozen each. Their
           shadows are left out: hidden under them and the seats, and a full plane of them was a lot to draw twice. */}
-      <Baked key={others.length} shadows={false}>
+      <Baked key={low ? 'low' : 'high'} shadows={false}>
         {others.map((o) => <Seated key={`${o.r}:${o.c}`} x={o.x} z={o.z} look={o.look} clip={o.clip} />)}
       </Baked>
       <Seated x={FLIGHT_SEAT.ticket.x} z={FLIGHT_SEAT.ticket.z} look={myLook} me />

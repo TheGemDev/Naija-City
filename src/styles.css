@@ -660,6 +660,13 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .region-map-badge .region-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 8px; border: 0; border-radius: 10px; background: var(--inverse); color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; transition: transform 0.12s; }
 .region-map-badge .region-actions button + button { background: #15803d; }
 .region-map-badge .region-actions button:active { transform: scale(0.96); }
+/* The weather under the state card (src/ui/WeatherChip.tsx), in the card's own glass. */
+.region-map-stack { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.region-map-stack .region-map-badge { align-self: stretch; }
+.region-weather { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border: 1px solid rgba(255,255,255,.8); border-radius: 99px; background: rgba(var(--surface-rgb), .92); color: var(--ink); box-shadow: 0 2px 10px rgba(15,23,42,.16); font-size: 12px; white-space: nowrap; backdrop-filter: blur(8px); }
+.region-weather b { font-weight: 800; }
+.region-weather span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.region-weather small { color: var(--fg-475569); font-size: 11px; font-weight: 600; }
 /* In the game the card is a button to the Civic app; the pill at its foot says so. */
 .building-map-badge { width: max-content; max-width: min(520px, 90vw); white-space: normal; padding: 10px 16px; cursor: default; pointer-events: none; user-select: none; background: rgba(var(--surface-rgb), 0.96); border: 1px solid rgba(226, 232, 240, 0.95); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12); color: var(--fg-0f172a); }
 .building-map-badge b { font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--fg-0f172a); }

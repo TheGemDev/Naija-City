@@ -35,6 +35,7 @@ import { openAdsSheet } from '../net/ads';
 import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { Emoji } from '../ui/Icons';
+import { WeatherChip } from '../ui/WeatherChip';
 
 const ROAD_Y = 0.012;
 
@@ -1136,7 +1137,7 @@ function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
 /**
  * The state's card over the map: its name, who runs it, what it makes and what it has in the bank. In the game it
  * carries two ways into the Civic app: the election board, where anyone can file to run, and this state's laws.
- * On the title screen, where there is no phone yet, it is only a sign.
+ * On the title screen, where there is no phone yet, it is only a sign. The weather there sits just under it.
  */
 function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
   const started = useGame((s) => s.started);
@@ -1148,19 +1149,22 @@ function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
   // Like the place labels: a tap on the card is for the card, not a drag of the map under it.
   const keep = { onPointerDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onMouseDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onTouchStart: (e: { stopPropagation(): void }) => e.stopPropagation() };
   return (
-    <div className="region-map-badge" title={nickname} {...(started ? keep : {})}>
-      <div className="region-head">
-        <b>{region.name}</b>
-        {state && <span className="region-state">{state}</span>}
-      </div>
-      <Leaders city={region.id} />
-      <StateFacts city={region.id} />
-      {started && (
-        <div className="region-actions">
-          <button type="button" onClick={() => open({})}><Emoji char="🗳️" size={13} /> Run for a post</button>
-          <button type="button" onClick={() => open({ wantLaws: CITY_HEAD[region.id] })}><Emoji char="⚖️" size={13} /> State laws</button>
+    <div className="region-map-stack">
+      <div className="region-map-badge" title={nickname} {...(started ? keep : {})}>
+        <div className="region-head">
+          <b>{region.name}</b>
+          {state && <span className="region-state">{state}</span>}
         </div>
-      )}
+        <Leaders city={region.id} />
+        <StateFacts city={region.id} />
+        {started && (
+          <div className="region-actions">
+            <button type="button" onClick={() => open({})}><Emoji char="🗳️" size={13} /> Run for a post</button>
+            <button type="button" onClick={() => open({ wantLaws: CITY_HEAD[region.id] })}><Emoji char="⚖️" size={13} /> State laws</button>
+          </div>
+        )}
+      </div>
+      <WeatherChip city={region.id} />
     </div>
   );
 }

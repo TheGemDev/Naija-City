@@ -4,9 +4,11 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PCFSoftShadowMap } from 'three';
 import { useGame } from '../src/game/store';
 import { useQuality } from '../src/game/quality';
-import { FlightCabin } from '../src/three/FlightCabin';
+import { FlightCabin as Now } from '../src/three/FlightCabin';
+import { FlightCabin as Head } from './FlightCabinHead';
 
 const q = new URLSearchParams(location.search);
+const FlightCabin = q.get('head') === '1' ? Head : Now;
 const kind = (q.get('kind') ?? 'ticket') as 'ticket' | 'jet';
 const frozen = q.get('p');
 const low = q.get('low') === '1';
@@ -66,11 +68,14 @@ function Probe() {
   return null;
 }
 
-const d = 26 / Math.hypot(1, 1.15, 1);
+const d = 26 * Number(q.get('zoom') ?? 1) / Math.hypot(1, 1.15, 1);
+const az = Number(q.get('az') ?? 0);
+const tz = Number(q.get('tz') ?? 0);
+const camPos: [number, number, number] = [d * Math.SQRT2 * Math.sin(Math.PI / 4 + az), 0.8 + 1.15 * d, tz + d * Math.SQRT2 * Math.cos(Math.PI / 4 + az)];
 createRoot(document.getElementById('root')!).render(
   <Canvas shadows={low ? false : { type: PCFSoftShadowMap }} dpr={Number(q.get('dpr') ?? (low ? 0.75 : Math.min(2, devicePixelRatio)))} gl={{ antialias: !low }}
-    camera={{ position: [d, 0.8 + 1.15 * d, d], fov: 35, near: 0.5, far: 400 }}
-    onCreated={({ camera }) => camera.lookAt(0, 0.8, 0)}>
+    camera={{ position: camPos, fov: 35, near: 0.1, far: 400 }}
+    onCreated={({ camera }) => camera.lookAt(0, 0.8, tz)}>
     <color attach="background" args={['#bfe3f5']} />
     <hemisphereLight args={['#fff8ec', '#6b5a3a', 1]} />
     <directionalLight position={[20, 24, 10]} intensity={2.2} castShadow={!low} shadow-mapSize={[2048, 2048]}

@@ -19,7 +19,7 @@ export const WEATHER_SLOT_MS = 15 * 60_000;
 export const WEATHER: Record<WeatherKind, { icon: string; night: string; label: string }> = {
   clear: { icon: '☀️', night: '🌙', label: 'Clear' },
   cloudy: { icon: '⛅', night: '☁️', label: 'Cloudy' },
-  harmattan: { icon: '🌫️', night: '🌫️', label: 'Harmattan' },
+  harmattan: { icon: '🌫️', night: '🌫️', label: 'Harmattan haze' },
   rain: { icon: '🌧️', night: '🌧️', label: 'Rain' },
   storm: { icon: '⛈️', night: '⛈️', label: 'Thunderstorm' },
 };
@@ -91,6 +91,32 @@ export function lightningAt(now = Date.now()) {
   const t = (now % 1000) / 1000;
   const flick = t < 0.08 ? 1 : t < 0.14 ? 0.15 : t < 0.22 ? 0.8 : Math.max(0, 0.8 - (t - 0.22) * 3);
   return flick;
+}
+
+/* ---------- Temperature ---------- */
+
+// Typical afternoon highs and pre-dawn lows (°C) by month, January first: Lagos on the coast, where the sea keeps it
+// muggy and even, and Kano in the Sahel, baking in April and cold on harmattan nights.
+const HIGH_SOUTH = [32, 33, 33, 32, 31, 29, 28, 28, 29, 30, 31, 32];
+const LOW_SOUTH = [23, 25, 25, 24, 24, 23, 23, 22, 23, 23, 24, 23];
+const HIGH_NORTH = [30, 33, 37, 39, 38, 35, 31, 30, 31, 34, 33, 30];
+const LOW_NORTH = [13, 16, 20, 24, 25, 23, 22, 21, 21, 19, 16, 13];
+
+/** Roughly how hot it is in that city at that hour (of the game clock) in that weather, in °C. */
+export function temperatureAt(city: string, hour: number, kind: WeatherKind, now = Date.now()) {
+  const north = NORTH[city] ?? 0.6;
+  const month = monthAt(now);
+  const high = HIGH_SOUTH[month] * (1 - north) + HIGH_NORTH[month] * north;
+  const low = LOW_SOUTH[month] * (1 - north) + LOW_NORTH[month] * north;
+  // Hottest at three in the afternoon, coolest at three in the morning.
+  const warm = (1 + Math.cos(((hour - 15) / 24) * Math.PI * 2)) / 2;
+  let t = low + (high - low) * warm;
+  if (kind === 'cloudy') t -= 1.5 * warm;
+  if (kind === 'rain') t -= 1 + 5 * warm;
+  if (kind === 'storm') t -= 2 + 6 * warm;
+  // Dry dusty air loses its heat at night.
+  if (kind === 'harmattan') t -= 3 * (1 - warm);
+  return Math.round(t);
 }
 
 /* ---------- What the scene is showing ---------- */
