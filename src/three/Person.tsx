@@ -4,7 +4,8 @@
 
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFrame, type ThreeElements } from '@react-three/fiber';
-import { CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, LatheGeometry, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TorusGeometry, TubeGeometry, Vector2, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
+import { BufferGeometry, CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, Euler, Float32BufferAttribute, LatheGeometry, Matrix4, MeshStandardMaterial, Quaternion, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TorusGeometry, TubeGeometry, Vector2, Vector3, type Group, type Mesh } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { decodeLook, GARMENT_BY_ID, HAIR_COLORS, isFullOutfit, SKINS, type Appearance, type Body, type Garment, type Pattern } from '../game/wardrobe';
 import type { ActivityAnimation } from '../game/catalog';
 
@@ -1016,19 +1017,141 @@ function Shoe({ g, skin }: { g?: Garment; skin: string }) {
 }
 
 /**
- * The head as one lathe: the top half is the round skull the hair is cut to fit (radius 0.14, a little
- * tall), the bottom narrows through the cheeks to the chin. Women's jaws are a touch finer.
+ * One slice of the head, crown to chin: its height, half its width, how far forward the face and how far
+ * back the skull reach there, and how square the front of the slice is (2 is a plain oval, more is flatter
+ * across the face with firmer corners at the cheeks and jaw).
+ */
+type HeadRow = [y: number, half: number, front: number, back: number, square: number];
+
+const HEAD_TOP = 0.146;
+/** Below this the skull gives way to the face. */
+const BROW_Y = 0.045;
+
+/**
+ * The head's slices. Above the brow it is the same egg as ever (0.129 wide, 0.134 to the forehead, 0.14
+ * behind), because every haircut and hat is sized to sit just outside it. Below the brow it stops being a
+ * ball: a brow ridge, eyes set in under it, cheekbones, a mouth that sits forward, a jaw that turns a corner
+ * and a chin, with the underside running back to the neck. Women's jaws and chins are finer and the brow softer.
+ */
+function headRows(f: boolean): HeadRow[] {
+  const rows: HeadRow[] = [];
+  const end = Math.acos(BROW_Y / HEAD_TOP);
+  for (let i = 0; i <= 7; i++) {
+    const t = (i / 7) * end;
+    const k = Math.sin(t);
+    rows.push([HEAD_TOP * Math.cos(t), 0.129 * k, 0.134 * k, -0.139 * k, 2]);
+  }
+  const jaw = f ? 0.9 : 1;
+  rows.push(
+    [0.028, 0.127, f ? 0.13 : 0.133, -0.136, 2.2],
+    [0.008, 0.125, 0.12, -0.136, 2.4],
+    [-0.022, 0.126, 0.123, -0.13, 2.6],
+    [-0.052, 0.119 * (f ? 0.96 : 1), 0.12, -0.113, 2.7],
+    [-0.082, 0.11 * jaw, 0.113, -0.086, f ? 2.5 : 3.2],
+    [-0.108, 0.091 * jaw, 0.107, -0.056, f ? 2.4 : 3.2],
+    [-0.13, f ? 0.048 : 0.064, f ? 0.1 : 0.103, -0.018, f ? 2.4 : 3],
+    [-0.145, f ? 0.022 : 0.032, f ? 0.088 : 0.092, 0.025, 2.2],
+    [-0.15, 0, 0.068, 0.068, 2],
+  );
+  return rows;
+}
+
+/** Catmull-Rom through four values. */
+const cr = (a: number, b: number, c: number, d: number, t: number) =>
+  0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t);
+
+/** The head's slices smoothed through a spline, so the lathe-like rings never show. */
+const headSlices = (f: boolean) => {
+  let s = slices.get(f);
+  if (s) return s;
+  const rows = headRows(f);
+  s = [];
+  const per = 3;
+  for (let i = 0; i < rows.length - 1; i++) {
+    const a = rows[Math.max(0, i - 1)], b = rows[i], c = rows[i + 1], d = rows[Math.min(rows.length - 1, i + 2)];
+    for (let j = 0; j < per; j++) s.push(b.map((_, k) => cr(a[k], b[k], c[k], d[k], j / per)) as HeadRow);
+  }
+  s.push(rows[rows.length - 1]);
+  slices.set(f, s);
+  return s;
+};
+const slices = new Map<boolean, HeadRow[]>();
+
+/** Where a slice's outline is at angle `t` round from the nose: superelliptic in front, a plain oval behind. */
+function slicePoint([, half, front, back, square]: HeadRow, t: number): [number, number] {
+  const s = Math.sin(t), c = Math.cos(t);
+  const n = c >= 0 ? square : 2.1;
+  const mid = (front + back) / 2, depth = (front - back) / 2;
+  return [half * Math.sign(s) * Math.abs(s) ** (2 / n), mid + depth * Math.sign(c) * Math.abs(c) ** (2 / n)];
+}
+
+/**
+ * How far forward the face's surface is at (x, y), so eyes, brows and lips can be set into it rather than
+ * hovering in front of it or sinking in.
+ */
+function faceZ(f: boolean, x: number, y: number) {
+  const s = headSlices(f);
+  let i = 1;
+  while (i < s.length - 1 && s[i][0] > y) i++;
+  const a = s[i - 1], b = s[i];
+  const k = Math.min(1, Math.max(0, (a[0] - y) / (a[0] - b[0] || 1)));
+  const row = a.map((v, j) => v + (b[j] - v) * k) as HeadRow;
+  const [, half, , , square] = row;
+  const sx = Math.min(1, Math.abs(x) / Math.max(1e-4, half)) ** (square / 2);
+  return slicePoint(row, Math.asin(sx))[1];
+}
+
+/**
+ * The whole head in one mesh (one draw call per person): the skull and face lofted through the slices
+ * above, with the nose and ears merged in since they are skin too.
  */
 const headGeo = (f: boolean) =>
   geo(`head:${f}`, () => {
-    const pts: Vector2[] = [];
-    const jaw: [number, number][] = [[0.132, -0.04], [0.116, -0.08], [0.092, -0.11], [0.058, -0.134], [0.024, -0.146], [0.0001, -0.149]];
-    for (let i = jaw.length - 1; i >= 0; i--) pts.push(new Vector2(jaw[i][0] * (f && i > 0 ? 0.94 : 1), jaw[i][1]));
-    for (let i = 0; i <= 12; i++) {
-      const a = (i / 12) * (Math.PI / 2);
-      pts.push(new Vector2(Math.max(0.0001, 0.14 * Math.cos(a)), 0.1456 * Math.sin(a)));
+    const s = headSlices(f);
+    const cols = 36;
+    const pos: number[] = [];
+    for (const row of s)
+      for (let c = 0; c < cols; c++) {
+        const [x, z] = slicePoint(row, (c / cols) * Math.PI * 2);
+        pos.push(x, row[0], z);
+      }
+    const index: number[] = [];
+    for (let r = 0; r < s.length - 1; r++)
+      for (let c = 0; c < cols; c++) {
+        const a = r * cols + c, b = a + cols, d = r * cols + ((c + 1) % cols), e = d + cols;
+        index.push(a, b, d, b, e, d);
+      }
+    const skull = new BufferGeometry();
+    skull.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    skull.setIndex(index);
+    skull.computeVertexNormals();
+    // The crown and the point under the chin are each one spot drawn as a ring of copies; give the copies
+    // one shared normal so neither shows a pinwheel of shading.
+    const nrm = skull.getAttribute('normal');
+    const last = (s.length - 1) * cols;
+    const under = new Vector3();
+    for (let c = 0; c < cols; c++) under.add(new Vector3().fromBufferAttribute(nrm, last + c));
+    under.normalize();
+    for (let c = 0; c < cols; c++) {
+      nrm.setXYZ(c, 0, 1, 0);
+      nrm.setXYZ(last + c, under.x, under.y, under.z);
     }
-    return new LatheGeometry(new SplineCurve(pts).getPoints(48), 32);
+
+    const part = (g: BufferGeometry, p: [number, number, number], r: [number, number, number] = [0, 0, 0], sc: [number, number, number] = [1, 1, 1]) => {
+      g.deleteAttribute('uv');
+      return g.applyMatrix4(new Matrix4().compose(new Vector3(...p), new Quaternion().setFromEuler(new Euler(...r)), new Vector3(...sc)));
+    };
+    // Nose: a bridge from between the eyes down to a rounded tip, with a nostril wing either side.
+    const k = f ? 0.88 : 1;
+    const tipZ = faceZ(f, 0, -0.026) + 0.016 * k;
+    const parts = [
+      part(new CapsuleGeometry(0.009 * k, 0.034 * k, 3, 8), [0, -0.004, (faceZ(f, 0, -0.004) + tipZ) / 2 - 0.004], [-0.42, 0, 0], [1.25, 1, 1]),
+      part(new SphereGeometry(0.0145 * k, 10, 8), [0, -0.026, tipZ - 0.006], [0, 0, 0], [1.1, 0.95, 1]),
+      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.0115 * k, 8, 6), [sd * 0.0155 * k, -0.031, tipZ - 0.016], [0, 0, 0], [1, 0.85, 1])),
+      // Ears: flat ovals standing off the side of the head, tipped back a little at the top.
+      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.032, 12, 10), [sd * 0.127, -0.006, -0.01], [-0.15, sd * -0.35, 0], [0.4, 1, 0.66])),
+    ];
+    return mergeGeometries([skull, ...parts])!;
   });
 
 /** The mouth: a short arc turned up at the corners, so faces at rest look friendly rather than glum. */
@@ -1040,40 +1163,45 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
   const hairColor = HAIR_COLORS[a.hairColor];
   const head = a.outfit.head ? GARMENT_BY_ID[a.outfit.head] : undefined;
   const coversHair = head && (head.shape === 'hijab' || head.shape === 'turban' || head.shape === 'gele' || head.shape === 'durag' || head.shape === 'headtie');
+  const { eyeZ, browZ, lipZ } = faceSpots(f);
   return (
     <group>
-      {/* Skull and jaw in one smooth piece */}
-      <M color={skin} geometry={headGeo(f)} scale={[0.92, 1, 1]} />
-      {/* Eyes */}
+      {/* Skull, face, nose and ears in one smooth piece */}
+      <M color={skin} geometry={headGeo(f)} />
+      {/* Eyes, set into the sockets under the brow */}
       {([-1, 1] as const).map((s) => (
-        <group key={s} position={[s * 0.047, 0.012, 0.118]}>
-          <M color="#f8fafc" geometry={sphere(0.022)} scale={[1, 0.85, 0.5]} rough={0.3} />
+        <group key={s} position={[s * EYE_X, EYE_Y, eyeZ]}>
+          <M color="#f8fafc" geometry={sphere(0.022)} scale={[1, 0.8, 0.5]} rough={0.3} />
           <M color="#1c1917" geometry={sphere(0.013)} position={[0, 0, 0.009]} scale={[1, 1, 0.5]} rough={0.2} />
-          {/* Brow */}
-          <M color={hairColor} position={[0, 0.038, 0.004]} rotation={[0, 0, s * 0.04]}>
-            <boxGeometry args={[0.042, f ? 0.007 : 0.011, 0.01]} />
+          {/* Brow, following the ridge above */}
+          <M color={hairColor} position={[0, 0.032, browZ - eyeZ]} rotation={[-0.25, 0, s * 0.06]}>
+            <boxGeometry args={[0.044, f ? 0.007 : 0.011, 0.01]} />
           </M>
           {f && (
-            <M color="#111827" position={[s * 0.004, 0.016, 0.009]} rotation={[0, 0, s * 0.12]}>
+            <M color="#111827" position={[s * 0.004, 0.015, 0.009]} rotation={[0, 0, s * 0.12]}>
               <boxGeometry args={[0.046, 0.0035, 0.006]} />
             </M>
           )}
         </group>
       ))}
-      {/* Nose */}
-      <M color={skin} geometry={sphere(0.024)} position={[0, -0.025, 0.128]} scale={[1.05, 0.9, 0.85]} />
       {/* Lips */}
-      <M color={f ? '#9f1239' : shade(skin, 0.62)} geometry={smile} position={[0, -0.05, 0.116]} rotation={[0.12, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.6]} />
-      {/* Ears */}
-      {([-1, 1] as const).map((s) => (
-        <M key={s} color={skin} geometry={sphere(0.03)} position={[s * 0.128, -0.005, 0]} scale={[0.45, 1, 0.75]} />
-      ))}
-      {f && !coversHair && ([-1, 1] as const).map((s) => <M key={s} color="#d4af37" geometry={sphere(0.012)} position={[s * 0.13, -0.04, 0.005]} metal={0.8} rough={0.3} />)}
+      <M color={f ? '#9f1239' : shade(skin, 0.62)} geometry={smile} position={[0, -0.05, lipZ]} rotation={[0.12, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.6]} />
+      {f && !coversHair && ([-1, 1] as const).map((s) => <M key={s} color="#d4af37" geometry={sphere(0.012)} position={[s * 0.126, -0.044, -0.004]} metal={0.8} rough={0.3} />)}
       {!coversHair && <Hair style={a.hair} color={hairColor} skin={skin} capped={!!head} />}
       {head && <HeadWear g={head} />}
       {a.outfit.eyes && <Eyes g={GARMENT_BY_ID[a.outfit.eyes]} />}
     </group>
   );
+}
+
+const EYE_X = 0.047;
+const EYE_Y = 0.01;
+/** Where the eyes, brows and lips sit on each face (worked out once, from the face's own surface). */
+const spots = new Map<boolean, { eyeZ: number; browZ: number; lipZ: number }>();
+function faceSpots(f: boolean) {
+  let s = spots.get(f);
+  if (!s) spots.set(f, (s = { eyeZ: faceZ(f, EYE_X, EYE_Y) - 0.005, browZ: faceZ(f, EYE_X, EYE_Y + 0.032) + 0.002, lipZ: faceZ(f, 0.016, -0.062) - 0.001 }));
+  return s;
 }
 
 /** Upper half of a sphere, for scalps and caps. */
