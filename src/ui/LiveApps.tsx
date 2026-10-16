@@ -7,7 +7,7 @@ import { dayOf, naira, netWorthOf, useGame } from '../game/store';
 import { fed, FOOD_ENERGY } from '../game/catalog';
 import { okadaBanned } from '../game/cityLaws';
 import { CAR_FUEL, fuelLeft } from '../game/carFuel';
-import { BET_WINDOW_MS, blackMarketPrice, FINAL_ODDS, FINAL_TEAMS, FUEL, fuelPrice, liveEvent, MAX_STAKE, roadEvent, type FinalPick } from '../game/live';
+import { blackMarketPrice, FUEL, fuelPrice, liveEvent } from '../game/live';
 import { ACHIEVEMENTS, legacyOf, nextRepTier, repScore, repTier, REP_TIERS } from '../game/legacy';
 import { CRIME_TIERS, crimeTier, nextCrimeTier, PARK_RULES, PARKS } from '../game/underworld';
 import { MUGUS, MUGU_PREFIX, PERK_BY_ID, SCAMS, SCAM_RULES } from '../game/scams';
@@ -18,12 +18,7 @@ import { PLACE_BY_ID } from '../game/city';
 import { generatorOf } from '../game/power';
 import { regionPlace } from '../game/regions';
 import { ORIGINS } from '../game/origins';
-import { blogOf } from '../game/news';
-import { CITY_NAME, CIVIC_CITIES } from '../game/civic';
-import {
-  FEED_WINDOW, claimPark, collectDues, deletePost, legacyInput, likePost, loadFeed, loadFriendsFeed, loadLive, loadVdmFeed, loadReplies, loadScams, loadUnderworld, placeBet, postGist, sendScam, setFeedCity, useLive,
-  type FeedPost,
-} from '../net/live';
+import { claimPark, collectDues, legacyInput, loadScams, loadUnderworld, sendScam, useLive } from '../net/live';
 import { searchPlayers, type PlayerRef } from '../net/social';
 import { useSession } from '../net/session';
 import { owambeNow } from './Owambe';
@@ -33,10 +28,6 @@ import { abujaEventButtons } from './AbujaEvents';
 import { lagosEventButtons } from './LagosEvents';
 import { kanoEventButtons } from './KanoEvents';
 import { Face } from './Face';
-import { Mugshot, MugshotShare } from './Mugshot';
-import { Poster } from './PlayerName';
-import { shareLink, tweetLink } from '../net/deeplink';
-import { Emoji } from './Icons';
 import { DailyTab, DispatchTile, FarmTab, FreelanceTab, HUSTLE_TABS, type HustleTab } from './Hustles';
 
 function useNow(ms = 1000) {
@@ -67,278 +58,10 @@ const closePhone = () => useGame.getState().setPanel(null);
 
 /** A place by the name it goes by in that city (Murtala Square is Eagle Square in Abuja). */
 const placeIn = (city: string, id: string) => regionPlace(city, id) ?? PLACE_BY_ID[id];
-const placeName = (city: string, id: string) => placeIn(city, id)?.name;
 
-/* ---------- Live event card (Gist, HUD) ---------- */
+/* ---------- Twitter (the city feed): src/ui/Twitter.tsx ---------- */
 
-function LiveEventCard() {
-  const now = useNow();
-  const city = useGame((s) => s.destinationId);
-  const e = liveEvent(now, city);
-  const road = roadEvent(now);
-  return (
-    <>
-    <div className={`live-card ${e.active ? 'on' : ''}`}>
-      <span className="live-icon"><Emoji char={e.def.icon} size={30} /></span>
-      <span className="live-info">
-        <small>{e.active ? <><Emoji char="🔴" size={10} /> LIVE NOW · whole city</> : `Next live event in ${mmss(e.startsAt - now)}`}</small>
-        <b>{e.def.title}</b>
-        <small>{e.def.blurb}</small>
-        {e.active && <small className="live-ends">Ends in {mmss(e.endsAt - now)}{e.def.place && <> · <Emoji char="📍" size={11} /> {placeName(city, e.def.place)}</>}</small>}
-      </span>
-    </div>
-    <div className={`live-card ${road.active ? 'on' : ''}`}>
-      <span className="live-icon"><Emoji char={road.def.icon} size={30} /></span>
-      <span className="live-info">
-        <small>{road.active ? <><Emoji char="🔴" size={10} /> ON THE ROADS NOW · drivers</> : `Next road event in ${mmss(road.startsAt - now)}`}</small>
-        <b>{road.def.title}</b>
-        <small>{road.def.blurb}</small>
-        {road.active && <small className="live-ends">Ends in {mmss(road.endsAt - now)}</small>}
-      </span>
-    </div>
-    </>
-  );
-}
-
-function BetSlip() {
-  const now = useNow();
-  const e = liveEvent(now);
-  const bets = useLive((s) => s.bets);
-  const results = useLive((s) => s.results);
-  const busy = useLive((s) => s.busy);
-  const money = useGame((s) => s.money);
-  const [pick, setPick] = useState<FinalPick>('home');
-  const [stake, setStake] = useState(5_000);
-  useEffect(() => void loadLive(), []);
-  const open = e.active && e.def.id === 'final' && now < e.startsAt + BET_WINDOW_MS;
-  const mine = bets.find((b) => b.slot === e.slot);
-  if (!open && !bets.length && !results.length) return null;
-  return (
-    <div className="list-card bet-card">
-      <b><Emoji char="🏆" size={16} /> {FINAL_TEAMS.home} vs {FINAL_TEAMS.away}</b>
-      {open && !mine && (
-        <>
-          <small className="muted">Bets close in {mmss(e.startsAt + BET_WINDOW_MS - now)}. Result at full time.</small>
-          <div className="bet-picks">
-            {(Object.keys(FINAL_ODDS) as FinalPick[]).map((p) => (
-              <button key={p} className={pick === p ? 'on' : ''} onClick={() => setPick(p)}>
-                <b>{p === 'draw' ? 'Draw' : FINAL_TEAMS[p]}</b>
-                <small>×{FINAL_ODDS[p]}</small>
-              </button>
-            ))}
-          </div>
-          <div className="bet-stakes">
-            {[1_000, 5_000, 20_000, MAX_STAKE].map((a) => (
-              <button key={a} className={stake === a ? 'on' : ''} disabled={money < a} onClick={() => setStake(a)}>{naira(a)}</button>
-            ))}
-          </div>
-          <button className="btn go wide" disabled={busy || money < stake} onClick={() => placeBet(pick, stake)}>
-            Stake {naira(stake)} · win {naira(Math.floor(stake * FINAL_ODDS[pick]))}
-          </button>
-        </>
-      )}
-      {mine && (
-        <small>
-          Your bet: {naira(mine.stake)} on {mine.pick === 'draw' ? 'a draw' : FINAL_TEAMS[mine.pick]}{' '}
-          {mine.payout === null ? <>· waiting for full time <Emoji char="⏳" size={13} /></> : mine.payout > 0 ? <>· WON {naira(mine.payout)} <Emoji char="🤑" size={13} /></> : <>· lost <Emoji char="😩" size={13} /></>}
-        </small>
-      )}
-      {results.slice(0, 2).map((r) => (
-        <small key={r.slot} className="muted">Result: {FINAL_TEAMS.home} {r.score} {FINAL_TEAMS.away}</small>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- Twitter (the city feed) ---------- */
-
-export function GistApp() {
-  const feed = useLive((s) => s.feed);
-  const friendsFeed = useLive((s) => s.friendsFeed);
-  const vdmFeed = useLive((s) => s.vdmFeed);
-  const loading = useLive((s) => s.feedLoading);
-  const busy = useLive((s) => s.busy);
-  const feedEnd = useLive((s) => s.feedEnd);
-  const feedCity = useLive((s) => s.feedCity);
-  const feedAuto = useLive((s) => s.feedAuto);
-  const here = useGame((s) => s.destinationId);
-  const friendsEnd = useLive((s) => s.friendsEnd);
-  const sharedPost = useLive((s) => s.sharedPost);
-  const myUid = useSession((s) => s.user?.uid);
-  const signedIn = !!myUid;
-  const [text, setText] = useState('');
-  const [openId, setOpenId] = useState<number | null>(null);
-  const [tab, setTab] = useState<'friends' | 'news' | 'vdm'>('friends');
-  // The news is the news of the state I am in, until I pick another.
-  useEffect(() => {
-    const state = CIVIC_CITIES.find((c) => c === here);
-    if (feedAuto && state) setFeedCity(state);
-  }, [here, feedAuto]);
-  // A tweet opened from a share link comes with its replies showing.
-  useEffect(() => {
-    if (sharedPost) setOpenId(sharedPost.id);
-  }, [sharedPost?.id]);
-  useEffect(() => {
-    const load = tab === 'vdm' ? loadVdmFeed : tab === 'friends' ? loadFriendsFeed : loadFeed;
-    void load();
-    const id = setInterval(() => void load(), 20_000);
-    return () => clearInterval(id);
-  }, [tab]);
-  const cards = (posts: FeedPost[]) => posts.filter((p) => p.id !== sharedPost?.id).map((p) => (
-    <TweetCard key={p.id} p={p} myUid={myUid} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} />
-  ));
-  const compose = signedIn && (
-    <form
-      className="gist-compose"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
-        void postGist(text.trim()).then((r) => r !== null && setText(''));
-      }}
-    >
-      <textarea value={text} maxLength={200} rows={2} placeholder="What’s happening in Naija?" onChange={(e) => setText(e.target.value)} />
-      <button className="btn sm go" disabled={busy || !text.trim()}>Post</button>
-    </form>
-  );
-  return (
-    <>
-      {sharedPost && (
-        <>
-          <div className="shared-head">
-            <b><Emoji char="🔗" size={14} /> Shared with you</b>
-            <button className="gist-like" onClick={() => useLive.setState({ sharedPost: null })}>✕ Close</button>
-          </div>
-          <TweetCard p={sharedPost} myUid={myUid} open={openId === sharedPost.id} onToggle={() => setOpenId(openId === sharedPost.id ? null : sharedPost.id)} />
-        </>
-      )}
-      <div className="tabs">
-        <button className={tab === 'friends' ? 'on' : ''} onClick={() => setTab('friends')}><Emoji char="👥" size={16} /> Friends</button>
-        <button className={tab === 'news' ? 'on' : ''} onClick={() => setTab('news')}><Emoji char="📰" size={16} /> News</button>
-        <button className={tab === 'vdm' ? 'on' : ''} onClick={() => setTab('vdm')}><Emoji char="📢" size={16} /> VDM</button>
-      </div>
-
-      {tab === 'friends' && (
-        <>
-          {compose}
-          {!friendsFeed.length && (
-            <p className="muted small">
-              {loading ? 'Loading tweets…' : 'Nothing from your friends yet. Add friends in Messages, or check the News tab for what is happening in the country.'}
-            </p>
-          )}
-          {cards(friendsFeed)}
-          {!friendsEnd && friendsFeed.length > 0 && <button className="ghost-btn" disabled={loading} onClick={() => loadFriendsFeed(true)}>Older tweets</button>}
-        </>
-      )}
-
-      {tab === 'news' && (
-        <>
-          <LiveEventCard />
-          <BetSlip />
-          <h4>Trending in Naija</h4>
-          <div className="pills" style={{ marginBottom: 10 }}>
-            <button className={feedCity === null ? 'on' : ''} onClick={() => { useLive.setState({ feedAuto: false }); setFeedCity(null); }}>All</button>
-            {CIVIC_CITIES.map((c) => (
-              <button key={c} className={feedCity === c ? 'on' : ''} onClick={() => { useLive.setState({ feedAuto: c === here }); setFeedCity(c); }}>{CITY_NAME[c]}</button>
-            ))}
-          </div>
-          {!feed.length && (
-            <p className="muted small">
-              {loading ? 'Loading the news…' : feedCity ? `No news from ${CITY_NAME[feedCity]} yet today. The blogs are watching the government.` : 'No news yet today. The blogs are watching the government.'}
-            </p>
-          )}
-          {cards(feed)}
-          {!feedEnd && feed.length > 0 && <button className="ghost-btn" disabled={loading} onClick={() => loadFeed(true)}>Older news</button>}
-          {feedEnd && feed.length >= FEED_WINDOW && <p className="muted small">That’s the latest {FEED_WINDOW} stories{feedCity ? ` from ${CITY_NAME[feedCity]}` : ''}.</p>}
-        </>
-      )}
-
-      {tab === 'vdm' && (
-        <>
-          <div className="vdm-hero">
-            <span><Emoji char="📢" size={30} /></span>
-            <span>
-              <b>VDM <Emoji char="✔️" size={14} /></b>
-              <small>Naija’s loudest whistleblower. He exposes thieves and drags the government. Call him from the Police app.</small>
-            </span>
-          </div>
-          {!vdmFeed.length && <p className="muted small">{loading ? 'Loading…' : 'VDM is quiet today. Nobody has called him, and the government has behaved.'}</p>}
-          {cards(vdmFeed)}
-        </>
-      )}
-    </>
-  );
-}
-
-/** Bold every @handle in a post. */
-function boldNames(text: string) {
-  return text.split(/(@\w+)/g).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
-}
-
-function TweetCard({ p, myUid, open, onToggle }: { p: FeedPost; myUid?: string; open: boolean; onToggle: () => void }) {
-  const replies = useLive((s) => s.replies[p.id]);
-  const busy = useLive((s) => s.busy);
-  const [text, setText] = useState('');
-  const signedIn = !!myUid;
-  useEffect(() => {
-    if (open) void loadReplies(p.id);
-  }, [open, p.id]);
-  const header = (q: FeedPost) => (
-    <div className="gist-meta">
-      {q.kind === 'post' && q.uid ? <Poster uid={q.uid} username={q.username} /> : <span><Emoji char={q.icon} size={18} /></span>}
-      <b>{q.kind === 'post' ? (q.uid ? '' : `@${q.username ?? 'someone'}`) : q.kind === 'vdm' ? <>VDM <Emoji char="✔️" size={12} /></> : q.kind === 'mugshot' ? <>Nigeria Police <Emoji char="✔️" size={12} /></> : q.kind === 'achievement' ? 'Achievement' : <>{blogOf(q.id)} <Emoji char="📰" size={13} /></>}</b>
-      <small>· {ago(q.at)}</small>
-    </div>
-  );
-  return (
-    <div className={`post gist-post kind-${p.kind}`}>
-      {header(p)}
-      <p>{boldNames(p.text)}</p>
-      {p.kind === 'mugshot' && p.uid && <Mugshot uid={p.uid} username={p.username} seed={p.id} at={p.at} />}
-      <div className="gist-actions">
-        <button className={`gist-like ${p.liked ? 'on' : ''}`} onClick={() => likePost(p.id)}>
-          <Emoji char={p.liked ? '❤️' : '🤍'} size={13} /> {p.likes}
-        </button>
-        <button className="gist-like" onClick={onToggle}><Emoji char="💬" size={13} /> {replies?.length ?? p.replies ?? 0}</button>
-        <button className="gist-like" onClick={() => void shareLink(tweetLink(p.id), `${p.kind === 'post' ? `@${p.username ?? 'someone'}` : p.kind === 'vdm' ? 'VDM' : blogOf(p.id)} on Naija Twitter`)}><Emoji char="↗️" size={13} /> Share</button>
-        {p.kind === 'mugshot' && p.uid && <MugshotShare uid={p.uid} username={p.username} seed={p.id} at={p.at} />}
-        {p.kind === 'post' && p.uid === myUid && (
-          <button className="gist-like" onClick={() => window.confirm('Delete this tweet?') && void deletePost(p.id).catch(() => {})}><Emoji char="🗑️" size={13} /></button>
-        )}
-      </div>
-      {open && (
-        <div className="gist-replies">
-          {(replies ?? []).map((r) => (
-            <div key={r.id} className="gist-reply">
-              {header(r)}
-              <p>{boldNames(r.text)}</p>
-              <div className="gist-actions">
-                <button className={`gist-like ${r.liked ? 'on' : ''}`} onClick={() => likePost(r.id)}>
-                  <Emoji char={r.liked ? '❤️' : '🤍'} size={13} /> {r.likes}
-                </button>
-                {r.uid === myUid && (
-                  <button className="gist-like" onClick={() => void deletePost(r.id, p.id).catch(() => {})}><Emoji char="🗑️" size={13} /></button>
-                )}
-              </div>
-            </div>
-          ))}
-          {signedIn && (
-            <form
-              className="gist-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!text.trim()) return;
-                void postGist(text.trim(), p.id).then((r) => r !== null && setText(''));
-              }}
-            >
-              <textarea value={text} maxLength={200} rows={1} placeholder={`Reply to @${p.username ?? 'someone'}…`} onChange={(e) => setText(e.target.value)} />
-              <button className="btn sm go" disabled={busy || !text.trim()}>Reply</button>
-            </form>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+export { GistApp } from './Twitter';
 
 /* ---------- Hustle ---------- */
 

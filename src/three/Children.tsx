@@ -235,8 +235,10 @@ function Nanny({ layout, items }: { layout: HouseLayout; items: PlacedItem[] }) 
 function freeCells(layout: HouseLayout, items: PlacedItem[]) {
   const blocked = blockedCells(items);
   const out: { x: number; z: number }[] = [];
-  const rooms = layout.rooms.filter((r) => !/bath|toilet|store/i.test(r.name));
-  for (const r of rooms.length ? rooms : layout.rooms) {
+  // Indoors only (the layout also names the compound and yard), and not the bathroom.
+  const inside = layout.rooms.filter((r) => r.x1 <= layout.width && r.z1 <= layout.depth && !/compound|yard|garden|carport|porch|outside/i.test(r.name));
+  const rooms = inside.filter((r) => !/bath|toilet|store/i.test(r.name));
+  for (const r of rooms.length ? rooms : inside) {
     for (let x = r.x0; x < r.x1; x++) for (let z = r.z0; z < r.z1; z++) {
       const k = key({ x, z });
       if (!blocked.has(k) && !layout.solid.has(k)) out.push({ x, z });

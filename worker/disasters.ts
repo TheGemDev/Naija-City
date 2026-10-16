@@ -15,13 +15,14 @@ import { CAR_BY_ID } from '../src/game/cars';
 import { conditionOf, damage, repairCost, type CarCondition } from '../src/game/carCare';
 import { MARKET_PRODUCT_BY_ID } from '../src/game/career';
 import { hash } from '../src/game/live';
-import { VDM_GOV_ICON } from '../src/game/news';
+import { GOV_RANT, VDM_GOV_ICON } from '../src/game/news';
 import { REGION_BY_ID } from '../src/game/property';
 import { feedStmt, naira } from './feed';
 import { gazette, official } from './gazette';
 import { sendPush } from './push';
 import { announceAll, notifyPlayer, onlinePlayers, whereIs } from './shards';
 import { applyStmts, getBalance } from './wallet';
+import { vdmStatements } from './vdm';
 
 declare global {
   interface Env {
@@ -348,15 +349,12 @@ async function relief(env: Env, ctx: ExecutionContext, d: Disaster, now: number)
   if (pot < DISASTER_RULES.reliefMin) {
     const claimed = await db.prepare('UPDATE disasters SET relief = 0 WHERE id = ? AND relief IS NULL RETURNING id').bind(d.id).first();
     if (!claimed) return 0;
-    const rants = [
-      `${CITY_NAME[city]} don suffer ${named(d)}. ${victims.length} families dey count loss, ${naira(total)} for repairs. ${who}, where SEMA dey? Not one mattress, not one bag of rice. Una dey wait make water dry before una come snap picture? 🤬`,
-      (state?.balance ?? 0) > 0
-        ? `After ${named(d)}, people dey sleep for church. ${who} never show face. Treasury dey there but relief no dey. Na only campaign season una dey find road to ${d.area}? 😤`
-        : `After ${named(d)}, the ${CITY_NAME[city]} treasury is empty. Empty! ${who}, who chop the money wey for be emergency fund? Victims dey on their own again. 🤬`,
-    ];
-    await db.prepare(
-      `INSERT INTO feed (uid, kind, icon, text, created_at, city) VALUES (?, 'vdm', ?, ?, ?, ?)`,
-    ).bind(policy?.head ?? null, VDM_GOV_ICON, rants[hash(d.id) % rants.length].slice(0, 280), now, city).run().catch(() => {});
+    // VDM drags the government that left the victims alone (src/game/vdm.ts), in words seeded by the disaster.
+    const rant = await vdmStatements(db, {
+      topic: 'noRelief', uid: policy?.head ?? null, city, icon: VDM_GOV_ICON, seed: `disaster:${d.id}`, now,
+      facts: { who, other: CITY_NAME[city], what: named(d), n: victims.length, amount: naira(total), area: d.area, empty: (state?.balance ?? 0) <= 0 },
+    }).catch(() => []);
+    if (rant.length) await db.batch(rant).catch(() => {});
     return 0;
   }
   // Each victim's share of the pot, by what they paid; the remainder goes to the biggest loss so the books balance.
@@ -386,6 +384,15 @@ async function relief(env: Env, ctx: ExecutionContext, d: Disaster, now: number)
   await db.prepare('INSERT INTO feed (uid, kind, icon, text, created_at, city) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(policy?.head ?? null, 'politics', '🏛️', `${who} has sent SEMA with ${naira(pot)} in relief for the ${victims.length} households hit by ${named(d)}. Each family gets back part of their repair bill.`.slice(0, 280), now, city).run().catch(() => {});
   await gazette(env, ctx, [{ uid: policy?.head ?? null, office, kind: 'palliative', icon: def.icon, text: `${who} paid ${naira(pot)} in disaster relief to ${victims.length} households after ${named(d)}.` }], false);
+  // Relief that reached the victims may get VDM's credit (decided by the disaster, so a second tick says the same).
+  if (roll(d.id, 7) < GOV_RANT.praiseChance * 2) {
+    const credit = await vdmStatements(db, {
+      topic: 'relief', uid: policy?.head ?? null, city, icon: VDM_GOV_ICON, seed: `disaster:${d.id}:relief`, now,
+      facts: { who, other: CITY_NAME[city], what: named(d), n: victims.length, amount: naira(pot) },
+      rest: { icons: [VDM_GOV_ICON], ms: GOV_RANT.gapMs },
+    }).catch(() => []);
+    if (credit.length) await db.batch(credit).catch(() => {});
+  }
   victims.forEach((v, i) => tell(env, ctx, v.uid, { id: d.id, kind: d.kind, what: 'relief', text: `🏛️ SEMA relief: ${naira(shares[i])} towards your repairs after ${named(d)}.`, paid: shares[i] }));
   return pot;
 }

@@ -19,6 +19,8 @@ import { POLICE_KEEP_MS } from './prune';
 import { stateRevenue } from './state';
 import type { FirebaseUser } from './auth';
 import { handle, naira, postFeed } from './feed';
+import { vdmStatements } from './vdm';
+import { vdmPass, type VdmFacts, type VdmTopic } from '../src/game/vdm';
 import { searchPhone } from './phoneSearch';
 import { applyStmts, ensureWallet, getBalance } from './wallet';
 import { ownedCounts } from './progress';
@@ -515,58 +517,23 @@ async function stealTarget(env: Env, me: string, itemId: string) {
   return { thiefPos: thiefPos!, victim, propertyId, row, save, propertyItems, lived, item };
 }
 
-/** What VDM says about a crime. Burglaries nobody saw get the rant without a name. */
-function vdmRant(row: CrimeRow, thief: string | undefined, victim: string | undefined) {
+/**
+ * What VDM says about a crime: the matter his post is built from (src/game/vdm.ts). Burglaries nobody saw get a call
+ * for information without a name; the rest name the thief.
+ */
+function vdmRant(row: CrimeRow, thief: string | undefined, victim: string | undefined): { topic: VdmTopic; facts: VdmFacts } {
   const item = row.item ? ITEMS[row.item]?.name ?? row.item : null;
   const loot = [row.amount ? naira(row.amount) : '', item ? `their ${item}` : ''].filter(Boolean).join(' and ');
   const v = handle(victim);
+  const money = row.amount ?? 0;
   if (unsolved({ kind: row.kind, success: !!row.success, guard: row.guard }) && row.status !== 'arrested') {
-    const lines = [
-      `Somebody broke into ${v}'s house and carried ${loot || 'their things'}. I don't know who you are YET, but I will find you. Naija, shine your eye! 👀`,
-      `Breaking: thief entered ${v}'s house and comot with ${loot || 'their property'}. Whoever you are, your days are numbered. Send me information, I go protect your identity. 🔦`,
-      `${v} came back home and ${loot || 'their property'} don disappear. No face, no name. If you know who do am, my DM is open. I no dey sleep. 📩`,
-      `My people, una dey sleep? Somebody enter ${v}'s house, pack ${loot || 'their things'} and waka comot like say na him papa house. I am on this matter. 🕵🏾`,
-      `To the person wey carry ${loot || 'the property'} from ${v}'s house: I dey come for you. Return am before I find your name. You have 24 hours. ⏳`,
-      `Ratels, assignment for una. ${v} was robbed of ${loot || 'their property'} and the thief vanished. Anybody selling something suspicious this week, tag me. 🔦`,
-      `Police never talk anything about ${v}'s house wey dem burgle. ${loot ? `${loot} gone. ` : ''}So na me go do investigation again? No wahala. 👀`,
-    ];
-    return pick(lines);
+    return { topic: 'exposeUnsolved', facts: { victim: v, loot: loot || 'their things', money } };
   }
-  const t = handle(thief);
   const did = row.success
     ? row.kind === 'burglary' ? `broke into ${v}'s house and carried ${loot || 'their property'}` : `dipped hand inside ${v}'s pocket and took ${loot || 'their money'}`
     : row.kind === 'burglary' ? `tried to break into ${v}'s house` : `tried to pick ${v}'s pocket`;
-  const lines = [
-    `🚨 EXPOSÉ 🚨 This one na ${t}. ${t} ${did}. Look at this face well. If you see am, run! Naija, I don talk my own. 🔦`,
-    `Na ${t} be this o! ${t} ${did}. Shameless! I am calling on the police to do their work. We are watching you. 👀`,
-    `Una see this ${t}? Yesterday na "bro bro", today ${t} ${did}. Tell your people make dem lock their doors. 🔒`,
-    `${t}, I greet you o. So na you ${did}? Your mama know say na this work you dey do? Come online and explain yourself. 🎤`,
-    `I have the full gist. ${t} ${did}. I no dey fear anybody, sue me if you like. Ratels, over to you. 🦡`,
-    `Naija, mark this name: ${t}. ${t} ${did}. If ${t} greet you for road, hold your pocket with two hands. 👐🏾`,
-    `Them say make I no talk. I go talk! ${t} ${did}. Person wey dey form big boy for Twitter. Shame no dey catch you? 😤`,
-    `Part 1 of ${t}'s matter: ${t} ${did}. Part 2 dey come if ${t} no settle ${v} today today. I get receipts. 🧾`,
-    `${v} cry come meet me. Why? Because ${t} ${did}. ${t}, wherever you dey hide, this country small. We go jam. 👀`,
-    `Dear police, I don do una work for una. Suspect: ${t}. Offence: ${t} ${did}. Oya, go and arrest. 🚔`,
-    `See as ${t} fine for profile picture, meanwhile ${t} ${did}. Fine boy, bad character. Avoid! 🚫`,
-  ];
-  return pick(lines);
+  return { topic: 'exposeNamed', facts: { who: handle(thief), victim: v, did, money } };
 }
-
-/** What he tells you when he won't carry your matter. */
-const VDM_PASS = [
-  'I don hear you. But this matter never sweet reach to post. Maybe later.',
-  'My hand full today. Too many people dey call me. Try me another time.',
-  'Hmm. Bring evidence first. I no dey post wetin I no fit defend.',
-  'This one small. People dey lose houses and you dey call me for this?',
-  'I dey court today. I no fit carry your matter now.',
-  'I go think about am. No promise.',
-  'My lawyer say make I calm down this week. Come back later.',
-  'Na so una go dey call me for everything? I don write am down sha.',
-  'I dey live video now, I no fit attend to you. Call back.',
-  'Let the police try first. If dem fail, come back.',
-];
-
-const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 export async function handleCrime(req: Request, env: Env, ctx: ExecutionContext, user: FirebaseUser, path: string): Promise<Response | null> {
   const db = env.DB;
@@ -865,13 +832,15 @@ export async function handleCrime(req: Request, env: Env, ctx: ExecutionContext,
     const names = await usernames(db, [row.thief_uid, me]);
     const report = (r: CrimeRow) => toReport({ ...r, thief: names.get(row.thief_uid) ?? null, victim: names.get(me) ?? null }, true);
     if (Math.random() >= VDM.odds({ kind: row.kind, success: !!row.success, guard: row.guard, status: row.status, amount: row.amount })) {
-      return json({ crime: report(claimed), posted: false, said: pick(VDM_PASS) });
+      return json({ crime: report(claimed), posted: false, said: vdmPass(`crime:${id}:${now}`) });
     }
     // He drags a break-in once, not once for every item carried out of it.
     await db.prepare('UPDATE crimes SET vdm_at = ?1 WHERE vdm_at IS NULL AND (id = ?2 OR (victim_uid = ?3 AND thief_uid = ?4 AND kind = ?5 AND ABS(created_at - ?6) <= ?7))')
       .bind(now, id, me, row.thief_uid, row.kind, row.created_at, SAME_VISIT_MS).run();
     const named = !(unsolved({ kind: row.kind, success: !!row.success, guard: row.guard }) && row.status !== 'arrested');
-    await postFeed(db, named ? row.thief_uid : null, 'vdm', VDM.icon, vdmRant(row, names.get(row.thief_uid), names.get(me)));
+    // In his own words each time (src/game/vdm.ts), seeded by the case, and remembered against the thief.
+    const expose = await vdmStatements(db, { ...vdmRant(row, names.get(row.thief_uid), names.get(me)), uid: named ? row.thief_uid : null, icon: VDM.icon, seed: `crime:${id}`, now }).catch(() => []);
+    if (expose.length) await db.batch(expose).catch(() => {});
     if (named) notify(env, ctx, row.thief_uid, { t: 'vdm', victim: names.get(me) ?? 'someone' });
     return json({ crime: report({ ...claimed, vdm_at: now }), posted: true });
   }

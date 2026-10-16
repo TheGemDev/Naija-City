@@ -5,7 +5,8 @@ import '../src/theme.css';
 import '../src/styles.css';
 import '../src/ui/phone-ui.css';
 import '../src/ui/safe-area.css';
-import { useGame, type TravelMode } from '../src/game/store';
+import { taskDurationSeconds, useGame, type TravelMode } from '../src/game/store';
+import { Emoji } from '../src/ui/Icons';
 import { avatar, resetAvatar } from '../src/game/avatar';
 import { regionPlace, regionPlaces } from '../src/game/regions';
 import { Avatar } from '../src/three/Avatar';
@@ -21,12 +22,35 @@ resetAvatar(regionPlace('kaduna', from)!.door);
 
 Object.assign(window, { __game: useGame, __trip: useTrip });
 
+// The card as it was before the fix (src/ui/Hud.tsx TaskChip at a4ad3df), for the before shots.
+function OldTaskChip() {
+  const task = useGame((s) => s.task);
+  const cancel = useGame((s) => s.cancelTask);
+  if (!task || task.actionId === 'walk' || (task.actionId === 'work' && task.phase === 'doing')) return null;
+  const pct = task.phase === 'doing' && task.total > 0 ? 100 - (task.remaining / task.total) * 100 : 0;
+  return (
+    <div className="task-chip">
+      <span className="task-icon"><Emoji char={task.icon} size={26} /></span>
+      <div className="task-body">
+        <b>{task.label}</b>
+        <div className="bar">
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <small>{task.phase === 'walking' ? 'On the way…' : `${taskDurationSeconds(task.remaining, task.total, task.fast)} sec left`}</small>
+      </div>
+      <button className="x" onClick={cancel} aria-label="Cancel">
+        ✕
+      </button>
+    </div>
+  );
+}
+
 createRoot(document.getElementById('root')!).render(
   <div className="app-root">
     <div className="scene-wrap" style={{ position: 'absolute', inset: 0 }}>
       <Canvas camera={{ position: [0, 40, 30] }}><Avatar /></Canvas>
     </div>
-    <div className="ui"><Hud /></div>
+    <div className="ui">{q.get('old') === '1' ? <div className="left-stack"><OldTaskChip /></div> : <Hud />}</div>
   </div>,
 );
 

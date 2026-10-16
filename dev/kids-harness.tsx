@@ -62,7 +62,8 @@ function cam(px: number, py: number, pz: number, tx: number, ty: number, tz: num
   if (c) { c.target.set(tx, ty, tz); c.update(); } else st.camera.lookAt(tx, ty, tz);
   return true;
 }
-Object.assign(window, { __h: { useGame, useKids, loadKids, startCare, cam, avatar, useSession } });
+const scene = () => { const c = document.querySelector('canvas'); return c ? _roots.get(c)?.store.getState().scene : null; };
+Object.assign(window, { __h: { useGame, useKids, loadKids, startCare, cam, avatar, useSession, scene } });
 
 createRoot(document.getElementById('root')!).render(
   <div className="app-root">

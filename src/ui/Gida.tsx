@@ -314,6 +314,9 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
   const { chooseDesign, startConstruction, setHomeProperty, setRented, collectRent, sellProperty, visitEstate, hireHouseholdStaff, dismissHouseholdStaff } = useGame.getState();
   const [contractor, setContractor] = useState('standard');
   const [choosingDesign, setChoosingDesign] = useState(false);
+  // Open on the house's picture, not wherever the list was scrolled to.
+  const top = useRef<HTMLButtonElement>(null);
+  useEffect(() => { top.current?.closest('.app-body, .phone-screen')?.scrollTo?.({ top: 0 }); }, [id]);
   if (!p) return <button className="btn sm" onClick={back}>‹ All properties</button>;
   const region = REGION_BY_ID[p.region];
   const design = p.design ? DESIGN_BY_ID[p.design] : null;
@@ -333,7 +336,7 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
 
   return (
     <>
-      <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={back}>‹ All properties</button>
+      <button ref={top} className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={back}>‹ All properties</button>
       <div className="hm-detail-hero">
         <div className="hm-card-pic">
           <PropertyThumb p={p} />

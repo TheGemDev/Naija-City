@@ -607,7 +607,7 @@ function useTripLine() {
   const landed = here === going.city;
   const leg = landed ? legs : inAir ? 2 : 1;
   const where = going.place && !going.stop ? `${going.place.name}, ${regionOf(going.city).name}` : going.home ? `home, ${regionOf(going.city).name}` : regionOf(going.city).name;
-  return { going, landed, title: `Trip to ${where}`, text: `Trip to ${where} · ${leg} of ${legs}` };
+  return { going, landed, title: `Trip to ${where}`, text: `Leg ${leg} of ${legs} · ${where}` };
 }
 
 function TaskChip() {

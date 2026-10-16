@@ -197,8 +197,8 @@ export const EXTENSIONS: ExtensionDef[] = [
   { id: 'terrace', name: 'Rooftop terrace', icon: '🌆', blurb: 'Tiles, a parapet, chairs and the whole estate at your feet. Needs a flat roof.', size: 0.25, designs: ['selfcon', 'bungalow', 'duplex', 'mansion', 'flats'], roof: 'flat', cols: 5 },
 ];
 export const EXTENSION_BY_ID: Record<string, ExtensionDef> = Object.fromEntries(EXTENSIONS.map((e) => [e.id, e]));
-/** Designs that stand two storeys high without a second floor added. */
-const TALL_DESIGNS = new Set(['mansion', 'flats']);
+/** Designs that stand two storeys high without a second floor added (the executive house's main block is). */
+const TALL_DESIGNS = new Set(['mansion', 'flats', 'duplex']);
 /** Storeys the house shows outside. */
 export const storeysOf = (design: string | null | undefined, ext?: string[] | null) =>
   design === 'flats' ? 3 : TALL_DESIGNS.has(design ?? '') || ext?.includes('floor2') ? 2 : 1;

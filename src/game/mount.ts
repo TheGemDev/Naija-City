@@ -10,8 +10,8 @@
 //
 // Free rotation: `rotDeg` (any angle, 15° steps in the editor) overrides `rot` for drawing; `rot` always holds the
 // nearest quarter turn. A floor item's centre stays at its quarter-turn footprint's centre and the cells it blocks are
-// the ones its turned outline really covers (less a little slack at the edges), so a chair at 15° still takes one tile
-// and a sofa at 45° takes the diagonal strip it lies across.
+// the ones its turned outline really covers (less a third of a tile of slack at the edges), so a chair or a sofa at 15°
+// still takes its own tiles and a sofa at 45° takes the diagonal strip it lies across.
 
 import { ITEMS } from './catalog';
 import type { Cell, Edge, HouseLayout, PlacedItem } from './grid';
@@ -30,8 +30,11 @@ export const CEILING_Y = 2.6;
 export const ROT_STEP = 15;
 /** The glass of a window (three/World.tsx), which only curtains may cover. */
 const WINDOW_SPAN: [number, number] = [1.1, 1.9];
-/** How much of a turned item's outline may poke into a neighbouring tile without blocking it. */
-const SLACK = 0.2;
+/**
+ * How far a turned item's outline may poke into a neighbouring tile without taking it: about a third of a tile, so a
+ * 3-seater turned 15° still fits its row, and at 30° or more it claims the tiles it really lies across.
+ */
+const SLACK = 0.32;
 
 /** The parts of a placed item that say where it is. Everything else (paint, broken...) rides along. */
 export interface Pose {

@@ -160,7 +160,7 @@ export const LIGHTS: Record<string, LightSpec> = {
   chandelier: {
     glow: [0, 1, 2, 3, 4, 5].map((i) => ({ p: [Math.cos((i / 6) * Math.PI * 2) * 0.42, 2.02, Math.sin((i / 6) * Math.PI * 2) * 0.42] as [number, number, number], r: 0.06 }))
       .concat([{ p: [0, 1.88, 0], r: 0.09 }]),
-    pool: 4.4, strength: 1, real: 1.8,
+    pool: 3.4, strength: 0.75, real: 1.5,
   },
   chandelier_lamp: { glow: [{ p: [0, 1.42, 0], r: 0.16 }], pool: 3.2, strength: 0.9, real: 1.3 },
   pendant_light: { glow: [{ p: [0, 1.72, 0], r: 0.08 }], pool: 2.6, strength: 0.85, real: 1.1 },

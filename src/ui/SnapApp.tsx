@@ -197,6 +197,14 @@ function ChatTab({ now, play }: { now: number; play: (p: Playing) => void }) {
 
 const CHAT_STATUS: Record<ChatState['kind'], string> = { new: 'New Snap', received: 'Received', delivered: 'Delivered', opened: 'Opened', none: 'Tap to chat' };
 
+/** Snapchat's status marks: a square for a snap I got (filled while new), an arrow for one I sent (filled until opened). */
+function StatusMark({ kind }: { kind: ChatState['kind'] }) {
+  const fill = kind === 'new' || kind === 'delivered';
+  const color = kind === 'none' ? 'var(--sn-blue)' : 'var(--sn-red)';
+  const shape = kind === 'delivered' || kind === 'opened' ? <path d="M3 3l18 9-18 9 4-9z" /> : kind === 'none' ? <path d="M4 5h16v11H9l-5 4z" /> : <rect x="4" y="4" width="16" height="16" rx="3" />;
+  return <svg className="snap-status" viewBox="0 0 24 24" width="12" height="12" fill={fill ? color : 'none'} stroke={color} strokeWidth="3" strokeLinejoin="round" aria-hidden>{shape}</svg>;
+}
+
 function ChatRow({ uid, username, st, now, onOpen }: { uid: string; username: string; st: ChatState; now: number; onOpen: () => void }) {
   const label = usePlayerLabel(uid, username);
   return (
@@ -206,7 +214,7 @@ function ChatRow({ uid, username, st, now, onOpen }: { uid: string; username: st
         <span className="snap-chat-text">
           <b>{label}</b>
           <small>
-            <i className={`snap-status ${st.kind}`} aria-hidden />
+            <StatusMark kind={st.kind} />
             {CHAT_STATUS[st.kind]}
             {st.kind === 'new' && st.unread.length > 1 && ` (${st.unread.length})`}
             {st.at > 0 && ` · ${ago(st.at, now)}`}
