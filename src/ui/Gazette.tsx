@@ -8,7 +8,8 @@ import { useCivic, useGazette } from '../net/civic';
 import { Emoji } from './Icons';
 import './gazette.css';
 
-const SHOWN_MS = 7000;
+/** How long a notice stays up (the banner's animation in gazette.css runs as long). */
+const SHOWN_MS = 14_000;
 
 const KIND_LABEL: Record<GazetteKind, string> = { law: 'New law', project: 'Public works', palliative: 'Palliatives', scandal: 'Scandal', elected: 'Election' };
 
@@ -37,7 +38,7 @@ export function GazetteBanner() {
   }, [cur, shift]);
   if (!cur) return null;
   return (
-    <button key={cur.key} type="button" className={`gazette-banner kind-${cur.kind}`} aria-live="polite" onClick={() => { shift(); openNews(); }}>
+    <button key={cur.key} type="button" className={`gazette-banner kind-${cur.kind}`} style={{ ['--gz-shown' as string]: `${SHOWN_MS}ms` }} aria-live="polite" onClick={() => { shift(); openNews(); }}>
       {/* Green-white-green down the edge, like the flag. */}
       <span className="gz-flag" aria-hidden><i /><i /><i /></span>
       <span className="gz-icon"><Emoji char={cur.icon} size={24} /></span>
@@ -57,7 +58,7 @@ export function GazetteBanner() {
 /** A judge's gavel striking its block, for the notice's corner badge. */
 function Gavel() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
       <g transform="rotate(-40 12 9)">
         <rect x="7.5" y="3.2" width="9" height="4.6" rx="1.4" />
         <rect x="6.3" y="2.6" width="1.6" height="5.8" rx="0.6" />
