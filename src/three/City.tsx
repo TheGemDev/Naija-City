@@ -19,6 +19,7 @@ import { B, Bike, Keke } from './models';
 import { Helicopter } from './aircraft';
 import { heli } from '../game/heli';
 import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat, windowsLit } from './cityModels';
+import { useLowPerf } from '../game/quality';
 import { GroundShade, LampPools, poolMat } from './CityFx';
 import { sky } from '../game/weather';
 import { gridOn } from '../game/live';
@@ -1181,11 +1182,12 @@ export function City() {
   const landmarks = regionLandmarks(destinationId);
   const places = regionPlaces(destinationId).filter((place) => place.id !== 'home' || hasHome);
   const buildings = useRef<Group>(null);
+  const low = useLowPerf();
   return (
     <group key={map.id}>
       <MapEffects />
       <Slab outline={map.outline} depth={1.4} top={region.ground} />
-      <IslandBase outline={map.outline} seed={destinationId.length + destinationId.charCodeAt(0)} />
+      <IslandBase map={map} ground={region.ground} seed={destinationId.length + destinationId.charCodeAt(0)} />
       {map.riverDraw.length > 1 && <River map={map} />}
       <Lakes map={map} />
       <Roads map={map} />
@@ -1212,7 +1214,8 @@ export function City() {
           ))}
         </group>
       </StaticBatch>
-      <GroundShade key={`shade|${destinationId}|${hasHome}`} source={buildings} />
+      {/* A light touch of shade round the foot of each building: thicker looked smudged, and it costs a little. */}
+      {!low && <GroundShade key={`shade|${destinationId}|${hasHome}`} source={buildings} strength={0.25} fade={0.45} />}
       <Html position={[CITY_W / 2, 27, 2]} center zIndexRange={[9, 0]} style={{ pointerEvents: 'auto' }}>
         <RegionBadge region={region} />
       </Html>

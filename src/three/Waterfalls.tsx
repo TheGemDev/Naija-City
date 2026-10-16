@@ -68,75 +68,84 @@ export function planFalls(map: CityMap, rim: Rim, seed: number): Fall[] {
 }
 
 /**
- * One ribbon per fall (two in high quality: a fainter wider sheet behind gives it body), merged into one geometry.
+ * One ribbon per fall, all merged into one geometry. Each vertex sits on the fall's centre line and is pushed out to
+ * the side in the shader: flat along the ground on the run to the lip, then turning to face the camera as it drops,
+ * so a fall seen from straight above still shows as a full sheet rather than a line.
+ * aTan: direction of flow. aSide: x, y the flat sideways direction (x, z), z how far to the side in world units.
  * aFlow: x across in world units, y flow time (so streaks speed up as they fall without smearing), z alpha.
  * aFall: x how far down the fall (0 at the lip, 1 at the bottom), y distance from the lip, z seed, w across (-1..1).
  */
 function fallsGeometry(falls: Fall[], low: boolean) {
-  const pos: number[] = [], flow: number[] = [], info: number[] = [], idx: number[] = [];
-  const ROWS = low ? 12 : 24;
+  const pos: number[] = [], tan: number[] = [], side: number[] = [], flow: number[] = [], info: number[] = [], idx: number[] = [];
+  const ROWS = low ? 12 : 26;
   const COLS = low ? 2 : 4;
+  let widest = 0;
   for (const f of falls) {
-    for (let layer = 0; layer < (low ? 1 : 2); layer++) {
-      const back = layer === 1;
-      const [ox, oz] = f.out;
-      // The spine: [x, y, z, across direction x, z, drop fraction]
-      const spine: number[][] = [];
-      if (f.from) {
-        // The river runs on over the ground to the lip, then a short way past it over the grass edge.
-        const [ex, ez] = f.from;
-        const rx = f.lip[0] - ex, rz = f.lip[2] - ez;
-        const rl = Math.hypot(rx, rz) || 1;
-        spine.push([ex, f.lip[1], ez, -rz / rl, rx / rl, 0]);
-        spine.push([f.lip[0], f.lip[1], f.lip[2], -oz, ox, 0]);
-      }
-      const start: [number, number, number] = f.from ? [f.lip[0] + ox * 0.6, f.lip[1] - 0.02, f.lip[2] + oz * 0.6] : f.lip;
-      for (let k = 0; k <= ROWS; k++) {
-        const t = k / ROWS;
-        const h = f.reach * t + (back ? -0.25 : 0);
-        spine.push([start[0] + ox * h, start[1] - f.drop * t * t, start[2] + oz * h, -oz, ox, t]);
-      }
-      // Distance along the spine, and flow time: water speeds up as it falls, so streaks stretch lower down.
-      const cum = [0];
-      for (let r = 1; r < spine.length; r++) {
-        const p = spine[r], q = spine[r - 1];
-        cum.push(cum[r - 1] + Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]));
-      }
-      const sLip = cum[f.from ? 2 : 0];
-      let phi = 0;
-      const base = pos.length / 3;
-      spine.forEach((p, r) => {
-        const s = cum[r];
-        if (r > 0) phi += (s - cum[r - 1]) / (1.2 + Math.sqrt(2 * 9.8 * Math.max(0, start[1] - p[1])) * 0.35);
-        const lipDist = s - sLip;
-        const half = (f.width / 2) * (1 + 0.3 * p[5]) * (back ? 1.15 : 1);
-        for (let c = 0; c <= COLS; c++) {
-          const v = (c / COLS) * 2 - 1;
-          // The sheet bows outwards in the middle as it falls, so it has a front rather than being a flat card.
-          const bow = (1 - v * v) * 0.18 * f.width * p[5] * (back ? -0.5 : 1);
-          pos.push(p[0] + p[3] * v * half + ox * bow, p[1], p[2] + p[4] * v * half + oz * bow);
-          // The flat run fades in where it takes over from the drawn river.
-          const fadeIn = f.from ? Math.min(1, s / 0.8) : 1;
-          flow.push(v * half, phi, fadeIn * (back ? 0.45 : 1));
-          info.push(p[5], lipDist, f.seed + layer * 0.37, v);
-        }
-        if (r > 0) {
-          const a = base + (r - 1) * (COLS + 1), b = base + r * (COLS + 1);
-          for (let c = 0; c < COLS; c++) idx.push(a + c, b + c, a + c + 1, a + c + 1, b + c, b + c + 1);
-        }
-      });
+    const [ox, oz] = f.out;
+    // The spine: [x, y, z, sideways x, z, drop fraction]
+    const spine: number[][] = [];
+    if (f.from) {
+      // The river runs on over the ground to the lip, then a short way past it over the grass edge.
+      const [ex, ez] = f.from;
+      const rx = f.lip[0] - ex, rz = f.lip[2] - ez;
+      const rl = Math.hypot(rx, rz) || 1;
+      spine.push([ex, f.lip[1], ez, -rz / rl, rx / rl, 0]);
+      spine.push([f.lip[0], f.lip[1], f.lip[2], -oz, ox, 0]);
     }
+    const start: [number, number, number] = f.from ? [f.lip[0] + ox * 0.6, f.lip[1] - 0.02, f.lip[2] + oz * 0.6] : f.lip;
+    for (let k = 0; k <= ROWS; k++) {
+      // Rows bunch up at the top, where the water curls over the lip.
+      const t = Math.pow(k / ROWS, 1.3);
+      spine.push([start[0] + ox * f.reach * t, start[1] - f.drop * t * t, start[2] + oz * f.reach * t, -oz, ox, t]);
+    }
+    // Distance along the spine, and flow time: water speeds up as it falls, so streaks stretch lower down.
+    const cum = [0];
+    for (let r = 1; r < spine.length; r++) {
+      const p = spine[r], q = spine[r - 1];
+      cum.push(cum[r - 1] + Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]));
+    }
+    const sLip = cum[f.from ? 2 : 0];
+    let phi = 0;
+    const base = pos.length / 3;
+    spine.forEach((p, r) => {
+      const s = cum[r];
+      if (r > 0) phi += (s - cum[r - 1]) / (1.2 + Math.sqrt(2 * 9.8 * Math.max(0, start[1] - p[1])) * 0.35);
+      const a = spine[Math.max(0, r - 1)], b = spine[Math.min(spine.length - 1, r + 1)];
+      // Spreads a little as it falls.
+      const half = (f.width / 2) * (1 + 0.35 * p[5]);
+      widest = Math.max(widest, half);
+      // The flat run fades in where it takes over from the drawn river.
+      const fadeIn = f.from ? Math.min(1, s / 0.8) : 1;
+      for (let c = 0; c <= COLS; c++) {
+        const v = (c / COLS) * 2 - 1;
+        pos.push(p[0], p[1], p[2]);
+        tan.push(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        side.push(p[3], p[4], v * half);
+        flow.push(v * half, phi, fadeIn);
+        info.push(p[5], s - sLip, f.seed, v);
+      }
+      if (r > 0) {
+        const i = base + (r - 1) * (COLS + 1), j = base + r * (COLS + 1);
+        for (let c = 0; c < COLS; c++) idx.push(i + c, j + c, i + c + 1, i + c + 1, j + c, j + c + 1);
+      }
+    });
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setAttribute('aTan', new Float32BufferAttribute(tan, 3));
+  g.setAttribute('aSide', new Float32BufferAttribute(side, 3));
   g.setAttribute('aFlow', new Float32BufferAttribute(flow, 3));
   g.setAttribute('aFall', new Float32BufferAttribute(info, 4));
   g.setIndex(idx);
   g.computeBoundingSphere();
+  // The sides are pushed out in the shader, past the centre lines the bounds were taken from.
+  if (g.boundingSphere) g.boundingSphere.radius += widest;
   return g;
 }
 
 const VERT = /* glsl */ `
+  attribute vec3 aTan;
+  attribute vec3 aSide;
   attribute vec3 aFlow;
   attribute vec4 aFall;
   varying vec3 vFlow;
@@ -145,7 +154,16 @@ const VERT = /* glsl */ `
   void main() {
     vFlow = aFlow;
     vFall = aFall;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vec3 world = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec3 flatSide = vec3(aSide.x, 0.0, aSide.y);
+    // Once it is falling, the sheet turns about its centre line to face the camera.
+    vec3 camSide = cross(normalize(aTan), normalize(cameraPosition - world));
+    float l = length(camSide);
+    camSide = l > 0.001 ? camSide / l : flatSide;
+    if (dot(camSide, flatSide) < 0.0) camSide = -camSide;
+    vec3 dir = normalize(mix(flatSide, camSide, smoothstep(0.0, 0.25, aFall.x)));
+    world += dir * aSide.z;
+    vec4 mvPosition = viewMatrix * vec4(world, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
   }
@@ -180,7 +198,7 @@ const FRAG = /* glsl */ `
     float foam = exp(-abs(lip) * 1.4) * (0.55 + 0.45 * n);
     float falling = smoothstep(-0.3, 0.5, lip);
     vec3 col = mix(uWater, uFoam, clamp(mix(streak * 0.35, 0.55 + 0.45 * streak, falling) + foam, 0.0, 1.0));
-    float a = edge * vFlow.z * mix(0.9, body * fade * (0.7 + 0.3 * streak), falling);
+    float a = edge * vFlow.z * mix(0.92, body * fade * (0.8 + 0.2 * streak), falling);
     a = max(a, foam * edge * vFlow.z * 0.9);
     if (a < 0.06) discard;
     gl_FragColor = vec4(col, a);

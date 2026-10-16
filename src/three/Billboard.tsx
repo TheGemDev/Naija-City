@@ -413,7 +413,8 @@ export function SeaAds({ region, x = 30, z = 42 }: { region: string; x?: number;
   const touring = useTour((s) => !!s.city);
   const dark = useTheme((s) => s.mode === 'dark') && !touring;
   // The sea is the sky the island floats in, so it takes the sky's colour (three/Scene.tsx): day blue, night navy,
-  // greyed by cloud and dusted by harmattan. It is drawn before everything else so the sun and moon can sit on it.
+  // greyed by cloud and dusted by harmattan. It is drawn before everything else so the sun and moon can sit on it,
+  // and writes no depth: the island's rock, waterfalls and clouds hang below it (three/IslandBase.tsx) and must show.
   const sea = useRef<MeshBasicMaterial>(null);
   useFrame(({ scene }) => {
     const bg = scene.background as Color | null;
@@ -423,7 +424,7 @@ export function SeaAds({ region, x = 30, z = 42 }: { region: string; x?: number;
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, SEA_WATER_Y, z]} raycast={() => null} renderOrder={-20}>
         <circleGeometry args={[160, 48]} />
-        <meshBasicMaterial ref={sea} color={dark ? '#0b1430' : '#bfe3f5'} toneMapped={false} />
+        <meshBasicMaterial ref={sea} color={dark ? '#0b1430' : '#bfe3f5'} toneMapped={false} depthWrite={false} />
       </mesh>
       <SeaGrid key={region} region={region} />
       {boards.map(({ ad, r }) => (

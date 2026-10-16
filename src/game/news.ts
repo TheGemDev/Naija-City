@@ -3,7 +3,7 @@
 // (who robbed whom, who is dating whom) stays on the Friends tab, where you know the names.
 
 /** The feed kinds the News tab shows (worker/fun.ts). */
-export const NEWS_KINDS = ['politics', 'election', 'roads', 'season', 'final'] as const;
+export const NEWS_KINDS = ['politics', 'election', 'roads', 'season', 'final', 'disaster'] as const;
 
 /** VDM's posts about the government, told apart from his crime exposés by their icon: these are national news too. */
 export const VDM_GOV_ICON = '🎤';

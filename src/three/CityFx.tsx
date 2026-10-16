@@ -71,19 +71,19 @@ function footprints(root: Group) {
  * sun's shadows miss (and low mode, which has no shadows, never had). Footprints are read off the buildings' own
  * blocks once, so new models get it for free. Mount it after the buildings, keyed the same way.
  */
-export function GroundShade({ source, strength = 0.6 }: { source: RefObject<Group | null>; strength?: number }) {
+export function GroundShade({ source, strength = 0.6, fade = FADE }: { source: RefObject<Group | null>; strength?: number; fade?: number }) {
   const ref = useRef<InstancedMesh>(null!);
   const mat = useMemo(() => new ShaderMaterial({
     vertexShader: SHADE_VERT,
     fragmentShader: SHADE_FRAG,
-    uniforms: UniformsUtils.merge([UniformsLib.fog, { uFade: { value: FADE }, uStrength: { value: strength } }]),
+    uniforms: UniformsUtils.merge([UniformsLib.fog, { uFade: { value: fade }, uStrength: { value: strength } }]),
     transparent: true,
     depthWrite: false,
     fog: true,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
-  }), [strength]);
+  }), [strength, fade]);
   useLayoutEffect(() => () => mat.dispose(), [mat]);
 
   useLayoutEffect(() => {

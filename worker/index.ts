@@ -24,6 +24,7 @@ import { referralClaim, referralClick } from './referral';
 import { handleVice } from './vice';
 import { handleLoans } from './loans';
 import { handleRoads } from './roads';
+import { handleDisasters, readDisasters } from './disasters';
 import { handleCrime } from './crime';
 import { handleGuns } from './guns';
 import { handleEfcc } from './efcc';
@@ -237,6 +238,9 @@ const handler = {
 
     const plot = path.match(/^\/api\/plot\/([a-z0-9_]{1,24})\/(\d{1,8})$/);
     if (plot && req.method === 'GET') return edgeCached(req, ctx, 30, () => readPlot(replica(env), plot[1], Number(plot[2])));
+
+    // Disasters are the same for everyone, so the list is public and shared from the edge for a few seconds.
+    if (path === '/api/disasters' && req.method === 'GET') return edgeCached(req, ctx, 10, () => readDisasters(replica(env)));
 
     const estate = path.match(/^\/api\/estate\/([a-z0-9_]{1,24})$/);
     if (estate && req.method === 'GET') return edgeCached(req, ctx, 10, () => readEstate(replica(env), estate[1], Number(new URL(req.url).searchParams.get('n') ?? 0)));
@@ -453,6 +457,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const roads = await handleRoads(req, env.DB, user.uid, path, env, ctx);
   if (roads) return roads;
+
+  const disasters = await handleDisasters(req, env, ctx, user.uid, path);
+  if (disasters) return disasters;
 
   const wallet = await handleWallet(req, env, user.uid, path);
   if (wallet) return wallet;

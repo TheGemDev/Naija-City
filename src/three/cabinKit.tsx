@@ -6,8 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
   Box3, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, Euler, Float32BufferAttribute,
-  FrontSide, Matrix3, Matrix4, MeshBasicMaterial, MeshStandardMaterial, Quaternion, ShapeGeometry, Sphere, SphereGeometry,
-  Vector3, type Group, type Material, type Mesh, type Object3D, type Shape, type Side,
+  FrontSide, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, ShapeGeometry, Sphere, SphereGeometry,
+  Vector3, type Group, type Material, type Object3D, type Shape, type Side,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
@@ -121,7 +121,7 @@ export class Kit {
 
   /** A flat shape in the XY plane, facing +z: window panes and their frames. */
   shape(sh: Shape, key: string, at: V3, colour: string, finish: Finish = 'satin', rot?: V3, scale?: V3) {
-    return this.add(template(`shape:${key}:${this.low}`, () => new ShapeGeometry(sh, this.low ? 4 : 10)), colour, finish, at, rot, scale);
+    return this.add(template(`shape:${key}:${this.low}`, () => new ShapeGeometry(sh, this.low ? 7 : 10)), colour, finish, at, rot, scale);
   }
 
   build(): Built {
@@ -172,6 +172,51 @@ function plainMaterial(rough: number, metal: number, side: Side) {
 }
 
 /**
+ * The inner loops of a bake, kept small and apart: they run once per part, hundreds of times, so the engine compiles
+ * them properly early on, where one long loop through every vertex of every person crawled.
+ */
+function copyVertices(pa: Float32Array, na: Float32Array | null, ua: Float32Array | null, count: number, e4: number[], e3: number[],
+  pos: Float32Array, nor: Float32Array, uv: Float32Array | null, col: Float32Array | null, vo: number, r: number, g: number, b: number, box: number[]) {
+  for (let i = 0; i < count; i++) {
+    const o = (vo + i) * 3;
+    const x = pa[i * 3], y = pa[i * 3 + 1], z = pa[i * 3 + 2];
+    const px = e4[0] * x + e4[4] * y + e4[8] * z + e4[12], py = e4[1] * x + e4[5] * y + e4[9] * z + e4[13], pz = e4[2] * x + e4[6] * y + e4[10] * z + e4[14];
+    pos[o] = px;
+    pos[o + 1] = py;
+    pos[o + 2] = pz;
+    if (px < box[0]) box[0] = px;
+    if (py < box[1]) box[1] = py;
+    if (pz < box[2]) box[2] = pz;
+    if (px > box[3]) box[3] = px;
+    if (py > box[4]) box[4] = py;
+    if (pz > box[5]) box[5] = pz;
+    const a = na ? na[i * 3] : 0, bb = na ? na[i * 3 + 1] : 1, d = na ? na[i * 3 + 2] : 0;
+    const nx = e3[0] * a + e3[3] * bb + e3[6] * d, ny = e3[1] * a + e3[4] * bb + e3[7] * d, nz = e3[2] * a + e3[5] * bb + e3[8] * d;
+    const k = 1 / (Math.sqrt(nx * nx + ny * ny + nz * nz) || 1);
+    nor[o] = nx * k;
+    nor[o + 1] = ny * k;
+    nor[o + 2] = nz * k;
+    if (uv) {
+      uv[(vo + i) * 2] = ua ? ua[i * 2] : 0;
+      uv[(vo + i) * 2 + 1] = ua ? ua[i * 2 + 1] : 0;
+    } else if (col) {
+      col[o] = r;
+      col[o + 1] = g;
+      col[o + 2] = b;
+    }
+  }
+}
+function copyIndex(ia: ArrayLike<number> | null, n: number, idx: Uint32Array, io: number, base: number, flip: boolean) {
+  for (let i = 0; i < n; i += 3, io += 3) {
+    const a = ia ? ia[i] : i, b = ia ? ia[i + 1] : i + 1, cc = ia ? ia[i + 2] : i + 2;
+    idx[io] = base + a;
+    idx[io + 1] = base + (flip ? cc : b);
+    idx[io + 2] = base + (flip ? b : cc);
+  }
+  return io;
+}
+
+/**
  * Bakes everything under `root` into a few meshes, as it stands right now: one for each way the surfaces take the light,
  * plus one for each printed fabric, which keeps its own material and texture. Positions are relative to `root`.
  */
@@ -205,50 +250,20 @@ function bake(root: Object3D): Part[] {
     const col = g.textured ? null : new Float32Array(verts * 3);
     const idx = new Uint32Array(tris);
     let vo = 0, io = 0;
-    const lo = new Vector3(Infinity, Infinity, Infinity), hi = new Vector3(-Infinity, -Infinity, -Infinity);
+    const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
     for (const mesh of g.meshes) {
       m.multiplyMatrices(inv, mesh.matrixWorld);
       n3.getNormalMatrix(m);
       const e4 = m.elements, e3 = n3.elements;
       const geo = mesh.geometry;
-      // People's shapes are plain (not interleaved) attributes, so their arrays are read directly: much the quickest.
+      // People's shapes are plain (not interleaved) attributes, so their arrays are read directly.
       const P = geo.getAttribute('position') as BufferAttribute, N = geo.getAttribute('normal') as BufferAttribute | undefined, U = geo.getAttribute('uv') as BufferAttribute | undefined;
-      const pa = P.array, na = N?.array, ua = U?.array;
-      c.copy((mesh.material as MeshStandardMaterial).color);
+      const colour = (mesh.material as MeshStandardMaterial).color;
       const base = vo;
-      for (let i = 0; i < P.count; i++, vo++) {
-        const x = pa[i * 3], y = pa[i * 3 + 1], z = pa[i * 3 + 2];
-        const px = e4[0] * x + e4[4] * y + e4[8] * z + e4[12], py = e4[1] * x + e4[5] * y + e4[9] * z + e4[13], pz = e4[2] * x + e4[6] * y + e4[10] * z + e4[14];
-        pos[vo * 3] = px;
-        pos[vo * 3 + 1] = py;
-        pos[vo * 3 + 2] = pz;
-        if (px < lo.x) lo.x = px; if (px > hi.x) hi.x = px;
-        if (py < lo.y) lo.y = py; if (py > hi.y) hi.y = py;
-        if (pz < lo.z) lo.z = pz; if (pz > hi.z) hi.z = pz;
-        const a = na ? na[i * 3] : 0, b = na ? na[i * 3 + 1] : 1, d = na ? na[i * 3 + 2] : 0;
-        const nx = e3[0] * a + e3[3] * b + e3[6] * d, ny = e3[1] * a + e3[4] * b + e3[7] * d, nz = e3[2] * a + e3[5] * b + e3[8] * d;
-        const len = Math.hypot(nx, ny, nz) || 1;
-        nor[vo * 3] = nx / len;
-        nor[vo * 3 + 1] = ny / len;
-        nor[vo * 3 + 2] = nz / len;
-        if (uv) {
-          uv[vo * 2] = ua ? ua[i * 2] : 0;
-          uv[vo * 2 + 1] = ua ? ua[i * 2 + 1] : 0;
-        } else if (col) {
-          col[vo * 3] = c.r;
-          col[vo * 3 + 1] = c.g;
-          col[vo * 3 + 2] = c.b;
-        }
-      }
-      const flip = m.determinant() < 0;
-      const ia = geo.getIndex()?.array;
-      const n = ia ? ia.length : P.count;
-      for (let i = 0; i < n; i += 3, io += 3) {
-        const a = ia ? ia[i] : i, b = ia ? ia[i + 1] : i + 1, cc = ia ? ia[i + 2] : i + 2;
-        idx[io] = base + a;
-        idx[io + 1] = base + (flip ? cc : b);
-        idx[io + 2] = base + (flip ? b : cc);
-      }
+      copyVertices(P.array as Float32Array, (N?.array ?? null) as Float32Array | null, (U?.array ?? null) as Float32Array | null, P.count, e4, e3, pos, nor, uv, col, vo, colour.r, colour.g, colour.b, box);
+      vo += P.count;
+      const ia = geo.getIndex()?.array ?? null;
+      io = copyIndex(ia, ia ? ia.length : P.count, idx, io, base, m.determinant() < 0);
     }
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(pos, 3));
@@ -257,6 +272,7 @@ function bake(root: Object3D): Part[] {
     if (col) geometry.setAttribute('color', new BufferAttribute(col, 3));
     geometry.setIndex(new BufferAttribute(idx, 1));
     // From the box gathered on the way: computing it over every vertex again took as long as the copy.
+    const lo = new Vector3(box[0], box[1], box[2]), hi = new Vector3(box[3], box[4], box[5]);
     geometry.boundingBox = new Box3(lo, hi);
     geometry.boundingSphere = new Sphere(lo.clone().add(hi).multiplyScalar(0.5), lo.distanceTo(hi) / 2);
     out.push({ geometry, material: g.material });
@@ -271,17 +287,31 @@ function bake(root: Object3D): Part[] {
  */
 export function Baked({ children, shadows = true }: { children: ReactNode; shadows?: boolean }) {
   const live = useRef<Group>(null!);
-  const [parts, setParts] = useState<Part[] | null>(null);
-  const frames = useRef(0);
+  const holder = useRef<Group>(null!);
+  const parts = useRef<Part[] | null>(null);
+  const [done, setDone] = useState(false);
   useFrame(() => {
-    // Two frames: every person has set their pose by then (their own useFrame), however the frame loop orders us.
-    if (parts || !live.current || ++frames.current < 2) return;
-    setParts(bake(live.current));
+    // The people's own useFrame comes first (children subscribe before their parent), so on the very first frame
+    // everyone has already sat down. The baked meshes go straight in, to be drawn (and their shaders built) this
+    // same frame with the rest of the cabin, rather than a frame later and a second hitch.
+    if (parts.current || !live.current) return;
+    parts.current = bake(live.current);
+    for (const p of parts.current) {
+      const mesh = new Mesh(p.geometry, p.material);
+      mesh.castShadow = shadows;
+      mesh.receiveShadow = true;
+      holder.current.add(mesh);
+    }
+    setDone(true);
   });
-  useEffect(() => () => parts?.forEach((p) => p.geometry.dispose()), [parts]);
-  if (parts) return <>{parts.map((p, i) => <mesh key={i} geometry={p.geometry} material={p.material} castShadow={shadows} receiveShadow />)}</>;
-  // Not seen until baked: no one sees them pop into their pose.
-  return <group ref={live} visible={false}>{children}</group>;
+  useEffect(() => () => parts.current?.forEach((p) => p.geometry.dispose()), []);
+  return (
+    <>
+      <group ref={holder} />
+      {/* Never seen themselves: only what is baked from them. */}
+      {!done && <group ref={live} visible={false}>{children}</group>}
+    </>
+  );
 }
 
 /** For a shade of a colour: k below 1 darker, above lighter. */

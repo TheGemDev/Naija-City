@@ -27,6 +27,7 @@ import { pruneSnaps } from './snaps';
 import { runShops } from './shops';
 import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
+import { runDisasters } from './disasters';
 
 export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
@@ -58,6 +59,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     ['rackets', () => settleRackets(env, ctx, now)],
     ['contracts', () => settleContracts(env, ctx, now)],
     ['potholes', () => spawnPotholes(env.DB, now)],
+    // Floods, fires and windstorms: maybe a new one, the damage of one that just struck, and whoever is caught in one.
+    ['disasters', () => runDisasters(env, ctx, now)],
     ['market', () => tickMarket(env.DB, now)],
     // Customers who aren't players buy from players' shops, and shelves with auto-restock on are topped up.
     ['shops', () => runShops(env, ctx, now)],
