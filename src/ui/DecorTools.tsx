@@ -119,6 +119,16 @@ export function OwnedDecorTools({ id }: { id: string }) {
   );
 }
 
+/** Undo / redo as a bold drawn arrow: the ↶ ↷ characters come out hairline-thin at any size. */
+function TurnArrow({ redo }: { redo?: boolean }) {
+  return (
+    <svg className="decor-arrow" viewBox="0 0 24 24" aria-hidden="true" style={redo ? { transform: 'scaleX(-1)' } : undefined}>
+      <path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Buy mode's top bar: undo / redo, and picking several pieces to move, turn or store together. */
 export function DecorBar() {
   const mode = useGame((s) => s.mode);
@@ -167,8 +177,8 @@ export function DecorBar() {
   if (!on || wallMode || placing) return null;
   return (
     <div className="decor-top" role="toolbar" aria-label="Decorating tools">
-      <button disabled={!canUndo} onClick={undo} aria-label="Undo" title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
-      <button disabled={!canRedo} onClick={redo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">↷<span>Redo</span></button>
+      <button disabled={!canUndo} onClick={undo} aria-label="Undo" title="Undo (Ctrl+Z)"><TurnArrow /><span>Undo</span></button>
+      <button disabled={!canRedo} onClick={redo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><TurnArrow redo /><span>Redo</span></button>
       <button className={selectMode ? 'on' : ''} aria-pressed={selectMode} onClick={() => setSelectMode(!selectMode)} title="Pick several (or hold a piece, or shift-click)">
         ☑<span>{selectMode ? 'Picking' : 'Select'}</span>
       </button>

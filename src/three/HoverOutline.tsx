@@ -26,10 +26,15 @@ const THICKNESS = 2.5;
 
 const useHover = create<{ target: Object3D | null }>(() => ({ target: null }));
 
+/** The clickable thing the pointer (or finger) last went over: what a click that follows is about. The camera centres on it
+ *  when it is selected (Scene.tsx CameraRig). */
+export const lastPointed: { obj: Object3D | null } = { obj: null };
+
 /** Pointer entered something clickable: the pointer cursor, and its outline (`target`, or the object the handler is on). */
 export function onHover(e: ThreeEvent<PointerEvent>, target?: Object3D | null) {
   e.stopPropagation();
   document.body.style.cursor = 'pointer';
+  lastPointed.obj = target === undefined ? e.eventObject : target;
   // `target` null: the pointer cursor only (a floating label), no outline.
   if (CAN_HOVER) useHover.setState({ target: target === undefined ? e.eventObject : target });
 }

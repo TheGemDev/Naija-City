@@ -106,8 +106,7 @@ function TopBar() {
 
   return (
     <div className="topbar">
-      {/* You, first in the row, so you always stand beside your money (the money tucks behind your picture). */}
-      {CORNER_HUD && <Needs />}
+      {/* Your picture sits inside the money pill, at its edge, and your needs in a row under the pill. */}
       <div className={`hud-card time-card ${day ? 'day' : 'night'}`}>
         <span className="sky"><Emoji char={day ? '☀️' : '🌙'} size={26} /></span>
         <div className="time-text">
@@ -119,8 +118,10 @@ function TopBar() {
       </div>
       {/* Buying money is switched off for now: the balance is display only. */}
       <div className="hud-card money-card-top">
+        {CORNER_HUD && <Needs show="badge" />}
         <Emoji char="💰" size={22} />
         <b className={money < 0 ? 'owing' : undefined}>{naira(money)}</b>
+        {CORNER_HUD && <NeedsRow />}
       </div>
       {ADS_ON_SALE && (
         <div className="hud-actions">
@@ -673,7 +674,8 @@ const NEED_HINT: Record<Need, string> = {
   bladder: 'Find a toilet, fast',
 };
 
-function Needs() {
+/** You: the portrait with its need ring and mood emoji (`badge`), the alerts for needs running out (`alerts`), or both. */
+function Needs({ show = 'all' }: { show?: 'all' | 'badge' | 'alerts' }) {
   const needs = useNeeds();
   const name = useGame((s) => s.name);
   const look = useGame((s) => s.look);
@@ -699,8 +701,8 @@ function Needs() {
   }, [mood.label]);
 
   return (
-    <div className="needs">
-      <button
+    <div className={`needs ${show === 'badge' ? 'in-pill' : ''}`}>
+      {show !== 'alerts' && <button
         type="button"
         className={`avatar-badge ${alert ? 'alert' : ''}`}
         aria-label={`${name || 'Your avatar'} — ${mood.label}. ${alert ? `${worst.label} is low. ` : ''}Tap for details`}
@@ -718,8 +720,8 @@ function Needs() {
           aria-label={`Mood: ${mood.label}. Open stats`}
           onClick={(e) => { e.stopPropagation(); useGame.getState().openProfile('stats'); }}
         ><Emoji char={mood.emoji} size={26} /></span>
-      </button>
-      {low.length > 0 && (
+      </button>}
+      {show !== 'badge' && low.length > 0 && (
         <div className="need-alerts" role="status">
           <i className="thought-dot a" aria-hidden="true" />
           <i className="thought-dot b" aria-hidden="true" />
@@ -742,6 +744,33 @@ function Needs() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Every need as a small icon in a ring that empties as it runs down, in a row under the money pill. A need running
+ *  out pulses, so there is no separate alert to look for. Tap any of them for your stats. */
+function NeedsRow() {
+  const needs = useNeeds();
+  return (
+    <div className="needs-row" role="group" aria-label="Your needs">
+      {NEEDS.map((n) => {
+        const v = Math.max(0, Math.min(100, needs[n.key]));
+        const low = v < 30;
+        return (
+          <button
+            key={n.key}
+            type="button"
+            className={`need-dot ${low ? 'low' : ''} ${v < 15 ? 'critical' : ''}`}
+            style={{ ['--v' as string]: `${v}%`, ['--c' as string]: needColor(v) }}
+            onClick={() => useGame.getState().openProfile('stats')}
+            aria-label={`${n.label}: ${Math.round(v)}${low ? `. ${NEED_HINT[n.key]}` : ''}`}
+            title={`${n.label} ${Math.round(v)}`}
+          >
+            <Emoji char={n.icon} size={15} />
+          </button>
+        );
+      })}
     </div>
   );
 }

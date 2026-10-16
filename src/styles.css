@@ -3338,3 +3338,32 @@ body.corner-hud .topbar .money-card-top { padding-left: calc(var(--me) / 2 + 12p
 /* You are as tall as the money pill beside you, at every size. */
 body.corner-hud { --me: var(--hud-h); }
 body.corner-hud .needs .avatar-badge { border-width: 2px; }
+
+/* Your picture lives inside the money pill, at its left edge, ring and mood emoji and all (Hud.tsx Needs show="badge"). */
+body.corner-hud .topbar .money-card-top { padding-left: 3px; gap: 7px; overflow: visible; }
+body.corner-hud .topbar .money-card-top .needs.in-pill { position: relative; left: auto; top: auto !important; bottom: auto !important; margin: 0 !important; order: 0; flex: none; z-index: 1; }
+body.corner-hud .topbar .money-card-top .needs.in-pill .avatar-badge { width: calc(var(--hud-h) - 6px); height: calc(var(--hud-h) - 6px); border-width: 2px; }
+/* What is left of you outside the pill is only the need alerts (fixed in place): it takes no room in the row. */
+body.corner-hud .topbar > .needs:not(.in-pill) { width: 0; margin: 0 !important; }
+
+/* Bigger you: the picture stands a little proud of the money pill, top and bottom, at its left edge. */
+body.corner-hud .topbar .money-card-top { position: relative; padding-left: calc(var(--hud-h) + 14px); }
+body.corner-hud .topbar .money-card-top .needs.in-pill { position: absolute; left: -6px; top: 50% !important; transform: translateY(-50%); }
+body.corner-hud .topbar .money-card-top .needs.in-pill .avatar-badge { width: calc(var(--hud-h) + 18px); height: calc(var(--hud-h) + 18px); border-width: 3px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25); }
+/* Your needs, under the money pill and clear of the picture. */
+.needs-row { position: absolute; top: calc(100% + 7px); left: calc(var(--hud-h) + 12px); display: flex; gap: 5px; }
+.need-dot { position: relative; display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(closest-side, var(--hud-bg, var(--card)) 76%, transparent 78% 100%), conic-gradient(var(--c) var(--v), rgba(148, 163, 184, 0.35) 0);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18); }
+.need-dot.low { animation: need-pulse 1.4s ease-in-out infinite; }
+.need-dot.critical { animation-duration: 0.8s; }
+@keyframes need-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25); } }
+@media (max-width: 400px) { .need-dot { width: 27px; height: 27px; } .needs-row { gap: 4px; } }
+/* The needs row starts past the picture and its mood emoji, and what stacks under the top row moves down to make room. */
+body.corner-hud .needs-row { left: calc(var(--hud-h) + 30px); }
+body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--hud-h) + 12px + 42px); }
+/* Decorate's top bar: big, thumb-sized icons (the ↶ ↷ glyphs read tiny at text size), and below the needs row. */
+.decor-top button { min-height: 48px; min-width: 48px; font-size: 24px; line-height: 1; }
+.decor-top button span { font-size: 13px; }
+body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + 42px + env(safe-area-inset-top, 0px)); }
+.decor-top .decor-arrow { width: 26px; height: 26px; flex: none; }

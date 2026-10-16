@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Color, Fog, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight } from 'three';
+import { Box3, Color, Fog, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, Vector3, type DirectionalLight, type HemisphereLight } from 'three';
 import { activeDesignOf, flightOf, hourOf, houseKeyOf, useGame, type GameState } from '../game/store';
 import { avatar } from '../game/avatar';
 import { driveState } from '../game/driveState';
@@ -39,7 +39,7 @@ import { PhotoRig } from './PhotoRig';
 import { houseGlow } from './HouseLights';
 import { pinWeather, sky, stepSky } from '../game/weather';
 import { Clouds, Rain, SkyBodies } from './Weather';
-import { HoverOutline } from './HoverOutline';
+import { HoverOutline, lastPointed } from './HoverOutline';
 
 /** Game time advances in steps this long (seconds). Every step updates the store and the screens
  *  watching it, so doing it every frame kept React busy 60 times a second. */
@@ -340,6 +340,9 @@ function CameraRig() {
   const placeId = useGame((s) => s.placeId);
   const flight = useGame(flightOf);
   const focus = useRef<{ x: number; z: number } | null>(null);
+  // The thing you selected (its activities fanned round it): the camera centres on it, so turning the view orbits it.
+  const selectedId = useGame((s) => s.selectedId);
+  const picked = useRef<{ x: number; z: number } | null>(null);
   // Photo mode runs the camera itself (PhotoRig); the room's usual framing comes back when it closes.
   const photo = usePhoto((s) => s.active);
 
@@ -357,6 +360,13 @@ function CameraRig() {
     focus.current = p ? placeCenter(p) : null;
   }, [placeId]);
 
+  useEffect(() => {
+    const obj = lastPointed.obj;
+    if (!selectedId || !obj?.parent) return void (picked.current = null);
+    const c = new Box3().setFromObject(obj).getCenter(new Vector3());
+    picked.current = Number.isFinite(c.x) ? { x: c.x, z: c.z } : null;
+  }, [selectedId]);
+
   useFrame((_, dt) => {
     // Photo mode keeps the camera on me itself.
     if (!controls || usePhoto.getState().active) return;
@@ -368,6 +378,18 @@ function CameraRig() {
       const k = Math.min(1, dt * 3);
       const dx = (transform.x + avatar.x * transform.scale - t.x) * k;
       const dz = (transform.z + avatar.z * transform.scale - t.z) * k;
+      t.x += dx;
+      t.z += dz;
+      camera.position.x += dx;
+      camera.position.z += dz;
+      return;
+    }
+    // Something selected: ease the view over to it and hold it there, so dragging round orbits it.
+    if (picked.current && useGame.getState().selectedId && !avatar.path.length) {
+      const t = controls.target;
+      const k = Math.min(1, dt * 4);
+      const dx = (picked.current.x - t.x) * k;
+      const dz = (picked.current.z - t.z) * k;
       t.x += dx;
       t.z += dz;
       camera.position.x += dx;
