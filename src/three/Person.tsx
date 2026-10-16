@@ -904,7 +904,8 @@ const handGeo = (side: -1 | 1) =>
 /** A relaxed hand below the wrist: a palm, four fingers curling in towards the body, and the thumb in front. */
 function HandModel({ skin, f, side }: { skin: string; f: boolean; side: -1 | 1 }) {
   return (
-    <group position={[0, -WRIST, 0]} scale={f ? 0.9 : 1}>
+    // Hands are about a ninth of a person's height: scaled up from the model's own size so they read at a distance.
+    <group position={[0, -WRIST, 0]} scale={f ? 1.32 : 1.45}>
       <M color={skin} geometry={handGeo(side)} />
     </group>
   );
@@ -1281,7 +1282,7 @@ function noseGeo(f: boolean) {
 
 /** The mouth: a short arc turned up at the corners, so faces at rest look friendly rather than glum. */
 const SMILE = 1.5;
-const smile = geo('smile', () => new TorusGeometry(0.03, 0.0075, 6, 12, SMILE));
+const smile = geo('smile', () => new TorusGeometry(0.03, 0.0026, 5, 14, SMILE));
 
 function Head({ a, skin }: { a: Appearance; skin: string }) {
   const f = a.body === 'f';
@@ -1308,8 +1309,14 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
           )}
         </group>
       ))}
-      {/* Lips */}
-      <M color={f ? '#9f1239' : shade(skin, 0.62)} geometry={smile} position={[0, -0.05, lipZ]} rotation={[0.12, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.6]} />
+      {/* Lips: a slimmer upper lip and a fuller lower one, a soft dark line between, the corners just turned up.
+          Men's are a deeper shade of their own skin; women's a muted berry-brown, not bright red. */}
+      <group position={[0, -0.05, lipZ + 0.002]}>
+        <M color={f ? '#7a2f3a' : shade(skin, 0.74)} geometry={sphere(0.02)} position={[0, 0.0062, 0]} scale={[1.5, 0.4, 0.52]} rough={0.55} />
+        <M color={f ? '#8c3a45' : shade(skin, 0.8)} geometry={sphere(0.02)} position={[0, -0.0062, 0.0012]} scale={[1.38, 0.52, 0.58]} rough={0.4} />
+        {/* Where the lips meet: the arc's lowest point sits right between them, its corners lifting ~8 mm into a smile. */}
+        <M color={shade(skin, 0.36)} geometry={smile} position={[0, 0.0302, 0.0098]} rotation={[0, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.4]} />
+      </group>
       {f && !coversHair && ([-1, 1] as const).map((s) => <M key={s} color="#d4af37" geometry={sphere(0.012)} position={[s * 0.126, -0.044, -0.004]} metal={0.8} rough={0.3} />)}
       {!coversHair && <Hair style={a.hair} color={hairColor} skin={skin} capped={!!head} />}
       {head && <HeadWear g={head} />}

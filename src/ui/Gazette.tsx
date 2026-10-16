@@ -38,12 +38,34 @@ export function GazetteBanner() {
   if (!cur) return null;
   return (
     <button key={cur.key} type="button" className={`gazette-banner kind-${cur.kind}`} aria-live="polite" onClick={() => { shift(); openNews(); }}>
-      <span className="gazette-banner-icon"><Emoji char={cur.icon} size={26} /></span>
-      <span className="gazette-banner-body">
-        <small>{KIND_LABEL[cur.kind]}</small>
-        <b>{cur.text}</b>
+      {/* Green-white-green down the edge, like the flag. */}
+      <span className="gz-flag" aria-hidden><i /><i /><i /></span>
+      <span className="gz-icon"><Emoji char={cur.icon} size={24} /></span>
+      <span className="gz-body">
+        <span className="gz-head">
+          <b className="gz-seal">Federal Gazette</b>
+          <i className="gz-kind">{KIND_LABEL[cur.kind]}</i>
+        </span>
+        <span className="gz-text">{cur.text}</span>
+        <small className="gz-foot">Just now · Tap for the full record ›</small>
       </span>
+      <span className="gz-gavel" aria-hidden><Gavel /></span>
     </button>
+  );
+}
+
+/** A judge's gavel striking its block, for the notice's corner badge. */
+function Gavel() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+      <g transform="rotate(-40 12 9)">
+        <rect x="7.5" y="3.2" width="9" height="4.6" rx="1.4" />
+        <rect x="6.3" y="2.6" width="1.6" height="5.8" rx="0.6" />
+        <rect x="16.1" y="2.6" width="1.6" height="5.8" rx="0.6" />
+        <rect x="11.1" y="7.6" width="1.8" height="10" rx="0.9" />
+      </g>
+      <rect x="3" y="18.6" width="11" height="2.8" rx="1.1" />
+    </svg>
   );
 }
 
