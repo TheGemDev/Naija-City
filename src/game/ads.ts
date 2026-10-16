@@ -10,6 +10,9 @@ export interface AdPlan {
   tag?: string;
 }
 
+/** Buying ads is switched off for now: no Ads sheet, button or app, and the server refuses bookings. Ads already live still show. */
+export const ADS_ON_SALE = false;
+
 /** Plans on sale. Only one-day ads for now. */
 export const AD_PLANS: AdPlan[] = [{ id: 'day', label: 'Quick Shout', icon: '📣', price: 1_000, days: 1 }];
 

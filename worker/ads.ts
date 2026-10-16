@@ -12,7 +12,7 @@
 import type { FirebaseUser } from './auth';
 import { bachsReady, createBachsSession } from './bachs';
 import { boardPrice, parseSea, SEA_PLANS, seaOverlap, validBoard } from '../src/game/boards';
-import { AD_LIMITS, AD_PLAN_BY_ID, AD_PLANS, cleanImage, cleanLink, MAX_OPEN_ADS } from '../src/game/ads';
+import { AD_LIMITS, AD_PLAN_BY_ID, AD_PLANS, ADS_ON_SALE, cleanImage, cleanLink, MAX_OPEN_ADS } from '../src/game/ads';
 
 declare global {
   interface Env {
@@ -112,7 +112,7 @@ export async function handleAds(req: Request, env: Env, user: FirebaseUser, path
     return json({
       reserved: held.map((h) => h.board),
       plans: AD_PLANS,
-      enabled: bachsReady(env) || !!env.ADS_TEST_ACTIVATE,
+      enabled: ADS_ON_SALE && (bachsReady(env) || !!env.ADS_TEST_ACTIVATE),
       live,
       mine: mine.map((a) => ({
         id: a.id, board: a.board, title: a.title, body: a.body, link: a.link, image: a.image, fill: !!a.fill, planId: a.plan_id, price: a.price, status: a.status,
@@ -120,6 +120,8 @@ export async function handleAds(req: Request, env: Env, user: FirebaseUser, path
       })),
     });
   }
+
+  if ((path === '/api/ads' || path === '/api/ads/checkout') && req.method === 'POST' && !ADS_ON_SALE) return err(503, 'Ads are not on sale right now');
 
   if (path === '/api/ads' && req.method === 'POST') {
     const b = (await req.json().catch(() => null)) as { board?: string; plan?: string; title?: string; body?: string; link?: string; image?: string; fill?: boolean } | null;

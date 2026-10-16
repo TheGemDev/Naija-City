@@ -55,6 +55,7 @@ import { FixerApp, GrindApp, PlugApp } from './Vice';
 import { ElectionBoard } from './Election';
 import { LoansPanel } from './Loans';
 import { openAdsSheet } from '../net/ads';
+import { ADS_ON_SALE } from '../game/ads';
 import { PerfSettings } from './PerfSettings';
 import { GuideSettings } from './Guide';
 import { startGuide } from '../game/guide';
@@ -122,7 +123,7 @@ const APPS: Record<AppId, AppDef> = {
   games: { id: 'games', label: 'Games', icon: '🎲', bg: ['#fb7185', '#7c3aed'], tint: '#7c3aed' },
 };
 /** Downloaded apps (src/game/apps.ts) only show once installed from the store. */
-const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'hire', 'forbes', 'closet', 'radio', 'civic', 'police', 'efcc', 'ads'];
+const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'hire', 'forbes', 'closet', 'radio', 'civic', 'police', 'efcc', ...(ADS_ON_SALE ? ['ads' as const] : [])];
 // 'topup' (buying money) is left off the home screen while card payments are switched off.
 /** Always last: the store, help and settings. */
 const TAIL_APPS: AppId[] = ['store', 'help', 'settings'];

@@ -7,7 +7,7 @@ import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, CanvasTexture, Color, DataTexture, NearestFilter, RedFormat, SRGBColorSpace, UnsignedByteType, Vector2, type ShaderMaterial } from 'three';
 import { cityMap, type BillboardSpot } from '../game/city';
 import { BILLBOARDS_HIDDEN, cityBoard, cityBoardOpen, ESTATE_BILLBOARDS, estateBoard, parseSea, SEA_MARGIN, seaCellOpen } from '../game/boards';
-import type { Ad } from '../game/ads';
+import { ADS_ON_SALE, type Ad } from '../game/ads';
 import { photoHour } from '../game/photo';
 import { hourOf, useGame } from '../game/store';
 import { LIGHTS_ON, sceneHour, useTheme } from '../game/theme';
@@ -150,6 +150,7 @@ export function useAdTexture(ad: Ad | null, aspect = 2, frameless = false) {
 /** Tapping an ad opens its link; tapping a blank board opens the Ads sheet. */
 export const tapAd = (ad: Ad | null, board: string | null = null) => {
   // A visitor on the city tour has to sign up before they can book a board.
+  if (!ad && !ADS_ON_SALE) return;
   if (!ad && useTour.getState().city) useAuthUi.getState().show('up');
   else if (!ad) openAdsSheet(board);
   else if (ad.link) window.open(ad.link, '_blank', 'noopener,noreferrer');

@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Color, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight, type PointLight } from 'three';
+import { Color, Fog, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight, type PointLight } from 'three';
 import { activeDesignOf, flightOf, hourOf, houseKeyOf, litHere, useGame, type GameState } from '../game/store';
 import { avatar } from '../game/avatar';
 import { driveState } from '../game/driveState';
@@ -30,6 +30,8 @@ import { useLowPerf } from '../game/quality';
 import { photoHour, usePhoto } from '../game/photo';
 import { LIGHTS_ON, sceneHour, setChromeColor } from '../game/theme';
 import { PhotoRig } from './PhotoRig';
+import { pinWeather, sky, stepSky } from '../game/weather';
+import { Clouds, Rain, SkyBodies } from './Weather';
 
 /** Game time advances in steps this long (seconds). Every step updates the store and the screens
  *  watching it, so doing it every frame kept React busy 60 times a second. */
@@ -37,7 +39,7 @@ const TICK_STEP = 0.1;
 
 function GameLoop() {
   const three = useThree();
-  if (import.meta.env.DEV) Object.assign(window, { __three: three, __game: useGame });
+  if (import.meta.env.DEV) Object.assign(window, { __three: three, __game: useGame, __pinWeather: pinWeather });
   const owed = useRef(0);
   useFrame((_, dt) => {
     const s = useGame.getState();
@@ -68,9 +70,29 @@ const SKY_BULB = new Color('#ffe0b0');
 const GROUND_DAY = new Color('#6b5a3a');
 const GROUND_NIGHT = new Color('#3a3f5c');
 const DAY = new Color('#bfe3f5');
+/** The sky's colour under each kind of weather (game/weather.ts): grey cloud, slate rain, and harmattan dust. */
+const DAY_CLOUD = new Color('#b4c2ce');
+const DAY_RAIN = new Color('#8794a1');
+const DAY_DUST = new Color('#dccaa6');
+const NIGHT_CLOUD = new Color('#161c28');
+const NIGHT_DUST = new Color('#241f19');
+const FLASH = new Color('#e4e8ff');
+const WHITE = new Color('#ffffff');
+/** The sun through harmattan dust: a soft orange. */
+const SUN_DUST = new Color('#ffcf9a');
+const SKY_DUST = new Color('#f3dcb5');
 const LAMPS: [number, number, number][] = [[4, 2.2, 3], [11, 2.2, 2.5], [11, 2.2, 7.5], [2.5, 2.2, 8], [6.5, 2.2, 8], [7, 2.2, 11.5]];
 
-/** Sun moves with the in-game clock (dark appearance keeps it night); lamps come on at night if there is power. */
+/** Out under the sky, where weather reaches: not inside a building or on a plane. */
+function outdoors(s: GameState) {
+  return !flightOf(s) && (!!useVisit.getState().current || s.view !== 'place');
+}
+
+/**
+ * Sun moves with the in-game clock (dark appearance keeps it night); lamps come on at night if there is power.
+ * Outdoors the weather (game/weather.ts) greys or dusts the sky, dims the sun and softens its shadows, and hazes
+ * the distance with fog.
+ */
 function DayNight() {
   const sun = useRef<DirectionalLight>(null!);
   const hemi = useRef<HemisphereLight>(null!);
@@ -78,8 +100,15 @@ function DayNight() {
   const { scene, controls, gl } = useThree();
   const view = useGame((s) => s.view);
   const bg = useRef(new Color());
+  const tint = useRef(new Color());
   const frames = useRef(0);
   const low = useLowPerf();
+  // Always set, and pushed out of sight when there is no haze: switching fog on and off would recompile every material.
+  const fog = useMemo(() => new Fog('#bfe3f5', 1e4, 1e4 + 1), []);
+  useEffect(() => {
+    scene.fog = fog;
+    return () => { scene.fog = null; };
+  }, [scene, fog]);
 
   // Soft light bounced in from all round, so glass, paint and metal pick up reflections instead of
   // looking chalky. Skipped in low mode.
@@ -97,14 +126,20 @@ function DayNight() {
     };
   }, [gl, scene, low]);
 
-  useFrame(() => {
+  useFrame(({ camera }, dt) => {
     const s = useGame.getState();
     // Photo mode can ask for the light of another time of day.
     const posed = photoHour();
     const h = posed ?? sceneHour(hourOf(s.minutes));
     const day = Math.max(0, Math.sin(((h - 6) / 12) * Math.PI)); // 0 at night, 1 at noon
-    // Two sky colours only, day blue and night navy: an orange dusk mixed in turned it muddy brown.
-    bg.current.copy(NIGHT).lerp(DAY, Math.min(1, day * 1.6));
+    stepSky(dt, s.destinationId);
+    const out = outdoors(s) ? 1 : 0;
+    const cloud = sky.cloud * out, haze = sky.haze * out, rain = sky.rain * out, flash = sky.flash * out;
+    const sunK = 1 - (1 - sky.sun) * out;
+    // Two sky colours only, day blue and night navy: an orange dusk mixed in turned it muddy brown. Weather greys or dusts both.
+    tint.current.copy(DAY).lerp(DAY_CLOUD, cloud).lerp(DAY_RAIN, rain).lerp(DAY_DUST, haze * (1 - rain));
+    bg.current.copy(NIGHT).lerp(NIGHT_CLOUD, cloud).lerp(NIGHT_DUST, haze * (1 - rain)).lerp(tint.current, Math.min(1, day * 1.6));
+    bg.current.lerp(FLASH, flash * 0.55);
     scene.background = bg.current;
     // The status bar of an installed app takes the sky's colour, so there is no odd strip above the world.
     if (frames.current++ % 60 === 0) setChromeColor(`#${bg.current.getHexString()}`);
@@ -115,6 +150,13 @@ function DayNight() {
     sun.current.position.set(t.x + Math.cos(angle) * 18, 4 + Math.max(0, Math.sin(angle)) * 20, t.z + 10);
     sun.current.target.position.set(t.x, 0, t.z);
     sun.current.target.updateMatrixWorld();
+    // Haze closes in round the middle of the screen; rain greys the far side. Clear air has no fog at all.
+    const thick = Math.max(haze, rain * 0.6);
+    const dist = camera.position.distanceTo(sun.current.target.position);
+    const open = (1 - thick) ** 2.5;
+    fog.color.copy(bg.current);
+    fog.near = thick < 0.01 ? 1e4 : dist * (0.35 + 2.65 * open);
+    fog.far = thick < 0.01 ? 1e4 + 1 : dist * (1.9 + 6.1 * open);
     // Night is never pitch black: moonlight keeps streets readable, and a room with power is lit by
     // its bulbs (businesses run generators, so building interiors always are). No power at home is
     // what stays dark: that's NEPA. Low mode has no lamps, so its moon is a little brighter.
@@ -123,12 +165,15 @@ function DayNight() {
     const indoors = !!visit || s.view === 'home' || s.view === 'place';
     const homePower = litHere(s);
     const bulbs = indoors && (s.view === 'place' && !visit ? true : homePower) ? night : 0;
-    const moon = night * (low ? 0.75 : 0.55);
-    sun.current.intensity = 0.15 + day * 2.2 + moon * (1 - bulbs * 0.6);
+    const moon = night * (low ? 0.75 : 0.55) * (1 - cloud * 0.4);
+    sun.current.intensity = 0.15 + day * 2.2 * sunK + moon * (1 - bulbs * 0.6);
+    sun.current.color.copy(WHITE).lerp(SUN_DUST, haze * 0.8);
+    // Under cloud the light comes from the whole sky: shadows go soft and faint.
+    sun.current.shadow.intensity = 0.25 + 0.75 * sunK;
     // High mode's room environment already fills the shadows, so its sky light is turned down by as much: stacked
-    // together at noon they washed the whole map out to white.
-    hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + moon * 0.9 + bulbs * (low ? 1.1 : 0.85);
-    hemi.current.color.copy(SKY_DAY).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8);
+    // together at noon they washed the whole map out to white. Some of the sunlight cloud takes away comes back as sky light.
+    hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + day * (1 - sunK) * 0.9 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85) + flash * 2.2;
+    hemi.current.color.copy(SKY_DAY).lerp(SKY_DUST, haze * 0.6).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8).lerp(FLASH, flash);
     hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - bulbs));
 
     scene.environmentIntensity = 0.05 + day * 0.1;
@@ -155,6 +200,19 @@ function DayNight() {
         LAMPS.map((p, i) => (
           <pointLight key={i} ref={(l) => { lamps.current[i] = l; }} position={p} color="#ffd9a0" distance={6} decay={1.5} intensity={0} />
         ))}
+    </>
+  );
+}
+
+/** The sun and moon wherever the sky shows; rain and clouds only out under it. */
+function WeatherLayer() {
+  const out = useGame((s) => outdoors(s));
+  const visiting = useVisit((s) => !!s.current);
+  return (
+    <>
+      <SkyBodies />
+      {(out || visiting) && <Rain />}
+      {(out || visiting) && <Clouds />}
     </>
   );
 }
@@ -392,6 +450,7 @@ export function Scene() {
       />
       <GameLoop />
       <DayNight />
+      <WeatherLayer />
       <CameraRig />
       <Suspense fallback={null}>
         <LocalWorld />

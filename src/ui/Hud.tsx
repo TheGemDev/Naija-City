@@ -22,6 +22,7 @@ import { ReactionToggle, ReactionTray, useReactions } from './Reactions';
 import { Chevron, Emoji } from './Icons';
 import { PhotoButton, openCamera } from './PhotoMode';
 import { openAdsSheet } from '../net/ads';
+import { ADS_ON_SALE } from '../game/ads';
 import { Person, type Clip } from '../three/Person';
 import { STAGES } from '../game/property';
 import { LiveBanner } from './LiveApps';
@@ -112,11 +113,13 @@ function TopBar() {
         <Emoji char="💰" size={22} />
         <b className={money < 0 ? 'owing' : undefined}>{naira(money)}</b>
       </div>
-      <div className="hud-actions">
-        <button className="round-btn" title="Ads" aria-label="Ads" onClick={() => openAdsSheet(null, true)}>
-          <Emoji char="📣" size={20} />
-        </button>
-      </div>
+      {ADS_ON_SALE && (
+        <div className="hud-actions">
+          <button className="round-btn" title="Ads" aria-label="Ads" onClick={() => openAdsSheet(null, true)}>
+            <Emoji char="📣" size={20} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

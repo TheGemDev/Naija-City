@@ -1,7 +1,7 @@
 // Player ads on the client (server side: worker/ads.ts).
 
 import { create } from 'zustand';
-import type { Ad, AdPlan, MyAd } from '../game/ads';
+import { ADS_ON_SALE, type Ad, type AdPlan, type MyAd } from '../game/ads';
 import { useGame } from '../game/store';
 import { api, useSession } from './session';
 import { idToken } from './firebase';
@@ -89,7 +89,8 @@ export const removeAd = (id: string) =>
 /** Show the Ads sheet (the phone, if open, closes first so the sheet isn't hidden behind it). */
 export function openAdsSheet(board: string | null = null, place = false) {
   // Booking is for players: a visitor's tap must not leave the sheet waiting to pop open after they sign in.
-  if (!useSession.getState().user) return;
+  // And not at all while ads are off sale (game/ads.ts).
+  if (!ADS_ON_SALE || !useSession.getState().user) return;
   useGame.getState().setPanel(null);
   void loadAds();
   useAds.setState({ sheetOpen: true, wantBoard: typeof board === 'string' ? board : null, wantPlace: place });
