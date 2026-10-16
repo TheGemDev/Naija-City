@@ -6,7 +6,9 @@
 // either way until it would meet a building, a house, a tree, a landmark, water or the edge of the land (it may cross a
 // road: rails only there, like a level crossing), up to RUN_MAX. The train comes in from the far end of one run and
 // leaves to the far end of the other, thinning out over the last stretch (trainKit PassingTrain) instead of vanishing
-// at the plot's edge. It runs out the side with the longer clear run.
+// at the plot's edge. It runs out the side with the longer clear run. Where a road (or anything else) comes right up to
+// the end of the plot, the line runs into a train shed there instead, and the train goes in under its roof and out of
+// sight: nothing is ever drawn over the street.
 
 import { useMemo } from 'react';
 import { activeMap, placeYaw } from '../game/city';
@@ -15,11 +17,15 @@ import { Glow, Kit, KitModel, type Built } from './placeKit';
 import { buildTrain, PassingTrain, RAIL_GREEN, RAIL_WHITE } from './trainKit';
 
 /** The train at the map's scale: a diesel and a coach, as long as the platform. */
-const MAP_SCALE = 0.4;
+const MAP_SCALE = 0.36;
 /** How far past the plot the line may run, either way. */
 const RUN_MAX = 14;
 /** The stretch at each far end over which the train thins out. */
-const FADE = 1.6;
+const FADE = 0.7;
+/** A clear run shorter than this ends in a train shed instead: the line goes in under its roof, and the train with it. */
+const SHED_MIN = 1.5;
+/** How long a train shed is, at the end of the plot. */
+const SHED = 0.9;
 
 const BALLAST = '#8a8178';
 const SLEEPER = '#5b4636';
@@ -32,6 +38,7 @@ const STEEL = '#94a3b8';
 const ROOF = '#e5e7eb';
 const BENCH = '#92400e';
 const DARK = '#1f2937';
+const SHED_WALL = '#e7e2d8';
 
 /** Where the two tracks run, across the plot's depth: the near one (the train's) and the far one. */
 const tracks = (d: number) => ({ near: -d / 2 + 0.45, far: -d / 2 + 1.05 });
@@ -40,7 +47,7 @@ const tracks = (d: number) => ({ near: -d / 2 + 0.45, far: -d / 2 + 1.05 });
  * How far the near track can run on past each end of the plot (in its own x): clear of every other building, house,
  * tree and landmark, on dry land, and stopping short of any road: the line never crosses the tarmac.
  */
-function clearRuns(w: number, d: number) {
+export function clearRuns(w: number, d: number) {
   const m = activeMap();
   const st = m.placeById?.station;
   if (!st) return { minus: 3, plus: 3 };
@@ -50,7 +57,8 @@ function clearRuns(w: number, d: number) {
   const world = (x: number, z: number) => [cx + x * cos + z * sin, cz - x * sin + z * cos] as const;
   const inside = (r: { x: number; z: number; w: number; d: number }, x: number, z: number, pad: number) => x >= r.x - pad && x <= r.x + r.w + pad && z >= r.z - pad && z <= r.z + r.d + pad;
   const blocked = (x: number, z: number) =>
-    !m.isLand(x, z) || m.isWater(x, z) || m.isBridge(x, z) || m.isRoad(x, z)
+    // The land, water and roads are kept per whole cell.
+    !m.isLand(Math.floor(x), Math.floor(z)) || m.isWater(Math.floor(x), Math.floor(z)) || m.isBridge(x, z) || m.isRoad(Math.floor(x), Math.floor(z))
     || m.places.some((p) => p !== st && inside(p, x, z, 0.15))
     || m.landmarks.some((l) => inside(l, x, z, 0.15))
     || m.houses.some((h) => inside(h, x, z, 0.1))
@@ -76,7 +84,23 @@ function buildStation(w: number, d: number, runs: ReturnType<typeof clearRuns>, 
   const back = -d / 2;
   const platform = back + 1.75;
   // The line: ballast, sleepers and rails on the plot and out along the clear runs.
-  const x0 = -w / 2 - runs.minus, x1 = w / 2 + runs.plus;
+  const x0 = -w / 2 - (runs.minus >= SHED_MIN ? runs.minus : 0), x1 = w / 2 + (runs.plus >= SHED_MIN ? runs.plus : 0);
+  // A train shed over each end with no run beyond it: walls either side, a green roof, a closed end at the plot's edge
+  // and an open mouth facing the platform, lit inside at night.
+  for (const side of [-1, 1]) {
+    if ((side < 0 ? runs.minus : runs.plus) >= SHED_MIN) continue;
+    const xc = side * (w / 2 - SHED / 2);
+    const z0 = back + 0.02, z1 = near + 0.5;
+    const zc = (z0 + z1) / 2, wd = z1 - z0;
+    for (const z of [z0 + 0.03, z1 - 0.03]) k.box(SHED_WALL, [xc, 0.62, z], [SHED, 1.24, 0.06]);
+    k.box(SHED_WALL, [side * (w / 2 - 0.03), 0.62, zc], [0.06, 1.24, wd]);
+    k.box(RAIL_GREEN, [xc, 1.3, zc], [SHED + 0.06, 0.1, wd + 0.08]);
+    k.box(ROOF, [xc, 1.38, zc], [SHED - 0.1, 0.06, wd - 0.2]);
+    const mouth = side * (w / 2 - SHED);
+    k.box(RAIL_GREEN, [mouth, 1.16, zc], [0.08, 0.16, wd]);
+    for (const z of [z0 + 0.03, z1 - 0.03]) k.box(DARK, [mouth, 0.58, z], [0.1, 1.16, 0.08]);
+    k.box('lamp', [mouth - side * 0.06, 1.06, zc], [0.03, 0.05, 0.3]);
+  }
   k.box(BALLAST, [0, 0.02, back + 0.8], [w, 0.04, 1.6]);
   for (const [a, b] of [[x0, -w / 2], [w / 2, x1]] as const) if (b - a > 0.01) k.box(BALLAST, [(a + b) / 2, 0.02, near], [b - a, 0.04, 0.95]);
   for (const z of [near, far]) {
@@ -136,14 +160,18 @@ function buildStation(w: number, d: number, runs: ReturnType<typeof clearRuns>, 
 export function TrainStation({ w, d }: { w: number; d: number }) {
   const low = useLowPerf();
   const runs = useMemo(() => clearRuns(w, d), [w, d]);
-  const train = useMemo(() => buildTrain(1, { low, glow: true }), [low]);
+  const train = useMemo(() => buildTrain(1, { low, glow: true, coachLen: 5.6 }), [low]);
   const { near } = tracks(d);
   // Out the side with the longer clear run; in from the other.
   const dir = runs.plus >= runs.minus ? 1 : -1;
+  const shedMinus = runs.minus >= SHED_MIN ? 0 : SHED, shedPlus = runs.plus >= SHED_MIN ? 0 : SHED;
+  const lo = -w / 2 - (shedMinus ? 0 : runs.minus), hi = w / 2 + (shedPlus ? 0 : runs.plus);
   return (
     <group>
       <KitModel build={(l) => buildStation(w, d, runs, l)} deps={[w, d, runs]} />
-      <PassingTrain train={train} from={-w / 2 - runs.minus} to={w / 2 + runs.plus} stop={dir * (w / 2 - 0.3)} dir={dir} at={[0, 0.1, near]} scale={MAP_SCALE} fade={FADE} cycle={46} />
+      {/* Cut at the far end of each clear run, or inside the shed where there is none. It stops with its nose at the
+          shed's mouth (or near the end of the platform), its tail wherever the train's length puts it. */}
+      <PassingTrain train={train} from={lo} to={hi} stop={dir * (w / 2 - (dir > 0 ? shedPlus : shedMinus) - 0.25)} dir={dir} at={[0, 0.1, near]} scale={MAP_SCALE} fade={FADE} cycle={46} />
     </group>
   );
 }

@@ -12,7 +12,6 @@ import type { ActionDef } from './catalog';
 import type { Cell } from './grid';
 import { JET_TRIP } from './cars';
 import { HOTEL_ID, ROOM_TYPES, roomPlaceId, type RoomType } from './hotel';
-import { liveEvent } from './live';
 import { trainActions } from './transport';
 
 export const CITY_W = 60;
@@ -211,8 +210,6 @@ export interface Place extends Rect {
   door: Cell;
   /** Open ground (parks, pitches): you can walk on it. */
   ground?: boolean;
-  /** Opening hours. A close past 24 runs over midnight. */
-  hours?: [number, number];
   /** Jobs whose shift happens here. */
   jobs?: string[];
   actions: ActionDef[];
@@ -282,7 +279,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'motorpark', name: 'Kawo Motor Park', area: 'Kawo', icon: '🚌', model: 'motorpark', blurb: 'Buses, keke, loud agbero calls, and hot roasted corn.',
-    x: 31, z: 1, w: 7, d: 4, door: { x: 33, z: 5 }, hours: [5, 22], jobs: ['keke'],
+    x: 31, z: 1, w: 7, d: 4, door: { x: 33, z: 5 }, jobs: ['keke'],
     actions: [
       { id: 'conductor_shout', label: 'Conductor hype: "BARNAWA CHIKUN ENTER WITH YOUR CHANGE!"', icon: '📢', category: 'wild', minutes: 30, payout: 3_500, pose: 'stand', perHour: { fun: 160, social: 140 }, tagline: 'Hang one leg out of the keke door and pack 4 passengers!' },
       { id: 'corn', label: 'Roasted corn & spicy pear snack', icon: '🌽', category: 'spend', minutes: 20, cost: 700, pose: 'stand', perHour: { hunger: 50, social: 30, fun: 20 }, tagline: 'Fresh yellow corn charred over open coals with ube' },
@@ -301,7 +298,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'nda', name: 'Nigerian Defence Academy', area: 'Afaka Road', icon: '🎖️', model: 'nda', blurb: 'Officer cadets, drill and the famous passing-out parade.',
-    x: 10, z: 9, w: 7, d: 6, door: { x: 13, z: 15 }, hours: [7, 18],
+    x: 10, z: 9, w: 7, d: 6, door: { x: 13, z: 15 },
     actions: [
       { id: 'parade', label: 'Watch the passing-out parade', icon: '🎖️', category: 'social', minutes: 90, pose: 'stand', perHour: { fun: 20, social: 15 }, tagline: 'Watch swords glistening in the sun' },
       { id: 'drill', label: 'Join the fitness drill', icon: '💪🏾', category: 'work', minutes: 60, pose: 'stand', perHour: { fun: 10, energy: -12, hygiene: -25 }, tagline: 'March and do push-ups on the red parade ground' },
@@ -311,7 +308,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'church', name: "St. Joseph's Cathedral", area: 'Kaduna North', icon: '⛪', model: 'church', blurb: 'Big choir, long sermon, plenty of friends after service.',
-    x: 31, z: 8, w: 4, d: 5, door: { x: 30, z: 10 }, hours: [6, 20],
+    x: 31, z: 8, w: 4, d: 5, door: { x: 30, z: 10 },
     actions: [
       { id: 'service', label: 'Attend Sunday service', icon: '🙏🏾', category: 'social', minutes: 120, pose: hidden, perHour: { social: 25, fun: 10 }, tagline: 'Praise, worship, and heartfelt preaching' },
       { id: 'choir_lead', label: 'Lead high-tempo praise & dance', icon: '💃🏾', category: 'wild', minutes: 45, pose: 'stand', perHour: { fun: 150, social: 120, energy: -15 }, tagline: 'Jump and wave white handkerchief in the aisle!' },
@@ -320,7 +317,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'stadium', name: 'Ahmadu Bello Stadium', area: 'Kawo', icon: '🏟️', model: 'stadium', blurb: 'Home of Kaduna United. Roaring stands, athletic showdowns, and matchday drama.',
-    x: 40, z: 8, w: 8, d: 7, door: { x: 43, z: 15 }, hours: [8, 22], jobs: ['fitness'],
+    x: 40, z: 8, w: 8, d: 7, door: { x: 43, z: 15 }, jobs: ['fitness'],
     actions: [
       { id: 'match', label: 'Watch Kaduna United match', icon: '⚽', category: 'social', minutes: 120, cost: 2_000, pose: hidden, perHour: { fun: 30, social: 20 }, tagline: 'Cheer Kaduna United from the packed terraces' },
       { id: 'sprint_challenge', label: '100m street sprint showdown for ₦5k', icon: '🏃🏾', category: 'wild', minutes: 30, payout: 5_000, pose: 'stand', perHour: { fun: 170, energy: -25, hygiene: -30 }, tagline: 'Dust Kaduna’s fastest sprinters on the red track!' },
@@ -333,7 +330,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'police', name: 'Kaduna Police HQ', area: 'Central', icon: '👮🏾', model: 'secretariat', blurb: 'Kaduna’s central police station. High-drama bail negotiations and wanted fugitives.',
-    x: 2, z: 30, w: 6, d: 5, door: { x: 4, z: 35 }, hours: [6, 22], jobs: ['police'],
+    x: 2, z: 30, w: 6, d: 5, door: { x: 4, z: 35 }, jobs: ['police'],
     actions: [
       { id: 'dry_gin_bribe', label: 'Audacious dry gin & bribe attempt', icon: '🥃', category: 'wild', minutes: 20, cost: 3_000, pose: 'stand', perHour: { fun: 140, social: 80 }, tagline: '"Officer salute! Weekend dey come!" Slide gin across desk.' },
       { id: 'spiritual_report', label: 'Report neighbor for spiritual/juju attack', icon: '🧙‍♂️', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 150, social: 90 }, tagline: 'Explain to DPO why their rooster only crows at your window' },
@@ -343,7 +340,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'techhub', name: 'Tech Hub', area: 'Malali GRA', icon: '💻', model: 'techhub', blurb: 'Fast Wi-Fi, startups and free coffee.',
-    x: 51, z: 10, w: 4, d: 4, door: { x: 52, z: 14 }, hours: [9, 21], jobs: ['dev'],
+    x: 51, z: 10, w: 4, d: 4, door: { x: 52, z: 14 }, jobs: ['dev'],
     actions: [
       { id: 'fake_startup', label: 'Pitch insane AI/Web3 startup to angels', icon: '🚀', category: 'wild', minutes: 45, pose: 'stand', perHour: { fun: 160, social: 120 }, tagline: '"Blockchain akara logistics!" Watch investor jaws drop.' },
       { id: 'leech_wifi', label: 'Leech 50GB high-speed Wi-Fi & coffee', icon: '☕', category: 'spend', cost: 500, minutes: 60, pose: 'sit', perHour: { fun: 120, energy: 15 }, tagline: 'Download entire seasons while staring at terminal' },
@@ -354,7 +351,7 @@ export const PLACES: Place[] = [
   /* ---- Rigasa & the central district ---- */
   {
     id: 'station', name: 'Rigasa Train Station', area: 'Rigasa', icon: '🚆', model: 'station', blurb: 'Kaduna – Abuja train. High speed, bustling platforms, and VIP lounges.',
-    x: 2, z: 18, w: 6, d: 5, door: { x: 5, z: 23 }, hours: [6, 18],
+    x: 2, z: 18, w: 6, d: 5, door: { x: 5, z: 23 },
     actions: [
       // Tickets to every city the lines reach (game/transport.ts), sold at the ticket desk (ui/TrainDesk.tsx).
       ...trainActions('kaduna'),
@@ -374,7 +371,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'lugard', name: 'Lugard Hall', area: 'Central', icon: '🏛️', model: 'lugard', blurb: 'The domed seat of the old Northern Region.',
-    x: 21, z: 19, w: 6, d: 5, door: { x: 23, z: 24 }, hours: [9, 17],
+    x: 21, z: 19, w: 6, d: 5, door: { x: 23, z: 24 },
     actions: [
       { id: 'tour', label: 'Take a guided historical tour', icon: '🧭', category: 'social', minutes: 60, cost: 500, pose: 'stand', knowledgePerHour: 0.3, perHour: { fun: 12 }, tagline: 'Walk through historic legislative chambers' },
       { id: 'lugard_chair', label: 'Sneak selfie on Lugard’s historic chair', icon: '🏛️', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 150, social: 80 }, tagline: 'Hop the velvet rope and strike a gubernatorial pose!' },
@@ -395,7 +392,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'arewa', name: 'Arewa House', area: 'Central', icon: '📜', model: 'arewa', blurb: 'Sardauna’s old residence, now the North’s history archive.',
-    x: 40, z: 19, w: 5, d: 4, door: { x: 42, z: 23 }, hours: [9, 17],
+    x: 40, z: 19, w: 5, d: 4, door: { x: 42, z: 23 },
     actions: [
       { id: 'archive', label: 'Read in the history archives', icon: '📜', category: 'work', minutes: 120, cost: 500, pose: 'stand', knowledgePerHour: 0.45, perHour: { fun: 8 }, tagline: 'Study declassified colonial documents' },
       { id: 'sardauna_recite', label: 'Recite Sardauna’s famous 1959 speech', icon: '🎙️', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 130, social: 80 }, tagline: 'Command the courtyard with vintage orator energy' },
@@ -403,7 +400,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'polo', name: 'Kaduna Polo Club', area: 'Ungwan Rimi', icon: '🐎', model: 'polo', ground: true, blurb: 'Horses, hats and the famous Kaduna Polo Tournament.',
-    x: 51, z: 18, w: 6, d: 8, door: { x: 53, z: 22 }, hours: [7, 19],
+    x: 51, z: 18, w: 6, d: 8, door: { x: 53, z: 22 },
     actions: [
       { id: 'polo', label: 'Watch a high-goal polo match', icon: '🐎', category: 'social', minutes: 120, cost: 1_500, pose: 'stand', perHour: { fun: 28, social: 22 }, tagline: 'Watch thunderous thundering hooves on green turf' },
       { id: 'horse_sprint', label: 'Bareback horse sprint across the turf', icon: '🏇', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 200, social: 120, energy: -20 }, tagline: 'Gallop past the VIP grandstand like an Emirate cavalryman!' },
@@ -413,7 +410,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'market', name: 'Kaduna Central Market', area: 'Central', icon: '🛒', model: 'market', blurb: 'Everything under one (very loud) roof. Okrika, spices, fabrics, and pure street energy.',
-    x: 10, z: 30, w: 7, d: 5, door: { x: 13, z: 35 }, hours: [7, 19], jobs: ['trader'],
+    x: 10, z: 30, w: 7, d: 5, door: { x: 13, z: 35 }, jobs: ['trader'],
     actions: [
       { id: 'okrika_dispute', label: 'Argue "Original Abibas" okrika shoe', icon: '👟', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 120, social: 80 }, tagline: 'Loudly drag the seller down from ₦50k to ₦2k!' },
       { id: 'thief_prank', label: 'Shout "Ewo! Catch thief!" prank', icon: '📢', category: 'wild', minutes: 15, pose: 'stand', perHour: { fun: 150, social: 60, energy: -15 }, tagline: 'Watch the entire aisle panic and clutch their bags!' },
@@ -448,12 +445,12 @@ export const PLACES: Place[] = [
   },
   {
     id: 'museum', name: 'National Museum', area: 'Central', icon: '🗿', model: 'museum', blurb: 'Home of Nok terracottas, 2,000+ years old.',
-    x: 40, z: 30, w: 5, d: 4, door: { x: 42, z: 29 }, hours: [9, 17],
+    x: 40, z: 30, w: 5, d: 4, door: { x: 42, z: 29 },
     actions: [{ id: 'nok', label: 'See the Nok terracottas', icon: '🗿', minutes: 90, cost: 1_000, pose: hidden, knowledgePerHour: 0.4, perHour: { fun: 15 } }],
   },
   {
     id: 'mall', name: 'KD Mall & Cinema', area: 'Ungwan Rimi', icon: '🎬', model: 'mall', blurb: 'Air-con, popcorn and the latest blockbusters.',
-    x: 51, z: 30, w: 5, d: 5, door: { x: 53, z: 29 }, hours: [9, 22],
+    x: 51, z: 30, w: 5, d: 5, door: { x: 53, z: 29 },
     actions: [
       { id: 'movie', label: 'Watch a movie', icon: '🍿', minutes: 120, cost: 3_000, pose: hidden, perHour: { fun: 30, social: 8 } },
       { id: 'icecream', label: 'Ice cream & waffles', icon: '🍦', category: 'spend', minutes: 15, cost: 2_000, pose: hidden, perHour: { hunger: 40, fun: 60 }, tagline: 'Creamy double-scoop sundae from the food court' },
@@ -466,7 +463,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'boutique', name: 'Malali Boutique', area: 'Ungwan Rimi', icon: '👗', model: 'boutique', blurb: 'Agbada, lace and gold. If you ask for price, you no fit afford am.',
-    x: 42, z: 24, w: 4, d: 3, door: { x: 43, z: 27 }, hours: [10, 21],
+    x: 42, z: 24, w: 4, d: 3, door: { x: 43, z: 27 },
     actions: [
       { id: 'clothes', label: 'Browse designer pieces', icon: '👗', category: 'spend', minutes: 0, effect: 'shop', shop: 'boutique', tagline: 'Tailored Senator suits and imported lace' },
       { id: 'try_agbada', label: 'Try on ₦350k presidential Agbada and pose', icon: '👑', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 160, social: 110 }, tagline: 'Take 40 mirror selfies looking like a state governor!' },
@@ -489,7 +486,7 @@ export const PLACES: Place[] = [
   /* ---- South of the river ---- */
   {
     id: 'poly', name: 'Kaduna Polytechnic', area: 'Tudun Wada', icon: '🎓', model: 'poly', blurb: 'Lectures, campus activism, exam halls, and high-energy student gist.',
-    x: 10, z: 46, w: 7, d: 5, door: { x: 13, z: 51 }, hours: [8, 18],
+    x: 10, z: 46, w: 7, d: 5, door: { x: 13, z: 51 },
     actions: [
       { id: 'lecture', label: 'Attend engineering lecture', icon: '🎓', category: 'work', minutes: 180, cost: 2_000, pose: 'sit', knowledgePerHour: 0.8, perHour: { social: 6, fun: -3, energy: -4 }, tagline: 'Take notes and avoid the lecturer’s tough questions' },
       { id: 'protest_cancel', label: 'Protest 8:00 AM lecturer cancellation', icon: '📢', category: 'wild', minutes: 30, pose: 'stand', perHour: { fun: 150, social: 120 }, tagline: 'Bang lecture desks: "We trekked from Barnawa for this?!"' },
@@ -503,7 +500,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'textile', name: 'KTL Textile Mill', area: 'Kakuri', icon: '🧶', model: 'mill', blurb: 'The old Kaduna Textiles mill — Kakuri’s pride. Looms still clatter.',
-    x: 10, z: 54, w: 7, d: 5, door: { x: 13, z: 59 }, hours: [7, 18], jobs: ['textile'],
+    x: 10, z: 54, w: 7, d: 5, door: { x: 13, z: 59 }, jobs: ['textile'],
     actions: [
       { id: 'fabric', label: 'Buy fabric off the roll', icon: '🧵', category: 'spend', minutes: 30, cost: 5_000, pose: 'stand', perHour: { fun: 30, social: 10 }, tagline: 'Wholesale cotton rolls directly off the factory floor' },
       { id: 'custom_ankara', label: 'Weave custom loud neon Ankara pattern', icon: '🧶', category: 'spend', cost: 10_000, minutes: 45, pose: 'stand', perHour: { fun: 130, social: 70 }, tagline: 'Produce 6 yards of one-of-a-kind bespoke Kaduna drip' },
@@ -512,7 +509,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'buka', name: 'Mama Hadiza Buka & Mai Shayi', area: 'Kakuri', icon: '🍲', model: 'buka', blurb: 'Late-night Indomie, spicy tea, masa and the latest compound gist.',
-    x: 19, z: 55, w: 3, d: 3, door: { x: 20, z: 58 }, hours: [6, 26],
+    x: 19, z: 55, w: 3, d: 3, door: { x: 20, z: 58 },
     actions: [
       { id: 'indomie_contest', label: 'Indomie eating contest with 3 eggs', icon: '🍜', category: 'wild', minutes: 30, cost: 2_500, pose: 'stand', perHour: { hunger: 180, fun: 140 }, tagline: 'Slurp boiling spicy noodles in front of a cheering crowd!' },
       { id: 'politics_tea', label: 'Heated election debate over spicy shayi', icon: '☕', category: 'social', minutes: 45, cost: 500, pose: 'stand', perHour: { fun: 110, social: 140 }, tagline: 'Slap the bench and quote the constitution from memory!' },
@@ -526,7 +523,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'bank', name: 'Kaduna Community Bank', area: 'Kakuri', icon: '🏦', model: 'bank', blurb: 'A local branch for secure savings, everyday banking, and high-drama queues.',
-    x: 23, z: 55, w: 4, d: 4, door: { x: 25, z: 59 }, hours: [8, 18], jobs: ['banker'],
+    x: 23, z: 55, w: 4, d: 4, door: { x: 25, z: 59 }, jobs: ['banker'],
     actions: [
       { id: 'bank', label: 'Use the bank counter', icon: '🏦', category: 'spend', minutes: 0, effect: 'bank', tagline: 'Open mobile banking app to deposit or transfer' },
       { id: 'heist', label: 'Case the vault: plan a heist', icon: '🥷🏾', category: 'wild', minutes: 0, effect: 'bankHeist', tagline: 'Go solo or pull a crew together. Big risk, big cash, and EFCC will be watching your income' },
@@ -542,7 +539,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'suya', name: 'Barnawa Suya Spot', area: 'Barnawa', icon: '🍢', model: 'suya', blurb: 'Smoky suya, cold drinks and loud gist till late.',
-    x: 35, z: 56, w: 3, d: 3, door: { x: 36, z: 59 }, hours: [16, 26],
+    x: 35, z: 56, w: 3, d: 3, door: { x: 36, z: 59 },
     actions: [
       { id: 'eat', label: 'Eat spicy beef suya', icon: '🍢', category: 'spend', minutes: 30, cost: 3_500, pose: 'stand', perHour: { hunger: 90, fun: 25, social: 15 }, tagline: 'Wrapped in newspaper with fresh onions and cabbage' },
       { id: 'yaji_challenge', label: 'Lethal extra-hot yaji pepper challenge', icon: '🌶️', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 170, social: 130, hygiene: -20 }, tagline: 'Eat a tablespoon of pure northern pepper and cry tears of fire!' },
@@ -555,7 +552,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'school', name: 'LEA Primary School', area: 'Barnawa', icon: '🏫', model: 'school', blurb: 'Morning assembly, chalk dust and noisy pupils.',
-    x: 40, z: 55, w: 7, d: 4, door: { x: 43, z: 59 }, hours: [7, 16], jobs: ['teacher'],
+    x: 40, z: 55, w: 7, d: 4, door: { x: 43, z: 59 }, jobs: ['teacher'],
     actions: [
       { id: 'volunteer', label: 'Volunteer a reading class', icon: '📖', category: 'work', minutes: 60, pose: 'sit', knowledgePerHour: 0.1, perHour: { social: 20, fun: 8 }, tagline: 'Teach energetic pupils storybooks and rhymes' },
       { id: 'bell_prank', label: 'Ring morning assembly bell 2 hours early', icon: '🔔', category: 'wild', minutes: 15, pose: 'stand', perHour: { fun: 140, social: 60 }, tagline: 'Watch hundreds of pupils stampede to assembly in confusion!' },
@@ -563,7 +560,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'club', name: 'The Castle Lounge & Nightclub', area: 'Barnawa', icon: '🪩', model: 'club', blurb: 'Kaduna’s premier luxury nightlife destination. VIP bottle service, top DJs, and heavy money spraying.',
-    x: 31, z: 46, w: 6, d: 5, door: { x: 34, z: 51 }, hours: [19, 29], jobs: ['dj'],
+    x: 31, z: 46, w: 6, d: 5, door: { x: 34, z: 51 }, jobs: ['dj'],
     actions: [
       { id: 'dance', label: 'Turn up on the dance floor', icon: '🕺🏾', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 120, social: 80, energy: -15, hygiene: -25 }, tagline: 'Poco Lee legwork, amapiano shuffle, and pure energy' },
       { id: 'table_dance', label: 'Jump on VIP table and dance like Odogwu', icon: '🍾', category: 'wild', minutes: 12, pose: 'stand', perHour: { fun: 180, social: 140, energy: -20 }, tagline: 'Bouncers screaming "step down!" while everyone films on Snapchat!' },
@@ -593,7 +590,7 @@ export const PLACES: Place[] = [
   },
   {
     id: 'viewing', name: 'Barnawa Football Viewing Centre', area: 'Barnawa', icon: '⚽', model: 'viewing', blurb: 'A noisy generator, wooden benches, heated arguments and match-day banters.',
-    x: 33, z: 61, w: 4, d: 3, door: { x: 35, z: 60 }, hours: [16, 26],
+    x: 33, z: 61, w: 4, d: 3, door: { x: 35, z: 60 },
     actions: [
       { id: 'watch', label: 'Watch Premier League derby on big screen', icon: '📺', category: 'social', minutes: 90, cost: 500, pose: 'sit', perHour: { fun: 70, social: 80 }, tagline: 'Arsenal vs Man United banter at ear-splitting volume' },
       { id: 'smash_chair', label: 'Slam plastic chair after missed 90th-min penalty', icon: '🪑', category: 'wild', minutes: 15, pose: 'stand', perHour: { fun: 150, social: 130 }, tagline: '"HOW DID HE MISS THAT?!" Jump up and slam the chair down!' },
@@ -1109,26 +1106,12 @@ export function placeAction(placeId: string, actionId: string): ActionDef | unde
 export const SMELLY_OK = new Set(['home', 'prison', 'camp', 'hospital', 'mosque', 'stadium']);
 export const turnedAwayForSmell = (p: Place) => !p.ground && !SMELLY_OK.has(p.id);
 
-/** A live event runs on the real clock (game/live.ts), so its venue stays open until it ends, whatever the game hour. */
-const hostingLiveEvent = (p: Place) => {
-  const e = liveEvent(Date.now(), active.id);
-  return e.active && e.def.place === p.id;
-};
-
-export function isOpen(p: Place, hour: number) {
-  if (!p.hours || hostingLiveEvent(p)) return true;
-  const [o, c] = p.hours;
-  return c > 24 ? hour >= o || hour < c - 24 : hour >= o && hour < c;
+/** Every place is open round the clock: nothing on the map is locked by the hour. */
+export function isOpen(_p: Place, _hour: number) {
+  return true;
 }
 
-export function hoursLabel(p: Place) {
-  if (!p.hours) return 'Open 24 hours';
-  const fmt = (h: number) => {
-    const hh = h % 24;
-    return `${hh % 12 === 0 ? 12 : hh % 12}${hh < 12 ? 'am' : 'pm'}`;
-  };
-  return `${fmt(p.hours[0])} – ${fmt(p.hours[1])}`;
-}
+export const hoursLabel = (_p: Place) => 'Open 24 hours';
 
 /** Rotation that turns a model (front = local +z) to face its door. */
 export function placeYaw(p: Place) {

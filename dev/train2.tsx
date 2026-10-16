@@ -56,6 +56,7 @@ if (view === 'map') {
   useGame.setState({ destinationId: city, view: 'city', minutes: (night ? 21 : 12) * 60 } as never);
 }
 const st = cityMap(city).places.find((p) => p.id === 'station')!;
+if (view === 'solo') setActiveMap('kaduna');
 const target: [number, number, number] = view === 'map' ? [st.x + st.w / 2 + Number(q.get('dx') ?? 0), 0, st.z + st.d / 2 + Number(q.get('dz') ?? 0)] : [0, 1.2, 0];
 const zoom = Number(q.get('zoom') ?? 1);
 const az = Number(q.get('az') ?? 0);
@@ -88,10 +89,16 @@ if (view !== 'probe') {
         shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={40} shadow-camera-bottom={-40} />
       <Render />
       {view === 'map' && <City />}
+      {view === 'solo' && (
+        <>
+          <mesh rotation-x={-Math.PI / 2} position-y={-0.01}><planeGeometry args={[30, 30]} /><meshStandardMaterial color="#c9b98f" /></mesh>
+          <TrainStation w={6} d={5} />
+        </>
+      )}
       {view === 'map' && q.get('outline') !== '0' && (
         <group userData={{ dynamic: true }}>
           {[[st.x + st.w / 2, st.z, st.w + 0.08, 0.06], [st.x + st.w / 2, st.z + st.d, st.w + 0.08, 0.06], [st.x, st.z + st.d / 2, 0.06, st.d], [st.x + st.w, st.z + st.d / 2, 0.06, st.d]].map(([x, z, sx, sz], i) => (
-            <mesh key={i} position={[x, 2.6, z]}><boxGeometry args={[sx, 0.04, sz]} /><meshBasicMaterial color="#ff00aa" depthTest={false} /></mesh>
+            <mesh key={i} position={[x, 0.06, z]} renderOrder={9}><boxGeometry args={[sx, 0.04, sz]} /><meshBasicMaterial color="#ff00aa" depthTest={false} /></mesh>
           ))}
         </group>
       )}
@@ -108,3 +115,37 @@ if (import.meta.hot) {
   import.meta.hot.on('vite:beforeFullReload', () => { throw new Error('harness: reload skipped'); });
   import.meta.hot.on('vite:beforeUpdate', () => { throw new Error('harness: update skipped'); });
 }
+import { clearRuns, TrainStation } from '../src/three/StationModel';
+if (view === 'runs') {
+  const out: string[] = [];
+  for (const id of ['kaduna', 'abuja', 'lagos', 'kano']) {
+    setActiveMap(id);
+    const p = cityMap(id).places.find((x) => x.id === 'station')!;
+    const side = Math.abs(Math.sin(placeYaw(p))) > 0.5;
+    out.push(`${id}: ${JSON.stringify(clearRuns(side ? p.d : p.w, side ? p.w : p.d))}`);
+  }
+  w.__runs = out.join('\n');
+}
+w.__marker = 'reached';
+try {
+if (view === 'runs') {
+  const out: string[] = [];
+  for (const id of ['kaduna', 'abuja', 'lagos', 'kano']) {
+    const m = cityMap(id); const st = m.places.find((p) => p.id === 'station')!; const yaw = placeYaw(st);
+    const side = Math.abs(Math.sin(yaw)) > 0.5; const W = side ? st.d : st.w, D = side ? st.w : st.d;
+    const cx = st.x + st.w / 2, cz = st.z + st.d / 2, cos = Math.cos(yaw), sin = Math.sin(yaw);
+    const world = (x: number, z: number) => [cx + x * cos + z * sin, cz - x * sin + z * cos] as const;
+    const inside = (r: any, x: number, z: number, pad: number) => x >= r.x - pad && x <= r.x + r.w + pad && z >= r.z - pad && z <= r.z + r.d + pad;
+    const why = (x: number, z: number) => !m.isLand(Math.floor(x), Math.floor(z)) ? 'sea' : m.isWater(Math.floor(x), Math.floor(z)) ? 'water' : m.isBridge(x, z) ? 'bridge' : m.isRoad(Math.floor(x), Math.floor(z)) ? 'road'
+      : m.places.find((p) => p !== st && inside(p, x, z, 0.15))?.id ?? m.landmarks.find((l) => inside(l, x, z, 0.15))?.name ?? (m.houses.some((h) => inside(h, x, z, 0.1)) ? 'house' : m.trees.some((t) => Math.hypot(t.x - x, t.z - z) < 0.35 + t.s * 0.4) ? 'tree' : '.');
+    const near = -D / 2 + 0.45;
+    for (const dir of [-1, 1]) {
+      const row: string[] = [];
+      for (let s = W / 2 + 0.25; s <= W / 2 + 4; s += 0.5) row.push([near - 0.42, near, near + 0.42].map((z) => why(...world(dir * s, z))).join('/'));
+      out.push(`${id} ${dir}: ${row.join('  ')}`);
+    }
+  }
+  w.__why = out.join('\n');
+}
+} catch (err) { w.__why = 'ERR ' + String(err); }
+w.__cityMap = cityMap; w.__placeYaw = placeYaw;
