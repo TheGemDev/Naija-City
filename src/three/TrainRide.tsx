@@ -14,7 +14,7 @@ import { encodeLook, randomAppearance } from '../game/wardrobe';
 import type { RailClass } from '../game/transport';
 import type { Clip } from './Person';
 import { Baked, Kit, KitMeshes, type Built } from './cabinKit';
-import { coach as coachExterior, loco, RAIL_GREEN, RAIL_WHITE, RAIL_YELLOW } from './trainKit';
+import { buildCoach, buildLoco, RAIL_GREEN, RAIL_WHITE, RAIL_YELLOW, TrainBody } from './trainKit';
 import { FlightTerrain, RAIL_TOP, type FlightMotion } from './FlightTerrain';
 import { Attendant, Seated } from './FlightCabin';
 import { Label } from './propKit';
@@ -190,23 +190,24 @@ function interior(cls: RailClass, low: boolean): { kit: Built; glass: Built } {
   return { kit: k.build(), glass: g.build() };
 }
 
-/** The cars either side of yours, and the diesel at the head: outside only, in the railway's colours. */
-function neighbours(low: boolean): Built {
-  const k = new Kit(low);
-  const s = 1.13;
-  const len = TRAIN_LENGTH / s;
-  const opts = { w: (HW * 2) / s, gauge: 0.75 / s };
+/** The cars either side of yours, and the diesel at the head (trainKit): outside only, scaled up to your coach's size. */
+const NEIGHBOUR_SCALE = 1.13;
+const LOCO_LEN = 7.5;
+function Neighbours({ low }: { low: boolean }) {
+  const len = TRAIN_LENGTH / NEIGHBOUR_SCALE;
+  const coach = useMemo(() => buildCoach(len, { low, no: '207' }), [len, low]);
+  const ahead = useMemo(() => buildCoach(len, { low, no: '205' }), [len, low]);
+  const head = useMemo(() => buildLoco(LOCO_LEN, { low, no: '2401' }), [low]);
   const gap = 0.6;
-  for (const z of [-(TRAIN_LENGTH + gap), TRAIN_LENGTH + gap]) {
-    k.push([0, RAIL_Y, z], [0, 0, 0], [s, s, s]);
-    coachExterior(k, len, opts);
-    k.pop();
-  }
-  const locoLen = 9;
-  k.push([0, RAIL_Y, TRAIN_LENGTH * 1.5 + gap * 2 + (locoLen * s) / 2], [0, 0, 0], [s, s, s]);
-  loco(k, locoLen, opts);
-  k.pop();
-  return k.build();
+  // Built along x with the cab at +x: turned to run along z, nose first.
+  const at = (z: number) => ({ position: [0, RAIL_Y, z] as [number, number, number], rotation: [0, -Math.PI / 2, 0] as [number, number, number], scale: NEIGHBOUR_SCALE });
+  return (
+    <>
+      <group {...at(-(TRAIN_LENGTH + gap))}><TrainBody train={coach} /></group>
+      <group {...at(TRAIN_LENGTH + gap)}><TrainBody train={ahead} /></group>
+      <group {...at(TRAIN_LENGTH * 1.5 + gap * 2 + (LOCO_LEN * NEIGHBOUR_SCALE) / 2)}><TrainBody train={head} beams={false} /></group>
+    </>
+  );
 }
 
 /** A station's platform beside the line: paving on the near side, a canopy and the hall across on the far side. */
@@ -313,7 +314,6 @@ export function TrainRide() {
     return { from: name(s.destinationId), to: name(dest) };
   }, []);
   const { kit, glass } = useMemo(() => interior(cls, low), [cls, low]);
-  const others = useMemo(() => neighbours(low), [low]);
   const stations = useMemo(() => platform(low), [low]);
   const passengers = usePassengers(cls, low);
   const coach = useRef<Group>(null!);
@@ -366,7 +366,7 @@ export function TrainRide() {
       <group ref={coach}>
         <KitMeshes kit={kit} />
         {glass.satin && <mesh geometry={glass.satin} material={GLASS} />}
-        <KitMeshes kit={others} />
+        <Neighbours low={low} />
         {/* Everyone else stays in their seat the whole way: baked into a few meshes (cabinKit Baked), no shadows. */}
         <Baked key={`${cls}:${low}`} shadows={false}>
           {passengers.map((o) => <Seated key={`${o.x}:${o.z}`} x={o.x} z={o.z} yaw={o.yaw} look={o.look} clip={o.clip} />)}

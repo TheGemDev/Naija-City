@@ -5,8 +5,9 @@
 import type { Interior } from '../game/interiors';
 import { B, Cyl, Label } from './propKit';
 import { StaticBatch } from './StaticBatch';
-import type { Kit } from './cabinKit';
-import { PassingTrain, train } from './trainKit';
+import { useMemo } from 'react';
+import { useLowPerf } from '../game/quality';
+import { buildTrain, PassingTrain } from './trainKit';
 
 const GREEN = '#15803d';
 const WHITE = '#f8fafc';
@@ -23,10 +24,11 @@ function Track({ x0, x1, z }: { x0: number; x1: number; z: number }) {
   );
 }
 
-/** The passenger train: the diesel and two coaches (trainKit). */
-const buildTrain = (k: Kit) => train(k, 2);
 
 export function StationPlatform({ it }: { it: Interior }) {
+  const low = useLowPerf();
+  // The passenger train (trainKit): the diesel and two coaches, the same as on the map and outside your coach on a ride.
+  const train = useMemo(() => buildTrain(2, { low, glow: true }), [low]);
   const depth = it.behind ?? 9;
   const glass = it.glass ?? [[1, 5], [9, 13]];
   const x0 = -1.2;
@@ -43,7 +45,7 @@ export function StationPlatform({ it }: { it: Interior }) {
   return (
     <>
     {/* The passenger train pulls in, stands at the platform with its nose at the far end, and pulls out again. */}
-    <PassingTrain build={buildTrain} from={x0} to={x1} stop={x1 - 0.3} at={[0, 0.14, near]} cycle={44} phase={6} />
+    <PassingTrain train={train} from={x0} to={x1} stop={x1 - 0.3} at={[0, 0.14, near]} fade={2.5} cycle={44} phase={6} />
     <StaticBatch>
       {/* Platform: paving, the yellow line, the white edge */}
       <B p={[mid, 0.03, (edge - 0.07) / 2]} s={[wide, 0.08, -edge - 0.07]} c="#cfcac4" />

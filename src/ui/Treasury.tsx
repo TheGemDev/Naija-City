@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
-import { naira, nairaShort, useGame } from '../game/store';
+import { naira, nairaShort } from '../game/store';
 import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
 import { cityRunBy, isSuspended, useCivic, type CivicHolder, type StateInfo } from '../net/civic';
 import { useOfficeBudget } from '../net/office';
@@ -175,10 +175,7 @@ function PayList({ treasury, saved, paidAt, holders, uid, canEdit, busy, onSave 
 export function TreasuryHero() {
   const data = useCivic((s) => s.data);
   const mine = useOfficeBudget();
-  const home = useGame((s) => s.homeState);
   const [open, setOpen] = useState(false);
-  // The state whose money matters to you: the one you run, or the one you live in.
-  const ownState = mine?.city ?? CIVIC_CITIES.find((c) => c === home);
   if (!data) {
     return (
       <div className="hero hero-green">
@@ -193,7 +190,8 @@ export function TreasuryHero() {
       <button type="button" className="tr-hero-top" aria-expanded={open} onClick={() => setOpen(!open)}>
         <small>Federal treasury</small>
         <b>{naira(data.treasury)}</b>
-        {ownState && <small className="tr-hero-own">{CITY_NAME[ownState]} treasury · {naira(data.states?.[ownState]?.balance ?? 0)}</small>}
+        {/* The whole country's public money: the federal treasury and every state's together. */}
+        <small className="tr-hero-own">Nigeria total · {naira(data.treasury + CIVIC_CITIES.reduce((sum, city) => sum + (data.states?.[city]?.balance ?? 0), 0))}</small>
         <small>{open ? 'Each state keeps its own money.' : 'Tap to see the states.'}</small>
         <i className="tr-hero-chev" aria-hidden />
       </button>

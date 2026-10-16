@@ -59,21 +59,26 @@ function bogie(k: Kit, x: number, axles: number, low: boolean) {
   }
 }
 
-/** Digits made of bars, like a painted number: `text` (digits only), `h` tall, its left end at `p`, facing ±z (`side`). */
-function number(k: Kit, colour: string, text: string, p: V3, h: number, side: number) {
+/**
+ * Digits made of bars, like a painted number: `text` (digits only), `h` tall, starting at `p` (its left end as you face
+ * it), on a face looking along `out` (one of ±x, ±z), so it reads the right way round from that side.
+ */
+function number(k: Kit, colour: string, text: string, p: V3, h: number, out: V3) {
   const W = h * 0.55, t = h * 0.13;
-  // Seven segments: a, b, c, d, e, f, g.
+  // Reading direction on that face: to your right as you look at it.
+  const right: V3 = out[2] > 0 ? [1, 0, 0] : out[2] < 0 ? [-1, 0, 0] : out[0] > 0 ? [0, 0, -1] : [0, 0, 1];
+  const along = Math.abs(right[0]) > 0;
   const SEG: Record<string, string> = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg' };
   [...text].forEach((ch, i) => {
-    const x = p[0] + i * (W + t * 1.6);
-    const y = p[1];
+    const u0 = i * (W + t * 1.6);
     const segs: Record<string, [number, number, number, number]> = {
-      a: [x + W / 2, y + h, W, t], g: [x + W / 2, y + h / 2, W, t], d: [x + W / 2, y, W, t],
-      f: [x, y + h * 0.75, t, h / 2], b: [x + W, y + h * 0.75, t, h / 2], e: [x, y + h * 0.25, t, h / 2], c: [x + W, y + h * 0.25, t, h / 2],
+      a: [u0 + W / 2, h, W, t], g: [u0 + W / 2, h / 2, W, t], d: [u0 + W / 2, 0, W, t],
+      f: [u0, h * 0.75, t, h / 2], b: [u0 + W, h * 0.75, t, h / 2], e: [u0, h * 0.25, t, h / 2], c: [u0 + W, h * 0.25, t, h / 2],
     };
-    for (const s of SEG[ch] ?? '') {
-      const [cx, cy, sw, sh] = segs[s];
-      k.box(colour, [cx, cy, p[2] + side * 0.005], [sw, sh, 0.012]);
+    for (const sg of SEG[ch] ?? '') {
+      const [u, v, su, sv] = segs[sg];
+      const c: V3 = [p[0] + right[0] * u + out[0] * 0.006, p[1] + v, p[2] + right[2] * u + out[2] * 0.006];
+      k.box(colour, c, along ? [su, sv, 0.012] : [0.012, sv, su]);
     }
   });
 }
@@ -114,7 +119,7 @@ export function coach(k: Kit, x: number, len: number, opts: { low?: boolean; no?
     k.box(RAIL_YELLOW, [dx, BODY_Y + 0.06, 0], [0.8, 0.05, CAR_W + 0.04]);
   }
   // The coach's number, by the door
-  if (opts.no && !low) for (const s of [-1, 1]) number(k, GREEN_DARK, opts.no, [x + len / 2 - 2.0, BODY_Y + 1.7, s * (CAR_W / 2 + 0.01)], 0.18, s);
+  if (opts.no && !low) for (const s of [-1, 1]) number(k, GREEN_DARK, opts.no, [x + s * (len / 2 - 2.4), BODY_Y + 1.7, s * (CAR_W / 2 + 0.01)], 0.18, [0, 0, s]);
   // Roof: a curved crown, and two air-conditioning pods with their grilles
   k.box(ROOF, [x, top + 0.06, 0], [len - 0.04, 0.12, CAR_W - 0.08]);
   k.box(ROOF, [x, top + 0.15, 0], [len - 0.2, 0.08, CAR_W - 0.5]);
@@ -177,7 +182,7 @@ export function loco(k: Kit, x: number, len: number, opts: { low?: boolean; no?:
   for (const s of [-1, 1]) {
     k.box(SURROUND, [cx + 0.05, BODY_Y + 1.6, s * (CAR_W / 2 + 0.005)], [1.0, 0.62, 0.02]);
     k.box('glass', [cx + 0.05, BODY_Y + 1.6, s * (CAR_W / 2 + 0.012)], [0.86, 0.5, 0.02]);
-    number(k, RAIL_WHITE, no, [hx - 0.55, BODY_Y + 1.12, s * 0.76], 0.26, s);
+    number(k, RAIL_WHITE, no, [hx - s * 0.75, BODY_Y + 1.12, s * 0.76], 0.26, [0, 0, s]);
   }
   k.box(ROOF, [cx - 0.05, BODY_Y + 2.29, 0], [1.6, 0.1, CAR_W - 0.06]);
   for (const s of [-1, 1]) k.post(RAIL_SILVER, [cx - 0.3, BODY_Y + 2.34, s * 0.22], 0.05, 0.22, 6, 0.4);
@@ -185,10 +190,11 @@ export function loco(k: Kit, x: number, len: number, opts: { low?: boolean; no?:
   // The nose: windscreen leaning back over it, the yellow front, headlamps, markers, buffer beam and coupler
   const nose = front - 0.25;
   k.box(RAIL_YELLOW, [nose, BODY_Y + 0.68, 0], [0.5, 1.36, CAR_W - 0.02]);
-  k.box(RAIL_GREEN, [front - 0.45, BODY_Y + 1.82, 0], [0.42, 0.9, CAR_W - 0.04], [0, 0, 0.32]);
-  k.box(SCREEN, [front - 0.37, BODY_Y + 1.86, 0], [0.04, 0.66, CAR_W - 0.3], [0, 0, 0.32]);
-  k.box(DARK, [front - 0.36, BODY_Y + 1.86, 0], [0.045, 0.05, CAR_W - 0.3], [0, 0, 0.32]);
-  number(k, DARK, no, [front + 0.005 - 0.0, BODY_Y + 0.92, 0], 0.16, 1);
+  // The windscreen leans back from the top of the nose to the cab roof: a green frame with the dark glass on its face.
+  k.box(RAIL_GREEN, [front - 0.62, BODY_Y + 1.82, 0], [0.42, 0.95, CAR_W - 0.04], [0, 0, 0.36]);
+  k.box(SCREEN, [front - 0.39, BODY_Y + 1.86, 0], [0.03, 0.7, CAR_W - 0.32], [0, 0, 0.36]);
+  k.box(DARK, [front - 0.385, BODY_Y + 1.86, 0], [0.035, 0.7, 0.05], [0, 0, 0.36]);
+  number(k, DARK, no, [front, BODY_Y + 1.04, 0.25], 0.15, [1, 0, 0]);
   for (const s of [-1, 1]) {
     k.box(SURROUND, [front + 0.005, BODY_Y + 0.62, s * 0.58], [0.04, 0.24, 0.32]);
     k.box('lamp', [front + 0.02, BODY_Y + 0.62, s * 0.58], [0.03, 0.17, 0.25]);
@@ -197,7 +203,7 @@ export function loco(k: Kit, x: number, len: number, opts: { low?: boolean; no?:
   k.box(DARK, [front + 0.05, 0.86, 0], [0.12, 0.34, CAR_W]);
   if (!low) for (let i = -3; i <= 3; i++) k.box(RAIL_YELLOW, [front + 0.115, 0.86, i * 0.24], [0.01, 0.3, 0.09], [0.6, 0, 0]);
   k.box(STEEL, [front + 0.22, 0.86, 0], [0.3, 0.14, 0.22]);
-  k.box(STEEL, [front + 0.1, 0.25, 0], [0.12, 0.2, 1.6], [0, 0, 0.5]);
+  k.box(DARK, [front + 0.12, 0.48, 0], [0.2, 0.26, 1.5]);
   // The far end: a short rear cab wall with a window, and its coupler
   const rear = x - len / 2;
   k.box(RAIL_GREEN, [rear + 0.2, BODY_Y + 0.9, 0], [0.4, 1.8, 1.6]);
