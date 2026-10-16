@@ -1,6 +1,6 @@
 # Lagos Life Open 🫡
 
-> Apparently, competition is "copying" in Nigeria.
+> War on Nigerian developer's community hypocrasy
 
 ## The Problem Is Not Copying. The Problem Is Your Mentality.
 
