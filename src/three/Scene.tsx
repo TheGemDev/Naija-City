@@ -178,8 +178,9 @@ function DayNight() {
     const moon = night * (low ? 0.75 : 0.55) * (1 - cloud * 0.4);
     sun.current.intensity = 0.15 + day * 2.2 * sunK + moon * (1 - bulbs * 0.6);
     sun.current.color.copy(WHITE).lerp(SUN_DUST, haze * 0.6);
-    // Under cloud the light comes from the whole sky: shadows go soft and faint.
-    sun.current.shadow.intensity = 0.25 + 0.75 * sunK;
+    // Under cloud the light comes from the whole sky: shadows go soft and faint. Even in full sun they stop short of
+    // black: with the sky light turned down (below) a full-strength shadow left whole plots near-black in daylight.
+    sun.current.shadow.intensity = (0.25 + 0.75 * sunK) * 0.55;
     // High mode's room environment already fills the shadows, so its sky light is turned down by as much: stacked
     // together at noon they washed the whole map out to white. A little of the sunlight cloud takes away comes back as
     // sky light, never as much as it took: weather only ever dims the map. Lightning is a soft flicker, not a white-out.
