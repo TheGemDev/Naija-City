@@ -76,6 +76,9 @@ export interface ActionDef {
   destination?: string;
   /** For effect 'travel': flown in your own private jet (src/game/cars.ts), so you must own one. */
   jet?: boolean;
+  /** For effect 'travel': by train from the station (game/transport.ts), in this class. */
+  rail?: boolean;
+  cls?: 'standard' | 'business';
   /** For effect 'shop': which clothes shop opens. */
   shop?: ShopId;
   waterUse?: number;

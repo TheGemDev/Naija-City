@@ -98,7 +98,7 @@ export function startDisasters() {
   });
 }
 
-interface DisasterEvent {
+export interface DisasterEvent {
   t: 'disaster';
   what: 'news' | 'house' | 'shop' | 'car' | 'hurt' | 'relief';
   id: number;

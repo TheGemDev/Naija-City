@@ -16,6 +16,7 @@ import { houseLayoutForDesign } from '../game/grid';
 import { Items, PlacementGhost } from './Items';
 import { Avatar } from './Avatar';
 import { City } from './City';
+import { Disasters } from './Disasters';
 import { Interior } from './Interior';
 import { CABIN_LENGTH, FlightCabin } from './FlightCabin';
 import { RemotePlayers } from './RemotePlayers';
@@ -402,7 +403,7 @@ function Area() {
       <HouseStaff staff={visit.save.staff} design={visit.save.design} />
     </>
   );
-  if (view === 'city') return <City />;
+  if (view === 'city') return <><City /><Disasters /></>;
   if (view === 'place') return <Interior />;
   if (view === 'estate') return <Estate />;
   return (

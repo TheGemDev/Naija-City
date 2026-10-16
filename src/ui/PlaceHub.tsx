@@ -65,8 +65,8 @@ export function PlaceActivityTabs({ place, insideVenue, onClose }: PlaceActivity
   // What only an office holder can do (the President's desk at Aso Villa) is listed for that office holder alone.
   const office = useHeldOffice();
   const categorizedActions = useMemo(() => {
-    // Flights are booked at the flight desk, not listed among the airport's activities.
-    return place.actions.filter((a) => (!a.office || a.office === office) && !(a.effect === 'travel' && place.id === 'airport')).map((a) => ({
+    // Flights are booked at the flight desk and trains at the ticket desk (ui/TrainDesk.tsx), not listed among the activities.
+    return place.actions.filter((a) => (!a.office || a.office === office) && !(a.effect === 'travel' && (place.id === 'airport' || a.rail))).map((a) => ({
       ...a,
       effectiveCat: getActionCategory(a),
     }));

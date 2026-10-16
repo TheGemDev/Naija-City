@@ -81,10 +81,31 @@ const discGeo = new CircleGeometry(1, 28).rotateX(-Math.PI / 2);
 const blobGeo = new IcosahedronGeometry(1, 1);
 const ringGeo = new RingGeometry(0.95, 1, 72).rotateX(-Math.PI / 2);
 
-const WATER_RIVER = '#7c6a48';
+const WATER_RIVER = '#8a7650';
 const WATER_LAKE = '#5d8a8c';
 const MUD = '#5e4630';
 const dummy = new Object3D();
+/** Flat layers lie a hair above the ground, the river and each other: pulled towards the camera so they never flicker through. */
+const flat = (n: number) => ({ polygonOffset: true, polygonOffsetFactor: -n, polygonOffsetUnits: -n * 2 });
+
+/** One clock for every flood's ripples, ticked by the layer (Disasters, below). */
+const rippleTime = { value: 0 };
+/** Moving glints on flood water, so it reads as water and not wet mud. Still lit by the scene like any other material. */
+function rippled<T extends MeshStandardMaterial>(mat: T): T {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = rippleTime;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vFloodPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvFloodPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vFloodPos;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float rA = sin(vFloodPos.x * 2.7 + uTime * 1.6 + sin(vFloodPos.z * 1.9 - uTime * 0.7) * 1.5);
+        float rB = sin(vFloodPos.z * 3.3 - uTime * 1.2 + sin(vFloodPos.x * 1.3 + uTime * 0.4) * 1.2);
+        diffuseColor.rgb += smoothstep(0.35, 0.95, rA * rB) * 0.22 + smoothstep(0.6, 1.0, rA) * 0.06;`);
+  };
+  return mat;
+}
 
 /** The current moment of a disaster, worked out once a frame by whoever needs it. */
 function stateOf(d: Disaster) {
@@ -164,9 +185,9 @@ function RiverFlood({ d, map }: { d: Disaster; map: CityMap }) {
   const lagoon = map.id === 'lagos';
   const [water, foam, mud] = useMemo(() => [strip.make(), strip.make(), strip.make()], [strip]);
   const mats = useMemo(() => ({
-    water: new MeshStandardMaterial({ color: lagoon ? '#4f7f86' : WATER_RIVER, roughness: 0.3, metalness: 0.15, transparent: true, opacity: 0.9 }),
-    foam: new MeshBasicMaterial({ color: '#c9b48c', transparent: true, opacity: 0.3, depthWrite: false }),
-    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false }),
+    water: rippled(new MeshStandardMaterial({ color: lagoon ? '#4f7f86' : WATER_RIVER, roughness: 0.22, metalness: 0.25, transparent: true, opacity: 0.86, ...flat(6) })),
+    foam: new MeshBasicMaterial({ color: '#c9b48c', transparent: true, opacity: 0.3, depthWrite: false, ...flat(5) }),
+    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false, ...flat(4) }),
   }), [lagoon]);
   useLayoutEffect(() => () => {
     water.dispose(); foam.dispose(); mud.dispose();
@@ -178,8 +199,9 @@ function RiverFlood({ d, map }: { d: Disaster; map: CityMap }) {
   // The mud covers everywhere the water got to: written once, it never moves.
   useLayoutEffect(() => strip.write(mud, (i) => half0 + spread * strip.taper[i] + 0.3, 0.024), [strip, mud, half0, spread]);
   useFrame(({ clock }) => {
-    const { level, after, phase } = stateOf(d);
-    const rise = Math.max(level, phase === 'warning' ? 0 : 0);
+    const { level, after, phase, pre } = stateOf(d);
+    // The river swells a little through the warning, then bursts its banks.
+    const rise = phase === 'warning' ? pre * 0.2 : level;
     const wet = rise > 0.01;
     refs.water.current.visible = wet;
     refs.foam.current.visible = wet;
@@ -191,13 +213,18 @@ function RiverFlood({ d, map }: { d: Disaster; map: CityMap }) {
     const mudLevel = phase === 'active' ? 0.85 : phase === 'aftermath' ? 0.85 * after : 0;
     refs.mud.current.visible = mudLevel > 0.01;
     mats.mud.opacity = mudLevel;
+    // Once it has gone down, the river is back in its bed, still running brown through the mud on its banks.
+    if (!wet && mudLevel > 0.01) {
+      if (!refs.water.current.visible) strip.write(water, () => half0 + 0.05, 0.03);
+      refs.water.current.visible = true;
+    }
   });
   if (!strip.ok) return null;
   return (
     <group>
       <mesh ref={refs.mud} geometry={mud} material={mats.mud} renderOrder={1} visible={false} />
       <mesh ref={refs.foam} geometry={foam} material={mats.foam} renderOrder={2} visible={false} />
-      <mesh ref={refs.water} geometry={water} material={mats.water} receiveShadow renderOrder={3} visible={false} />
+      <mesh ref={refs.water} geometry={water} material={mats.water} renderOrder={3} visible={false} />
     </group>
   );
 }
@@ -206,8 +233,8 @@ function RiverFlood({ d, map }: { d: Disaster; map: CityMap }) {
 function LakeFlood({ d, map }: { d: Disaster; map: CityMap }) {
   const lake = map.lakes.reduce((a, l) => (Math.hypot(l.x - d.x, l.z - d.z) < Math.hypot(a.x - d.x, a.z - d.z) ? l : a), map.lakes[0]);
   const mats = useMemo(() => ({
-    water: new MeshStandardMaterial({ color: WATER_LAKE, roughness: 0.3, metalness: 0.1, transparent: true, opacity: 0.88 }),
-    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false }),
+    water: rippled(new MeshStandardMaterial({ color: WATER_LAKE, roughness: 0.3, metalness: 0.1, transparent: true, opacity: 0.88, ...flat(6) })),
+    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false, ...flat(4) }),
   }), []);
   useLayoutEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   const water = useRef<Mesh>(null!);
@@ -246,8 +273,8 @@ function Puddles({ d }: { d: Disaster }) {
     });
   }, [d, low]);
   const mats = useMemo(() => ({
-    water: new MeshStandardMaterial({ color: '#86704c', roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.85 }),
-    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false }),
+    water: rippled(new MeshStandardMaterial({ color: '#86704c', roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.85, ...flat(6) })),
+    mud: new MeshBasicMaterial({ color: MUD, transparent: true, opacity: 0, depthWrite: false, ...flat(4) }),
   }), []);
   useLayoutEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   const water = useRef<InstancedMesh>(null!);
@@ -355,7 +382,7 @@ function LocalRain({ d, wind = 0.15, strength = 1 }: { d: Disaster; wind?: numbe
 
 /** The storm cloud's shadow: the area goes dark while it is overhead. */
 function CloudShadow({ d }: { d: Disaster }) {
-  const mat = useMemo(() => new MeshBasicMaterial({ color: '#0b1220', map: puff(), transparent: true, opacity: 0, depthWrite: false }), []);
+  const mat = useMemo(() => new MeshBasicMaterial({ color: '#0b1220', map: puff(), transparent: true, opacity: 0, depthWrite: false, ...flat(7) }), []);
   useLayoutEffect(() => () => mat.dispose(), [mat]);
   const ref = useRef<Mesh>(null!);
   useFrame(() => {
@@ -381,7 +408,7 @@ function flameSources(d: Disaster, map: CityMap, low: boolean, bush: boolean): F
       const x = p.x + 0.3 + rand() * (p.w - 0.6);
       const z = p.z + 0.3 + rand() * (p.d - 0.6);
       const roof = rand() < 0.55;
-      out.push({ x, z, y: roof ? 1.1 + rand() * 0.9 : 0.05, s: 0.9 + rand() * 0.9, ign: (Math.hypot(x - d.x, z - d.z) / Math.max(p.w, p.d)) * 0.25 });
+      out.push({ x, z, y: roof ? 1.6 + rand() * 1.2 : 0.05, s: 0.9 + rand() * 0.9, ign: (Math.hypot(x - d.x, z - d.z) / Math.max(p.w, p.d)) * 0.25 });
     }
     // The fire jumps to the houses round it.
     const near = map.houses.filter((h) => Math.hypot(h.x + h.w / 2 - d.x, h.z + h.d / 2 - d.z) < d.r).slice(0, low ? 3 : 6);
@@ -427,23 +454,36 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
     g.setAttribute('position', new Float32BufferAttribute(new Float32Array(smokeCount * 3), 3));
     return g;
   }, [smokeCount]);
+  // The blaze seen from above: a hot glow on each burning spot (cones alone are just dots from the map camera).
+  const blazeGeo = useMemo(() => {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(new Float32Array(sources.length * 3), 3));
+    return g;
+  }, [sources]);
+  const blaze = useRef<Points>(null!);
+  const core = useRef<Points>(null!);
   const mats = useMemo(() => ({
-    smoke: new PointsMaterial({ color: bush ? '#8c8174' : '#3d3a37', map: puff(), size: bush ? 2.6 : 3.4, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true }),
+    smoke: new PointsMaterial({ color: bush ? '#8c8174' : '#34312e', map: puff(), size: bush ? 3.4 : 4.6, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true }),
+    blaze: new PointsMaterial({ color: '#ff6a1a', map: puff(), size: bush ? 2.4 : 3, transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
+    core: new PointsMaterial({ color: '#ffd76a', map: puff(), size: bush ? 1.1 : 1.5, transparent: true, opacity: 0.95, blending: AdditiveBlending, depthWrite: false }),
     glow: new SpriteMaterial({ color: '#ff7a2a', map: puff(), blending: AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }),
-    char: new MeshBasicMaterial({ color: '#ffffff', map: scorch(), transparent: true, opacity: 0, depthWrite: false }),
+    char: new MeshBasicMaterial({ color: '#ffffff', map: scorch(), transparent: true, opacity: 0, depthWrite: false, ...flat(4) }),
   }), [bush]);
-  useLayoutEffect(() => () => { smokeGeo.dispose(); Object.values(mats).forEach((m) => m.dispose()); }, [smokeGeo, mats]);
+  useLayoutEffect(() => () => { smokeGeo.dispose(); blazeGeo.dispose(); Object.values(mats).forEach((m) => m.dispose()); }, [smokeGeo, blazeGeo, mats]);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     const { level, after, phase, pre, progress } = stateOf(d);
     // Flames: each source lights at its turn, burns, and (in the bush) dies down as the front moves on.
     let lit = 0;
+    const hot = (blazeGeo.getAttribute('position') as Float32BufferAttribute).array as Float32Array;
     sources.forEach((s, i) => {
       const on = level > 0.01 ? smooth(s.ign, s.ign + 0.08, progress) * (1 - smooth(s.ign + burnFor - 0.1, s.ign + burnFor, progress)) * Math.min(1, level * 1.4) : 0;
       if (on > 0.05) lit++;
       const flick = 0.75 + 0.3 * Math.sin(t * 9 + i * 1.7) + 0.12 * Math.sin(t * 23 + i * 3.1);
-      const k = Math.max(0.0001, s.s * on);
+      const k = Math.max(0.0001, s.s * on * 1.6);
+      // An unlit spot's glow is parked under the island.
+      hot.set(on > 0.05 ? [s.x, s.y + 0.5 * s.s, s.z] : [s.x, -50, s.z], i * 3);
       dummy.position.set(s.x, s.y, s.z);
       dummy.rotation.set(0, t * 0.5 + i, Math.sin(t * 3 + i) * 0.12);
       dummy.scale.set(k * (0.85 + 0.15 * Math.sin(t * 7 + i)), k * flick * 1.5, k * (0.85 + 0.15 * Math.cos(t * 6 + i)));
@@ -455,7 +495,11 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
     });
     outer.current.instanceMatrix.needsUpdate = true;
     inner.current.instanceMatrix.needsUpdate = true;
-    outer.current.visible = inner.current.visible = lit > 0;
+    outer.current.visible = inner.current.visible = blaze.current.visible = core.current.visible = lit > 0;
+    blazeGeo.getAttribute('position').needsUpdate = true;
+    blazeGeo.computeBoundingSphere();
+    mats.blaze.opacity = 0.75 + 0.2 * Math.sin(t * 13);
+    mats.core.opacity = 0.8 + 0.2 * Math.sin(t * 17 + 1);
     const burning = sources.length ? lit / sources.length : 0;
 
     // Smoke: thin while it is only smouldering in the warning, a thick column at the height of it, wisps in the aftermath.
@@ -464,7 +508,7 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
     if (smokeLevel > 0.01 && sources.length) {
       const pos = smokeGeo.getAttribute('position') as Float32BufferAttribute;
       const arr = pos.array as Float32Array;
-      const height = bush ? 8 : 15;
+      const height = bush ? 7 : 12;
       smokeData.forEach((p, j) => {
         const s = sources[p.src % sources.length];
         const life = (t * 0.07 * p.sp + p.off) % 1;
@@ -474,14 +518,14 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
       });
       pos.needsUpdate = true;
       smokeGeo.computeBoundingSphere();
-      mats.smoke.opacity = 0.55 * smokeLevel;
+      mats.smoke.opacity = 0.8 * smokeLevel;
     }
 
     // Glow: an orange haze over the fire that reads from across the map, and real light on the buildings round it.
     const flare = (0.85 + 0.15 * Math.sin(t * 11) + 0.08 * Math.sin(t * 27)) * Math.max(burning, level > 0.01 ? 0.25 : 0) * Math.min(1, level * 1.5);
-    mats.glow.opacity = Math.min(0.85, flare);
+    mats.glow.opacity = Math.min(1, flare * 1.1);
     glow.current.visible = flare > 0.01;
-    glow.current.scale.setScalar((bush ? d.r * 1.6 : d.r * 1.3) * (0.9 + 0.1 * Math.sin(t * 5)));
+    glow.current.scale.setScalar((bush ? d.r * 1.8 : d.r * 1.7) * (0.9 + 0.1 * Math.sin(t * 5)));
     if (light.current) light.current.intensity = flare * (bush ? 4 : 7);
 
     // The scorched ground spreads as it burns and stays for the aftermath.
@@ -492,9 +536,11 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
 
   return (
     <group>
-      <mesh ref={char} geometry={discGeo} material={mats.char} position={[d.x, 0.029, d.z]} scale={[d.r * (bush ? 1.15 : 0.95), 1, d.r * (bush ? 1.15 : 0.95)]} renderOrder={1} visible={false} />
+      <mesh ref={char} geometry={discGeo} material={mats.char} position={[d.x, 0.029, d.z]} scale={[d.r * 0.95, 1, d.r * 0.95]} renderOrder={1} visible={false} />
       <instancedMesh ref={outer} args={[flameGeo, flameOuter, sources.length]} frustumCulled={false} renderOrder={6} visible={false} />
       <instancedMesh ref={inner} args={[flameGeo, flameInner, sources.length]} frustumCulled={false} renderOrder={7} visible={false} />
+      <points ref={blaze} geometry={blazeGeo} material={mats.blaze} frustumCulled={false} renderOrder={6} visible={false} />
+      <points ref={core} geometry={blazeGeo} material={mats.core} frustumCulled={false} renderOrder={7} visible={false} />
       <points ref={smoke} geometry={smokeGeo} material={mats.smoke} frustumCulled={false} renderOrder={8} visible={false} />
       <sprite ref={glow} material={mats.glow} position={[d.x, bush ? 1 : 1.8, d.z]} renderOrder={9} visible={false} />
       {!low && <pointLight ref={light} position={[d.x, 2.2, d.z]} color="#ff8a3d" distance={d.r * 3.5} decay={1.6} intensity={0} />}
@@ -646,7 +692,7 @@ const RING = { warning: '#f59e0b', active: '#ef4444', aftermath: '#94a3b8', over
 /** A ring round the danger area and a floating tag over it, readable at any zoom: what it is, and how long until it hits or ends. */
 function Marker({ d }: { d: Disaster }) {
   const def = DISASTERS[d.kind];
-  const mat = useMemo(() => new MeshBasicMaterial({ color: RING.warning, transparent: true, opacity: 0.7, depthWrite: false }), []);
+  const mat = useMemo(() => new MeshBasicMaterial({ color: RING.warning, transparent: true, opacity: 0.7, depthWrite: false, ...flat(8) }), []);
   useLayoutEffect(() => () => mat.dispose(), [mat]);
   const ring = useRef<Mesh>(null!);
   const tag = useRef<HTMLDivElement>(null);
@@ -734,6 +780,13 @@ function DisasterView({ d, map }: { d: Disaster; map: CityMap }) {
   }
 }
 
+function RippleClock() {
+  useFrame(({ clock }) => {
+    rippleTime.value = clock.elapsedTime;
+  });
+  return null;
+}
+
 /** Every disaster that can be seen in the city on screen. Mounted beside the town map (three/Scene.tsx). */
 export function Disasters() {
   const city = useGame((s) => s.destinationId);
@@ -749,6 +802,7 @@ export function Disasters() {
   if (!list.length) return null;
   return (
     <group>
+      <RippleClock />
       {list.map((d) => (
         <DisasterView key={d.id} d={d} map={map} />
       ))}

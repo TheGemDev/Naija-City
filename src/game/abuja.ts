@@ -20,6 +20,7 @@ import type { ActionDef } from './catalog';
 import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightFare, flightMinutes, jetFare, jetFlight, PLACE_BY_ID, PRISON_PLACE, smoothClosed, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
 import { roomPlaceId } from './hotel';
 import { SUITE_ID, VILLA_ID } from './villa';
+import { trainActions } from './transport';
 
 export const ABUJA_W = 78;
 export const ABUJA_H = 60;
@@ -163,7 +164,7 @@ const PLACES: Place[] = [
     x: 8, z: 28, w: 5, d: 4, door: { x: 13, z: 30 },
   }, {
     abuja: { label: 'Day trip to Kaduna', tagline: 'First-class morning express to Rigasa Station' },
-  }),
+  }, trainActions('abuja')),
   abuja('techhub', {
     name: 'Abuja Tech Village', area: 'Gwarinpa', blurb: 'Fast Wi-Fi, founders pitching, and free coffee.',
     x: 24, z: 10, w: 4, d: 4, door: { x: 25, z: 14 },

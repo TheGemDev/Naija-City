@@ -3031,3 +3031,22 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .efcc-exhibits .law-line > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .efcc-returned { opacity: 0.55; }
 .efcc-returned > span { text-decoration: line-through; }
+
+/* Natural disasters (src/ui/DisasterBanner.tsx, src/three/Disasters.tsx). */
+.disaster-banner.warning { background: var(--bg-fff7ed); border-color: #f59e0b; }
+.disaster-banner.active { background: #fef2f2; color: #7f1d1d; border-color: #ef4444; animation: disaster-pulse 1.2s ease-in-out infinite; }
+.disaster-banner.active small, .disaster-banner.active .live-banner-close { color: #991b1b; }
+.disaster-banner-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.disaster-banner .disaster-prep { background: #1d4ed8; }
+.disaster-banner .disaster-prep:disabled { opacity: 0.6; }
+@keyframes disaster-pulse { 50% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3), var(--shadow); } }
+.disaster-pin { display: flex; align-items: center; gap: 5px; padding: 3px 9px 3px 5px; border-radius: 99px; background: rgba(15, 23, 42, 0.86); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); white-space: nowrap; font-size: 11px; line-height: 1.15; user-select: none; }
+.disaster-pin-icon { font-size: 18px; }
+.disaster-pin-text { display: flex; flex-direction: column; }
+.disaster-pin-text small { opacity: 0.85; font-size: 10px; }
+.disaster-pin.warning { background: rgba(180, 83, 9, 0.92); }
+.disaster-pin.active { background: rgba(185, 28, 28, 0.94); animation: disaster-pin-pulse 1s ease-in-out infinite; }
+.disaster-pin.aftermath { background: rgba(71, 85, 105, 0.85); }
+@keyframes disaster-pin-pulse { 50% { transform: scale(1.08); } }
+:root[data-theme="dark"] .disaster-banner.active { background: #3b0d0d; color: #fecaca; }
+:root[data-theme="dark"] .disaster-banner.active small, :root[data-theme="dark"] .disaster-banner.active .live-banner-close { color: #fca5a5; }

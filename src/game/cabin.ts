@@ -1,4 +1,4 @@
-// Cabin service: what the crew brings you in the air (ui/Airport.tsx). Your own jet has a chef, a bed and a
+// Cabin service: what the crew brings you in the air, or down the train (ui/Airport.tsx). Your own jet has a chef, a bed and a
 // shower, all on the house; a ticketed flight has one free snack and a trolley you pay for.
 
 import { create } from 'zustand';
@@ -17,7 +17,14 @@ export interface CabinItem {
   said: string;
 }
 
-export const CABIN_MENU: Record<'ticket' | 'jet', CabinItem[]> = {
+export const CABIN_MENU: Record<'ticket' | 'jet' | 'train', CabinItem[]> = {
+  // The train's trolley comes down the coach from the buffet car (three/TrainRide.tsx).
+  train: [
+    { id: 'puffpuff', icon: '🍩', name: 'Puff-puff and zobo', blurb: 'The free snack bag. One per seat.', price: 0, needs: { hunger: 10, fun: 3 }, said: '🍩 Six puff-puff in a paper bag and a cold zobo. Still warm.' },
+    { id: 'suya', icon: '🍢', name: 'Suya wrap', blurb: 'From the buffet car, with pepper on the side.', price: 3_000, needs: { hunger: 35, fun: 8 }, said: '🍢 Suya in newspaper. The man across the aisle asks where you bought it.' },
+    { id: 'tea', icon: '🫖', name: 'Tea and bread', blurb: 'Sweet tea in a flask cup, bread and butter.', price: 1_200, needs: { energy: 15, hunger: 10 }, said: '🫖 Three sugars, whether you asked or not.' },
+    { id: 'wifi', icon: '📶', name: 'Onboard Wi-Fi', blurb: 'Stream something until the signal drops in the bush.', price: 1_500, needs: { fun: 28 }, said: '📶 Two bars. Enough for one skit.' },
+  ],
   jet: [
     { id: 'champagne', icon: '🥂', name: 'Champagne', blurb: 'A cold bottle, opened at 40,000 feet.', price: 0, needs: { fun: 40, social: 20 }, said: '🥂 “Welcome on board.” The cork hits the ceiling.' },
     { id: 'chef', icon: '🍽️', name: 'Chef’s plate', blurb: 'Party jollof, grilled croaker and dodo, plated in the galley.', price: 0, needs: { hunger: 70, fun: 10 }, said: '🍽️ The chef brings it out himself. Not a single cold grain.' },

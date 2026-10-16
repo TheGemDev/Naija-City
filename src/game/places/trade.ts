@@ -3,6 +3,7 @@
 // outside the station's and the refinery's glass is in three/StationPlatform.tsx and three/RefineryYard.tsx.
 
 import { exit, p, sign, type Interior, type PropDef } from '../interiorKit';
+import { ALL_TRAIN_IDS } from '../transport';
 
 /** Sizes of the props only these places use (their models are in three/props/trade.tsx). */
 export const TRADE_SIZES: Record<string, PropDef> = {
@@ -89,7 +90,7 @@ export const TRADE: Record<string, Interior> = {
       p('station_turnstile', 10, 1),
       p('plant', 5, 0), p('plant', 8, 0),
       // Ticket hall, down the left wall
-      p('station_tickets', 0, 1, ['abuja'], 3, 'Ticket office', 'TICKETS'),
+      p('station_tickets', 0, 1, ['abuja', ...ALL_TRAIN_IDS], 3, 'Ticket office', 'TICKETS'),
       p('kiosk', 0, 5, [], 3, 'Ticket machine'),
       p('station_board', 0, 6, [], 1, 'Departures board'),
       p('trolley', 0, 9),

@@ -4,6 +4,7 @@
 // the server accepts or rejects each one and returns the real balance. What the player sees is
 // always `server balance + events the server hasn't answered yet`.
 
+import type { FareSubsidy } from '../game/transport';
 import { setOkadaBan } from '../game/cityLaws';
 import { moneyHooks, useGame, type MoneyKind } from '../game/store';
 import { cachedToken } from './firebase';
@@ -89,7 +90,12 @@ export async function flushWalletNow(): Promise<void> {
     const batch = pending.slice(0, 100);
     const res = await api('/api/wallet/events', { method: 'POST', body: JSON.stringify({ events: batch }) });
     if (!res.ok) throw new Error(`${res.status}`);
-    const { balance, debt, rejected, taxRate, stateTax, okadaBan } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; stateTax?: number; okadaBan?: string[] };
+    const { balance, debt, rejected, taxRate, stateTax, okadaBan, fares } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; stateTax?: number; okadaBan?: string[]; fares?: FareSubsidy };
+    // The fare subsidy the ticket desks show (worker/wallet.ts prices every ticket the same way).
+    if (fares) {
+      const was = useGame.getState().fares;
+      if (was.air !== fares.air || was.rail !== fares.rail || was.funded !== fares.funded) useGame.setState({ fares });
+    }
     if (taxRate !== undefined && taxRate !== useGame.getState().taxRate) useGame.setState({ taxRate });
     if (stateTax !== undefined && stateTax !== useGame.getState().stateTax) useGame.setState({ stateTax });
     if (okadaBan) setOkadaBan(okadaBan);

@@ -42,7 +42,8 @@ import { entrance, estatePath, houseRect, PLOT, rowsFor, sectionOf, slotOrigin, 
 import { ORIGINS, originOf, type OriginId } from './origins';
 import { CAMPAIGN_EVENTS, OFFICE_RULES, STATE_FLEET, type CampaignEvent, type ExecutiveOffice, type PoliticalOffice } from './civic';
 import { decodeLook, encodeLook, fits, GARMENT_BY_ID, isFullOutfit, STARTER_WARDROBE, type ShopId, type Slot } from './wardrobe';
-import { getRegion, regionalAction, regionOf, regionPlaces, regionAirportDoor, regionStartDoor } from './regions';
+import { getRegion, regionalAction, regionOf, regionPlace, regionPlaces, regionAirportDoor, regionStartDoor } from './regions';
+import { fareRef, subsidise, type FareSubsidy } from './transport';
 import { HOUSEHOLD_STAFF, HOUSE_STAFF_ROLES, STARTER_HOUSE, rollStaffTheft, type StaffRole, type HouseholdStaff, type HouseStaffRole } from './staff';
 import { careerHooks, careerState } from './career';
 import { employment, jobById, shiftClock, shiftHours, shiftMinutes, streakPay, wageFor, workplaceOf } from './jobs';
@@ -112,12 +113,25 @@ export interface Task {
   startedAt?: number;
   /** For work: the shift has run out and you have not clocked out yet. The real time (ms) it ran out. */
   over?: number;
-  /** In the air: the scene shows the cabin (three/FlightCabin.tsx) instead of the airport. */
-  flight?: 'ticket' | 'jet';
+  /** In the air: the scene shows the cabin (three/FlightCabin.tsx) instead of the airport. On a train: the coach (three/TrainRide.tsx). */
+  flight?: 'ticket' | 'jet' | 'train';
   /** Riding in the state's fleet (game/civic.ts STATE_FLEET) as this office holder: the treasury paid. */
   official?: ExecutiveOffice;
   /** You started this yourself to fill this bar (game/selfCare.ts): it ends when the bar is full, and any tap stops it. */
   auto?: Need;
+}
+
+/**
+ * What a ticket (an airline seat or a train) costs you right now, after the government's fare subsidy, and the ref the
+ * server prices it by (worker/wallet.ts charges the same). Null for anything that is not a ticket: your own jet is never subsidised.
+ */
+export function ticketOf(def: ActionDef, from: string, fares: FareSubsidy) {
+  if (def.effect !== 'travel' || def.jet || !def.destination) return null;
+  const mode = def.rail ? 'rail' as const : 'air' as const;
+  const pct = fares.funded ? fares[mode] : 0;
+  const base = def.cost ?? 0;
+  const { off, price } = subsidise(base, pct);
+  return { mode, base, off, pct: off ? pct : 0, price, ref: fareRef(mode, from, def.destination, def.cls) };
 }
 
 /** The kind of flight you are on right now, if you are in the air. */
@@ -314,6 +328,8 @@ export interface GameState {
   taxRate: number;
   /** The extra wage tax of the state you live in, on top of the president's (worker/wallet.ts). */
   stateTax: number;
+  /** The President's subsidy on airline seats and train tickets, as the server last said (worker/wallet.ts). */
+  fares: FareSubsidy;
   /** The governor dug up your street until this time (ms): slower travel, dearer fares. */
   roadBlockUntil: number | null;
   /** The owambe screen is open. */
@@ -865,11 +881,16 @@ export const useGame = create<GameState>((set, get) => {
   /** A private flight in the state's jet: the office it belongs to, when I hold it and its budget covers the trip. */
   const stateJet = (def: ActionDef) => (def.effect === 'travel' && def.jet ? stateRide(def.cost ?? 0) : null);
   /** What an action costs you: a flight in the state's jet is the treasury's bill. */
-  const actionCost = (def: ActionDef) => (stateJet(def) ? 0 : def.cost ?? 0);
+  const actionCost = (def: ActionDef) => (stateJet(def) ? 0 : ticketOf(def, get().destinationId, get().fares)?.price ?? def.cost ?? 0);
 
   let searched = false;
   const boardingStop = (def: ActionDef, retry: () => void): boolean => {
     if (def.effect !== 'travel') return false;
+    // Nobody searches the train.
+    if (def.rail) {
+      set({ placeHubOpen: false });
+      return false;
+    }
     if (def.jet) {
       const jet = jetToFly(get().ownedJets, get().carFuel, get().jetWear);
       const fuelled = !!jet && jetFuelLeft(get().carFuel, jet) >= 1;
@@ -915,10 +936,11 @@ export const useGame = create<GameState>((set, get) => {
         jetWear: { ...st.jetWear, [flown]: jetFlown(st.jetWear, flown) + 1 },
       }));
       set({ task: null, destinationId: action.destination });
-      toast(`Welcome to ${regionOf(action.destination).name}! ✈️`);
+      toast(`Welcome to ${regionOf(action.destination).name}! ${action.rail ? '🚆' : '✈️'}`);
       // Landing puts you on the map, but it doesn't snatch the phone out of your hand mid-scroll.
       const onPhone = get().panel === 'phone';
-      enterCity(regionAirportDoor(action.destination));
+      // A train pulls in at the city's station; a flight lands at its airport.
+      enterCity((action.rail && regionPlace(action.destination, 'station')?.door) || regionAirportDoor(action.destination));
       if (onPhone) set({ panel: 'phone' });
       return;
     }
@@ -1172,13 +1194,16 @@ export const useGame = create<GameState>((set, get) => {
       }
     }
     const official = stateJet(def) ?? undefined;
+    // A ticket is charged after the fare subsidy, under a ref the server prices it by.
+    const ticket = ticketOf(def, s.destinationId, s.fares);
+    const cost = ticket?.price ?? def.cost ?? 0;
     if (official) chargeTreasury(def.cost ?? 0, 'jet', def.destination);
-    else if (def.cost) {
-      if (s.money < def.cost) {
-        toast(`You need ${naira(def.cost)} for that`);
+    else if (cost) {
+      if (s.money < cost) {
+        toast(`You need ${naira(cost)} for that`);
         return set({ task: null });
       }
-      pay(-def.cost, def.label);
+      pay(-cost, ticket?.off ? `${def.label} (govt subsidy −${ticket.pct}%)` : def.label, 'spend', ticket?.ref);
     }
 
     if (def.effect === 'fuelGen') {
@@ -1200,7 +1225,7 @@ export const useGame = create<GameState>((set, get) => {
 
     let remaining = def.minutes;
     let startedAt: number | undefined;
-    const flight = def.effect === 'travel' ? (def.jet ? 'jet' as const : 'ticket' as const) : undefined;
+    const flight = def.effect === 'travel' ? (def.jet ? 'jet' as const : def.rail ? 'train' as const : 'ticket' as const) : undefined;
     if (def.effect === 'work') {
       const info = shiftInfo(s);
       if (!info || info.clock.phase !== 'on') {
@@ -1274,6 +1299,7 @@ export const useGame = create<GameState>((set, get) => {
     hover: null,
     toasts: [],
     taxRate: 0,
+    fares: { air: 0, rail: 0, funded: false },
     stateTax: 0,
     roadBlockUntil: null,
     owambe: false,
@@ -1990,7 +2016,7 @@ export const useGame = create<GameState>((set, get) => {
         if (over) return toast(`🔌 Your ${ITEMS[over.gen].name} can’t carry that: the house would pull ${over.load.toFixed(1)} kW and it gives ${over.max} kW. Wait for NEPA or buy a bigger gen.`);
       }
       if (notInOffice(def)) return;
-      if (s.money < actionCost(def)) return toast(`You need ${naira(def.cost ?? 0)} for that`);
+      if (s.money < actionCost(def)) return toast(`You need ${naira(actionCost(def))} for that`);
       if (boardingStop(def, () => get().startAction(itemId, actionId))) return;
       if (def.waterUse && !visitItemOf(itemId) && s.waterTank < def.waterUse) return toast('The overhead tank is dry. Pump water or call Mai Ruwa from Phone → NEPA.');
       if ((def.effect === 'durbar' || def.effect === 'buyRam') && dayOf(s.minutes) % 28 !== 0) return toast('Hawan Sallah is on the 28th day of each in-game month. Check back on Durbar day! 🐎');
@@ -2119,7 +2145,7 @@ export const useGame = create<GameState>((set, get) => {
       const inCell = s.view === 'place' && s.insideId === placeId && (placeId === 'prison' || placeId === 'camp');
       if (!inCell && jailed()) return;
       if (notInOffice(def)) return;
-      if (s.money < actionCost(def)) return toast(`You need ${naira(def.cost ?? 0)} for that`);
+      if (s.money < actionCost(def)) return toast(`You need ${naira(actionCost(def))} for that`);
       if (s.view === 'place' && s.insideId === placeId) {
         if (boardingStop(def, () => get().startPlaceAction(placeId, actionId))) return;
         const inside = INTERIORS[placeId];
@@ -2132,7 +2158,7 @@ export const useGame = create<GameState>((set, get) => {
         const target = cells.find((cell) => interiorPathToCell(inside, avatarCell(), cell) !== null);
         const path = target ? interiorPathToCell(inside, avatarCell(), target) : null;
         if (!path) return toast("Can't find a clear spot for that activity");
-        if (actionCost(def)) pay(-def.cost!, def.label);
+        if (actionCost(def) && !ticketOf(def, s.destinationId, s.fares)) pay(-def.cost!, def.label);
         avatar.snap = null;
         avatar.pose = 'stand';
         avatar.path = path;

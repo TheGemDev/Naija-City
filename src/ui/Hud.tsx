@@ -26,6 +26,7 @@ import { ADS_ON_SALE } from '../game/ads';
 import { Person, type Clip } from '../three/Person';
 import { STAGES } from '../game/property';
 import { LiveBanner } from './LiveApps';
+import { DisasterBanner } from './DisasterBanner';
 import { sectionOf } from '../game/estate';
 import { PUSH_CATEGORIES, type PushCategory } from '../game/push';
 import { ALLOCATION, CITY_NAME } from '../game/civic';
@@ -37,6 +38,7 @@ import { RadioPill } from './RadioPill';
 import { HotelDesk, HotelLauncher, RoomCard, StayChip } from './Hotel';
 import { SuiteLauncher } from './Villa';
 import { CabinService, FlightBanner, FlightDesk, FlightLauncher } from './Airport';
+import { TrainDesk, TrainLauncher } from './TrainDesk';
 import { useCabin } from '../game/cabin';
 import { useShift } from '../game/shiftGame';
 import { GazetteBanner } from './Gazette';
@@ -950,6 +952,7 @@ export function Hud() {
         </div>
         <NotificationBanner />
         <LiveBanner />
+        <DisasterBanner />
         <ElectionDayPill />
         <DebtPill />
         <BudgetChip />
@@ -990,7 +993,9 @@ export function Hud() {
       {!visiting && <HotelDesk />}
       <FlightBanner />
       {!visiting && <FlightLauncher />}
+      {!visiting && <TrainLauncher />}
       {!visiting && <FlightDesk />}
+      {!visiting && <TrainDesk />}
       <CabinService />
       <Nav />
     </>

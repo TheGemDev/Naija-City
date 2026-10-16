@@ -6,6 +6,7 @@ import { BIZ } from '../game/career';
 import { ALLOCATION, OFFICES, type Allocation, type PoliticalOffice } from '../game/civic';
 import { naira, OFFICE_RULES } from '../game/store';
 import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, STATE_ASSETS, STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS, type StateCaps, type StateLawKey } from '../game/treasury';
+import { FARE_SUBSIDY } from '../game/transport';
 import { isSuspended, useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
 import { Emoji } from './Icons';
 import './laws.css';
@@ -46,6 +47,8 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
       hint: `The most any state may set. Lowering it cuts every state above it down. ${STATE_LAWS[k].hint}`,
     })),
     { key: 'federalCut', title: 'Federal cut', unit: '%', options: [0, 5, 10, 15, 20, 25, 30], hint: 'The share of every state’s revenue sent up to the federal treasury each hour. The states keep the rest.', treasury: true },
+    { key: 'airSubsidy', title: 'Air fare subsidy', unit: '%', options: [...FARE_SUBSIDY.air.options], hint: `Taken off every airline seat at the flight desk. The federal treasury pays it, and stops paying when it falls below ${naira(FARE_SUBSIDY.reserve)}.` },
+    { key: 'railSubsidy', title: 'Train fare subsidy', unit: '%', options: [...FARE_SUBSIDY.rail.options], hint: `Taken off every train ticket at the stations. The federal treasury pays it, and stops paying when it falls below ${naira(FARE_SUBSIDY.reserve)}.` },
   ],
   governor: [
     okadaBan('okadaBanKaduna', 'Kaduna'),

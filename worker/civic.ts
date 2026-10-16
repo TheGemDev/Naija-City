@@ -11,6 +11,7 @@ import { feedStmt, handle, naira, postFeed } from './feed';
 import { refreshPolicy } from './policy';
 import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
+import { FARE_SUBSIDY } from '../src/game/transport';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
 import { lootAction, lootBoard, openLootCase, settleLoot, type LootAction } from './loot';
 import { myGhosts, potStmt, runScheme, setGhosts } from './schemes';
@@ -131,6 +132,8 @@ const GAZETTE_LAWS = {
   loanRate: { column: 'loan_rate', office: 'president', icon: '🏦', label: 'bank loan interest', unit: '%' },
   transferFee: { column: 'transfer_fee', office: 'president', icon: '💸', label: 'the bank transfer fee', unit: '%' },
   federalCut: { column: 'federal_cut', office: 'president', icon: '🏛️', label: 'the federal cut of state revenue', unit: '%' },
+  airSubsidy: { column: 'air_subsidy', office: 'president', icon: '✈️', label: 'the subsidy on air fares', unit: '%' },
+  railSubsidy: { column: 'rail_subsidy', office: 'president', icon: '🚆', label: 'the subsidy on train fares', unit: '%' },
   patrols: { column: 'patrols', office: 'igp', icon: '🚓', label: 'street patrols', unit: '%' },
   jailMinutes: { column: 'jail_minutes', office: 'igp', icon: '⛓️', label: 'jail terms', unit: ' min' },
   finePct: { column: 'fine_pct', office: 'efcc', icon: '⚖️', label: 'fines on thieves', unit: '%' },
@@ -371,6 +374,8 @@ async function snapshot(db: D1Database, uid: string) {
       loanRate: (policies?.loan_rate as number) ?? LOAN.defaultRate,
       transferFee: (policies?.transfer_fee as number) ?? 0,
       federalCut: (policies?.federal_cut as number | undefined) ?? FEDERAL_CUT.default,
+      airSubsidy: (policies?.air_subsidy as number | undefined) ?? 0,
+      railSubsidy: (policies?.rail_subsidy as number | undefined) ?? 0,
       ...Object.fromEntries(STATE_LAW_KEYS.map((k) => [STATE_LAWS[k].capField, caps[k]])),
       ...Object.fromEntries(OKADA_BANS.map((b) => [b.key, (policies?.[b.column] as number) ?? 0])),
       ...Object.fromEntries(OFFICE_LIST.map((o) => [o, holder(o)])),
@@ -440,6 +445,8 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     reportHours?: number;
     loanRate?: number;
     transferFee?: number;
+    airSubsidy?: number;
+    railSubsidy?: number;
     okadaBanKaduna?: number;
     okadaBanAbuja?: number;
     okadaBanLagos?: number;
@@ -1135,6 +1142,15 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       updates.push('transfer_fee = ?');
       values.push(body.transferFee);
     }
+    // The fare subsidy (src/game/transport.ts): the federal treasury pays this share of every ticket while it can.
+    for (const [key, column, rule] of [['airSubsidy', 'air_subsidy', FARE_SUBSIDY.air], ['railSubsidy', 'rail_subsidy', FARE_SUBSIDY.rail]] as const) {
+      const value = body[key];
+      if (value === undefined) continue;
+      if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set a fare subsidy');
+      if (!Number.isInteger(value) || !(rule.options as readonly number[]).includes(value)) return err(400, `Choose a subsidy from the list, up to ${rule.max}%`);
+      updates.push(`${column} = ?`);
+      values.push(value);
+    }
     // The most a state may charge for each tax and fee: lowering one cuts every state above it down to the new maximum.
     const lowered: { key: (typeof STATE_LAW_KEYS)[number]; cap: number }[] = [];
     for (const key of STATE_LAW_KEYS) {
@@ -1200,7 +1216,8 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       if (next === undefined || was === undefined || was === next) continue;
       notices.push({ uid: user.uid, office: law.office, kind: 'law', icon: law.icon, text: `${official(law.office, who)} ${next > was ? 'raised' : 'cut'} ${law.label}: ${was}${law.unit} → ${next}${law.unit}.` });
       posts.push(blogStmt(db, user.uid, law.icon, lawNews(key, official(law.office, who), law.label, was, next, law.unit), OFFICE_RULES[law.office].city));
-      if (law.office === 'president' && next > was) posts.push(...vdmGov(db, user.uid, 'levy', { who: official(law.office, who), what: `${law.label} from ${was}${law.unit} to ${next}${law.unit}` }));
+      // A bigger subsidy is a gift, not a levy: VDM has nothing to say about that.
+      if (law.office === 'president' && next > was && key !== 'airSubsidy' && key !== 'railSubsidy') posts.push(...vdmGov(db, user.uid, 'levy', { who: official(law.office, who), what: `${law.label} from ${was}${law.unit} to ${next}${law.unit}` }));
     }
     for (const { ban, on, as } of bans) {
       notices.push({ uid: user.uid, office: as, kind: 'law', icon: '🏍️', text: on

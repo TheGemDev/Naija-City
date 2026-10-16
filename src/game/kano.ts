@@ -19,6 +19,7 @@
 
 import type { ActionDef } from './catalog';
 import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightFare, flightMinutes, jetFare, jetFlight, PLACE_BY_ID, PRISON_PLACE, smoothClosed, smoothOpen, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
+import { trainActions } from './transport';
 
 export const KANO_W = 82;
 export const KANO_H = 60;
@@ -182,7 +183,7 @@ const PLACES: Place[] = [
     x: 52, z: 10, w: 5, d: 4, door: { x: 54, z: 14 },
   }, {
     abuja: { label: 'Day trip to Zaria', tagline: 'The morning train down the old line. Back by evening with a sack of sugar cane' },
-  }),
+  }, trainActions('kano')),
 
   /* ---- Sabon Gari & Bompai ---- */
   kano('club', {

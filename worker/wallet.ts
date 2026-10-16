@@ -23,6 +23,8 @@ import { PARK_BY_ID } from '../src/game/underworld';
 import { careerPayMults } from './career';
 import { loadPolicy } from './policy';
 import { STATE_CUT } from '../src/game/treasury';
+import { flightFare } from '../src/game/city';
+import { FARE_SUBSIDY, parseFareRef, railFare, subsidise, type FareSubsidy } from '../src/game/transport';
 
 export const START_MONEY = 150_000;
 /** Cap when seeding a wallet from a save that predates wallets (or a guest's local progress). */
@@ -34,6 +36,18 @@ const REDRAW_COOLDOWN_MS = 24 * 3600_000;
 const MAX_EVENTS = 100;
 /** A sync that loses a race with another write for the same player starts over this many times before giving up. */
 const SYNC_TRIES = 4;
+
+/** The fare subsidy as it stands this moment (not the cached policy): the percents, and what the federal treasury holds to pay them. */
+async function fareState(db: D1Database) {
+  const row = await db.prepare('SELECT treasury, air_subsidy, rail_subsidy FROM civic_policies WHERE id = 1').first<{ treasury: number; air_subsidy: number; rail_subsidy: number }>().catch(() => null);
+  return { air: row?.air_subsidy ?? 0, rail: row?.rail_subsidy ?? 0, treasury: row?.treasury ?? 0 };
+}
+
+/** What the game shows on the ticket desks (src/game/transport.ts FareSubsidy): paid only while the treasury stays above its reserve. */
+export async function fareSubsidy(db: D1Database): Promise<FareSubsidy> {
+  const f = await fareState(db);
+  return { air: f.air, rail: f.rail, funded: f.treasury >= FARE_SUBSIDY.reserve };
+}
 
 /** Largest single money event. Showroom cars and jets may go up to their own price, and payments on a property up to MAX_PROPERTY_COST. */
 export const MAX_EVENT_AMOUNT = 500_000_000;
@@ -175,6 +189,8 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
 
   // The job whose wage was just accepted: a shift bonus is only good straight after it, once.
   let paidJob: string | null = null;
+  // The fare subsidy and the treasury paying it, read the first time this batch buys a ticket and followed through it.
+  let fares: Awaited<ReturnType<typeof fareState>> | null = null;
 
   for (const e of events) {
     if (typeof e.id !== 'string' || e.id.length > 64) {
@@ -201,6 +217,28 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
     if (!Number.isInteger(qty) || qty < 1 || qty > MAX_TRADE_UNITS || !Number.isInteger(e.amount) || Math.abs(e.amount!) > Math.max(MAX_EVENT_AMOUNT * qty, showroom, property)) {
       rejected.set(e.id, 'Malformed');
       continue;
+    }
+    // A ticket (an airline seat or a train) is priced here, not by the client: the route's fare, less the President's
+    // subsidy while the federal treasury can pay it and still keep its reserve. The treasury pays the difference.
+    const fare = e.kind === 'spend' && e.amount! <= 0 ? parseFareRef(e.ref) : null;
+    if (fare) {
+      const real = REGION_IDS.includes(fare.from as never) && REGION_IDS.includes(fare.to as never) && fare.from !== fare.to;
+      const base = !real ? 0 : fare.mode === 'air' ? flightFare(fare.from, fare.to) : railFare(fare.from, fare.to, fare.cls);
+      if (!base) {
+        rejected.set(e.id, 'No such route');
+        continue;
+      }
+      fares ??= await fareState(db);
+      let { off, price } = subsidise(base, fares[fare.mode]);
+      if (off && fares.treasury - off < FARE_SUBSIDY.reserve) ({ off, price } = { off: 0, price: base });
+      fares.treasury -= off;
+      e.amount = -price;
+      if (off) {
+        extra.push((gate) =>
+          db
+            .prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND EXISTS (SELECT 1 FROM ledger WHERE uid = ?2 AND client_id = ?3)')
+            .bind(off, uid, gate));
+      }
     }
     const amount = e.amount!;
     const ref = typeof e.ref === 'string' ? e.ref : undefined;
@@ -424,7 +462,9 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown, he
     ]);
     if (!claim.meta.changes) continue;
     const wallet = await getWallet(db, uid);
-    return { balance: wallet.balance, debt: wallet.debt, taxRate: presidentRate, stateTax, okadaBan: policy?.okadaBan ?? [], accepted: [...seen, ...accepted.map((e) => e.id)], rejected: Object.fromEntries(rejected) };
+    // Asked only while a subsidy is on: what the ticket desks should show.
+    const fares = policy?.airSubsidy || policy?.railSubsidy ? await fareSubsidy(db) : { air: 0, rail: 0, funded: false };
+    return { balance: wallet.balance, debt: wallet.debt, taxRate: presidentRate, stateTax, okadaBan: policy?.okadaBan ?? [], fares, accepted: [...seen, ...accepted.map((e) => e.id)], rejected: Object.fromEntries(rejected) };
   }
   return null;
 }

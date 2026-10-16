@@ -284,6 +284,8 @@ const LAW_ASIDES: Record<string, [up: string, down: string]> = {
   loanRate: ['Borrowers are sweating. 🥵', 'The banks say their doors are open. 🏦'],
   transferFee: ['Sending money just got dearer. 💸', 'Cheaper transfers for everybody. 📲'],
   federalCut: ['Governors are counting what is left for the states. 😬', 'The states keep more of what they raise. 💃🏾'],
+  airSubsidy: ['Cheaper tickets at every airport from today, on the government. ✈️', 'Airline seats are back to full price. 🧾'],
+  railSubsidy: ['Train tickets are cheaper from today: the government is paying. 🚆', 'Train fares are going back up. 🎟️'],
   patrols: ['More police vans on the streets from tonight. 🚓', 'Fewer patrols, and the thieves have noticed. 👀'],
   jailMinutes: ['Longer nights in the cell for anybody caught. ⛓️', 'Shorter stays in the cell from today. 🔓'],
   finePct: ['Thieves will pay more when they are caught. ⚖️', 'Getting caught just got cheaper. 🤨'],

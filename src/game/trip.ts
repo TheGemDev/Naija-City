@@ -16,13 +16,17 @@ export interface CityTrip {
   stop?: boolean;
 }
 
+/** How the trip crosses between cities: an airline seat, or a standard-class train ticket (game/transport.ts). */
+export type Via = 'air' | 'rail';
+
 /** A trip under way: to a place, or home to the house `home` names (its id, 'lease' or 'gov', as goHome takes it). */
-type Going = { city: string; place?: Place; home?: string; stop?: boolean; mode: TravelMode; at: number };
+type Going = { city: string; place?: Place; home?: string; stop?: boolean; mode: TravelMode; via: Via; at: number };
 
 /** `offer`: the trip the sheet is asking about. `going`: the one under way, until you land and ride on. */
 export const useTrip = create<{ offer: CityTrip | null; going: Going | null }>(() => ({ offer: null, going: null }));
 
 const AIRPORT_ID = 'airport';
+const STATION_ID = 'station';
 /** A trip that stalled (no money at the gate, a closed airport) is forgotten after this long. */
 const TRIP_EXPIRES_MS = 15 * 60_000;
 /** A beat after landing, so you see where you are before the ride pulls up. */
@@ -32,30 +36,37 @@ const LANDED_PAUSE_MS = 900;
 export const tripFlight = (from: string, to: string) =>
   regionPlace(from, AIRPORT_ID)?.actions.find((a) => a.effect === 'travel' && a.destination === to && !a.jet);
 
-/** Set off on the trip on offer: to the airport by `mode`, onto the flight, and by `mode` again at the other end. */
-export function startTrip(mode: TravelMode) {
+/** The standard-class train from one city straight to another, if a line runs there (game/transport.ts). */
+export const tripTrain = (from: string, to: string) =>
+  regionPlace(from, STATION_ID)?.actions.find((a) => a.effect === 'travel' && a.rail && a.cls === 'standard' && a.destination === to);
+/** The ticket for the way `via` crosses between two cities, and where you board it. */
+export const tripTicket = (from: string, to: string, via: Via) =>
+  ({ ticket: via === 'rail' ? tripTrain(from, to) : tripFlight(from, to), hub: via === 'rail' ? STATION_ID : AIRPORT_ID });
+
+/** Set off on the trip on offer: to the airport (or the station) by `mode`, onto the flight or the train, and by `mode` again at the other end. */
+export function startTrip(mode: TravelMode, via: Via = 'air') {
   const { offer } = useTrip.getState();
   useTrip.setState({ offer: null });
-  if (offer) setOff(offer, mode);
+  if (offer) setOff(offer, mode, via);
 }
 
 /** Set off home to a house in another city: `home` is the house's id, 'lease' or 'gov'. */
-export const startHomeTrip = (city: string, home: string, mode: TravelMode) => setOff({ city, home }, mode);
+export const startHomeTrip = (city: string, home: string, mode: TravelMode, via: Via = 'air') => setOff({ city, home }, mode, via);
 
-function setOff(to: Omit<Going, 'mode' | 'at'>, mode: TravelMode) {
+function setOff(to: Omit<Going, 'mode' | 'via' | 'at'>, mode: TravelMode, via: Via) {
   const g = useGame.getState();
-  const flight = tripFlight(g.destinationId, to.city);
-  if (!flight) return;
-  g.startPlace(AIRPORT_ID, mode);
+  const { ticket, hub } = tripTicket(g.destinationId, to.city, via);
+  if (!ticket) return;
+  g.startPlace(hub, mode);
   const s = useGame.getState();
-  if (s.task?.actionId === 'enter' && s.task.placeId === AIRPORT_ID) {
-    useGame.setState({ task: { ...s.task, actionAfterTravel: flight.id } });
-  } else if (s.view === 'place' && s.insideId === AIRPORT_ID) {
-    // Already at the door: straight to the gate.
-    s.startPlaceAction(AIRPORT_ID, flight.id);
+  if (s.task?.actionId === 'enter' && s.task.placeId === hub) {
+    useGame.setState({ task: { ...s.task, actionAfterTravel: ticket.id } });
+  } else if (s.view === 'place' && s.insideId === hub) {
+    // Already at the door: straight to the gate (or the platform).
+    s.startPlaceAction(hub, ticket.id);
   } else return; // could not set off: the store has said why
   // Noted last: setting off ends whatever you were doing, which calls a trip off.
-  useTrip.setState({ going: { ...to, mode, at: Date.now() } });
+  useTrip.setState({ going: { ...to, mode, via, at: Date.now() } });
 }
 
 tripHooks.cancel = () => useTrip.setState({ going: null });

@@ -32,3 +32,17 @@
 .ticket-stub b { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ticket-stub .btn { width: 100%; }
 .flight-jet { display: flex; align-items: center; gap: 6px; margin: 10px auto 0; }
+
+/* The station's ticket desk (ui/TrainDesk.tsx): the same boarding passes, in the railway's green. */
+.venue-bet-launch.train { --tint: #15803d; }
+.ticket.rail { --tint: 21, 128, 61; }
+.ticket.rail.biz { --tint: 161, 98, 7; }
+.train-note { margin: 10px 2px 0; text-align: center; }
+/* The President's fare subsidy: the full fare struck through over what you pay, and a line saying who pays the rest. */
+.fare-price { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.fare-price s { font-size: 11px; font-weight: 700; color: var(--muted); }
+.fare-price b { font-size: 13px; font-weight: 800; color: #15803d; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fare-subsidy { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 10px; padding: 8px 10px; border-radius: 12px; background: rgba(21, 128, 61, 0.12); color: #15803d; font-size: 12px; font-weight: 700; line-height: 1.35; }
+.fare-subsidy.dry { background: rgba(202, 138, 4, 0.14); color: #a16207; }
+.fare-subsidy > :first-child { flex: none; }
+.trip-via { margin: 0 0 8px; }

@@ -2,13 +2,15 @@
 // a ticketed flight or your own jet (game/cars.ts) to another city.
 
 import { useEffect, useState } from 'react';
-import { findAction, flightOf, naira, useGame } from '../game/store';
+import { findAction, flightOf, naira, ticketOf, useGame } from '../game/store';
+import { FarePrice, SubsidyNote } from './TrainDesk';
 import { CABIN_MENU, useCabin } from '../game/cabin';
 import { JET_BY_ID, jetFlightsLeft, jetFuelLeft, jetRefuelCost, jetServiceCost, jetToFly } from '../game/cars';
 import { regionOf, regionPlace, type RegionId } from '../game/regions';
 import { useVice } from '../net/vice';
 import { stateRide, useCivic } from '../net/civic';
 import { STATE_FLEET } from '../game/civic';
+import { railRoute } from '../game/transport';
 import { Emoji } from './Icons';
 import './hotel.css';
 import './airport.css';
@@ -28,19 +30,22 @@ export function FlightBanner() {
     const dest = t && flightOf(s) ? findAction(t.itemId, t.actionId, s.items, t.placeId)?.destination : null;
     return dest ? regionOf(dest).name : '';
   });
+  const train = flight === 'train';
   const leg = useGame((s) => {
     const t = s.task;
     const p = t && t.total > 0 ? 1 - t.remaining / t.total : 0;
+    if (train) return p < 0.08 ? 'Departing' : p > 0.9 ? 'Arriving' : 'On the way';
     return p < 0.18 ? 'Taking off' : p > 0.8 ? 'Coming in to land' : 'Cruising';
   });
   const official = useGame((s) => s.task?.official);
+  const line = useGame((s) => (train && s.task ? railRoute(s.destinationId, findAction(s.task.itemId, s.task.actionId, s.items, s.task.placeId)?.destination ?? '') : undefined));
   if (!flight || !to) return null;
   return (
     <div className="flight-banner" role="status">
-      <Emoji char={flight === 'jet' ? '🛩️' : '✈️'} size={18} />
+      <Emoji char={train ? '🚆' : flight === 'jet' ? '🛩️' : '✈️'} size={18} />
       <span>
         <b>{from} → {to}</b>
-        <small>{official ? STATE_FLEET[official].jet : flight === 'jet' ? 'Your jet' : 'Flight KD 101'} · {leg}</small>
+        <small>{official ? STATE_FLEET[official].jet : train ? `${line?.train ?? 'Train'} · ${line?.line ?? 'NRC'}` : flight === 'jet' ? 'Your jet' : 'Flight KD 101'} · {leg}</small>
       </span>
     </div>
   );
@@ -118,6 +123,7 @@ export function FlightDesk() {
   // The destination being looked at: one tab per city you can fly to.
   const [dest, setDest] = useState<string | null>(null);
   const wraps = useVice((s) => Object.values(s.plug?.stash ?? {}).reduce((a, n) => a + n, 0));
+  const fares = useGame((s) => s.fares);
   if (!open) return null;
   const g = useGame.getState();
   const close = () => g.setFlightDesk(false);
@@ -139,7 +145,7 @@ export function FlightDesk() {
     const step = office ? { price: 0, label: 'Fly', go: fly }
       : f.jet && jetId && fuel < 1 ? { price: refuel, label: 'Refuel', go: () => g.refuelJet(jetId) }
       : f.jet && jetId && flightsLeft < 1 ? { price: service, label: 'Service', go: () => g.serviceJet(jetId) }
-      : { price: f.cost ?? 0, label: f.jet ? 'Fly' : 'Buy', go: fly };
+      : { price: ticketOf(f, regionId, fares)?.price ?? f.cost ?? 0, label: f.jet ? 'Fly' : 'Buy', go: fly };
     return (
       <div key={f.id} className={`ticket ${f.jet ? 'jet' : ''}`}>
         <div className="ticket-main">
@@ -151,7 +157,7 @@ export function FlightDesk() {
           <small>{flightTime(f.minutes)} · {office ? STATE_FLEET[office].jet : f.jet && jet ? `⛽ ${fuel} · ${jet.name}` : 'One-way'}</small>
         </div>
         <div className="ticket-stub">
-          <b>{office ? 'State pays' : naira(step.price)}</b>
+          {office ? <b>State pays</b> : !f.jet ? <FarePrice def={f} from={regionId} fares={fares} /> : <b>{naira(step.price)}</b>}
           <button type="button" className="btn sm go" disabled={money < step.price} onClick={step.go}>{step.label}</button>
         </div>
       </div>
@@ -177,6 +183,7 @@ export function FlightDesk() {
           ))}
         </div>
       )}
+      <SubsidyNote mode="air" fares={fares} />
       <div className="tickets">
         {seats.map(renderTicket)}
         {privateJets.length > 0 && (

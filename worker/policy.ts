@@ -20,6 +20,9 @@ export interface Policy {
   transferFee: number;
   /** The cities whose government has banned okada. Missing on a copy cached before the ban existed. */
   okadaBan?: CivicCity[];
+  /** The President's fare subsidy, percent off airline seats and train tickets (src/game/transport.ts). Missing on an older copy. */
+  airSubsidy?: number;
+  railSubsidy?: number;
 }
 
 const KEY = 'civic:policy';
@@ -35,6 +38,8 @@ async function fromD1(db: D1Database): Promise<Policy | null> {
     taxRate: p.tax_rate, loanRate: p.loan_rate, policeFunding: p.police_funding, patrols: p.patrols,
     jailMinutes: p.jail_minutes, finePct: p.fine_pct, reportHours: p.report_hours, transferFee: p.transfer_fee,
     okadaBan: CIVIC_CITIES.filter((city) => !!p[`okada_ban_${city}`]),
+    airSubsidy: Number(p.air_subsidy ?? 0),
+    railSubsidy: Number(p.rail_subsidy ?? 0),
   };
 }
 

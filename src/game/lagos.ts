@@ -16,6 +16,7 @@
 
 import type { ActionDef } from './catalog';
 import { addCityMap, addCityPotholes, FLIGHT_PERHOUR, flightFare, flightMinutes, jetFare, jetFlight, PLACE_BY_ID, PRISON_PLACE, smoothClosed, smoothOpen, type Landmark, type P2, type Place, type Pothole, type Road } from './city';
+import { trainActions } from './transport';
 
 export const LAGOS_W = 84;
 export const LAGOS_H = 62;
@@ -217,7 +218,7 @@ const PLACES: Place[] = [
     x: 61, z: 20, w: 5, d: 4, door: { x: 63, z: 24 },
   }, {
     abuja: { label: 'Day trip to Ibadan', tagline: 'Morning express to Moniya. Amala at Skye Lo and back by evening' },
-  }),
+  }, trainActions('lagos')),
   lagos('school', {
     name: 'Yaba College of Technology', area: 'Yaba', icon: '🎓', blurb: 'YabaTech, the oldest higher institution in the country. Art students, engineers and the best fashion show nobody paid for.',
     x: 67, z: 20, w: 6, d: 4, door: { x: 69, z: 24 },

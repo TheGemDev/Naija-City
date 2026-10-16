@@ -96,7 +96,7 @@ const MIN = 60_000;
 
 export const DISASTERS: Record<DisasterKind, DisasterDef> = {
   flood: {
-    kind: 'flood', icon: '🌊', title: 'River flood', agency: 'NIHSA',
+    kind: 'flood', icon: '🌊', title: 'Flood', agency: 'NIHSA',
     warnMs: 15 * MIN, activeMs: 40 * MIN, afterMs: 120 * MIN, radius: 8,
     house: 0.06, stock: 0.4, car: [{ part: 'engine', amount: 45 }, { part: 'battery', amount: 60 }],
     hurt: 0.35, potholes: 3, lamps: 0, asset: { asset: 'roads', condition: 8 }, prep: 'Sandbag the house',
@@ -416,9 +416,9 @@ export function placeDisaster(kind: DisasterKind, city: string, seed: number): D
     x = s.x + (rand() - 0.5) * 6;
     z = s.z + (rand() - 0.5) * 6;
   } else {
-    // The bush at the edge of town: a point on the outline, pulled a little way in.
+    // The bush at the edge of town: a point on the outline, pulled in far enough that the burnt ground stays on land.
     const o = map.outline[Math.floor(rand() * map.outline.length)];
-    const k = 5 / Math.max(1, dist(o[0], o[1], map.w / 2, map.h / 2));
+    const k = (def.radius + 2) / Math.max(1, dist(o[0], o[1], map.w / 2, map.h / 2));
     x = o[0] + (map.w / 2 - o[0]) * k;
     z = o[1] + (map.h / 2 - o[1]) * k;
   }

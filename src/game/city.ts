@@ -13,6 +13,7 @@ import type { Cell } from './grid';
 import { JET_TRIP } from './cars';
 import { HOTEL_ID, ROOM_TYPES, roomPlaceId, type RoomType } from './hotel';
 import { liveEvent } from './live';
+import { trainActions } from './transport';
 
 export const CITY_W = 60;
 export const CITY_H = 84;
@@ -355,6 +356,8 @@ export const PLACES: Place[] = [
     id: 'station', name: 'Rigasa Train Station', area: 'Rigasa', icon: '🚆', model: 'station', blurb: 'Kaduna – Abuja train. High speed, bustling platforms, and VIP lounges.',
     x: 2, z: 18, w: 6, d: 5, door: { x: 5, z: 23 }, hours: [6, 18],
     actions: [
+      // Tickets to every city the lines reach (game/transport.ts), sold at the ticket desk (ui/TrainDesk.tsx).
+      ...trainActions('kaduna'),
       { id: 'abuja', label: 'Day trip to Abuja', icon: '🚆', category: 'social', minutes: 480, cost: 10_000, pose: hidden, perHour: { fun: 15, social: 12 }, tagline: 'First-class morning express to Idu Station' },
       { id: 'platform_sprint', label: 'Dramatic sprint for departing train doors', icon: '🏃🏾', category: 'wild', minutes: 20, pose: 'stand', perHour: { fun: 140, social: 60, energy: -15 }, tagline: 'Dive through the sliding doors as the whistle blows!' },
       { id: 'vip_lounge', label: 'Chill in VIP air-conditioned lounge', icon: '🛋️', category: 'spend', cost: 5_000, minutes: 45, pose: 'sit', perHour: { fun: 50, energy: 20 }, tagline: 'Sip cold drinks and relax away from the crowds' },

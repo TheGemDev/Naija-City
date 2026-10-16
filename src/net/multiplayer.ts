@@ -17,6 +17,7 @@ import { shoutoutHooks, useShoutouts, type LobbyActionKind } from '../game/shout
 import { onFunEvent, type FunEvent } from './live';
 import { onViceEvent, type ViceEvent } from './vice';
 import { onGameEvent } from './games';
+import { onDisasterEvent, type DisasterEvent } from './disasters';
 import type { GameEvent } from '../game/streetGames';
 import { useVisit } from '../game/visits';
 import { onCityEvent } from './cityStats';
@@ -124,7 +125,8 @@ type ServerMsg =
   | { t: 'meter-report'; by: string }
   | ViceEvent
   | GameEvent
-  | FunEvent;
+  | FunEvent
+  | DisasterEvent;
 
 /** When each player was last seen, so a quick reconnect (a server update drops everybody's connection) is not announced as someone arriving. */
 const lastSeen = new Map<string, number>();
@@ -221,6 +223,8 @@ function onMessage(m: ServerMsg) {
     onViceEvent(m);
   } else if (m.t === 'game') {
     onGameEvent(m);
+  } else if (m.t === 'disaster') {
+    onDisasterEvent(m);
   }
 
 }

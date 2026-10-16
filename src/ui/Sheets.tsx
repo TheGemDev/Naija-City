@@ -2,7 +2,7 @@ import { brokenAsset } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { ItemThumb } from '../three/thumbnails';
 import { CATEGORIES, ITEMS, ITEM_LIST, JOBS, type ActionDef, type Category } from '../game/catalog';
-import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, useGame, type TravelMode } from '../game/store';
+import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, ticketOf, useGame, type TravelMode } from '../game/store';
 import { cityMap, hoursLabel, isOpen, PLACE_BY_ID } from '../game/city';
 import { cityNameHere, regionPlaces } from '../game/regions';
 import { employment } from '../game/jobs';
@@ -48,6 +48,9 @@ export function ActionSheet() {
   const start = useGame((s) => s.startAction);
   const select = useGame((s) => s.select);
   const office = useHeldOffice();
+  // A ticket (a train at the station's ticket office) shows its price after the fare subsidy.
+  const fares = useGame((s) => s.fares);
+  const region = useGame((s) => s.destinationId);
   if (mode !== 'live' || !selectedId) return null;
 
   let title: string;
@@ -87,7 +90,7 @@ export function ActionSheet() {
                   : 'Get a job from Phone → Jobs'
               : a.effect === 'goCity'
                 ? 'Walk out to the town map'
-                : [a.minutes ? `${taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec` : null, a.cost ? naira(a.cost) : null, noPower ? 'needs light' : null].filter(Boolean).join(' · ');
+                : [a.minutes ? `${taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec` : null, a.cost ? naira(ticketOf(a, region, fares)?.price ?? a.cost) : null, noPower ? 'needs light' : null].filter(Boolean).join(' · ');
           return (
             <ActionRow key={a.id} action={a} sub={sub} dim={!!noPower} onClick={() => start(selectedId, a.id)} />
           );

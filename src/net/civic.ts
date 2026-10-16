@@ -62,6 +62,9 @@ export interface PolicyChange {
   reportHours?: number;
   loanRate?: number;
   transferFee?: number;
+  /** The President's fare subsidy, percent off airline seats and train tickets (game/transport.ts). */
+  airSubsidy?: number;
+  railSubsidy?: number;
   /** 1 while the city's government has okada off its streets. */
   okadaBanKaduna?: number;
   okadaBanAbuja?: number;

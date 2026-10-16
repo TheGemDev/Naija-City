@@ -7,7 +7,7 @@ import { sectionOf } from '../game/estate';
 import { avatarCell } from '../game/avatar';
 import { isOpen } from '../game/city';
 import { kmBetween } from '../game/fares';
-import { startHomeTrip, tripFlight } from '../game/trip';
+import { startHomeTrip, tripFlight, type Via } from '../game/trip';
 import { roomParent } from '../game/villa';
 import { Chevron, Emoji } from './Icons';
 import { TravelSheet, carDry, fareOf, tripCost } from './TravelSheet';
@@ -63,6 +63,8 @@ export function TravelPicker() {
   const [mode, setMode] = useState<TravelMode>('keke');
   // The ride at both ends of a trip home to another city.
   const [tripMode, setTripMode] = useState<TravelMode>('keke');
+  // And how it crosses between the cities: a flight, or the train where a line runs.
+  const [via, setVia] = useState<Via>('air');
   const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
   const [carId, setCarId] = useState<string | null>(null);
   // Which estate the arrows have landed on (null = the one the sheet opened with).
@@ -124,7 +126,10 @@ export function TravelPicker() {
   const ready = !here && money >= fare && (current !== 'car' || (!!carId && ownedCars.includes(carId))) && !carDry(current, carId, carFuel, km);
   // Home in another city: the ride to the airport from where the map lets you out, the flight, and the ride on to your door.
   const legs = isHome && home?.away
-    ? tripLegs(city, home.city, tripMode, view === 'city' ? avatarCell() : (view === 'place' && regionPlace(city, roomParent(insideId) ?? '')?.door) || startDoor(city, homeState), home.km)
+    ? (() => {
+      const from = view === 'city' ? avatarCell() : (view === 'place' && regionPlace(city, roomParent(insideId) ?? '')?.door) || startDoor(city, homeState);
+      return tripLegs(city, home.city, tripMode, from, home.km, via) ?? tripLegs(city, home.city, tripMode, from, home.km);
+    })()
     : null;
   const flying = !!legs && isOpen(legs.airport, hour);
 
@@ -132,7 +137,7 @@ export function TravelPicker() {
     const st = useGame.getState();
     close();
     const car = current === 'car' ? carId ?? undefined : undefined;
-    if (legs && home) startHomeTrip(home.city, home.id, tripMode);
+    if (legs && home) startHomeTrip(home.city, home.id, tripMode, legs.via);
     else if (trip.kind === 'home') st.goHome(current, car, home?.id);
     else st.visitEstate(regionId!, section, current, car);
   };
@@ -149,7 +154,7 @@ export function TravelPicker() {
       ) : homes.length > 0 && (
         <HomeStrip homes={homes} selected={home?.id ?? null} onPick={setHomeId} />
       )}
-      route={legs && home && <TripRoute fromId={city} toId={home.city} end="home" legs={legs} mode={tripMode} setMode={setTripMode} />}
+      route={legs && home && <TripRoute fromId={city} toId={home.city} end="home" legs={legs} mode={tripMode} setMode={setTripMode} setVia={setVia} />}
       km={km}
       allowWalk={isHome}
       mode={current}
@@ -157,7 +162,7 @@ export function TravelPicker() {
       carId={carId}
       setCarId={setCarId}
       goLabel={legs
-        ? !flying ? <><Emoji char="🔒" size="1em" /> Airport closed</> : money < legs.total ? `You need ${naira(legs.total)}` : <>Go home · {naira(legs.total)}</>
+        ? !flying ? <><Emoji char="🔒" size="1em" /> {legs.via === 'rail' ? 'Station closed' : 'Airport closed'}</> : money < legs.total ? `You need ${naira(legs.total)}` : <>Go home · {naira(legs.total)}</>
         : here ? 'Already here' : <>Go · {tripCost(current, carId, km)}</>}
       goDisabled={legs ? !flying || money < legs.total : !ready}
       onGo={go}
