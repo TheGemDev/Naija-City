@@ -191,4 +191,6 @@ export interface Prisoner {
   uid: string;
   username: string;
   until: number;
+  /** Their appearance, so the cell can show them (three/JailMates.tsx). */
+  look?: string | null;
 }

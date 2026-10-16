@@ -20,6 +20,7 @@ import { Slab } from './Slab';
 import { StaticBatch } from './StaticBatch';
 import { Emoji } from '../ui/Icons';
 import { offHover, onHover } from './HoverOutline';
+import { JailMates } from './JailMates';
 
 const TALL = 2.6;
 const SHORT = 0.9;
@@ -423,6 +424,7 @@ export function Interior() {
       {staffOf(place.id, it).map((member, i) => <StaffMember key={i} {...member} />)}
       {!it.jungle && <Patrons placeId={place.id} it={it} taken={staffOf(place.id, it)} />}
       {place.id === 'camp' && <KidnapCamp />}
+      {place.id === 'prison' && <JailMates />}
       {place.id === 'murtala' && <MurtalaEvents />}
       {Outside && <Outside it={it} />}
       <StaticBatch>

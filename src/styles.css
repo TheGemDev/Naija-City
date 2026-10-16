@@ -3477,3 +3477,10 @@ body.corner-hud .topbar .needs-row .need-alert { width: 22px; height: 22px; back
 body.corner-hud .topbar .needs-row .need-alert-icon { transform: none; }
 /* The notices start just under the needs icons: the row ends at the pill's height + 23px, its number badges 7px lower. */
 body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--hud-h) + 36px); }
+
+/* Under the clock: Music, then Low power, stacked and right-aligned, each with its words. */
+body.corner-hud .time-card .time-radio { flex-direction: column; align-items: flex-end; gap: 6px; }
+body.corner-hud .time-card .time-radio .power-save { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 10px; }
+body.corner-hud .time-card .time-radio .power-save span { font-size: 12px; font-weight: 700; }
+/* On a phone the notices on the left reach across: Low power keeps just its battery so they never overlap. */
+@media (max-width: 600px) { body.corner-hud .time-card .time-radio .power-save span { display: none; } body.corner-hud .time-card .time-radio .power-save { padding: 0 9px; } }

@@ -1142,8 +1142,9 @@ async function loadWanted(env: Env, me: string): Promise<WantedPerson[]> {
 
 async function loadCustody(db: D1Database): Promise<Prisoner[]> {
   const { results } = await db
-    .prepare('SELECT uid, username, jailed_until FROM players WHERE jailed_until > ? ORDER BY jailed_until LIMIT 20')
+    .prepare(`SELECT uid, username, jailed_until, (SELECT json_extract(s.data, '$.look') FROM saves s WHERE s.uid = players.uid) AS look
+              FROM players WHERE jailed_until > ? ORDER BY jailed_until LIMIT 20`)
     .bind(Date.now())
-    .all<{ uid: string; username: string | null; jailed_until: number }>();
-  return results.map((r) => ({ uid: r.uid, username: r.username ?? 'someone', until: r.jailed_until }));
+    .all<{ uid: string; username: string | null; jailed_until: number; look: string | null }>();
+  return results.map((r) => ({ uid: r.uid, username: r.username ?? 'someone', until: r.jailed_until, look: typeof r.look === 'string' ? r.look : null }));
 }

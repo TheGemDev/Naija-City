@@ -60,7 +60,7 @@ export function formatClock(minutes: number) {
 }
 
 /** Low power mode switch: lights up amber when on (no shadows, lower resolution). */
-function PowerSaveButton() {
+function PowerSaveButton({ label = false }: { label?: boolean }) {
   const low = useLowPerf();
   const setQuality = useQuality((s) => s.setQuality);
   return (
@@ -76,6 +76,7 @@ function PowerSaveButton() {
       }}
     >
       <Emoji char={low ? '🪫' : '🔋'} size={16} />
+      {label && <span>{low ? 'Low power on' : 'Low power'}</span>}
     </button>
   );
 }
@@ -117,7 +118,7 @@ function TopBar() {
           </small>
         </div>
         {/* The music switch (or the radio playing) hangs under the clock, on the right. */}
-        {CORNER_HUD && <div className="time-radio"><RadioPill /></div>}
+        {CORNER_HUD && <div className="time-radio"><RadioPill /><PowerSaveButton label /></div>}
       </div>
       {/* Buying money is switched off for now: the balance is display only. */}
       <div className="hud-card money-card-top">
@@ -1309,7 +1310,7 @@ export function Hud() {
               {leftStackCollapsed && <i className="stack-count">{leftStackCount}</i>}
             </button>
           )}
-          <PowerSaveButton />
+          {!CORNER_HUD && <PowerSaveButton />}
           <ThemeButton />
           <PhotoButton />
         </div>
