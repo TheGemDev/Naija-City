@@ -3335,3 +3335,6 @@ body.corner-hud .need-alerts { top: calc(14px + var(--hud-h) + 12px); }
 body.corner-hud .topbar { left: 12px; }
 body.corner-hud .topbar .needs { position: relative; left: auto; top: auto !important; bottom: auto !important; margin: 0 calc(var(--me) / -2) 0 0 !important; flex: none; order: -1; z-index: 21; }
 body.corner-hud .topbar .money-card-top { padding-left: calc(var(--me) / 2 + 12px); }
+/* You are as tall as the money pill beside you, at every size. */
+body.corner-hud { --me: var(--hud-h); }
+body.corner-hud .needs .avatar-badge { border-width: 2px; }
