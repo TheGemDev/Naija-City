@@ -3050,3 +3050,19 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 @keyframes disaster-pin-pulse { 50% { transform: scale(1.08); } }
 :root[data-theme="dark"] .disaster-banner.active { background: #3b0d0d; color: #fecaca; }
 :root[data-theme="dark"] .disaster-banner.active small, :root[data-theme="dark"] .disaster-banner.active .live-banner-close { color: #fca5a5; }
+
+/* Desktop pie menu (ui/PieMenu.tsx): a clicked object's activities in a ring round where you clicked, like The Sims. */
+.pie { position: fixed; z-index: 45; width: 0; height: 0; pointer-events: none; }
+.pie-hub, .pie-item { position: absolute; pointer-events: auto; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,.85); background: rgba(var(--surface-rgb), .96); color: var(--ink); box-shadow: 0 6px 22px rgba(15,23,42,.22); backdrop-filter: blur(10px); cursor: pointer; font: inherit; }
+.pie-hub { left: 0; top: 0; display: flex; max-width: 150px; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 12px; animation: pie-in .16s ease-out both; }
+.pie-hub b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-hub span { opacity: .55; font-size: 11px; }
+.pie-item { display: flex; min-width: 0; max-width: 190px; align-items: center; gap: 8px; padding: 7px 13px 7px 8px; border-radius: 999px; text-align: left; animation: pie-in .2s cubic-bezier(.2,.9,.3,1.3) both; animation-delay: calc(var(--i) * 22ms); }
+.pie-item:hover { background: #fff; color: #0f172a; transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 8px 26px rgba(15,23,42,.3), 0 0 0 2px #22c55e; }
+.pie-item.dim { opacity: .55; }
+.pie-icon { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border-radius: 50%; background: rgba(34,197,94,.14); font-size: 17px; }
+.pie-text { display: flex; min-width: 0; flex-direction: column; line-height: 1.15; }
+.pie-text b { overflow: hidden; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.pie-text small { overflow: hidden; opacity: .6; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.pie-none { position: absolute; top: 34px; transform: translateX(-50%); white-space: nowrap; font-size: 12px; color: var(--ink); }
+@keyframes pie-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.55); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }

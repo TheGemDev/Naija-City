@@ -69,7 +69,7 @@ export interface ActionDef {
   cookingPerHour?: number;
   /** Finishing this course trains a career skill (the server charges the fee and checks the cooldown). */
   skill?: 'cooking' | 'mechanic' | 'tailoring' | 'trading';
-  effect?: 'fuelGen' | 'toggleGen' | 'work' | 'goHome' | 'goCity' | 'enterPlace' | 'goodDeed' | 'durbar' | 'buyRam' | 'feedRam' | 'shareRam' | 'shop' | 'phoneShop' | 'travel' | 'bank' | 'bankHeist' | 'sprayMoney' | 'hotelDesk' | 'hotelLift' | 'leaveRoom' | 'villaSuite';
+  effect?: 'fuelGen' | 'toggleGen' | 'work' | 'goHome' | 'goCity' | 'enterPlace' | 'goodDeed' | 'durbar' | 'buyRam' | 'feedRam' | 'shareRam' | 'shop' | 'phoneShop' | 'travel' | 'bank' | 'bankHeist' | 'sprayMoney' | 'hotelDesk' | 'hotelLift' | 'leaveRoom' | 'villaSuite' | 'kidCare';
   /** Only whoever holds this office can do it (game/villa.ts). */
   office?: PoliticalOffice;
   /** Destination region for effect 'travel'. */
@@ -947,6 +947,32 @@ const list: ItemDef[] = [
   {
     type: 'water_drum', name: 'Water Storage Drum', icon: '🛢️', category: 'bath', price: 24_000, w: 1, d: 1, layer: 'object',
     actions: [{ id: 'drum_bath', label: 'Scoop water & bath', icon: '🪣', minutes: 25, untilFull: 'hygiene', perHour: { hygiene: 140 } }],
+  },
+
+  // Nursery (Phone → Adopt, game/kids.ts): caring for a child at the right piece does more. Spread over the existing
+  // categories rather than a new one, so a house without children is never marked down for not having a nursery.
+  {
+    type: 'baby_cot', name: 'Baby Cot', icon: '🛏️', category: 'sleep', price: 85_000, w: 1, d: 1, layer: 'object',
+    actions: [{ id: 'kid_sleep', label: 'Put the baby to bed', icon: '😴', minutes: 15, effect: 'kidCare', animation: 'talk' }],
+  },
+  {
+    type: 'high_chair', name: 'Baby High Chair', icon: '🪑', category: 'kitchen', price: 45_000, w: 1, d: 1, layer: 'object',
+    actions: [{ id: 'kid_feed', label: 'Feed the little one', icon: '🍼', minutes: 25, effect: 'kidCare', animation: 'perform', perHour: { social: 6 } }],
+  },
+  {
+    type: 'baby_bath', name: 'Baby Bath & Changing Table', icon: '🛁', category: 'bath', price: 60_000, w: 1, d: 1, layer: 'object',
+    actions: [
+      { id: 'kid_bathe', label: 'Bath time', icon: '🛁', minutes: 25, effect: 'kidCare', animation: 'wash', perHour: { fun: 6 } },
+      { id: 'kid_change', label: 'Change the nappy', icon: '🧷', minutes: 10, effect: 'kidCare', animation: 'clean' },
+    ],
+  },
+  {
+    type: 'play_mat', name: 'Kids Play Mat', icon: '🧩', category: 'fun', price: 30_000, w: 2, d: 2, layer: 'floor', blocks: false,
+    actions: [{ id: 'kid_play', label: 'Play with the kids', icon: '🧸', minutes: 40, effect: 'kidCare', animation: 'dance', perHour: { fun: 22, social: 14 } }],
+  },
+  {
+    type: 'toy_box', name: 'Toy Box', icon: '🧸', category: 'fun', price: 25_000, w: 1, d: 1, layer: 'object',
+    actions: [{ id: 'kid_play', label: 'Play with the kids', icon: '🧸', minutes: 40, effect: 'kidCare', animation: 'dance', perHour: { fun: 22, social: 14 } }],
   },
 
   // More to look at

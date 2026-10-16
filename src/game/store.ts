@@ -16,6 +16,7 @@ import { useVisit } from './visits';
 import { ITEM_PAINT, isColourRef, type HousePaint, type WallPart } from './paint';
 import { WALL_BUILD_COST, WALL_KNOCK_COST, arrivalCell, edgeKey, fitItemsToLayout, houseLayout, inGrid, isEditableEdge, wallBuildError, type WallEdge, itemTransform, pathToCell, pathToItem, placementError, type Cell, type HouseLayout, type PlacedItem } from './grid';
 import { DEFAULT_ITEMS } from './defaults';
+import { childrenOf, tidy, type Pose } from './mount';
 import { activeMap, cityMap, cityPathToCell, cityPathToPlace, cityStraightPath, HOME_PLACE, hoursLabel, isOpen, mapGroundY, PLACE_BY_ID, placeAction, placeHere, setActiveMap, turnedAwayForSmell } from './city';
 import { exitCell, frontCell, interiorPathToCell, interiorPathToProp, INTERIORS, propDef, propTransform } from './interiors';
 import { CHECKOUT_WARNING, HOTEL_ID, isHotelRoom, MAX_NIGHTS, NIGHT, nightlyIn, nightsFree, ROOM_BY_ID, roomNumber, roomPlaceId, stayActive, stayCountdown, stayIn, type HotelStay, type HotelStays, type RoomTypeId } from './hotel';
@@ -70,6 +71,15 @@ export const GOV_WEEKLY_RENT: Partial<Record<OriginId, number>> = {
 
 /** Hooks the network layer fills in (src/net/rentals.ts): tenants go "home" to the house they rent. */
 export const rentalHooks: { enter?: () => void } = {};
+/**
+ * The furniture editor (game/decor.ts) fills these: where the piece being placed really goes (wall, top, free angle,
+ * a whole group), turning pieces, and boxing up what lost its wall. Unset, the plain grid rules apply.
+ */
+export const decorHooks: {
+  plan?: (c: Cell) => { err?: string | null; cand?: Pose; items?: PlacedItem[] } | null;
+  turn?: (ids: string[], deg: number) => void;
+  settle?: (why: string) => void;
+} = {};
 
 /** Who a player is renting from (src/net/rentals.ts keeps it current). Not saved: the server owns it. */
 export interface Lease {
@@ -317,7 +327,11 @@ export interface GameState {
   placeId: string | null;
   /** Bumped whenever the avatar jumps between views, so the camera can follow. */
   teleportId: number;
-  placing: null | { type: string; rot: number; moveId?: string; inventoryItemId?: string };
+  /**
+   * The piece being placed or moved. rotDeg: a free angle (game/mount.ts). y: a wall piece's height. paint: colours a
+   * duplicate copies. group: ids moving together with moveId (multi-select in game/decor.ts).
+   */
+  placing: null | { type: string; rot: number; rotDeg?: number; y?: number; paint?: (string | null)[]; group?: string[]; moveId?: string; inventoryItemId?: string };
   /** Buy mode's wall tool is on. */
   wallMode: boolean;
   /** Wall edge picked with the wall tool, waiting for a confirm tap. */
@@ -1602,6 +1616,8 @@ export const useGame = create<GameState>((set, get) => {
       const next = current.includes(k) ? current.filter((x) => x !== k) : [...current, k];
       set((st) => ({ wallEdits: { ...st.wallEdits, [house]: next }, wallSel: null }));
       toast(exists ? '🔨 Wall knocked down' : '🧱 Wall built');
+      // Pictures, shelves and the like that hung on a wall that is gone go into storage.
+      if (exists) decorHooks.settle?.('came off the wall');
     },
     setPanel(panel) {
       set({ panel, selectedId: null, placing: null, mode: panel ? 'live' : get().mode });
@@ -2477,12 +2493,14 @@ export const useGame = create<GameState>((set, get) => {
     startMoving(id) {
       const it = get().items.find((i) => i.id === id);
       if (!it || ITEMS[it.type].fixed) return;
-      set({ placing: { type: it.type, rot: it.rot, moveId: id }, selectedId: null, hover: { x: it.x, z: it.z } });
+      set({ placing: { type: it.type, rot: it.rot, rotDeg: it.rotDeg, y: it.y, moveId: id }, selectedId: null, hover: { x: it.x, z: it.z } });
     },
     rotatePlacing() {
-      set((s) => (s.placing ? { placing: { ...s.placing, rot: (s.placing.rot + 1) % 4 } } : {}));
+      // A free angle turns with it, a quarter at a time.
+      set((s) => (s.placing ? { placing: { ...s.placing, rot: (s.placing.rot + 1) % 4, rotDeg: s.placing.rotDeg === undefined ? undefined : (s.placing.rotDeg + 90) % 360 } } : {}));
     },
     rotateItem(id) {
+      if (decorHooks.turn) return decorHooks.turn([id], 90);
       const s = get();
       const it = s.items.find((i) => i.id === id);
       if (!it || ITEMS[it.type].fixed) return;
@@ -2514,8 +2532,11 @@ export const useGame = create<GameState>((set, get) => {
       const it = s.items.find((i) => i.id === id);
       if (!it || ITEMS[it.type].fixed) return;
       if (s.task?.itemId === id) get().cancelTask();
-      set({ items: s.items.filter((i) => i.id !== id), furnitureInventory: [...s.furnitureInventory, it], selectedId: null });
-      toast(`${ITEMS[it.type].name} stored 📦`);
+      // What stands on it goes into storage with it.
+      const kids = childrenOf(s.items, id);
+      const gone = new Set([id, ...kids.map((k) => k.id)]);
+      set({ items: s.items.filter((i) => !gone.has(i.id)), furnitureInventory: [...s.furnitureInventory, it, ...kids], selectedId: null });
+      toast(`${ITEMS[it.type].name} stored 📦${kids.length ? ` with ${kids.length} thing${kids.length > 1 ? 's' : ''} on it` : ''}`);
     },
     setHover(hover) {
       const h = get().hover;
@@ -2526,11 +2547,17 @@ export const useGame = create<GameState>((set, get) => {
       const s = get();
       const p = s.placing;
       if (!p) return;
-      const cand = { type: p.type, x: c.x, z: c.z, rot: p.rot };
-      const err = placementError(cand, s.items, avatarCell(), p.moveId, houseLayoutForState(s));
+      // The editor knows the real spot (a wall, a table top, a free angle, a whole group); else the plain grid.
+      const plan = decorHooks.plan?.(c) ?? null;
+      const cand: Pose & { type: string } = plan?.cand ? { type: p.type, ...plan.cand } : { type: p.type, x: c.x, z: c.z, rot: p.rot };
+      const err = plan ? plan.err : placementError(cand, s.items, avatarCell(), p.moveId, houseLayoutForState(s));
       if (err) return toast(err);
+      if (plan?.items) {
+        set({ items: plan.items, placing: null });
+        return;
+      }
       if (p.moveId) {
-        set({ items: s.items.map((i) => (i.id === p.moveId ? { ...i, ...cand } : i)), placing: null });
+        set({ items: s.items.map((i) => (i.id === p.moveId ? tidy({ ...i, ...cand }) : i)), placing: null });
         return;
       }
       const def = ITEMS[p.type];
@@ -2538,7 +2565,7 @@ export const useGame = create<GameState>((set, get) => {
         const stored = s.furnitureInventory.find((i) => i.id === p.inventoryItemId && i.type === p.type);
         if (!stored) return toast('That item is no longer in your furniture inventory.');
         set({
-          items: [...s.items, { ...stored, ...cand }],
+          items: [...s.items, tidy({ ...stored, ...cand })],
           furnitureInventory: s.furnitureInventory.filter((i) => i.id !== stored.id),
           placing: null,
         });
@@ -2546,7 +2573,7 @@ export const useGame = create<GameState>((set, get) => {
       }
       if (s.money < def.price) return toast(`You need ${naira(def.price)}`);
       pay(-def.price, `Bought ${def.name}`, 'buy', def.type);
-      set({ items: [...get().items, { id: newId(), ...cand }] });
+      set({ items: [...get().items, tidy({ id: newId(), ...cand, paint: p.paint })] });
       // Keep placing more of the same unless they can't afford another.
       if (get().money < def.price) set({ placing: null });
     },
@@ -2561,7 +2588,10 @@ export const useGame = create<GameState>((set, get) => {
       if (def.fixed || it.stolen) return;
       if (s.task?.itemId === id) get().cancelTask();
       const value = Math.round(def.price * 0.5);
-      set({ items: get().items.filter((i) => i.id !== id), selectedId: null });
+      // What stood on it is kept, in storage.
+      const kids = childrenOf(get().items, id);
+      const kidIds = new Set(kids.map((k) => k.id));
+      set((st) => ({ items: st.items.filter((i) => i.id !== id && !kidIds.has(i.id)), furnitureInventory: kids.length ? [...st.furnitureInventory, ...kids] : st.furnitureInventory, selectedId: null }));
       pay(value, `Sold ${def.name}`, 'sell', def.type);
     },
 

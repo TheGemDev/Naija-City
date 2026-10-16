@@ -14,7 +14,7 @@ import { sendPush } from './push';
 import { followHost, roomOf } from './shards';
 import { houseOf } from './social';
 import { ITEMS } from '../src/game/catalog';
-import { MAX_GRID_H, MAX_GRID_W, placementError, type PlacedItem } from '../src/game/grid';
+import { MAX_GRID_H, MAX_GRID_W, arrivalCell, placementError, type PlacedItem } from '../src/game/grid';
 import { PAINT_BY_ID, type HousePaint } from '../src/game/paint';
 import { REGION_BY_ID, STAGES } from '../src/game/property';
 import { getRegion } from '../src/game/regions';
@@ -409,13 +409,13 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     const before = Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
     const { results } = await db
       .prepare(
-        `SELECT t.id, t.uid, t.pid, t.city, t.caption, t.open, t.score, t.tier, t.layout, t.created_at AS at, p.username,
+        `SELECT t.id, t.uid, t.pid, t.city, t.region, t.slot, t.caption, t.open, t.score, t.tier, t.layout, t.created_at AS at, p.username,
                 s.media_key, s.created_at AS snap_at
          FROM crib_tours t JOIN players p ON p.uid = t.uid LEFT JOIN snaps s ON s.id = t.snap_id
          WHERE t.id < ? AND t.created_at > ? ORDER BY t.id DESC LIMIT ?`,
       )
       .bind(before, now - TOUR.keepMs, TOUR.page)
-      .all<{ id: number; uid: string; pid: string; city: string; caption: string; open: number; score: number; tier: string; layout: string; at: number; username: string; media_key: string | null; snap_at: number | null }>();
+      .all<{ id: number; uid: string; pid: string; city: string; region: string | null; slot: number | null; caption: string; open: number; score: number; tier: string; layout: string; at: number; username: string; media_key: string | null; snap_at: number | null }>();
     return json({
       page: TOUR.page,
       tours: results.map(({ media_key, snap_at, layout, open, ...t }) => ({
@@ -447,8 +447,11 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     const caption = (b?.caption ?? '').replace(/\s+/g, ' ').trim().slice(0, TOUR.captionMax);
     const layout = snapshotHouse(save, house.pid, house.items, house.layout);
     const tour = await db
-      .prepare('INSERT INTO crib_tours (uid, pid, city, caption, snap_id, open, score, tier, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id')
-      .bind(me, house.pid, house.city, caption, snapId, b?.open ? 1 : 0, row.score, row.tier, JSON.stringify(layout), now)
+      .prepare('INSERT INTO crib_tours (uid, pid, city, region, slot, caption, snap_id, open, score, tier, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id')
+      .bind(
+        me, house.pid, house.city, REGION_BY_ID[String(house.property?.region)] ? String(house.property?.region) : null,
+        Number.isInteger(house.property?.slot) ? house.property!.slot : null, caption, snapId, b?.open ? 1 : 0, row.score, row.tier, JSON.stringify(layout), now,
+      )
       .first<{ id: number }>();
     const tier = tierOf(row.score);
     await postFeed(db, me, 'cribs', '🏠', `${handle(self.username)} just posted a house tour on Cribs: ${tier.icon} ${tier.name}, ${row.score}/100.${caption ? ` “${caption}”` : ''}${b?.open ? ' Open house: come and look!' : ''}`);
@@ -642,7 +645,8 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     if (b?.version !== job.version) return err(409, 'The job changed: reload it');
     const draft = parseDraft(job);
     const layout = cribLayout(job.design, null);
-    const far = { x: -9, z: -9 };
+    // Checked as if someone stood just inside the gate: nothing may block the way in or sit on that spot.
+    const far = arrivalCell(layout);
     const at = (x: unknown, z: unknown, rot: unknown) => (Number.isInteger(x) && Number.isInteger(z) && Number.isInteger(rot) && (rot as number) >= 0 && (rot as number) <= 3 ? { x: x as number, z: z as number, rot: rot as number } : null);
     let spend = 0;
     let detail = '';

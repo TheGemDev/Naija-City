@@ -3,7 +3,7 @@
 // (worker/cribs.ts), which works every score out from the saved house itself so nobody can claim one.
 
 import { CATEGORIES, ITEMS, type Category } from './catalog';
-import { footprint, houseLayout, placementError, type HouseLayout, type HouseRoom, type PlacedItem } from './grid';
+import { arrivalCell, footprint, houseLayout, placementError, type HouseLayout, type HouseRoom, type PlacedItem } from './grid';
 import { PAINT_BY_ID, type HousePaint } from './paint';
 import { layoutKey } from './exterior';
 
@@ -17,9 +17,9 @@ export const CRIB_TIERS: CribTier[] = [
   { id: 'selfcon', name: 'Self-con', min: 15, icon: '🛖', colour: '#d6a35c' },
   { id: 'miniflat', name: 'Mini Flat', min: 30, icon: '🏠', colour: '#60a5fa' },
   { id: 'duplex', name: 'Duplex Vibes', min: 45, icon: '🏡', colour: '#34d399' },
-  { id: 'lekki', name: 'Lekki Penthouse', min: 60, icon: '🏙️', colour: '#a78bfa' },
-  { id: 'maitama', name: 'Maitama Mansion', min: 75, icon: '🏰', colour: '#f472b6' },
-  { id: 'banana', name: 'Banana Island', min: 88, icon: '🏝️', colour: '#fbbf24' },
+  { id: 'lekki', name: 'Lekki Penthouse', min: 62, icon: '🏙️', colour: '#a78bfa' },
+  { id: 'maitama', name: 'Maitama Mansion', min: 78, icon: '🏰', colour: '#f472b6' },
+  { id: 'banana', name: 'Banana Island', min: 90, icon: '🏝️', colour: '#fbbf24' },
 ];
 export const CRIB_TIER_BY_ID: Record<string, CribTier> = Object.fromEntries(CRIB_TIERS.map((t) => [t.id, t]));
 export const tierOf = (score: number): CribTier => [...CRIB_TIERS].reverse().find((t) => score >= t.min) ?? CRIB_TIERS[0];
@@ -27,7 +27,7 @@ export const tierOf = (score: number): CribTier => [...CRIB_TIERS].reverse().fin
 /* ---------- What the score reads ---------- */
 
 /** A placed item as the score sees it. Extra fields (wall mounts, stacking, free rotation) are carried through untouched. */
-export type CribItem = Pick<PlacedItem, 'type' | 'x' | 'z' | 'rot'> & { id?: string; paint?: (string | null)[] | null; [k: string]: unknown };
+export type CribItem = Pick<PlacedItem, 'type' | 'x' | 'z' | 'rot'> & { id?: string; paint?: (string | null)[] | null; stolen?: boolean; broken?: boolean };
 
 export interface CribInput {
   items: CribItem[];
@@ -165,12 +165,12 @@ export function colourHarmony(items: CribItem[], paint?: HousePaint | null): { g
 /* ---------- The score ---------- */
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-/** Value points run on a log scale from ₦20k of furniture (nothing) to ₦50m (full marks). */
+/** Value points run on a log scale from ₦20k of furniture (nothing) to ₦100m (full marks). */
 const VALUE_LOW = 20_000;
-const VALUE_HIGH = 50_000_000;
+const VALUE_HIGH = 100_000_000;
 const valuePoints = (v: number) => 30 * clamp01(Math.log10(Math.max(1, v) / VALUE_LOW) / Math.log10(VALUE_HIGH / VALUE_LOW));
-/** Quality: the average piece, from ₦10k (cheap) to ₦2m (luxury). */
-const qualityPoints = (avg: number) => 10 * clamp01(Math.log10(Math.max(1, avg) / 10_000) / Math.log10(2_000_000 / 10_000));
+/** Quality: the average piece, from ₦10k (cheap) to ₦3m (luxury). */
+const qualityPoints = (avg: number) => 10 * clamp01(Math.log10(Math.max(1, avg) / 10_000) / Math.log10(3_000_000 / 10_000));
 const VARIETY_FULL = 8;
 
 const naira = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`;
@@ -201,11 +201,11 @@ export function scoreCrib(input: CribInput): CribScore {
 
   // Variety across categories (the gate and power and security gear aside, which nobody decorates with).
   const cats = new Set<Category>(placed.map((i) => ITEMS[i.type].category).filter((c) => c !== 'power' && c !== 'security'));
-  const varp = 15 * clamp01(cats.size / VARIETY_FULL);
+  const varp = 12 * clamp01(cats.size / VARIETY_FULL);
   const missingCats = CATEGORIES.filter((c) => c.key !== 'power' && c.key !== 'security' && !cats.has(c.key));
   parts.push({
-    key: 'variety', label: 'Variety', icon: '🎨', got: varp, max: 15,
-    ...(cats.size < VARIETY_FULL ? { tip: `Add something from ${missingCats.slice(0, 2).map((c) => c.label.toLowerCase()).join(' or ')}`, gain: 15 / VARIETY_FULL } : {}),
+    key: 'variety', label: 'Variety', icon: '🎨', got: varp, max: 12,
+    ...(cats.size < VARIETY_FULL ? { tip: `Add something from ${missingCats.slice(0, 2).map((c) => c.label.toLowerCase()).join(' or ')}`, gain: 12 / VARIETY_FULL } : {}),
   });
 
   // Room completeness: every room furnished for what it is.
@@ -221,33 +221,33 @@ export function scoreCrib(input: CribInput): CribScore {
       else firstGap ??= { room: input.rooms?.[room.name]?.name as string || room.name, label: n.label };
     }
   }
-  const rp = need ? 20 * (met / need) : 0;
+  const rp = need ? 22 * (met / need) : 0;
   parts.push({
-    key: 'rooms', label: 'Rooms complete', icon: '🛏️', got: rp, max: 20,
-    ...(firstGap ? { tip: `Put ${firstGap.label} in ${firstGap.room}`, gain: 20 / Math.max(1, need) } : {}),
+    key: 'rooms', label: 'Rooms complete', icon: '🛏️', got: rp, max: 22,
+    ...(firstGap ? { tip: `Put ${firstGap.label} in ${firstGap.room}`, gain: 22 / Math.max(1, need) } : {}),
   });
 
   // Colour harmony.
   const colour = colourHarmony(placed, input.paint);
-  parts.push({ key: 'colour', label: 'Colour harmony', icon: '🖌️', got: colour.got, max: 10, ...(colour.tip ? { tip: colour.tip, gain: 10 - colour.got } : {}) });
+  parts.push({ key: 'colour', label: 'Colour harmony', icon: '🖌️', got: colour.got * 0.8, max: 8, ...(colour.tip ? { tip: colour.tip, gain: (10 - colour.got) * 0.8 } : {}) });
 
   // Lighting: rooms with a light in them, plus light fittings from the house's finishes.
   const fin = finishesOf(input.finishes, input.lighting);
   const litRooms = scored.filter(({ room }) => placed.some((i) => LIGHT_ITEMS.has(i.type) && inRoom(room, i))).length;
   const lightShare = scored.length ? clamp01((litRooms + fin.lights) / scored.length) : 0;
-  const lp = 8 * lightShare;
+  const lp = 10 * lightShare;
   const unlit = scored.find(({ room }) => !placed.some((i) => LIGHT_ITEMS.has(i.type) && inRoom(room, i)));
   parts.push({
-    key: 'light', label: 'Lighting', icon: '💡', got: lp, max: 8,
-    ...(lightShare < 1 ? { tip: unlit ? `Add lighting to ${input.rooms?.[unlit.room.name]?.name as string || unlit.room.name}` : 'Add lighting', gain: Math.min(8 - lp, 8 / Math.max(1, scored.length) * 2) } : {}),
+    key: 'light', label: 'Lighting', icon: '💡', got: lp, max: 10,
+    ...(lightShare < 1 ? { tip: unlit ? `Add lighting to ${input.rooms?.[unlit.room.name]?.name as string || unlit.room.name}` : 'Add lighting', gain: Math.min(10 - lp, (10 / Math.max(1, scored.length)) * 2) } : {}),
   });
 
   // Finishing touches: decor pieces and the house's own finishes (floors, wall finishes...).
   const decor = placed.filter((i) => ITEMS[i.type].category === 'decor' || ['plant', 'gilded_mirror', 'ming_vase', 'bronze_head', 'lion_statue', 'wall_clock', 'ankara_rug', 'rug', 'velvet_rug'].includes(i.type)).length;
-  const fp = Math.min(7, Math.min(4, decor) + Math.min(3, (fin.filled - fin.lights) * 0.75));
+  const fp = Math.min(8, Math.min(4, decor) + Math.min(4, (fin.filled - fin.lights) * 0.75));
   parts.push({
-    key: 'finish', label: 'Finishing touches', icon: '🪴', got: fp, max: 7,
-    ...(fp < 7 ? { tip: decor < 4 ? 'Add rugs, plants or art' : 'Choose floor and wall finishes', gain: Math.min(7 - fp, 2) } : {}),
+    key: 'finish', label: 'Finishing touches', icon: '🪴', got: fp, max: 8,
+    ...(fp < 8 ? { tip: decor < 4 ? 'Add rugs, plants or art' : 'Choose floor and wall finishes', gain: Math.min(8 - fp, 2) } : {}),
   });
 
   for (const p of parts) {
@@ -380,7 +380,7 @@ export function autoPlace<T extends { type: string; rot?: number }>(pieces: T[],
   const placed: (T & { x: number; z: number; rot: number })[] = [];
   const left: T[] = [];
   const all: PlacedItem[] = [...existing];
-  const avoid = opts.avoid ?? { x: -9, z: -9 };
+  const avoid = opts.avoid ?? arrivalCell(layout);
   const roomCells = (role: RoomRole | 'outside' | null) => {
     if (role === 'outside') return (c: { x: number; z: number }) => c.x >= layout.width || c.z >= layout.depth;
     const rooms = role ? layout.rooms.filter((r) => roomRoles(r, opts.rooms).includes(role)) : [];

@@ -50,6 +50,9 @@ CREATE TABLE crib_tours (
   uid TEXT NOT NULL,
   pid TEXT NOT NULL,
   city TEXT NOT NULL,
+  -- Where the house stands (estate and plot), so a guest can travel there; null for a starter house.
+  region TEXT,
+  slot INTEGER,
   caption TEXT NOT NULL DEFAULT '',
   snap_id INTEGER,
   open INTEGER NOT NULL DEFAULT 0,

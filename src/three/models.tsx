@@ -7,6 +7,7 @@ import { BoxGeometry, type Group } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { useLowPerf } from '../game/quality';
 import { lampShape } from './lampModels';
+import { nurseryModel } from './nurseryModels';
 
 type V3 = [number, number, number];
 
@@ -2662,7 +2663,7 @@ function itemShape({ type, powered, running }: ModelProps): ReactNode {
       );
 
     default:
-      return <B p={[0, 0.4, 0]} s={[0.8, 0.8, 0.8]} c="#f0f" />;
+      return nurseryModel(type) ?? <B p={[0, 0.4, 0]} s={[0.8, 0.8, 0.8]} c="#f0f" />;
   }
 }
 

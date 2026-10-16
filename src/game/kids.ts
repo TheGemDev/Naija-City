@@ -134,13 +134,13 @@ export function careLabel(id: CareId, stage: KidStage): string {
 
 /** The game task for each care (src/game/store.ts runs them like any other activity). Free in the game: the server charges. */
 export const KID_ACTIONS: (ActionDef & { care: CareId })[] = [
-  { id: 'kid_feed', care: 'feed', label: 'Feed the little one', icon: '🍼', minutes: 25, effect: 'kidCare', animation: 'eat', perHour: { social: 6 } },
-  { id: 'kid_change', care: 'change', label: 'Change the nappy', icon: '🧷', minutes: 10, effect: 'kidCare', animation: 'wash' },
+  { id: 'kid_feed', care: 'feed', label: 'Feed the little one', icon: '🍼', minutes: 25, effect: 'kidCare', animation: 'perform', perHour: { social: 6 } },
+  { id: 'kid_change', care: 'change', label: 'Change the nappy', icon: '🧷', minutes: 10, effect: 'kidCare', animation: 'clean' },
   { id: 'kid_bathe', care: 'bathe', label: 'Bath time', icon: '🛁', minutes: 25, effect: 'kidCare', animation: 'wash', perHour: { fun: 6 } },
-  { id: 'kid_play', care: 'play', label: 'Play with the kids', icon: '🧸', minutes: 40, effect: 'kidCare', animation: 'clap', perHour: { fun: 22, social: 14 } },
+  { id: 'kid_play', care: 'play', label: 'Play with the kids', icon: '🧸', minutes: 40, effect: 'kidCare', animation: 'dance', perHour: { fun: 22, social: 14 } },
   { id: 'kid_sleep', care: 'sleep', label: 'Put to bed', icon: '😴', minutes: 15, effect: 'kidCare', animation: 'talk' },
   { id: 'kid_clinic', care: 'clinic', label: 'Clinic visit', icon: '🏥', minutes: 90, effect: 'kidCare', animation: 'talk', perHour: { energy: -4 } },
-] as (ActionDef & { care: CareId })[];
+];
 export const KID_ACTION_BY_CARE = Object.fromEntries(KID_ACTIONS.map((a) => [a.care, a])) as Record<CareId, (typeof KID_ACTIONS)[number]>;
 export const careOfAction = (actionId: string): CareId | null => KID_ACTIONS.find((a) => a.id === actionId)?.care ?? null;
 
