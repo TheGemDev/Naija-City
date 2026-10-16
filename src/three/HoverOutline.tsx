@@ -2,15 +2,20 @@
 // onHover / offHover from its pointer handlers (the same place it sets the pointer cursor); one HoverOutline in the
 // scene draws the outline for whatever is hovered.
 //
-// The outline is an inverted hull: the hovered meshes drawn again, back faces only, pushed out along smoothed
-// normals by a fixed number of pixels, so it stays the same width near or far. Only the hovered object pays: its
+// The outline is a hull: the hovered meshes drawn again in white, pushed out along smoothed normals by a fixed
+// number of pixels, so it stays the same width near or far. The object's own shape is first stamped into the stencil
+// buffer and the hull is only drawn outside it, so a busy model (a stadium's fans and masts) gets one clean line round
+// its silhouette instead of a rim on every part. Only the hovered object pays: its
 // hull geometries are built on hover (cached for the next time) and nothing is drawn when nothing is hovered.
 // Phones and tablets never hover, so they never build any of it.
 
 import { useEffect, useState } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { create } from 'zustand';
-import { BackSide, MeshBasicMaterial, Mesh, SkinnedMesh, Vector2, type BufferGeometry, type Material, type Object3D } from 'three';
+import {
+  AlwaysStencilFunc, DoubleSide, KeepStencilOp, MeshBasicMaterial, Mesh, NotEqualStencilFunc, ReplaceStencilOp, SkinnedMesh, Vector2,
+  type BufferGeometry, type Material, type Object3D,
+} from 'three';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** A real mouse or trackpad: touch screens fire pointer-over on a tap, which must not leave an outline behind. */
@@ -36,7 +41,16 @@ export function offHover() {
 }
 
 const resolution = { value: new Vector2(1, 1) };
-const outlineMat = new MeshBasicMaterial({ color: '#ffffff', side: BackSide, toneMapped: false, fog: false });
+/** Stamps where the hovered object is on screen into the stencil, drawing nothing. */
+const maskMat = new MeshBasicMaterial({
+  colorWrite: false, depthWrite: false, depthTest: false,
+  stencilWrite: true, stencilRef: 1, stencilFunc: AlwaysStencilFunc, stencilZPass: ReplaceStencilOp,
+});
+/** The white hull, kept off the stamped area so only the rim outside the silhouette shows. */
+const outlineMat = new MeshBasicMaterial({
+  color: '#ffffff', side: DoubleSide, toneMapped: false, fog: false,
+  stencilWrite: true, stencilRef: 1, stencilFunc: NotEqualStencilFunc, stencilFail: KeepStencilOp, stencilZFail: KeepStencilOp, stencilZPass: KeepStencilOp,
+});
 outlineMat.onBeforeCompile = (shader) => {
   shader.uniforms.uRes = resolution;
   shader.uniforms.uThick = { value: THICKNESS };
@@ -91,7 +105,7 @@ function attached(o: Object3D, root: Object3D) {
 export function HoverOutline() {
   const target = useHover((s) => s.target);
   const { scene, size, gl } = useThree();
-  const [hulls, setHulls] = useState<{ src: Mesh; mesh: Mesh }[]>([]);
+  const [hulls, setHulls] = useState<{ src: Mesh; mesh: Mesh; mask: Mesh }[]>([]);
 
   useEffect(() => {
     resolution.value.set(size.width, size.height);
@@ -99,24 +113,28 @@ export function HoverOutline() {
 
   useEffect(() => {
     if (!target) return setHulls([]);
-    const list: { src: Mesh; mesh: Mesh }[] = [];
+    const list: { src: Mesh; mesh: Mesh; mask: Mesh }[] = [];
+    // Skinned (people) follow their skeleton; everything else is placed by hand on top of its mesh each frame.
+    const twin = (o: Mesh, geo: BufferGeometry, mat: Material, order: number) => {
+      const skinned = o as SkinnedMesh;
+      let m: Mesh;
+      if (skinned.isSkinnedMesh) {
+        const s = new SkinnedMesh(geo, mat);
+        s.bind(skinned.skeleton, skinned.bindMatrix);
+        m = s;
+      } else m = new Mesh(geo, mat);
+      m.matrixAutoUpdate = false;
+      m.matrixWorldAutoUpdate = false;
+      m.frustumCulled = false;
+      m.renderOrder = order;
+      m.raycast = () => {};
+      return m;
+    };
     // Hidden meshes count: the map's StaticBatch hides a building's own meshes and draws merged copies instead.
     target.traverse((o) => {
       if (!outlinable(o)) return;
-      const geo = hullOf(o.geometry);
-      const skinned = o as SkinnedMesh;
-      let mesh: Mesh;
-      if (skinned.isSkinnedMesh) {
-        const s = new SkinnedMesh(geo, outlineMat);
-        s.bind(skinned.skeleton, skinned.bindMatrix);
-        mesh = s;
-      } else mesh = new Mesh(geo, outlineMat);
-      // Placed by hand each frame on top of its mesh: the scene must not recompute where it is.
-      mesh.matrixAutoUpdate = false;
-      mesh.matrixWorldAutoUpdate = false;
-      mesh.frustumCulled = false;
-      mesh.raycast = () => {};
-      list.push({ src: o, mesh });
+      // Every mask before any hull, after the rest of the scene's opaque meshes.
+      list.push({ src: o, mask: twin(o, o.geometry, maskMat, 1000), mesh: twin(o, hullOf(o.geometry), outlineMat, 1001) });
     });
     setHulls(list);
   }, [target]);
@@ -125,12 +143,15 @@ export function HoverOutline() {
     if (!target) return;
     if (!attached(target, scene)) return offHover();
     // Hidden meshes still track their place (the batcher only hides them), so the hull follows anything that moves.
-    for (const { src, mesh } of hulls) mesh.matrixWorld.copy(src.matrixWorld);
+    for (const { src, mesh, mask } of hulls) {
+      mesh.matrixWorld.copy(src.matrixWorld);
+      mask.matrixWorld.copy(src.matrixWorld);
+    }
   });
 
   return (
     <group>
-      {hulls.map(({ mesh }) => <primitive key={mesh.uuid} object={mesh} />)}
+      {hulls.flatMap(({ mesh, mask }) => [<primitive key={mask.uuid} object={mask} />, <primitive key={mesh.uuid} object={mesh} />])}
     </group>
   );
 }

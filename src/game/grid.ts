@@ -2,6 +2,7 @@
 // Cell (x, z) covers world [x, x+1] × [z, z+1]. Walls sit on cell edges.
 
 import { ITEMS } from './catalog';
+import { baseY, cellsOf, centreOf, mountError, mountOf, yawOf, type Mount, type Placed } from './mount';
 import { EXTENSION_BY_ID } from './exterior';
 
 /** Grid of the starter home (bungalow). Each design has its own size: see HouseLayout.gridW/gridH. */
@@ -16,7 +17,16 @@ export interface Cell { x: number; z: number }
  * paint: palette id per colour slot (game/paint.ts); null / missing = the model's own colour.
  * broken: a spoilt appliance, useless until the repairer comes (game/breakdowns.ts).
  */
-export interface PlacedItem { id: string; type: string; x: number; z: number; rot: number; paint?: (string | null)[]; stolen?: boolean; broken?: boolean }
+export interface PlacedItem {
+  id: string; type: string; x: number; z: number; rot: number; paint?: (string | null)[]; stolen?: boolean; broken?: boolean;
+  /**
+   * Furniture freedom (game/mount.ts). All optional, so saves from before them load as they were.
+   * rotDeg: free angle in degrees (rot stays the nearest quarter turn). mount: 'wall' | 'ceiling' | 'surface' ('floor'
+   * when unset). on: the item a surface piece stands on. px / pz: its exact spot on the floor plan. y: a wall item's
+   * centre height or a surface piece's standing height.
+   */
+  rotDeg?: number; mount?: Mount; on?: string; px?: number; pz?: number; y?: number;
+}
 
 export interface Edge { dir: 'h' | 'v'; x: number; z: number; kind: Kind; tall: boolean }
 
@@ -374,6 +384,7 @@ export function wallBuildError(layout: HouseLayout, e: WallEdge, items: PlacedIt
   const [a, b] = edgeCells(e);
   const ka = key(a), kb = key(b);
   for (const it of items) {
+    if (mountOf(it) !== 'floor') continue;
     const cells = new Set(footprint(it).map(key));
     if (cells.has(ka) && cells.has(kb)) return `Your ${ITEMS[it.type]?.name ?? 'furniture'} is in the way`;
   }
@@ -406,17 +417,15 @@ export function itemSize(type: string, rot: number) {
   return rot % 2 ? { w: def.d, d: def.w } : { w: def.w, d: def.d };
 }
 
-export function footprint(item: { type: string; x: number; z: number; rot: number }): Cell[] {
-  const { w, d } = itemSize(item.type, item.rot);
-  const cells: Cell[] = [];
-  for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) cells.push({ x: item.x + i, z: item.z + j });
-  return cells;
+/** Cells an item stands over (a turned item: the ones its outline covers; game/mount.ts cellsOf). */
+export function footprint(item: Placed): Cell[] {
+  return cellsOf(item);
 }
 
-/** World-space centre and yaw of an item. Front of the model faces local +z. */
-export function itemTransform(item: PlacedItem) {
-  const { w, d } = itemSize(item.type, item.rot);
-  return { cx: item.x + w / 2, cz: item.z + d / 2, yaw: -item.rot * (Math.PI / 2) };
+/** World-space centre, yaw and base height of an item. Front of the model faces local +z. */
+export function itemTransform(item: Placed) {
+  const { cx, cz } = centreOf(item);
+  return { cx, cz, yaw: yawOf(item), cy: baseY(item) };
 }
 
 export function blockedCells(items: PlacedItem[], ignoreId?: string): Set<string> {
@@ -424,7 +433,7 @@ export function blockedCells(items: PlacedItem[], ignoreId?: string): Set<string
   for (const it of items) {
     if (it.id === ignoreId) continue;
     const def = ITEMS[it.type];
-    if (def.layer === 'floor' || def.blocks === false) continue;
+    if (!def || def.layer === 'floor' || def.blocks === false || mountOf(it) !== 'floor') continue;
     for (const c of footprint(it)) set.add(key(c));
   }
   return set;
@@ -461,6 +470,9 @@ export function bfs(start: Cell, blocked: Set<string>, isGoal: (c: Cell) => bool
 
 /** Path to a spot where the avatar can use the item. */
 export function pathToItem(start: Cell, item: PlacedItem, items: PlacedItem[], layout = DEFAULT_LAYOUT): Cell[] | null {
+  // Something standing on a table is used from beside the table.
+  const base = mountOf(item) === 'surface' ? items.find((i) => i.id === item.on) : undefined;
+  if (base && base.id !== item.id) return pathToItem(start, base, items, layout);
   const def = ITEMS[item.type];
   const cells = footprint(item);
   const blocked = blockedCells(items);
@@ -482,13 +494,15 @@ export function pathToCell(start: Cell, goal: Cell, items: PlacedItem[], layout 
 
 /** Can this item go here? Returns an error message or null. */
 export function placementError(
-  cand: { type: string; x: number; z: number; rot: number },
+  cand: Placed,
   items: PlacedItem[],
   avatarCell: Cell,
   ignoreId?: string,
   layout = DEFAULT_LAYOUT,
 ): string | null {
   const def = ITEMS[cand.type];
+  // Hung on a wall, from the ceiling or stood on a top: those only clash with their own kind (game/mount.ts).
+  if (mountOf(cand) !== 'floor') return mountError(cand, items, layout, ignoreId);
   const cells = footprint(cand);
   if (!cells.every((c) => inGrid(c, layout))) return 'Out of bounds';
   const houseCells = cells.map((c) => c.x < layout.width && c.z < layout.depth);
@@ -499,7 +513,7 @@ export function placementError(
   }
   const taken = new Set<string>();
   for (const it of items) {
-    if (it.id === ignoreId) continue;
+    if (it.id === ignoreId || mountOf(it) !== 'floor') continue;
     const other = ITEMS[it.type];
     // Floor items can share cells with objects, but not with each other. The gate cell is reserved.
     if (other.layer === def.layer || it.type === 'gate') for (const c of footprint(it)) taken.add(key(c));
@@ -528,8 +542,14 @@ export function fitItemsToLayout(items: PlacedItem[], layout: HouseLayout): { it
   const boxed: PlacedItem[] = [];
   const gate = items.find((i) => i.type === 'gate');
   if (gate) kept.push({ ...gate, x: layout.gate.x, z: layout.gate.z, rot: 0 });
+  // Wall, ceiling and surface pieces go after the floor: they need their wall still there and their table kept.
+  const mounted: PlacedItem[] = [];
   for (const it of items) {
     if (it.type === 'gate' || !ITEMS[it.type]) continue;
+    if (mountOf(it) !== 'floor') {
+      mounted.push(it);
+      continue;
+    }
     const cells = footprint(it);
     const inside = cells.map((c) => c.x < layout.width && c.z < layout.depth);
     const crosses = cells.some((a) => cells.some((b) => Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1 && wallBetween(a, b, layout)));
@@ -540,5 +560,14 @@ export function fitItemsToLayout(items: PlacedItem[], layout: HouseLayout): { it
     if (!cells.every((c) => inGrid(c, layout)) || inside.some((v) => v !== inside[0]) || crosses || clash || parked) boxed.push(it);
     else kept.push(it);
   }
-  return { items: kept, boxed };
+  for (const m of ['wall', 'ceiling', 'surface'] as const) {
+    for (const it of mounted) {
+      if (mountOf(it) !== m) continue;
+      if (mountError(it, kept, layout, it.id)) boxed.push(it);
+      else kept.push(it);
+    }
+  }
+  // Same order as before, so an unchanged house compares equal item by item.
+  const stays = new Set(kept);
+  return { items: [...kept.filter((k) => k.type === 'gate'), ...items.filter((i) => i.type !== 'gate' && stays.has(i))], boxed };
 }

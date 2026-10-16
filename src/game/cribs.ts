@@ -62,10 +62,6 @@ export interface CribScore {
 
 export type RoomRole = 'bedroom' | 'bathroom' | 'kitchen' | 'dining' | 'living' | 'study' | 'prayer';
 
-const ROLE_LABEL: Record<RoomRole, string> = {
-  bedroom: 'bedroom', bathroom: 'bathroom', kitchen: 'kitchen', dining: 'dining room', living: 'parlour', study: 'study', prayer: 'prayer room',
-};
-
 /** Rooms nobody furnishes: passing through, or outside. */
 const SKIP_ROOM = /hall|corridor|compound|side yard|yard|garage|car bay|park/i;
 

@@ -148,12 +148,14 @@ export const moodOf = (f?: HouseFinish | null) => MOOD_BY_ID[f?.mood ?? ''] ?? M
 
 /**
  * Lights you can buy, by item type, and where on the model their light comes from (local, front faces +z).
- * glow: bulbs drawn as small glowing balls; strip: a glowing bar (length along x); pool: radius of the light on
- * the floor; wash: the light thrown up the wall behind it (sconces, strips, floor lamps by a wall).
+ * Positions are in the model's own space, from its base (game/mount.ts baseY: the floor, a surface top, or a wall
+ * item's centre height). glow: bulbs drawn as small glowing balls; strip: a glowing bar (length along x); pool:
+ * radius of the light on the floor; wash: the light thrown up the wall behind it; real: a real light's strength
+ * when this lamp is one of the two nearest you.
  */
 export interface LightSpec { glow: { p: [number, number, number]; r: number }[]; strip?: { p: [number, number, number]; len: number }; pool: number; wash?: number; strength: number; real: number }
 export const LIGHTS: Record<string, LightSpec> = {
-  table_lamp: { glow: [{ p: [0, 0.78, 0], r: 0.07 }], pool: 2.2, strength: 0.7, real: 0.9 },
+  table_lamp: { glow: [{ p: [0, 0.31, 0], r: 0.055 }], pool: 2.2, strength: 0.7, real: 0.9 },
   floor_lamp: { glow: [{ p: [0, 1.58, 0], r: 0.08 }], pool: 3, wash: 1.4, strength: 0.85, real: 1.2 },
   chandelier: {
     glow: [0, 1, 2, 3, 4, 5].map((i) => ({ p: [Math.cos((i / 6) * Math.PI * 2) * 0.42, 2.02, Math.sin((i / 6) * Math.PI * 2) * 0.42] as [number, number, number], r: 0.06 }))
@@ -162,8 +164,8 @@ export const LIGHTS: Record<string, LightSpec> = {
   },
   chandelier_lamp: { glow: [{ p: [0, 1.42, 0], r: 0.16 }], pool: 3.2, strength: 0.9, real: 1.3 },
   pendant_light: { glow: [{ p: [0, 1.72, 0], r: 0.08 }], pool: 2.6, strength: 0.85, real: 1.1 },
-  led_strip: { glow: [], strip: { p: [0, 0.05, -0.42], len: 1.9 }, pool: 1.6, wash: 2.2, strength: 0.75, real: 0.6 },
-  wall_sconce: { glow: [{ p: [0, 1.7, -0.36], r: 0.07 }], pool: 1.6, wash: 1.6, strength: 0.7, real: 0.8 },
+  led_strip: { glow: [], strip: { p: [0, 0.004, -0.405], len: 1.92 }, pool: 1.6, wash: 2.2, strength: 0.75, real: 0.6 },
+  wall_sconce: { glow: [{ p: [0, 0, -0.3], r: 0.06 }], pool: 1.6, wash: 1.6, strength: 0.7, real: 0.8 },
 };
 
 // ── Rooms, faces and runs ────────────────────────────────────────────────────────────────────────

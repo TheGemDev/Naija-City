@@ -24,6 +24,7 @@ import { settle as settleRentals, settleNpcTenants } from './rentals';
 import { spawn as spawnPotholes } from './roads';
 import { onlineEverywhere } from './shards';
 import { pruneSnaps } from './snaps';
+import { settleDesignJobs } from './cribs';
 import { runShops } from './shops';
 import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
@@ -65,6 +66,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     // Customers who aren't players buy from players' shops, and shelves with auto-restock on are topped up.
     ['shops', () => runShops(env, ctx, now)],
     ['vdm', () => vdmGrumbles(env.DB, now)],
+    // Interior designer jobs (worker/cribs.ts): unanswered offers refunded, keys that ran out, reviews nobody did.
+    ['design-jobs', () => settleDesignJobs(env.DB, now)],
   ];
   // Visits come from Cloudflare's own analytics; refresh them in KV on every run (every 5 minutes).
   jobs.push(['visits', () => rollupCfTraffic(env)]);

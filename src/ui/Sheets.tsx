@@ -21,6 +21,7 @@ import { ITEM_PAINT, PAINT_COLOURS, WALL_PARTS } from '../game/paint';
 import { placeLink, shareLink } from '../net/deeplink';
 import { Emoji, Icon } from './Icons';
 import { useApps } from '../game/apps';
+import { PIE_MENU } from './PieMenu';
 
 /** One row of the activities sheet. Shared with the visit bar so visiting a house looks the same as being home. */
 export function ActionRow({ action: a, sub, dim, onClick }: { action: ActionDef; sub: string; dim?: boolean; onClick: () => void }) {
@@ -35,8 +36,8 @@ export function ActionRow({ action: a, sub, dim, onClick }: { action: ActionDef;
   );
 }
 
-/** Live mode: tap an item (at home) or a prop (inside a place) → choose what to do with it. */
-export function ActionSheet() {
+/** What the selected item (at home) or prop (inside a place) offers: its title, and each action with its line of detail. */
+export function useSelectedActions() {
   const selectedId = useGame((s) => s.selectedId);
   const items = useGame((s) => s.items);
   const mode = useGame((s) => s.mode);
@@ -45,8 +46,6 @@ export function ActionSheet() {
   const powered = useGame(isPowered);
   const jobId = useGame((s) => s.jobId);
   const jobPlace = useGame((s) => employment(s)?.place.name);
-  const start = useGame((s) => s.startAction);
-  const select = useGame((s) => s.select);
   const office = useHeldOffice();
   // A ticket (a train at the station's ticket office) shows its price after the fare subsidy.
   const fares = useGame((s) => s.fares);
@@ -69,32 +68,43 @@ export function ActionSheet() {
   }
   const job = JOBS.find((j) => j.id === jobId);
   const placeJob = view === 'place' && insideId ? JOBS.find((j) => PLACE_BY_ID[insideId]?.jobs?.includes(j.id)) : undefined;
+  const rows = actions.map((a) => {
+    const noPower = a.needsPower && !powered;
+    const sub =
+      a.effect === 'work'
+        ? placeJob
+          ? `${placeJob.title} · ${placeJob.start}:00–${placeJob.end}:00`
+          : job
+            ? `${job.title} at ${jobPlace} · ${job.start}:00–${job.end}:00`
+            : 'Get a job from Phone → Jobs'
+        : a.effect === 'goCity'
+          ? 'Walk out to the town map'
+          : [a.minutes ? `${taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec` : null, a.cost ? naira(ticketOf(a, region, fares)?.price ?? a.cost) : null, noPower ? 'needs light' : null].filter(Boolean).join(' · ');
+    return { action: a, sub, dim: !!noPower };
+  });
+  return { selectedId, title, rows };
+}
+
+/** Live mode: tap an item (at home) or a prop (inside a place) → choose what to do with it. On desktop the pie menu
+ *  round the object does this instead (PieMenu.tsx). */
+export function ActionSheet() {
+  const sel = useSelectedActions();
+  const start = useGame((s) => s.startAction);
+  const select = useGame((s) => s.select);
+  if (!sel || PIE_MENU) return null;
   return (
     <div className="sheet small">
       <div className="sheet-head">
-        <h3>{title}</h3>
+        <h3>{sel.title}</h3>
         <button className="x" onClick={() => select(null)}>
           ✕
         </button>
       </div>
-      {actions.length === 0 && <p className="muted">Nothing to do with this one. E fine sha ✨</p>}
+      {sel.rows.length === 0 && <p className="muted">Nothing to do with this one. E fine sha ✨</p>}
       <div className="actions">
-        {actions.map((a) => {
-          const noPower = a.needsPower && !powered;
-          const sub =
-            a.effect === 'work'
-              ? placeJob
-                ? `${placeJob.title} · ${placeJob.start}:00–${placeJob.end}:00`
-                : job
-                  ? `${job.title} at ${jobPlace} · ${job.start}:00–${job.end}:00`
-                  : 'Get a job from Phone → Jobs'
-              : a.effect === 'goCity'
-                ? 'Walk out to the town map'
-                : [a.minutes ? `${taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec` : null, a.cost ? naira(ticketOf(a, region, fares)?.price ?? a.cost) : null, noPower ? 'needs light' : null].filter(Boolean).join(' · ');
-          return (
-            <ActionRow key={a.id} action={a} sub={sub} dim={!!noPower} onClick={() => start(selectedId, a.id)} />
-          );
-        })}
+        {sel.rows.map(({ action: a, sub, dim }) => (
+          <ActionRow key={a.id} action={a} sub={sub} dim={dim} onClick={() => start(sel.selectedId, a.id)} />
+        ))}
       </div>
     </div>
   );

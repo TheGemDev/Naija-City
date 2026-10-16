@@ -82,6 +82,7 @@ if (mode === 'city') {
   const city = q.get('city') ?? 'kaduna';
   const night = q.get('night') === '1';
   pinWeather((q.get('weather') as WeatherKind) ?? 'clear');
+  if (q.get('notrees') === '1') cityMap(city).trees.splice(0);
   const x = q.get('x'), z = q.get('z');
   if (x && z) { avatar.x = Number(x); avatar.z = Number(z); }
   useGame.setState({ view: 'city', destinationId: city, minutes: night ? 22 * 60 : 12 * 60 });

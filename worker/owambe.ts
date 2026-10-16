@@ -13,6 +13,8 @@ import { PARTY, PARTY_KINDS, squareCity, squareName, type Party, type PartyKind 
 import { getRegion } from '../src/game/regions';
 import { sendPush } from './push';
 import { notifyPlayer, whereIs } from './shards';
+import { bestCribScore } from './cribs';
+import { owambeCribBonus } from '../src/game/cribs';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -75,10 +77,14 @@ async function wrapUp(db: D1Database, now: number) {
       )
       .bind(row.id)
       .first<{ username: string | null; sprayed: number }>();
+    // A host whose crib is famous on Cribs (src/game/cribs.ts) pulls a bigger crowd: their guests spray a little more.
+    // Paid once per party: the wrap claim above is taken by one request only, and the ledger id is the party's.
+    const crib = owambeCribBonus(await bestCribScore(db, row.host_uid), row.sprayed);
+    if (crib.bonus > 0) await db.batch(applyStmts(db, row.host_uid, `owambe-crib:${row.id}`, 'spray_in', 'owambe_crib', crib.bonus)).catch(() => {});
     await postFeed(
       db, row.host_uid, 'owambe', PARTY_KINDS[row.kind].icon,
       row.sprayed > 0
-        ? `${row.title} is over! Guests sprayed ${naira(row.sprayed)}${top ? `, and ${handle(top.username)} was the biggest spender with ${naira(top.sprayed)}` : ''}. 💃🏾💸`
+        ? `${row.title} is over! Guests sprayed ${naira(row.sprayed)}${top ? `, and ${handle(top.username)} was the biggest spender with ${naira(top.sprayed)}` : ''}.${crib.bonus > 0 ? ` ${crib.guests} more guests came to see the famous crib and sprayed another ${naira(crib.bonus)}.` : ''} 💃🏾💸`
         : `${row.title} is over. The DJ played to an empty square and nobody sprayed a kobo. 😭`,
     );
   }

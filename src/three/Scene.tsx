@@ -452,7 +452,8 @@ export function Scene() {
       key={low ? 'low' : 'high'}
       shadows={low ? false : { type: PCFSoftShadowMap }}
       dpr={low ? Math.min(dpr, LOW_DPR) : dpr}
-      gl={{ powerPreference: low ? 'low-power' : 'high-performance', antialias: !low }}
+      // stencil: the desktop hover outline masks out the hovered object so only its silhouette is lined (HoverOutline.tsx).
+      gl={{ powerPreference: low ? 'low-power' : 'high-performance', antialias: !low, stencil: true }}
       camera={{ position: framing(useGame.getState()).pos, fov: FOV, near: 0.5, far: 400 }}
       onPointerMissed={() => useGame.getState().select(null)}
     >
