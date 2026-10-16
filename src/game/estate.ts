@@ -42,16 +42,38 @@ export const entrance = (rows: number): Cell => ({ x: 1, z: estateH(rows) - 2 })
 
 export interface EstateLot { slot: number; plot: PlotSize; stage: number; design: string | null }
 
-/** Shortest walk across the estate, going round houses that have walls up. */
+/** A finished house stands in its own compound: a wall round the plot, the gate in the middle of the front. */
+export const FINISHED_STAGE = 4;
+/** The gate cell of a plot (inside the wall, in front of the door), and the road cell outside it. */
+export function plotGate(slot: number): { inside: Cell; outside: Cell } {
+  const o = slotOrigin(slot);
+  const x = o.x + Math.floor(PLOT / 2);
+  return { inside: { x, z: o.z + PLOT - 1 }, outside: { x, z: o.z + PLOT } };
+}
+
+/** Shortest walk across the estate, going round houses that have walls up and in at compound gates. */
 export function estatePath(start: Cell, goal: Cell, lots: EstateLot[], rows: number): Cell[] | null {
   const W = estateW();
   const H = estateH(rows);
   const blocked = new Set<string>();
+  // Which walled compound a cell is inside: you only cross its wall at the gate (three/houseKit.tsx draws it).
+  const yard = new Map<string, number>();
+  const gates = new Set<string>();
   for (const l of lots) {
     if (!l.design || l.stage < 2) continue;
     const r = houseRect(l.slot, l.plot);
     for (let x = r.x0; x < r.x1; x++) for (let z = r.z0; z < r.z1; z++) blocked.add(`${x},${z}`);
+    if (l.stage < FINISHED_STAGE) continue;
+    const o = slotOrigin(l.slot);
+    for (let x = o.x; x < o.x + PLOT; x++) for (let z = o.z; z < o.z + PLOT; z++) yard.set(`${x},${z}`, l.slot);
+    const g = plotGate(l.slot);
+    gates.add(`${g.inside.x},${g.inside.z}>${g.outside.x},${g.outside.z}`);
+    gates.add(`${g.outside.x},${g.outside.z}>${g.inside.x},${g.inside.z}`);
   }
+  const walled = (a: Cell, b: Cell) => {
+    const ya = yard.get(`${a.x},${a.z}`), yb = yard.get(`${b.x},${b.z}`);
+    return ya !== yb && !gates.has(`${a.x},${a.z}>${b.x},${b.z}`);
+  };
   const k = (c: Cell) => `${c.x},${c.z}`;
   if (blocked.has(k(goal)) || goal.x < 0 || goal.z < 0 || goal.x >= W || goal.z >= H) return null;
   const prev = new Map<string, Cell | null>([[k(start), null]]);
@@ -65,7 +87,7 @@ export function estatePath(start: Cell, goal: Cell, lots: EstateLot[], rows: num
     }
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const n = { x: cur.x + dx, z: cur.z + dz };
-      if (n.x < 0 || n.z < 0 || n.x >= W || n.z >= H || prev.has(k(n)) || blocked.has(k(n))) continue;
+      if (n.x < 0 || n.z < 0 || n.x >= W || n.z >= H || prev.has(k(n)) || blocked.has(k(n)) || walled(cur, n)) continue;
       prev.set(k(n), cur);
       queue.push(n);
     }

@@ -13,6 +13,7 @@ import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
 import { cleanExtensions, cleanExterior, layoutKey } from '../src/game/exterior';
 import { isColourRef } from '../src/game/paint';
+import { LIGHTS, cleanFinish, cleanLamp } from '../src/game/finishes';
 import { sectionOf } from '../src/game/estate';
 import { CAR_BY_ID } from '../src/game/cars';
 import { supplyOf, type PowerSave, type Supply } from '../src/game/power';
@@ -507,10 +508,12 @@ type Home = {
   meterBypassed: boolean;
   save: {
     origin: string;
-    items: { id: string; type: string; x: number; z: number; rot: number; paint?: (string | null)[] }[];
+    items: { id: string; type: string; x: number; z: number; rot: number; paint?: (string | null)[]; light?: { c?: string; b?: number } }[];
     design: string | null;
     walls: string[];
     paint: { outer?: string; inner?: string };
+    /** Floors, walls, ceilings and mood (game/finishes.ts). */
+    finish?: import('../src/game/finishes').HouseFinish;
     staff: HouseholdStaff[];
     ownedCars?: string[];
     houseStation: string | null;
@@ -536,6 +539,7 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
     activeHouseId?: string | null;
     wallEdits?: Record<string, unknown>;
     housePaint?: Record<string, unknown>;
+    houseFinish?: Record<string, unknown>;
     nepaOwed?: number;
     power?: PowerSave['power'];
     meter?: { level?: string };
@@ -561,9 +565,10 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
       Number.isInteger(i.z) && (i.z as number) >= 0 && (i.z as number) < MAX_GRID_H &&
       Number.isInteger(i.rot) && (i.rot as number) >= 0 && (i.rot as number) <= 3;
   }).map((item) => {
-    const { paint, ...rest } = item;
+    const { paint, light, ...rest } = item;
     const clean = Array.isArray(paint) ? paint.slice(0, 4).map((id) => (isColourRef(id) ? id : null)) : [];
-    return clean.some(Boolean) ? { ...rest, paint: clean } : rest;
+    const lamp = LIGHTS[rest.type] ? cleanLamp(light) : undefined;
+    return { ...rest, ...(clean.some(Boolean) ? { paint: clean } : {}), ...(lamp ? { light: lamp } : {}) };
   });
   const wallSource = save.wallEdits?.[home?.id ?? 'starter'];
   const walls = Array.isArray(wallSource)
@@ -603,6 +608,8 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
         exterior: cleanExterior(home?.exterior) ?? null,
         walls,
         paint,
+        // Floors, walls, ceilings and mood (game/finishes.ts), cleaned of anything unknown.
+        finish: cleanFinish(save.houseFinish?.[home?.id ?? 'starter']),
         staff,
         ownedCars: Array.isArray(save.ownedCars)
           ? save.ownedCars.filter((id): id is string => typeof id === 'string' && !!CAR_BY_ID[id])

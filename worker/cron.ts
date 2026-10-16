@@ -16,6 +16,7 @@ import { syncForum } from './groups';
 import { settleBets } from './fun';
 import { sweepGames } from './games';
 import { settleHangouts } from './hangout';
+import { sweepKids } from './kids';
 import { tickMarket } from './market';
 import { track } from './metrics';
 import { vdmGrumbles } from './news';
@@ -55,6 +56,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     ['forum', () => syncForum(env.DB, now)],
     ['seasons', () => settleSeasons(env.DB, now)],
     ['hangouts', () => settleHangouts(env.DB, now)],
+    // Adopted children whose next alert has come: a push for a parent who is away (worker/kids.ts).
+    ['kids', () => sweepKids(env, ctx, now)],
     ['efcc', () => settleDueCases(env.DB)],
     ['manhunts', () => sweepManhunts(env, ctx)],
     ['rackets', () => settleRackets(env, ctx, now)],

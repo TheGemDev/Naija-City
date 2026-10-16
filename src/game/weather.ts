@@ -36,6 +36,9 @@ const DUST = [1, 0.75, 0.3, 0.05, 0, 0, 0, 0, 0, 0.05, 0.4, 0.9];
 /** The month (0 to 11) in Nigeria, which is an hour ahead of UTC all year. */
 const monthAt = (now: number) => new Date(now + 3600_000).getUTCMonth();
 
+/** How much harmattan dust has settled on the leaves in that city this month, 0 to 1 (three/trees.ts): most in the far north mid-season. */
+export const seasonDust = (city: string, now = Date.now()) => DUST[monthAt(now)] * (0.25 + 0.75 * (NORTH[city] ?? 0.6));
+
 /** The weather the season deals for one slot, before road and city events have their say. */
 function dealt(slot: number, city: string): WeatherKind {
   const north = NORTH[city] ?? 0.6;

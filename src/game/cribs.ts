@@ -4,7 +4,7 @@
 
 import { CATEGORIES, ITEMS, type Category } from './catalog';
 import { arrivalCell, footprint, houseLayout, placementError, type HouseLayout, type HouseRoom, type PlacedItem } from './grid';
-import { PAINT_BY_ID, type HousePaint } from './paint';
+import { hexHsl, isColourRef, paintHex, type HousePaint } from './paint';
 import { layoutKey } from './exterior';
 
 /* ---------- Tiers ---------- */
@@ -36,7 +36,7 @@ export interface CribInput {
   walls?: string[] | null;
   paint?: HousePaint | null;
   /** The owner's room settings (property.rooms): a room's `type` overrides what its design name says it is. */
-  rooms?: Record<string, { type?: string; [k: string]: unknown }> | null;
+  rooms?: Record<string, { type?: string; name?: string }> | null;
   /**
    * Finishes and lighting, whatever shape the house keeps them in (floors, wall finishes, fittings, light settings).
    * The score counts how much of it is filled in; see finishesOf.
@@ -140,19 +140,25 @@ export function finishesOf(...sources: unknown[]): { filled: number; lights: num
 
 /* ---------- Colour ---------- */
 
-const NEUTRAL = new Set(['chalk', 'cream', 'charcoal']);
-const WARM = new Set(['terracotta', 'blush']);
-const COOL = new Set(['sage', 'sky', 'navy']);
+/** A colour's family: neutral (greys, whites, creams, near-black), warm (reds to yellows, pinks) or cool. Custom hexes too. */
+export function colourFamily(ref: string): 'neutral' | 'warm' | 'cool' | null {
+  const hex = paintHex(ref);
+  if (!hex) return null;
+  const [h, sat, l] = hexHsl(hex);
+  // Pale beiges and creams sit with the neutrals; a pale pink is still an accent.
+  if (sat < 18 || l > 90 || l < 14 || (h >= 25 && h <= 60 && l > 70)) return 'neutral';
+  return h < 70 || h >= 300 ? 'warm' : 'cool';
+}
 
 /** 0-10 for how well the paint goes together, and what to change. */
 export function colourHarmony(items: CribItem[], paint?: HousePaint | null): { got: number; tip?: string } {
   const used: string[] = [];
-  for (const id of [paint?.inner, paint?.outer]) if (id && PAINT_BY_ID[id]) used.push(id);
-  for (const it of items) for (const id of it.paint ?? []) if (id && PAINT_BY_ID[id]) used.push(id);
+  for (const id of [paint?.inner, paint?.outer]) if (isColourRef(id)) used.push(id);
+  for (const it of items) for (const id of it.paint ?? []) if (isColourRef(id)) used.push(id);
   if (!used.length) return { got: 4, tip: 'Paint your inside walls and pick a colour or two for the furniture' };
-  const accents = [...new Set(used.filter((id) => !NEUTRAL.has(id)))];
-  const warm = accents.some((id) => WARM.has(id));
-  const cool = accents.some((id) => COOL.has(id));
+  const accents = [...new Set(used.filter((id) => colourFamily(id) !== 'neutral'))];
+  const warm = accents.some((id) => colourFamily(id) === 'warm');
+  const cool = accents.some((id) => colourFamily(id) === 'cool');
   let got = 10;
   let tip: string | undefined;
   if (accents.length > 2) { got -= 2 * (accents.length - 2); tip = `Too many colours: keep to two accents (you have ${accents.length})`; }
@@ -218,7 +224,7 @@ export function scoreCrib(input: CribInput): CribScore {
     for (const role of roles) for (const n of ROOM_NEEDS[role]) {
       need++;
       if (here.some(n.met)) met++;
-      else firstGap ??= { room: input.rooms?.[room.name]?.name as string || room.name, label: n.label };
+      else firstGap ??= { room: input.rooms?.[room.name]?.name || room.name, label: n.label };
     }
   }
   const rp = need ? 22 * (met / need) : 0;
@@ -239,7 +245,7 @@ export function scoreCrib(input: CribInput): CribScore {
   const unlit = scored.find(({ room }) => !placed.some((i) => LIGHT_ITEMS.has(i.type) && inRoom(room, i)));
   parts.push({
     key: 'light', label: 'Lighting', icon: '💡', got: lp, max: 10,
-    ...(lightShare < 1 ? { tip: unlit ? `Add lighting to ${input.rooms?.[unlit.room.name]?.name as string || unlit.room.name}` : 'Add lighting', gain: Math.min(10 - lp, (10 / Math.max(1, scored.length)) * 2) } : {}),
+    ...(lightShare < 1 ? { tip: unlit ? `Add lighting to ${input.rooms?.[unlit.room.name]?.name || unlit.room.name}` : 'Add lighting', gain: Math.min(10 - lp, (10 / Math.max(1, scored.length)) * 2) } : {}),
   });
 
   // Finishing touches: decor pieces and the house's own finishes (floors, wall finishes...).

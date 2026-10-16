@@ -3,8 +3,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Color, Fog, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight, type PointLight } from 'three';
-import { activeDesignOf, flightOf, hourOf, houseKeyOf, litHere, useGame, type GameState } from '../game/store';
+import { Color, Fog, MOUSE, PCFSoftShadowMap, PMREMGenerator, TOUCH, type DirectionalLight, type HemisphereLight } from 'three';
+import { activeDesignOf, flightOf, hourOf, houseKeyOf, useGame, type GameState } from '../game/store';
 import { avatar } from '../game/avatar';
 import { driveState } from '../game/driveState';
 import { activeMap, placeCenter, placeHere } from '../game/city';
@@ -33,8 +33,9 @@ import { useVisit } from '../game/visits';
 import { useTour } from '../game/tour';
 import { useLowPerf } from '../game/quality';
 import { photoHour, usePhoto } from '../game/photo';
-import { LIGHTS_ON, sceneHour, setChromeColor } from '../game/theme';
+import { sceneHour, setChromeColor } from '../game/theme';
 import { PhotoRig } from './PhotoRig';
+import { houseGlow } from './HouseLights';
 import { pinWeather, sky, stepSky } from '../game/weather';
 import { Clouds, Rain, SkyBodies } from './Weather';
 import { HoverOutline } from './HoverOutline';
@@ -89,7 +90,8 @@ const SUN_DUST = new Color('#ffe4c4');
 const SKY_DUST = new Color('#e9e0d0');
 /** Rain light: cool and grey. */
 const SKY_RAIN = new Color('#b9c6d6');
-const LAMPS: [number, number, number][] = [[4, 2.2, 3], [11, 2.2, 2.5], [11, 2.2, 7.5], [2.5, 2.2, 8], [6.5, 2.2, 8], [7, 2.2, 11.5]];
+/** The house's bulb colour this frame (its mood). */
+const bulbTint = new Color();
 
 /** Out under the sky, where weather reaches: not inside a building or on a plane. */
 function outdoors(s: GameState) {
@@ -104,9 +106,7 @@ function outdoors(s: GameState) {
 function DayNight() {
   const sun = useRef<DirectionalLight>(null!);
   const hemi = useRef<HemisphereLight>(null!);
-  const lamps = useRef<(PointLight | null)[]>([]);
   const { scene, controls, gl } = useThree();
-  const view = useGame((s) => s.view);
   const bg = useRef(new Color());
   const tint = useRef(new Color());
   const frames = useRef(0);
@@ -134,7 +134,7 @@ function DayNight() {
     };
   }, [gl, scene, low]);
 
-  useFrame(({ camera }, dt) => {
+  useFrame(({ camera, clock }, dt) => {
     const s = useGame.getState();
     // Photo mode can ask for the light of another time of day.
     const posed = photoHour();
@@ -174,8 +174,13 @@ function DayNight() {
     const night = 1 - Math.min(1, day * 2.5);
     const visit = useVisit.getState().current;
     const indoors = !!visit || s.view === 'home' || s.view === 'place';
-    const homePower = litHere(s);
-    const bulbs = indoors && (s.view === 'place' && !visit ? true : homePower) ? night : 0;
+    // A house's bulbs follow its supply (a generator is dimmer) and its mood (game/finishes.ts); its lamps and their
+    // two real lights are HouseLights.tsx's. A public place always has light.
+    const house = s.view !== 'place' || !!visit;
+    const glow = house ? houseGlow(s, clock.elapsedTime) : null;
+    const bulbs = !indoors ? 0 : glow ? night * Math.min(1.15, glow.level) : night;
+    bulbTint.copy(SKY_BULB);
+    if (glow) bulbTint.lerp(glow.color, 0.7);
     const moon = night * (low ? 0.75 : 0.55) * (1 - cloud * 0.4);
     sun.current.intensity = 0.15 + day * 2.2 * sunK + moon * (1 - bulbs * 0.6);
     sun.current.color.copy(WHITE).lerp(SUN_DUST, haze * 0.6);
@@ -186,13 +191,10 @@ function DayNight() {
     // together at noon they washed the whole map out to white. A little of the sunlight cloud takes away comes back as
     // sky light, never as much as it took: weather only ever dims the map. Lightning is a soft flicker, not a white-out.
     hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + day * (1 - sunK) * 0.2 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85) + flash * 0.5;
-    hemi.current.color.copy(SKY_DAY).lerp(SKY_DUST, haze * 0.5).lerp(SKY_RAIN, rain * 0.5).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8).lerp(FLASH, flash);
-    hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - bulbs));
+    hemi.current.color.copy(SKY_DAY).lerp(SKY_DUST, haze * 0.5).lerp(SKY_RAIN, rain * 0.5).lerp(SKY_MOON, night * 0.6).lerp(bulbTint, Math.min(1, bulbs) * 0.8).lerp(FLASH, flash);
+    hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - Math.min(1, bulbs)));
 
     scene.environmentIntensity = 0.05 + day * 0.1;
-
-    const lit = homePower && (h < 6.5 || h >= LIGHTS_ON) ? 3.2 : 0;
-    lamps.current.forEach((l) => l && (l.intensity = lit));
   });
 
   return (
@@ -209,10 +211,6 @@ function DayNight() {
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
       />
-      {view === 'home' && !low &&
-        LAMPS.map((p, i) => (
-          <pointLight key={i} ref={(l) => { lamps.current[i] = l; }} position={p} color="#ffd9a0" distance={6} decay={1.5} intensity={0} />
-        ))}
     </>
   );
 }
@@ -405,7 +403,7 @@ function Area() {
   if (flight) return flight === 'train' ? <TrainRide /> : <FlightCabin kind={flight} />;
   if (visit) return (
     <>
-      <World readOnly items={visit.save.items} origin={visit.save.origin} design={visit.save.design} walls={visit.save.walls} paint={visit.save.paint} visitCars={visit.save.ownedCars} />
+      <World readOnly items={visit.save.items} origin={visit.save.origin} design={visit.save.design} walls={visit.save.walls} paint={visit.save.paint} finish={visit.save.finish} visitCars={visit.save.ownedCars} />
       <HouseStaff staff={visit.save.staff} design={visit.save.design} />
     </>
   );

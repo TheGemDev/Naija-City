@@ -176,3 +176,28 @@ export function flyHeli(dt: number) {
   h.pitch += (pitch - h.pitch) * damp(3.5, dt);
   h.bank += (bank - h.bank) * damp(4, dt);
 }
+
+/** Seconds to cover `left` cells from `v` cells a second: pull away towards cruise, then brake evenly into the spot. */
+function flyTime(left: number, v: number) {
+  const peak = Math.min(CRUISE, Math.sqrt((2 * left * ACCEL * BRAKE + v * v * BRAKE) / (ACCEL + BRAKE)));
+  const up = Math.max(0, peak - v) / ACCEL;
+  const down = peak / BRAKE;
+  const cover = Math.max(0, peak * peak - v * v) / (2 * ACCEL) + (peak * peak) / (2 * BRAKE);
+  return up + down + Math.max(0, left - cover) / Math.max(peak, 0.5);
+}
+
+/** About how long the helicopter ride on the avatar's route has left, wind-up and landing included (for the HUD). */
+export function heliSecondsLeft() {
+  const a = avatar;
+  if (!a.path.length) return 0;
+  const h = heli;
+  const end = a.path[a.path.length - 1];
+  const left = Math.hypot(end.x + 0.5 - a.x, end.z + 0.5 - a.z);
+  const down = LAND + SETTLE;
+  // Off the ground once the rotor is flat out and it is up near half height.
+  const lift = CLIMB * 0.45;
+  if (h.trip !== a.path || h.phase === 'spool') return (1 - (h.trip === a.path ? h.rpm : 0)) * SPOOL + lift + flyTime(left, 0) + down;
+  if (h.phase === 'fly') return (h.speed > 0 ? 0 : Math.max(0, lift - h.t)) + flyTime(left, h.speed) + down;
+  if (h.phase === 'land') return Math.max(0, LAND - h.t) + SETTLE;
+  return Math.max(0, SETTLE - h.t);
+}

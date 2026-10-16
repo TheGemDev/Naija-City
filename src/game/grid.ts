@@ -26,6 +26,8 @@ export interface PlacedItem {
    * centre height or a surface piece's standing height.
    */
   rotDeg?: number; mount?: Mount; on?: string; px?: number; pz?: number; y?: number;
+  /** A light's colour and brightness (game/finishes.ts LampSetting): `c` a tone id or colour ref, `b` 0.15-1. */
+  light?: { c?: string; b?: number };
 }
 
 export interface Edge { dir: 'h' | 'v'; x: number; z: number; kind: Kind; tall: boolean }

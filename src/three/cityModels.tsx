@@ -4,6 +4,8 @@
 import { TrainStation } from './StationModel';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial } from 'three';
 import { B } from './models';
+import { useLowPerf } from '../game/quality';
+import { bushKind, mapTreeSize, treeDust, treeGeometry, treePick, type TreeKind } from './trees';
 import { Stadium } from './Stadium';
 import { Airport, Campus, Church, CompVillage, Flyover, Hospital, Jetty, Mill, MotorPark, Mosque, Nda, Poly, Port, Refinery, School, TechHub } from './places/institutions';
 import * as Commerce from './places/commerce';
@@ -164,26 +166,20 @@ function Parapet({ w, d, y, c, h = 0.2, cap = '#ece6da' }: { w: number; d: numbe
   );
 }
 
-// The crown is a cluster of soft lumps: low-poly spheres with smooth normals, so a city of hundreds of trees stays light.
-const CROWN = [
-  [0, 2.45, 0, 0.95, 1], [0.6, 2.2, 0.3, 0.68, 0.9], [-0.55, 2.25, -0.25, 0.7, 0.86],
-  [0.2, 2.15, -0.6, 0.62, 0.8], [-0.3, 2.1, 0.55, 0.62, 0.92], [0.05, 3.05, 0.05, 0.6, 1.1],
-] as const;
-
-function Tree({ p, s = 0.6, c = '#3f7d2a' }: { p: V3; s?: number; c?: string }) {
+/**
+ * A tree on the map or in a scene of its own: one mesh from the shared tree kit (trees.ts), which StaticBatch folds into
+ * the town's buckets. `s` is about a third of its height; `kind` the species (a shade tree or oil palm by default).
+ */
+function Tree({ p, s = 0.6, kind, seed = 0 }: { p: V3; s?: number; kind?: TreeKind; seed?: number }) {
+  const low = useLowPerf();
+  const k = kind ?? bushKind(p[0], p[2]);
+  const pick = treePick(k, p[0], p[2], seed);
+  const size = mapTreeSize(k, s) * pick.scale;
   return (
-    <group position={p} scale={s}>
-      <Cyl p={[0, 0.95, 0]} r={0.17} rt={0.1} h={1.9} c="#5b3a1e" seg={6} />
-      {/* two boughs leaving the trunk into the crown */}
-      <group position={[0.12, 1.75, 0]} rotation={[0, 0, -0.6]}><Cyl p={[0, 0.25, 0]} r={0.07} rt={0.05} h={0.5} c="#5b3a1e" seg={5} /></group>
-      <group position={[-0.1, 1.65, 0.05]} rotation={[0.3, 0, 0.6]}><Cyl p={[0, 0.25, 0]} r={0.07} rt={0.05} h={0.5} c="#5b3a1e" seg={5} /></group>
-      {CROWN.map(([x, y, z, r, k], i) => (
-        <mesh key={i} position={[x, y, z]} castShadow>
-          <icosahedronGeometry args={[r, 1]} />
-          <meshStandardMaterial color={shade(c, k)} roughness={0.9} />
-        </mesh>
-      ))}
-    </group>
+    // noShade: the ground shade is for buildings, and a tree's bounds would read as one.
+    <mesh geometry={treeGeometry(k, pick.variant, pick.palette, low, treeDust())} position={p} rotation={[pick.lx, pick.yaw, pick.lz]} scale={size} castShadow receiveShadow dispose={null} userData={{ noShade: true }}>
+      <meshStandardMaterial vertexColors flatShading emissiveIntensity={0} />
+    </mesh>
   );
 }
 

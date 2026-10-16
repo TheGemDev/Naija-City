@@ -14,8 +14,12 @@ import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, DoubleSide, Float32BufferAttribute, IcosahedronGeometry, Matrix4, MeshStandardMaterial, SphereGeometry, Vector3, type Mesh } from 'three';
 import { frame, Glow, Kit, KitModel, prep, rng, scale, type Built, type RGB, type V3 } from '../placeKit';
+import { plantTree, savannaKind, shadeKind, type TreeKind } from '../trees';
 import { useGame } from '../../game/store';
 import { paintHex } from '../../game/paint';
+import { exteriorOf, type Exterior } from '../../game/exterior';
+import { CAR_BY_ID } from '../../game/cars';
+import { DESIGN_WALL, drawHouse, HousePen, seedOf } from '../houseKit';
 
 /* ---------- Colours ---------- */
 
@@ -44,8 +48,6 @@ const DUST = '#c9a46a';
 const GRASS = '#8fb35a';
 const LAWN = '#7fae4f';
 const HEDGE = '#2f6b2a';
-const LEAF = ['#3f7d2a', '#4d8a34', '#356b24'];
-const TRUNK = '#5b3a1e';
 const PAVING = '#d6d0c4';
 const PAVING_DARK = '#bdb5a6';
 const CONCRETE = '#a8a29e';
@@ -144,11 +146,9 @@ function person(k: Pen, x: number, z: number, cloth: string, o: { y?: number; s?
   if (o.cap) k.box(o.cap, [x, y + h + 0.065 * s, z], [0.062 * s, 0.025 * s, 0.062 * s]);
 }
 
-/** A tree: a trunk and a crown of a lump or two. */
-function tree(k: Pen, x: number, z: number, s: number, low: boolean, leaf = LEAF[0], y = 0) {
-  k.post(TRUNK, [x, y, z], 0.05 * s, 0.55 * s, 5, 0.7);
-  k.shape(leaf, LUMP(0), [x, y + 0.75 * s, z], [0.42 * s, 0.34 * s, 0.42 * s], [0, x * 3, 0]);
-  if (!low) k.shape(LEAF[(Math.round(x * 7 + z * 3) & 1) + 1], LUMP(0), [x + 0.18 * s, y + 0.62 * s, z + 0.1 * s], [0.28 * s, 0.24 * s, 0.28 * s], [0.4, z, 0]);
+/** A tree from the tree kit (trees.ts): a neem, mango or flame tree unless `kind` says, standing at height `y`. */
+function tree(k: Pen, x: number, z: number, s: number, low: boolean, kind?: TreeKind, y = 0) {
+  plantTree(k, kind ?? shadeKind(x, z), x, z, 1.05 * s, { low, y });
 }
 
 /** A flagpole flying a flag of three upright bands (Nigeria's by default). */
@@ -488,8 +488,8 @@ function buildEmirPalace(w: number, d: number, low: boolean) {
   k.box(ZINC, [sx0, 0.68, -0.3], [0.85, 0.04, 1.8], [0, 0, 0.12]);
   for (const z of [-1.05, -0.3, 0.45]) k.post(WOOD, [sx0 - 0.36, 0, z], 0.025, 0.62, 5);
   // Neem trees in the courtyard.
-  tree(k, -hw + 0.55, hd - 0.75, 0.75, low, LEAF[1]);
-  if (!low) tree(k, hw - 0.6, hd - 0.75, 0.6, low, LEAF[2]);
+  tree(k, -hw + 0.55, hd - 0.75, 0.75, low, 'neem');
+  if (!low) tree(k, hw - 0.6, hd - 0.75, 0.6, low, 'neem');
   // The Emir's flag over the gatehouse.
   flag(k, 0.75, gz - 0.2, 2.55, [RELIEF_GREEN, RELIEF_GREEN, RELIEF_GREEN]);
 
@@ -617,7 +617,7 @@ function buildDala(w: number, d: number, low: boolean) {
     const th = (i / 7) * Math.PI * 2 + 0.6;
     if (Math.abs(Math.sin(th) - 1) < 0.15) continue;
     const p = pt(th, 0.93);
-    tree(k, p[0], p[2], 0.45 + rand() * 0.2, low, '#6f8a3c', p[1] - 0.05);
+    tree(k, p[0], p[2], 0.45 + rand() * 0.2, low, savannaKind(p[0], p[2]), p[1] - 0.05);
   }
   if (!low) {
     // Climbers on the stair and sightseers at the top.
@@ -962,7 +962,7 @@ function buildLugard(w: number, d: number, low: boolean) {
   fWash(k, face, -0.9, 0.9, 1.7, 0.28);
   if (!low) {
     tree(k, -w / 2 + 0.35, d / 2 - 0.35, 0.6, low);
-    tree(k, w / 2 - 0.35, d / 2 - 0.35, 0.6, low, LEAF[2]);
+    tree(k, w / 2 - 0.35, d / 2 - 0.35, 0.6, low, 'mango');
     for (let i = 0; i < 5; i++) person(k, -0.3 + i * 0.16, d / 2 - 0.4 - (i % 2) * 0.4, ROBES[(i * 3 + 1) % ROBES.length], { head: SKIN[i % 3] });
   }
   return k.done();
@@ -1284,7 +1284,7 @@ function buildPitch(w: number, d: number, low: boolean) {
   }
   // The mango tree, the bench under it and the spectators.
   const tx = -w / 2 + 0.25, tz = -d / 2 + 0.2;
-  tree(k, tx, tz, 0.9, low, LEAF[2]);
+  tree(k, tx, tz, 0.9, low, 'mango');
   k.box(WOOD_LIGHT, [tx + 0.75, 0.09, tz + 0.02], [0.9, 0.03, 0.12]);
   for (const x of [0.4, 1.1]) k.box(CONCRETE, [tx + x, 0.04, tz + 0.02], [0.1, 0.08, 0.1]);
   // A street lamp at the corner: the only light for evening matches.
@@ -1408,160 +1408,37 @@ function FountainJets({ R }: { R: number }) {
 
 /* ---------- The player's house ---------- */
 
-// Your house: a walled compound with a black steel gate between capped pillars (lamps on top), interlocking paving,
-// the house under a long-span roof with barred windows and a porch, a GP tank up on its stand, the generator in its
-// little house by the gate, the DSTV dish, a car under the carport for the bigger houses, a mango tree and the
-// washing line. It follows the house you live in: a Gida build is drawn as its design (a self-con, a bungalow, an
-// executive house, a block of flats, a two-storey mansion), the starter home as a small bungalow, its outside walls in
-// the paint you chose. Read when the map loads, like the rest of the town.
-interface HomeLook { design: string | null; wall: string | null }
-const HOUSES: Record<string, { w: number; d: number; floors: number; roof: string; porch: boolean; car: boolean }> = {
-  starter: { w: 2.4, d: 1.7, floors: 1, roof: '#1f4e3d', porch: false, car: false },
-  selfcon: { w: 2.3, d: 1.6, floors: 1, roof: '#7c2d12', porch: false, car: false },
-  bungalow: { w: 2.8, d: 1.9, floors: 1, roof: '#1f4e3d', porch: true, car: false },
-  duplex: { w: 2.8, d: 2.0, floors: 1, roof: '#1e3a5f', porch: true, car: true },
-  flats: { w: 3.0, d: 1.8, floors: 2, roof: '#7c2d12', porch: false, car: false },
-  mansion: { w: 2.9, d: 2.0, floors: 2, roof: '#3f3f46', porch: true, car: true },
+// Your house on the map is the same model as on its estate plot and in the House app (three/houseKit.tsx): the design
+// you built (the government starter house until then), your paint, the outside you chose (fence, gate, roof, carport,
+// what stands in the yard), extensions, and your cars under the carport. Read when the map loads, like the rest of town.
+interface HomeLook { design: string; wall: string; ext: Exterior; extensions: string[]; cars: string[]; seed: number }
+/** The house's own size on a map plot, by design: the starter and the self-con small, the mansion filling the plot. */
+const MAP_HOUSE: Record<string, [number, number]> = {
+  starter: [2.2, 1.7], selfcon: [2.0, 1.6], bungalow: [2.5, 1.85], duplex: [2.6, 1.9], flats: [2.7, 1.9], mansion: [2.9, 1.95],
 };
-function buildHome(w: number, d: number, low: boolean, look: HomeLook) {
-  const k = new Pen();
-  const H = HOUSES[look.design ?? 'starter'] ?? HOUSES.starter;
-  const WALL = look.wall ?? '#f3ead8';
-  const FENCE = '#e6dcc6', COPING = '#a8a29e';
-  const hw = w / 2 - 0.06, hd = d / 2 - 0.06;
-  // The yard: interlocking paving, a strip of lawn, the driveway.
-  k.flat('#b9b2a6', -hw, -hd, hw, hd, 0.012);
-  if (!low) for (let z = -hd + 0.25; z < hd; z += 0.25) k.flat('#a39b8e', -hw, z - 0.006, hw, z + 0.006, 0.014);
-  k.flat(LAWN, -hw + 0.1, -hd + 0.1, -hw + 0.75, hd - 0.9, 0.016);
-  // The drive from the gate, a front lawn with a flower bed beside it.
-  k.flat('#8f887c', -0.45, 0.2, 0.45, hd, 0.015);
-  k.flat(LAWN, 0.62, 0.45, hw - 0.1, hd - 0.12, 0.016);
-  if (!low) for (let i = 0; i < 5; i++) k.box(['#dc2626', '#facc15', '#ec4899'][i % 3], [0.75 + i * 0.22, 0.04, hd - 0.22], [0.12, 0.06, 0.1]);
-  // The fence: a block wall with pillars and coping, a rail of spikes on top.
-  const FH = 0.55;
-  const wall = (cx: number, cz: number, lx: number, lz: number) => {
-    k.box(FENCE, [cx, FH / 2, cz], [lx, FH, lz]);
-    k.box(COPING, [cx, FH + 0.02, cz], [lx + 0.03, 0.04, lz + 0.03]);
-    if (!low) k.box(DARK, [cx, FH + 0.09, cz], [lx > lz ? lx : 0.012, 0.1, lz > lx ? lz : 0.012]);
-  };
-  const T = 0.08;
-  const gate = 1.0;
-  wall(0, -hd, w - 0.12, T);
-  wall(-hw, 0, T, d - 0.12);
-  wall(hw, 0, T, d - 0.12);
-  const fl = hw - gate / 2 - 0.08;
-  wall(-(gate / 2 + 0.08 + fl / 2), hd, fl, T);
-  wall(gate / 2 + 0.08 + fl / 2, hd, fl, T);
-  for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [-hw, 0], [hw, 0], [0, -hd]]) k.box(FENCE, [x, 0.31, z], [0.14, 0.62, 0.14]);
-  // The gate: capped pillars with lamps, the black steel leaves with their bars and a gold band.
-  for (const s of [-1, 1]) {
-    k.box('#d6cdb8', [s * (gate / 2 + 0.04), 0.36, hd], [0.16, 0.72, 0.16]);
-    k.box(COPING, [s * (gate / 2 + 0.04), 0.74, hd], [0.2, 0.04, 0.2]);
-    k.box(`lamp${s > 0 ? 1 : 0}`, [s * (gate / 2 + 0.04), 0.81, hd], [0.08, 0.1, 0.08]);
-    groundPool(k, s * (gate / 2 + 0.04), hd + 0.15, 0.4, 0.3);
-  }
-  k.box(DARK, [0, 0.32, hd], [gate - 0.04, 0.6, 0.04]);
-  if (!low) for (let i = 0; i < 9; i++) k.box('#111827', [-gate / 2 + 0.07 + i * ((gate - 0.14) / 8), 0.32, hd + 0.025], [0.02, 0.56, 0.01]);
-  k.box(GOLD, [0, 0.5, hd + 0.026], [gate - 0.08, 0.03, 0.012]);
-  // The house.
-  const hz = -hd + 0.25 + H.d / 2;
-  const hx = 0.3;
-  const fh = 0.72;
-  const top = fh * H.floors;
-  k.box('#9c958a', [hx, 0.05, hz], [H.w + 0.08, 0.1, H.d + 0.08]);
-  k.box(WALL, [hx, top / 2 + 0.05, hz], [H.w, top, H.d]);
-  if (H.floors > 1) k.box('#d6cdb8', [hx, fh + 0.05, hz], [H.w + 0.04, 0.05, H.d + 0.04]);
-  const ey = top + 0.05;
-  if (look.design === 'flats') {
-    // A block of flats: a flat roof behind a parapet, the stair tower poking up.
-    k.box('#d6cdb8', [hx, ey + 0.08, hz], [H.w + 0.06, 0.16, H.d + 0.06]);
-    k.box('#9ca3af', [hx, ey + 0.165, hz], [H.w - 0.08, 0.01, H.d - 0.08]);
-    k.box(WALL, [hx - H.w / 2 + 0.3, ey + 0.3, hz - 0.2], [0.4, 0.5, 0.5]);
-    hipRoof(k, H.roof, hx - H.w / 2 + 0.3, hz - 0.2, 0.5, 0.6, ey + 0.55, 0.12);
-  } else {
-    hipRoof(k, H.roof, hx, hz, H.w + 0.3, H.d + 0.3, ey, Math.min(0.7, H.d * 0.38), '#1c1917');
-  }
-  // Windows with burglary-proof bars, front and sides.
-  const zf = hz + H.d / 2;
-  const nW = Math.max(2, Math.round(H.w / 0.55));
-  for (let f = 0; f < H.floors; f++) {
-    const wy = 0.05 + f * fh + fh * 0.55;
-    for (let i = 0; i < nW; i++) {
-      const x = hx - H.w / 2 + (i + 0.5) * (H.w / nW);
-      if (f === 0 && i === Math.floor(nW / 2)) continue;
-      k.box(`glass${(i + f) % 4}`, [x, wy, zf + 0.005], [0.26, 0.26, 0.02]);
-      k.box('#f8fafc', [x, wy - 0.15, zf + 0.02], [0.32, 0.03, 0.04]);
-      if (!low) for (const dx of [-0.07, 0, 0.07]) k.box(DARK, [x + dx, wy, zf + 0.018], [0.012, 0.26, 0.008]);
-    }
-    for (const s of [-1, 1]) k.box(`glass${f + 1}`, [hx + s * (H.w / 2 + 0.005), wy, hz], [0.02, 0.26, 0.3]);
-  }
-  // The front door (a steel security door) and the porch over it.
-  const dx = hx - H.w / 2 + (Math.floor(nW / 2) + 0.5) * (H.w / nW);
-  k.box('#3b2a1a', [dx, 0.33, zf + 0.008], [0.24, 0.48, 0.02]);
-  k.box('#7c4a1e', [dx, 0.33, zf + 0.018], [0.18, 0.42, 0.01]);
-  if (H.porch) {
-    k.box(WALL, [dx, fh + 0.02, zf + 0.25], [0.7, 0.06, 0.5]);
-    for (const s of [-1, 1]) k.post(WHITE, [dx + s * 0.3, 0.1, zf + 0.45], 0.03, fh - 0.08, 8);
-    k.box('#9c958a', [dx, 0.04, zf + 0.25], [0.7, 0.08, 0.5]);
-    if (H.floors > 1) {
-      // The balcony over the porch.
-      k.box('#e5e7eb', [dx, fh + 0.12, zf + 0.47], [0.7, 0.14, 0.03]);
-      k.box('glass2', [dx, fh + 0.35, zf + 0.008], [0.3, 0.36, 0.02]);
-    }
-  } else {
-    k.box(H.roof, [dx, 0.62, zf + 0.12], [0.45, 0.03, 0.24], [0.2, 0, 0]);
-  }
-  // A security light over the door.
-  k.box('lamp2', [dx, 0.6, zf + 0.03], [0.06, 0.04, 0.04]);
-  groundPool(k, dx, zf + 0.35, 0.5, 0.25);
-  // The GP tank on its stand at the back corner.
-  const tx = -hw + 0.35, tz = -hd + 0.35;
-  for (const ox of [-0.16, 0.16]) for (const oz of [-0.16, 0.16]) k.post('#64748b', [tx + ox, 0, tz + oz], 0.018, 1.25, 4);
-  k.box('#64748b', [tx, 1.25, tz], [0.42, 0.04, 0.42]);
-  k.post('#2563eb', [tx, 1.27, tz], 0.24, 0.4, 10);
-  k.post('#1d4ed8', [tx, 1.67, tz], 0.24, 0.05, 10, 0.5);
-  if (!low) for (let y = 0.35; y < 1.2; y += 0.3) k.box('#64748b', [tx, y, tz - 0.16], [0.32, 0.015, 0.015]);
-  // The generator in its house by the gate.
-  const gx = -hw + 0.45, gz = hd - 0.35;
-  k.box(FENCE, [gx, 0.22, gz - 0.1], [0.55, 0.44, 0.04]);
-  k.box(ZINC, [gx, 0.46, gz], [0.6, 0.03, 0.36], [-0.12, 0, 0]);
-  k.post(WOOD, [gx - 0.26, 0, gz + 0.15], 0.015, 0.45, 4);
-  k.post(WOOD, [gx + 0.26, 0, gz + 0.15], 0.015, 0.45, 4);
-  const big = look.design === 'mansion' || look.design === 'flats';
-  k.box(big ? '#15803d' : '#dc2626', [gx, 0.1, gz], big ? [0.42, 0.2, 0.22] : [0.26, 0.17, 0.18]);
-  k.box(DARK, [gx, 0.02, gz], big ? [0.44, 0.04, 0.24] : [0.28, 0.04, 0.2]);
-  k.box(DARK, [gx + 0.1, 0.22, gz - 0.04], [0.025, 0.08, 0.025]);
-  // Trees and the extras.
-  tree(k, hw - 0.35, -hd + 0.35, 0.7, low, LEAF[1]);
-  if (!low) {
-    // The DSTV dish on the roof edge.
-    k.post('#e5e7eb', [hx + H.w / 2 - 0.25, ey, hz + H.d / 2 - 0.05], 0.12, 0.05, 8, 1.4);
-    k.box(DARK, [hx + H.w / 2 - 0.25, ey + 0.08, hz + H.d / 2 - 0.02], [0.02, 0.1, 0.02]);
-    // The washing line behind the house.
-    k.box(DARK, [hx, 0.5, -hd + 0.12], [H.w * 0.8, 0.008, 0.008]);
-    for (let i = 0; i < 4; i++) k.box(ROBES[(i * 3 + 2) % ROBES.length], [hx - H.w * 0.3 + i * (H.w * 0.2), 0.42, -hd + 0.12], [0.14, 0.16, 0.01]);
-    // Flower pots by the door.
-    for (const s of [-1, 1]) {
-      k.post('#9a4f2a', [dx + s * 0.4, 0, zf + 0.12], 0.05, 0.08, 6, 1.3);
-      k.shape(LEAF[1], LUMP(0), [dx + s * 0.4, 0.12, zf + 0.12], [0.07, 0.06, 0.07]);
-    }
-    if (H.car) {
-      // The car on the driveway, nose to the gate.
-      const cx = 0.6, cz = hd - 0.45;
-      k.box('#0f172a', [cx, 0.11, cz], [0.32, 0.12, 0.6]);
-      k.box('#0f172a', [cx, 0.21, cz - 0.04], [0.28, 0.1, 0.32]);
-      k.box('glass3', [cx, 0.215, cz + 0.125], [0.26, 0.07, 0.01]);
-      for (const ox of [-0.16, 0.16]) for (const oz of [-0.19, 0.19]) k.box(DARK, [cx + ox, 0.05, cz + oz], [0.04, 0.1, 0.1]);
-    }
-  }
+function buildHome(w: number, d: number, low: boolean, look: HomeLook): Built {
+  const k = new HousePen();
+  const [W, D] = MAP_HOUSE[look.design] ?? MAP_HOUSE.starter;
+  const z0 = -d / 2 + 0.32, x0 = Math.max(-w / 2 + 0.3, 0.2 - W / 2);
+  drawHouse(k, {
+    design: look.design, stage: 4, wall: look.wall, ext: look.ext, extensions: look.extensions, plot: 'full', cars: look.cars, seed: look.seed,
+  }, { w, d, fh: 0.72, house: { x0, z0, x1: Math.min(w / 2 - 0.3, x0 + W), z1: z0 + D } }, low);
   return k.done();
 }
 
 function homeLook(): HomeLook {
   const s = useGame.getState();
   const id = s.homePropertyId;
-  const design = id ? s.properties.find((p) => p.id === id)?.design ?? null : null;
-  return { design, wall: paintHex(s.housePaint[id ?? 'starter']?.outer) };
+  const home = id ? s.properties.find((p) => p.id === id) : undefined;
+  const design = home?.design && DESIGN_WALL[home.design] ? home.design : 'starter';
+  return {
+    design,
+    wall: paintHex(s.housePaint[id ?? 'starter']?.outer) ?? DESIGN_WALL[design],
+    ext: exteriorOf(design, home?.exterior),
+    extensions: home?.extensions ?? [],
+    cars: s.ownedCars.slice(-2).map((c) => CAR_BY_ID[c]?.color ?? '#475569'),
+    seed: seedOf(id ?? 'starter'),
+  };
 }
 
 /* ---------- The models ---------- */
@@ -1589,5 +1466,5 @@ export function Fountain({ w, d }: Size) {
 }
 export function Home({ w, d }: Size) {
   const [look] = useState(homeLook);
-  return <KitModel build={(low) => buildHome(w, d, low, look)} deps={[w, d, look.design, look.wall]} />;
+  return <KitModel build={(low) => buildHome(w, d, low, look)} deps={[w, d, JSON.stringify(look)]} />;
 }

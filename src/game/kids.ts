@@ -254,12 +254,15 @@ export function moodOfKid(s: KidSnap): Mood {
 }
 export const MOOD_FACE: Record<Mood, string> = { happy: '😄', okay: '🙂', sad: '😢', sick: '🤒' };
 
-/** The worst thing about a child right now, for a chip, a toast or a push. Null when all is well. */
-export function kidAlert(name: string, sex: KidSex, stage: KidStage, s: KidSnap): { key: string; title: string; body: string; urgent: boolean; care: CareId } | null {
+/**
+ * The worst thing about a child right now, for a chip, a toast or a push. Null when all is well. `among` limits it to
+ * those alerts (needs, or 'sick'): a push says what is new, not what was already said.
+ */
+export function kidAlert(name: string, sex: KidSex, stage: KidStage, s: KidSnap, among?: string[]): { key: string; title: string; body: string; urgent: boolean; care: CareId } | null {
   const she = sex === 'f' ? 'she' : 'he';
   const her = sex === 'f' ? 'her' : 'him';
-  if (s.sick) return { key: 'sick', title: `🤒 ${name} is sick`, body: `Take ${her} to the clinic before Social Welfare hears about it.`, urgent: true, care: 'clinic' };
-  const low = alertsOf(s).sort((a, b) => s[a] - s[b])[0];
+  if (s.sick && (!among || among.includes('sick'))) return { key: 'sick', title: `🤒 ${name} is sick`, body: `Take ${her} to the clinic before Social Welfare hears about it.`, urgent: true, care: 'clinic' };
+  const low = alertsOf(s).filter((k) => !among || among.includes(k)).sort((a, b) => s[a] - s[b])[0];
   if (!low) return null;
   const urgent = s[low] <= 5;
   if (low === 'hunger') return { key: low, title: `👶🏾 ${name} is hungry`, body: stage === 'newborn' || stage === 'baby' ? `Crying for a bottle. Come and feed ${her}.` : `${cap(she)} wants food. Come and feed ${her}.`, urgent, care: 'feed' };

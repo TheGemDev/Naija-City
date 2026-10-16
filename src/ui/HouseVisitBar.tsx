@@ -14,6 +14,7 @@ import { sfx } from '../game/sfx';
 import { Icon } from './Icons';
 import { ActionRow } from './Sheets';
 import { HouseFacts } from './HouseCard';
+import { CribRate } from './CribRate';
 
 /** While burgling, keep checking the house cameras; walking into a view cone gets the thief caught. */
 function useCameraWatch(on: boolean) {
@@ -216,6 +217,7 @@ export function HouseVisitBar() {
     <div className={`house-visit-bar${visit.burglary ? ' burglary' : ''}`}>
       <span className="visit-name"><Icon name={visit.burglary ? 'break-in' : 'home'} size={15} /> <HouseFacts title={`@${visit.ownerUsername}'s house`} address={visit} /></span>
       <div className="visit-buttons">
+      {!carrying && !selected && <CribRate visit={visit} />}
       {visit.meterBypassed && !carrying && !visit.burglary && (
         <button className="danger" disabled={busy} title="You notice a dodgy wire from the pole to their meter" onClick={() => void reportMeter()}>
           🔌 Report meter

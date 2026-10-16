@@ -12,6 +12,7 @@ import { USERNAME_RE } from './social';
 import { SNAP_KEEP_MS } from './snaps';
 import { FEED_KEEP_MS } from './feed';
 import { shopRow, tweetAuthor } from './og';
+import { profileKidsSql } from './kids';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -25,13 +26,16 @@ export async function readProfile(db: D1Database, username: string): Promise<Res
   const p = await db
     .prepare(
       `SELECT p.uid, p.username, p.name, COALESCE(w.balance, 0) AS balance,
-              (SELECT COUNT(*) FROM estate_plots e WHERE e.uid = p.uid) AS plots
+              (SELECT COUNT(*) FROM estate_plots e WHERE e.uid = p.uid) AS plots,
+              ${profileKidsSql} AS children
        FROM players p LEFT JOIN wallets w ON w.uid = p.uid WHERE p.username = ?`,
     )
     .bind(name)
-    .first<{ uid: string; username: string; name: string | null; balance: number; plots: number }>();
+    .first<{ uid: string; username: string; name: string | null; balance: number; plots: number; children: string | null }>();
   if (!p) return json({ error: 'Not found' }, 404);
-  return json({ uid: p.uid, username: p.username, name: p.name, plots: p.plots });
+  // The children at home (Phone → Adopt): first names and ages, shown on their profile card.
+  const children = JSON.parse(p.children ?? '[]') as { name: string; sex: string; bornAt: number }[];
+  return json({ uid: p.uid, username: p.username, name: p.name, plots: p.plots, children });
 }
 
 /** GET /api/plot/<region>/<slot>: public card for a plot. */

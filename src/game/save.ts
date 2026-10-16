@@ -3,6 +3,7 @@
 import { avatar, resetAvatar } from './avatar';
 import { loadMeter } from './meterBypass';
 import { RENAMED_ITEMS } from './catalog';
+import { cleanFinishes } from './finishes';
 import { dayOf, GOV_WEEKLY_RENT, houseStaffOnly, useGame, type GameState } from './store';
 import { STARTER_WARDROBE } from './wardrobe';
 import { STARTER_ANDROID } from './phones';
@@ -20,7 +21,7 @@ const SAVED_KEYS = [
   'started', 'name', 'look', 'origin', 'loanOwed', 'debtOwed', 'govRentOwed', 'govRentPaidThrough', 'personalStaff', 'wardrobe', 'minutes', 'money', 'needs', 'knowledge', 'cooking',
   'items', 'furnitureInventory', 'jobId', 'jobCity', 'workedDay', 'workDays', 'campaign', 'governmentOffice',
   'goodDeeds', 'notoriety', 'streetStory', 'storyLog', 'power', 'waterTank', 'sallahRam', 'txns', 'deliveries', 'view', 'insideId', 'hotelStays', 'estateId', 'estateNo', 'investments',
-  'ownedCars', 'ownedJets', 'jetWear', 'selectedCar', 'carCondition', 'carFuel', 'phone', 'ownedPhones', 'freePhone', 'properties', 'homePropertyId', 'activeHouseId', 'wallEdits', 'housePaint', 'destinationId', 'homeState',
+  'ownedCars', 'ownedJets', 'jetWear', 'selectedCar', 'carCondition', 'carFuel', 'phone', 'ownedPhones', 'freePhone', 'properties', 'homePropertyId', 'activeHouseId', 'wallEdits', 'housePaint', 'houseFinish', 'destinationId', 'homeState',
   'stats', 'storyFlags', 'achievements', 'recentStories', 'fuelCans', 'nepaOwed', 'meter', 'nepaWarnedDay', 'nepaBilledDay', 'owambeInvite', 'owambeInviteCity', 'houseStation', 'legacy', 'aliases',
 ] as const;
 
@@ -90,6 +91,8 @@ export function hydrate(data: SaveData) {
     activeHouseId: rest.activeHouseId ?? rest.homePropertyId ?? null,
     wallEdits: rest.wallEdits && typeof rest.wallEdits === 'object' ? rest.wallEdits : {},
     housePaint: rest.housePaint && typeof rest.housePaint === 'object' ? rest.housePaint : {},
+    // Saves from before finishes have none: every house is as built.
+    houseFinish: cleanFinishes(rest.houseFinish),
     furnitureInventory: renameItems(rest.furnitureInventory),
     aliases: rest.aliases && typeof rest.aliases === 'object' ? rest.aliases : {},
     campaign: rest.campaign ?? null,
@@ -164,7 +167,7 @@ export function startAutosave() {
   // Save right away on big moments so a refresh never loses them.
   const unsub = useGame.subscribe((s, p) => {
     if (
-      s.started !== p.started || s.items !== p.items || s.housePaint !== p.housePaint || s.jobId !== p.jobId || s.jobCity !== p.jobCity ||
+      s.started !== p.started || s.items !== p.items || s.housePaint !== p.housePaint || s.houseFinish !== p.houseFinish || s.jobId !== p.jobId || s.jobCity !== p.jobCity ||
       s.aliases !== p.aliases || s.campaign !== p.campaign ||
       s.governmentOffice !== p.governmentOffice || s.money !== p.money ||
       s.streetStory !== p.streetStory || s.storyLog !== p.storyLog ||

@@ -12,6 +12,7 @@
 
 import { IcosahedronGeometry } from 'three';
 import { clamp, frame, Glow, Kit, KitModel, prep, rng, scale, unitCyl, type Built, type RGB, type V3 } from '../placeKit';
+import { plantTree, savannaKind, shadeKind, type TreeKind } from '../trees';
 
 /* ---------- Colours ---------- */
 
@@ -28,10 +29,9 @@ const LINE = '#f8fafc';
 const LAWN = '#97c068';
 const LAWN_DARK = '#82ad57';
 const HEDGE = '#3f7d3a';
-const TREE_A = '#2f7d3b';
-const TREE_B = '#3f8f45';
-const TREE_C = '#4f9a3c';
-const TRUNK = '#6b4a2f';
+/** Shrub looks for bush(): wild scrub round the rocks, bougainvillea in the gardens. */
+const SCRUB = '#557f35';
+const BLOOM = '#4d8a3a';
 const STEEL = '#94a3b8';
 const DARK = '#1f2937';
 const DOOR = '#3b2a1a';
@@ -176,27 +176,19 @@ function flag(kit: Kit, x: number, z: number, h: number, cols: string[] = NIGERI
   cols.forEach((c, i) => kit.box(c, [x + 0.012 + sw * (i + 0.5), h - 0.09 * size, z], [sw, 0.16 * size, 0.008]));
 }
 
-function tree(kit: Kit, rand: () => number, x: number, z: number, s = 1) {
-  kit.post(TRUNK, [x, 0, z], 0.035 * s, 0.32 * s, 5, 0.7);
-  const c = [TREE_A, TREE_B, TREE_C][Math.floor(rand() * 3)];
-  kit.shape(c, ICO, [x, 0.42 * s, z], [0.26 * s, 0.22 * s, 0.26 * s], [0, rand() * 3, 0]);
+/** A shade tree from the tree kit (trees.ts): neem, mango or a flame tree unless `kind` says. */
+function tree(kit: Kit, rand: () => number, x: number, z: number, s = 1, low = false, kind?: TreeKind) {
+  plantTree(kit, kind ?? shadeKind(x, z), x, z, 0.66 * s, { low, seed: rand() });
 }
 
-/** A palm: a leaning trunk and a crown of fronds. */
+/** A coconut palm from the tree kit: a curved, ringed trunk and a crown of arching fronds. */
 function palm(kit: Kit, rand: () => number, x: number, z: number, s = 1, low = false) {
-  const h = 0.75 * s;
-  kit.post('#7a5c3c', [x, 0, z], 0.03 * s, h, 5, 0.7);
-  const n = low ? 4 : 6;
-  const r0 = rand() * TAU;
-  for (let i = 0; i < n; i++) {
-    const a = r0 + (i / n) * TAU;
-    const f = frame([x, h, z], [0, -a, 0]);
-    kit.box(i % 2 ? TREE_A : TREE_C, [0.13 * s, -0.03 * s, 0], [0.28 * s, 0.015, 0.07 * s], [0, 0, -0.35], f);
-  }
+  plantTree(kit, 'coconut', x, z, 0.58 * s, { low, seed: rand() });
 }
 
-function bush(kit: Kit, rand: () => number, x: number, z: number, s = 1, c = HEDGE) {
-  kit.shape(c, ICO, [x, 0.06 * s, z], [0.14 * s, 0.1 * s, 0.14 * s], [0, rand() * 3, 0]);
+/** A shrub from the tree kit: hedge green, wild scrub (SCRUB) or bougainvillea (BLOOM). */
+function bush(kit: Kit, rand: () => number, x: number, z: number, s = 1, c = HEDGE, low = false) {
+  plantTree(kit, 'shrub', x, z, 0.58 * s, { low, seed: rand(), palette: c === SCRUB ? 1 : c === BLOOM ? 2 : 0 });
 }
 
 /** A parked car, nose along `yaw` (0 faces +z). */
@@ -388,12 +380,12 @@ function govHouse(w: number, d: number, low: boolean): Built {
   for (const s of [-1, 1]) {
     kit.box(HEDGE, [s * 0.34, 0.07, (zc + rc + d / 2) / 2], [0.08, 0.1, Math.max(0.2, d / 2 - zc - rc - 0.2)]);
     palm(kit, rand, s * (W / 2 + 0.25), zf + 0.15, 1.1, low);
-    tree(kit, rand, s * (w / 2 - 0.35), -d / 2 + 0.35, 1.1);
-    tree(kit, rand, s * (w / 2 - 0.4), zc + 0.1, 1);
+    tree(kit, rand, s * (w / 2 - 0.35), -d / 2 + 0.35, 1.1, low);
+    tree(kit, rand, s * (w / 2 - 0.4), zc + 0.1, 1, low);
     if (!low) {
       tree(kit, rand, s * (w / 2 - 0.35), 0, 0.9);
       tree(kit, rand, s * (W / 2 - 0.4), -d / 2 + 0.25, 0.8);
-      for (let i = 0; i < 4; i++) bush(kit, rand, s * (mw / 2 + 0.25 + i * 0.32), zf + 0.12, 0.9, i % 2 ? HEDGE : '#4d8a3a');
+      for (let i = 0; i < 4; i++) bush(kit, rand, s * (mw / 2 + 0.25 + i * 0.32), zf + 0.12, 0.9, i % 2 ? HEDGE : BLOOM);
     }
   }
   for (const s of [-1, 1]) lamp(kit, glow, s * 0.36, zc + rc + 0.45, 0.42);
@@ -482,8 +474,8 @@ function asoRock(w: number, d: number, low: boolean): Built {
   }
   foot.forEach(([x, z], i) => {
     if (i % 4 === 0) kit.shape(i % 8 ? '#8d867b' : '#9a9388', ICO, [x, 0.08, z], [0.22, 0.16, 0.18], [0, rand() * 3, 0]);
-    else if (i % 4 === 1) tree(kit, rand, x, z, 0.9 + rand() * 0.4);
-    else bush(kit, rand, x, z, 1.2 + rand() * 0.8, i % 2 ? HEDGE : '#557f35');
+    else if (i % 4 === 1) tree(kit, rand, x, z, 0.9 + rand() * 0.4, low, savannaKind(x, z));
+    else bush(kit, rand, x, z, 1.2 + rand() * 0.8, i % 2 ? HEDGE : SCRUB, low);
   });
   // The edge of the bush along the front and sides, where the map's streets meet it.
   const ring = low ? 8 : 16;
@@ -491,8 +483,8 @@ function asoRock(w: number, d: number, low: boolean): Built {
     const x = -w / 2 + 0.35 + (i / (ring - 1)) * (w - 0.7);
     if (height(x, d / 2 - 0.5) > 0.02 || rand() < 0.2) continue;
     const z = d / 2 - 0.3 - rand() * 0.45;
-    if (i % 3 === 1) bush(kit, rand, x + (rand() - 0.5) * 0.3, z, 1.3 + rand() * 0.6, '#557f35');
-    else tree(kit, rand, x + (rand() - 0.5) * 0.3, z, 0.8 + rand() * 0.5);
+    if (i % 3 === 1) bush(kit, rand, x + (rand() - 0.5) * 0.3, z, 1.3 + rand() * 0.6, SCRUB, low);
+    else tree(kit, rand, x + (rand() - 0.5) * 0.3, z, 0.8 + rand() * 0.5, low, savannaKind(x, z));
   }
   return { parts: kit.build() };
 }
@@ -567,9 +559,9 @@ function zumaRock(w: number, d: number, low: boolean): Built {
     const p = surf(a, 0, 0.08 + rand() * 0.2);
     if (Math.abs(p[0]) > w / 2 - 0.2 || Math.abs(p[2]) > d / 2 - 0.2) continue;
     if (k % 3 === 0) kit.shape('#9a9388', ICO, [p[0], 0.1, p[2]], [0.2, 0.17, 0.16], [0, rand() * 3, 0]);
-    else bush(kit, rand, p[0], p[2], 1.1 + rand() * 0.7, k % 2 ? HEDGE : '#557f35');
+    else bush(kit, rand, p[0], p[2], 1.1 + rand() * 0.7, k % 2 ? HEDGE : SCRUB, low);
   }
-  for (const [x, z] of [[-w / 2 + 0.35, d / 2 - 0.3], [w / 2 - 0.35, -d / 2 + 0.35], [-w / 2 + 0.35, -d / 2 + 0.4], [w / 2 - 0.4, d / 2 - 0.35]]) tree(kit, rand, x, z, 1);
+  for (const [x, z] of [[-w / 2 + 0.35, d / 2 - 0.3], [w / 2 - 0.35, -d / 2 + 0.35], [-w / 2 + 0.35, -d / 2 + 0.4], [w / 2 - 0.4, d / 2 - 0.35]]) tree(kit, rand, x, z, 1, low, savannaKind(x, z));
   return { parts: kit.build() };
 }
 
@@ -719,8 +711,8 @@ function supremeCourt(w: number, d: number, low: boolean): Built {
   for (const s of [-1, 1]) {
     flag(kit, s * 0.42, zf + 0.42, 1.0);
     lamp(kit, glow, s * 0.42, d / 2 - 0.35, 0.42);
-    tree(kit, rand, s * (w / 2 - 0.3), d / 2 - 0.35, 0.9);
-    tree(kit, rand, s * (w / 2 - 0.3), -d / 2 + 0.35, 0.9);
+    tree(kit, rand, s * (w / 2 - 0.3), d / 2 - 0.35, 0.9, low);
+    tree(kit, rand, s * (w / 2 - 0.3), -d / 2 + 0.35, 0.9, low);
   }
   const lx0 = BW / 2 + 0.35, lx1 = w / 2 - 0.1;
   if (lx1 - lx0 > 0.3) {
@@ -1043,8 +1035,8 @@ function ecowas(w: number, d: number, low: boolean): Built {
   }
   // Trees behind and round the sides, a couple of diplomatic cars on the drive.
   for (const s of [-1, 1]) {
-    tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.9);
-    tree(kit, rand, s * (w / 2 - 0.25), d / 2 - 0.3, 0.8);
+    tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.9, low);
+    tree(kit, rand, s * (w / 2 - 0.25), d / 2 - 0.3, 0.8, low);
     const lp = at(s * span * 0.5, R0 * 0.55, 0);
     lamp(kit, glow, lp[0], lp[2], 0.42);
   }
@@ -1081,8 +1073,8 @@ function nass(w: number, d: number, low: boolean): Built {
     // Hedged lawns with rows of trees down the pool's sides.
     kit.box(HEDGE, [s * 0.52, 0.07, (zf + 0.55 + d / 2 - 0.1) / 2], [0.06, 0.08, d / 2 - 0.65 - zf]);
     const rows = Math.max(1, Math.floor((d / 2 - 0.3 - zf - 0.7) / 0.42));
-    for (let i = 0; i <= rows; i++) tree(kit, rand, s * 0.72, zf + 0.75 + i * 0.42, 0.75);
-    if (!low) for (let i = 0; i <= rows; i++) tree(kit, rand, s * (w / 2 - 0.35), zf + 0.75 + i * 0.42, 0.8);
+    for (let i = 0; i <= rows; i++) tree(kit, rand, s * 0.72, zf + 0.75 + i * 0.42, 0.75, low);
+    if (!low) for (let i = 0; i <= rows; i++) tree(kit, rand, s * (w / 2 - 0.35), zf + 0.75 + i * 0.42, 0.8, low);
   }
   kit.box(KERB, [0, 0.055, (zf + 0.6 + d / 2 - 0.15) / 2], [0.6, 0.05, d / 2 - 0.15 - zf - 0.6]);
   kit.flat(WATER, -0.26, zf + 0.62, 0.26, d / 2 - 0.17, 0.085);
@@ -1100,7 +1092,7 @@ function nass(w: number, d: number, low: boolean): Built {
     // The chambers' roof lights over the Senate's red and the House's green.
     kit.box('#cbd5e1', [x, WH + 0.09, zc], [WW * 0.56, 0.04, WD * 0.46]);
     kit.box(s > 0 ? '#14532d' : '#7f1d1d', [x, WH + 0.115, zc], [WW * 0.46, 0.02, WD * 0.36]);
-    if (!low) tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.8);
+    if (!low) tree(kit, rand, s * (w / 2 - 0.25), -d / 2 + 0.3, 0.8, low);
   }
   // The base: white, a pointed-arch arcade on every side.
   kit.box(WHITE, [0, BH / 2, zc], [B, BH, B]);
@@ -1385,7 +1377,7 @@ function secretariat(w: number, d: number, low: boolean): Built {
   for (const s of [-1, 1]) {
     flag(kit, s * 0.45, ez + 0.45, 1.05);
     lamp(kit, glow, s * 0.32, (ez + d / 2) / 2 + 0.2, 0.42);
-    tree(kit, rand, s * (w / 2 - 0.22), zc - D / 2 - 0.05, 0.8);
+    tree(kit, rand, s * (w / 2 - 0.22), zc - D / 2 - 0.05, 0.8, low);
   }
   // The queue at the door and the people waiting under the canopy.
   if (!low) for (let i = 0; i < 9; i++) person(kit, rand, (i % 2 ? 0.06 : -0.06) + (rand() - 0.5) * 0.04, ez + 0.35 + i * 0.09);

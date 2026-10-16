@@ -17,6 +17,7 @@ import { useFrame } from '@react-three/fiber';
 import { Color, DoubleSide, IcosahedronGeometry, Matrix4, MeshStandardMaterial, Object3D, Vector3, type InstancedMesh } from 'three';
 import { useLowPerf } from '../../game/quality';
 import { clamp, frame, Glow, Kit, KitModel, prep, rng, scale, unitCyl, type RGB, type V3 } from '../placeKit';
+import { plantTree, shadeKind, type TreeKind } from '../trees';
 
 /* ---------- Colours ---------- */
 
@@ -49,7 +50,6 @@ const TARP = ['#2563eb', '#1d4ed8'];
 const SKIN = ['#5b3a24', '#6d4329', '#4a2e1c'];
 const CLOTHES = ['#dc2626', '#2563eb', '#facc15', '#16a34a', '#f97316', '#f8fafc', '#9333ea', '#0f172a', '#db2777', '#0d9488'];
 const CARS = ['#f8fafc', '#111827', '#9ca3af', '#1d4ed8', '#b91c1c', '#e5e7eb', '#334155', '#facc15'];
-const NEEM = ['#3f7d2a', '#2f6b25', '#4d8f31'];
 const WARM: RGB = [1, 0.82, 0.5];
 
 /** `c` a shade darker (k < 1) or lighter (k > 1). */
@@ -157,37 +157,13 @@ function okada(c: Ctx, x: number, z: number, yaw: number, col = '#b91c1c') {
   k.box(STEEL, [0, 0.16, 0.11], [0.14, 0.012, 0.012], undefined, f);
 }
 
-/** A shade tree: a trunk and a crown or three (one in low mode). */
-function tree(c: Ctx, x: number, z: number, s = 1, tone?: string) {
-  const col = tone ?? pick(c, NEEM);
-  c.kit.post(WOOD_DARK, [x, 0.04, z], 0.045 * s, 0.42 * s, 5, 0.7);
-  c.kit.shape(col, ICO, [x, 0.6 * s, z], [0.32 * s, 0.26 * s, 0.32 * s], [0, c.r() * 3, 0]);
-  if (!c.low) {
-    c.kit.shape(shade(col, 1.12), ICO, [x + 0.14 * s, 0.68 * s, z + 0.08 * s], [0.2 * s, 0.17 * s, 0.2 * s], [0, c.r() * 3, 0]);
-    c.kit.shape(shade(col, 0.88), ICO, [x - 0.15 * s, 0.55 * s, z - 0.06 * s], [0.2 * s, 0.17 * s, 0.2 * s], [0, c.r() * 3, 0]);
-  }
+/** A shade tree from the tree kit (trees.ts): neem, mango or now and then a flame tree, or the `kind` asked for. */
+function tree(c: Ctx, x: number, z: number, s = 1, kind?: TreeKind) {
+  plantTree(c.kit, kind ?? shadeKind(x, z), x, z, 0.9 * s, { low: c.low, y: 0.04 });
 }
-/** A coconut palm: a leaning trunk and a star of drooping fronds. */
-function palm(c: Ctx, x: number, z: number, h = 1.1, lean = 0.12) {
-  const k = c.kit;
-  const yaw = c.r() * Math.PI * 2;
-  const lx = Math.cos(yaw) * lean, lz = Math.sin(yaw) * lean;
-  const pts: V3[] = [0, 0.4, 0.75, 1].map((t) => [x + lx * t * t, 0.04 + h * t, z + lz * t * t]);
-  for (let i = 0; i < pts.length - 1; i++) k.bar('#8b6b4a', pts[i], pts[i + 1], 0.05 - i * 0.008);
-  const top = pts[pts.length - 1];
-  const n = c.low ? 5 : 7;
-  for (let i = 0; i < n; i++) {
-    const a = yaw + (i / n) * Math.PI * 2;
-    const ca = Math.cos(a), sa = Math.sin(a), px = -sa, pz = ca;
-    const L = h * 0.42;
-    const mid: V3 = [top[0] + ca * L * 0.5, top[1] + 0.05, top[2] + sa * L * 0.5];
-    const tip: V3 = [top[0] + ca * L, top[1] - 0.12, top[2] + sa * L];
-    const wd = 0.07;
-    const key = i % 2 ? '#2f7d32' : '#3d9140';
-    k.quad(key, [top[0] + px * 0.02, top[1], top[2] + pz * 0.02], [top[0] - px * 0.02, top[1], top[2] - pz * 0.02], [mid[0] - px * wd, mid[1], mid[2] - pz * wd], [mid[0] + px * wd, mid[1], mid[2] + pz * wd], [0, 1, 0]);
-    k.tri(key, [mid[0] + px * wd, mid[1], mid[2] + pz * wd], [mid[0] - px * wd, mid[1], mid[2] - pz * wd], tip, [0, 1, 0]);
-  }
-  k.box('#5b4a2a', [top[0], top[1] - 0.05, top[2]], [0.08, 0.06, 0.08]);
+/** A coconut palm from the tree kit: a curved ringed trunk `h` tall under a star of arching fronds. */
+function palm(c: Ctx, x: number, z: number, h = 1.1) {
+  plantTree(c.kit, 'coconut', x, z, h / 1.3, { low: c.low, y: 0.04 });
 }
 /** A patio umbrella: a pole and a canopy of `cols` panels round it. */
 function umbrella(c: Ctx, x: number, z: number, r: number, h: number, cols: readonly string[], seg = 8, y = 0.04) {
@@ -1479,7 +1455,7 @@ function buildGolf(w: number, d: number, low: boolean) {
     if (Math.hypot(x - pondX, z - pondZ) < 0.7 || (x < -w / 2 + 2.4 && z > d / 2 - 1.0)) continue;
     if (trees.some(([tx, tz]) => Math.hypot(tx - x, tz - z) < 0.4)) continue;
     trees.push([x, z]);
-    tree(c, x, z, 0.85 + c.r() * 0.3, pick(c, ['#2f6b25', '#3f7d2a', '#255a20']));
+    tree(c, x, z, 0.85 + c.r() * 0.3, pick(c, ['neem', 'mango', 'neem'] as const));
   }
   // The clubhouse at the front, its carts and golfers.
   const cx = -w / 2 + 0.85, cz = d / 2 - 0.42, cw = 1.3, cd = 0.6;
@@ -1876,7 +1852,7 @@ function buildBeach(w: number, d: number, low: boolean) {
     kit.box(CAB[i % CAB.length], [x, 0.32, zb + 0.55], [0.38, 0.04, 0.34]);
     kit.box(CAB[i % CAB.length], [x, 0.17, zb + 0.7], [0.32, 0.26, 0.012]);
   }
-  for (let x = -w / 2 + 0.35; x < w / 2 - 0.2; x += low ? 1.3 : 0.75) palm(c, x + c.r() * 0.2, zb + 0.2 + c.r() * 0.15, 1.0 + c.r() * 0.3, 0.2);
+  for (let x = -w / 2 + 0.35; x < w / 2 - 0.2; x += low ? 1.3 : 0.75) palm(c, x + c.r() * 0.2, zb + 0.2 + c.r() * 0.15, 1.0 + c.r() * 0.3);
   // Umbrellas and loungers across the sand.
   const UMB = [['#ef4444', WHITE], ['#0ea5e9', WHITE], ['#facc15', '#f97316'], ['#22c55e', '#facc15'], ['#a855f7', WHITE]] as const;
   const uz0 = zb + 1.05, uz1 = zw - 0.35;

@@ -39,6 +39,7 @@ import { handleCommunity } from './community';
 import { handleGroups } from './groups';
 import { handleCareer } from './career';
 import { handleHangout } from './hangout';
+import { handleKids } from './kids';
 import { handleRentals } from './rentals';
 import { handleBlackMarket } from './blackmarket';
 import { handleShop, handleShopWebhook } from './shop';
@@ -538,6 +539,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const hangout = await handleHangout(req, env, ctx, user, path);
   if (hangout) return hangout;
+
+  const kids = await handleKids(req, env, ctx, user, path);
+  if (kids) return kids;
 
   const rentals = await handleRentals(req, env, ctx, user, path);
   if (rentals) return rentals;

@@ -15,7 +15,7 @@ import { useLowPerf, useQuality } from '../game/quality';
 import { useVisit } from '../game/visits';
 import { leaveHouseVisit } from '../net/visit';
 import { CLUB_SHOUTS, PLACE_SHOUTS, useMoneyRain, useShoutouts } from '../game/shoutout';
-import { placeHere } from '../game/city';
+import { cityMap, placeHere } from '../game/city';
 import { useSocial } from '../net/social';
 import { loadLoans, useLoans } from '../net/loans';
 import { ReactionToggle, ReactionTray, useReactions } from './Reactions';
@@ -44,6 +44,10 @@ import { useShift } from '../game/shiftGame';
 import { GazetteBanner } from './Gazette';
 import { WorkChip } from './WorkChip';
 import { isPrivateRoom } from '../game/villa';
+import { useShallow } from 'zustand/react/shallow';
+import { readRoute } from '../game/travelProgress';
+import { useTrip } from '../game/trip';
+import { regionOf } from '../game/regions';
 
 export function formatClock(minutes: number) {
   const h = Math.floor(hourOf(minutes));
@@ -537,21 +541,101 @@ function ChowChip() {
   );
 }
 
+/** How often the task card reads its progress: a few times a second is smooth enough, and costs nothing. */
+const TASK_READ_MS = 300;
+
+/**
+ * The task card's bar and time left, read on a timer. A trip's progress lives outside the store (the route in
+ * game/avatar.ts, game/travelProgress.ts reads it), so nothing would re-render the card as you move; and a task in
+ * hand ticks the store ten times a second, which the card does not need to follow.
+ */
+function useTaskReading() {
+  const [reading, setReading] = useState<{ pct: number; secs: number | null }>({ pct: 0, secs: null });
+  useEffect(() => {
+    let last = '';
+    const read = () => {
+      const s = useGame.getState();
+      const t = s.task;
+      let pct = 0;
+      let secs: number | null = null;
+      if (t?.phase === 'doing') {
+        pct = t.total > 0 ? 100 - (t.remaining / t.total) * 100 : 0;
+        secs = taskDurationSeconds(t.remaining, t.total, t.fast);
+      } else if (t) {
+        const route = readRoute(s.view, t, !!useVisit.getState().current);
+        if (route) {
+          pct = route.done * 100;
+          secs = Math.ceil(route.secs);
+        }
+      }
+      pct = Math.round(Math.max(0, Math.min(100, pct)) * 2) / 2;
+      const key = `${pct}|${secs}`;
+      if (key === last) return;
+      last = key;
+      setReading({ pct, secs });
+    };
+    read();
+    const id = setInterval(read, TASK_READ_MS);
+    // A new route (a new place, the next leg of a trip): measured straight away, before the first step is taken.
+    const unsub = useGame.subscribe((s, prev) => {
+      if (s.task?.label !== prev.task?.label || s.task?.phase !== prev.task?.phase) read();
+    });
+    return () => {
+      clearInterval(id);
+      unsub();
+    };
+  }, []);
+  return reading;
+}
+
+const timeLeft = (secs: number) => (secs <= 1 ? 'Arriving' : secs >= 120 ? `${Math.round(secs / 60)} min left` : `${secs} sec left`);
+
+/** On a trip to another city (game/trip.ts): where it ends, and which leg of it this is. */
+function useTripLine() {
+  const going = useTrip((s) => s.going);
+  const here = useGame((s) => cityMap(s.destinationId).id);
+  const inAir = useGame((s) => !!flightOf(s) || (!!s.task && s.view === 'place' && (s.insideId === 'airport' || s.insideId === 'station')));
+  if (!going) return null;
+  const legs = going.stop ? 2 : 3;
+  const landed = here === going.city;
+  const leg = landed ? legs : inAir ? 2 : 1;
+  const where = going.place && !going.stop ? `${going.place.name}, ${regionOf(going.city).name}` : going.home ? `home, ${regionOf(going.city).name}` : regionOf(going.city).name;
+  return { going, landed, title: `Trip to ${where}`, text: `Trip to ${where} · ${leg} of ${legs}` };
+}
+
 function TaskChip() {
-  const task = useGame((s) => s.task);
+  // Only what the card shows: not the whole task, which the clock replaces ten times a second.
+  const task = useGame(useShallow((s) => (s.task ? { label: s.task.label, icon: s.task.icon, phase: s.task.phase, actionId: s.task.actionId } : null)));
+  const boarding = useGame((s) => s.boarding);
   const cancel = useGame((s) => s.cancelTask);
-  // On shift, your post has its own card (ui/ShiftGame.tsx).
-  if (!task || task.actionId === 'walk' || (task.actionId === 'work' && task.phase === 'doing')) return null;
-  const pct = task.phase === 'doing' && task.total > 0 ? 100 - (task.remaining / task.total) * 100 : 0;
+  const { pct, secs } = useTaskReading();
+  const trip = useTripLine();
+  // Between the legs of a trip (the search at the gate, the moment after landing) there is no task: the trip still shows.
+  if (!task && trip) {
+    const rail = trip.going.via === 'rail';
+    return (
+      <div className="task-chip" role="status">
+        <span className="task-icon"><Emoji char={rail ? '🚆' : '✈️'} size={26} /></span>
+        <div className="task-body">
+          <b>{trip.title}</b>
+          <div className="bar"><i style={{ width: trip.landed ? '100%' : '0%' }} /></div>
+          <small>{trip.landed ? 'Landed · your ride is coming' : boarding ? 'Security check at the gate…' : 'Getting to the gate…'}</small>
+        </div>
+      </div>
+    );
+  }
+  // On shift, your post has its own card (ui/ShiftGame.tsx). A stroll you tapped out on the map needs no card.
+  if (!task || (task.actionId === 'walk' && task.label === 'Walking') || (task.actionId === 'work' && task.phase === 'doing')) return null;
   return (
     <div className="task-chip">
       <span className="task-icon"><Emoji char={task.icon} size={26} /></span>
       <div className="task-body">
         <b>{task.label}</b>
-        <div className="bar">
+        <div className="bar" role="progressbar" aria-label={task.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
           <i style={{ width: `${pct}%` }} />
         </div>
-        <small>{task.phase === 'walking' ? 'On the way…' : `${taskDurationSeconds(task.remaining, task.total, task.fast)} sec left`}</small>
+        <small>{secs !== null ? timeLeft(secs) : task.phase === 'walking' ? 'On the way…' : 'Almost done'}</small>
+        {trip && <small className="task-trip">{trip.text}</small>}
       </div>
       <button className="x" onClick={cancel} aria-label="Cancel">
         ✕

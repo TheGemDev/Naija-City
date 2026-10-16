@@ -13,17 +13,13 @@ import { Person, seatDrop, type Clip } from './Person';
 import { useVisit } from '../game/visits';
 import { sceneFor } from '../game/streetScenes';
 import { driveState } from '../game/driveState';
-import { CATCH } from '../game/crime';
-import { injured } from '../game/injury';
+import { onMap, routeSpeed } from '../game/travelProgress';
 import { flyHeli } from '../game/heli';
 
 export const TARGET_HEIGHT = 1.7;
-const WALK_SPEED = 2.4; // tiles per second
-const MAP_SPEED = 5; // travelling across the town map
 /** People on the town map, shrunk to match the cars and houses (the plumbob still marks you out). */
 export const MAP_SCALE = 0.5;
-/** The town map and the estates are both seen from above with small people. */
-export const onMap = (view: string) => view === 'city' || view === 'estate';
+export { onMap };
 
 export type { Clip };
 
@@ -143,8 +139,8 @@ export function Avatar() {
       const dz = tz - a.z;
       const dist = Math.hypot(dx, dz);
       const visiting = !!useVisit.getState().current;
-      const ride = s.task?.actionId === 'enter' && s.task.phase === 'walking' && (s.task.travelMode ?? 'walk') !== 'walk';
-      const step = Math.min(dt, 0.1) * (!visiting && onMap(s.view) ? MAP_SPEED * (ride ? 1.7 : 1) : WALK_SPEED) * (injured() ? CATCH.slowFactor : 1);
+      // The same pace the trip card in the HUD times you by (game/travelProgress.ts).
+      const step = Math.min(dt, 0.1) * routeSpeed(s.view, s.task, visiting);
       if (dist <= step) {
         a.x = tx;
         a.z = tz;

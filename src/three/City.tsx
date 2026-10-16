@@ -18,10 +18,11 @@ import { avatar } from '../game/avatar';
 import { B, Bike, Keke } from './models';
 import { Helicopter } from './aircraft';
 import { heli } from '../game/heli';
+import { mapTrees, setTreeDust } from './trees';
 import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat, windowsLit } from './cityModels';
 import { useLowPerf } from '../game/quality';
 import { GroundShade, LampPools, poolMat } from './CityFx';
-import { sky } from '../game/weather';
+import { seasonDust, sky } from '../game/weather';
 import { gridOn } from '../game/live';
 import { Slab } from './Slab';
 import { brokenAsset, useRoads } from '../net/roads';
@@ -1182,6 +1183,8 @@ export function City() {
   const places = regionPlaces(destinationId).filter((place) => place.id !== 'home' || hasHome);
   const buildings = useRef<Group>(null);
   const low = useLowPerf();
+  // The season on the leaves, before anything with a tree in it is built (trees.ts).
+  setTreeDust(seasonDust(map.id));
   return (
     <group key={map.id}>
       <MapEffects />
@@ -1202,8 +1205,8 @@ export function City() {
               <HouseModel {...h} />
             </group>
           ))}
-          {map.trees.map((t, i) => (
-            <CityTree key={i} p={[t.x + 0.5, 0, t.z + 0.5]} s={t.s} c={i % 3 ? region.accent : '#b88b49'} />
+          {mapTrees(map).map((t, i) => (
+            <CityTree key={i} p={[t.x + 0.5, 0, t.z + 0.5]} s={t.s} kind={t.kind} />
           ))}
           {landmarks.map((l) => (
             <LandmarkMesh key={l.name} l={l} />

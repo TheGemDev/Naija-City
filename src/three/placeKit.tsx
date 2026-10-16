@@ -1,8 +1,9 @@
 // The kit every place model on the city map is built with (the stadium first: Stadium.tsx). Parts are merged into
 // one geometry per colour, so a whole building is a handful of plain meshes that the map's StaticBatch folds into the
-// town's own buckets: next to no new draw calls. Two colour keys are special: 'lamp…' parts share lampMat and
-// 'glass…' parts share windowMat, so they light up at night with the street lamps and windows. Night-only light
-// (floodlight pools, lit signs) goes in a Glow, drawn additively and only after dark.
+// town's own buckets: next to no new draw calls. Three keys are special: 'lamp…' parts share lampMat and 'glass…'
+// parts share windowMat, so they light up at night with the street lamps and windows; 'vc…' parts carry their own
+// colour per vertex (the trees: trees.ts). Night-only light (floodlight pools, lit signs) goes in a Glow, drawn
+// additively and only after dark.
 //
 // Rules of thumb (learned on the stadium): give plain parts their own colour key rather than sharing a material
 // (a material shared between meshes gets its own StaticBatch bucket instead of joining the houses'); read the
@@ -208,6 +209,11 @@ export function KitModel({ build, deps }: { build: (low: boolean) => Built; deps
           <mesh key={key} geometry={g} material={lampMat} />
         ) : key.startsWith('glass') ? (
           <mesh key={key} geometry={g} material={windowMat} />
+        ) : key.startsWith('vc') ? (
+          // Parts that bring their own colour per vertex (the trees: trees.ts).
+          <mesh key={key} geometry={g} castShadow receiveShadow>
+            <meshStandardMaterial vertexColors emissiveIntensity={0} flatShading />
+          </mesh>
         ) : (
           <mesh key={key} geometry={g} castShadow receiveShadow>
             <meshStandardMaterial color={key} emissiveIntensity={0} flatShading />

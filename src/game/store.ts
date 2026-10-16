@@ -14,6 +14,7 @@ import { driveHooks, driveState } from './driveState';
 import { avatar, avatarCell, resetAvatar } from './avatar';
 import { useVisit } from './visits';
 import { ITEM_PAINT, isColourRef, type HousePaint, type WallPart } from './paint';
+import { LIGHTS, applyFinish, cleanLamp, finishCost, finishLabel, validValue, type FinishChange, type HouseFinish, type LampSetting } from './finishes';
 import { WALL_BUILD_COST, WALL_KNOCK_COST, arrivalCell, edgeKey, fitItemsToLayout, houseLayout, inGrid, isEditableEdge, wallBuildError, type WallEdge, itemTransform, pathToCell, pathToItem, placementError, type Cell, type HouseLayout, type PlacedItem } from './grid';
 import { DEFAULT_ITEMS } from './defaults';
 import { childrenOf, tidy, type Pose } from './mount';
@@ -50,6 +51,7 @@ import { fareRef, subsidise, type FareSubsidy } from './transport';
 import { HOUSEHOLD_STAFF, HOUSE_STAFF_ROLES, STARTER_HOUSE, rollStaffTheft, type StaffRole, type HouseholdStaff, type HouseStaffRole } from './staff';
 import { careerHooks, careerState } from './career';
 import { employment, jobById, shiftClock, shiftHours, shiftMinutes, streakPay, wageFor, workplaceOf } from './jobs';
+import { KID_ACTIONS, kidHooks } from './kids';
 
 export const START_MINUTES = 7 * 60; // Day 1, 7:00 AM
 export const DAY = 24 * 60;
@@ -263,6 +265,8 @@ export interface GameState {
   wallEdits: Record<string, string[]>;
   /** Repainted walls per house (same keys as wallEdits). */
   housePaint: Record<string, HousePaint>;
+  /** Floors, walls, ceilings and night mood per house (same keys). Plain JSON: see game/finishes.ts for the format. */
+  houseFinish: Record<string, HouseFinish>;
   /** Lifetime counters for achievements and the legacy score (game/legacy.ts). */
   stats: Stats;
   /** Things street stories left you with (a visa, going viral...). */
@@ -385,6 +389,10 @@ export interface GameState {
   /** Recolour one colour slot of a placed item (null = back to the model's own colour). */
   paintItem(id: string, slot: number, colour: string | null): void;
   paintWalls(part: WallPart, colour: string | null): void;
+  /** Buys a finish for this house (floors, walls, a feature wall, ceilings) or sets its mood. Returns false if refused. */
+  setFinish(change: FinishChange): boolean;
+  /** A light's colour (tone id or colour ref) and brightness. Free. */
+  setLamp(id: string, light: LampSetting): void;
   /** After loading a save: refit the current house's furniture and keep you on its plot. */
   fitHome(): void;
   setWallHover(e: WallEdge | null): void;
@@ -554,7 +562,8 @@ export function findAction(itemId: string | null, actionId: string, items: Place
     return regionalAction(regionId, placeId, actionId) ?? placeAction(placeId, actionId);
   }
 
-  if (!itemId) return PHONE_ACTIONS.find((a) => a.id === actionId);
+  // Caring for an adopted child (game/kids.ts) is done where you stand when there is no nursery furniture to do it at.
+  if (!itemId) return PHONE_ACTIONS.find((a) => a.id === actionId) ?? KID_ACTIONS.find((a) => a.id === actionId);
   const it = items.find((i) => i.id === itemId);
   return it ? ITEMS[it.type].actions.find((a) => a.id === actionId) : undefined;
 }
@@ -713,6 +722,7 @@ const fresh = () => ({
   activeHouseId: null as string | null,
   wallEdits: {} as Record<string, string[]>,
   housePaint: {} as Record<string, HousePaint>,
+  houseFinish: {} as Record<string, HouseFinish>,
   stats: {} as Stats,
   storyFlags: [] as StoryFlag[],
   achievements: [] as string[],
@@ -1044,6 +1054,8 @@ export const useGame = create<GameState>((set, get) => {
       return enterCity(doorOf('club'));
     }
     if (!cancelled && action?.skill) careerHooks.train?.(action.skill);
+    // A care for an adopted child is done: the server applies it and charges for it (src/net/kids.ts).
+    if (!cancelled && action?.effect === 'kidCare') kidHooks.done?.(t.actionId, t.itemId ? taskItems(s).find((i) => i.id === t.itemId)?.type ?? null : null);
     if (!cancelled && action?.payout && action.payout > 0) {
       pay(action.payout, action.label);
       toast(`💰 You earned ${naira(action.payout)} from ${action.label}!`);
@@ -2150,6 +2162,7 @@ export const useGame = create<GameState>((set, get) => {
       if (def.waterUse && !visitItemOf(itemId) && s.waterTank < def.waterUse) return toast('The overhead tank is dry. Pump water or call Mai Ruwa from Phone → NEPA.');
       if ((def.effect === 'durbar' || def.effect === 'buyRam') && dayOf(s.minutes) % 28 !== 0) return toast('Hawan Sallah is on the 28th day of each in-game month. Check back on Durbar day! 🐎');
       if (def.effect === 'buyRam' && s.sallahRam !== 'none') return toast('You already have a ram at home. Feed it before sharing Sallah meat.');
+      if (def.effect === 'kidCare' && !kidHooks.canStart?.(actionId)) return;
       if (def.effect === 'feedRam' && s.sallahRam !== 'unfed') return toast('Buy a ram at Murtala Square on Durbar day first.');
       if (def.effect === 'shareRam' && s.sallahRam !== 'fed') return toast('Feed your Sallah ram first, then share the meat with your neighbours.');
       if (def.effect === 'work') {
@@ -2184,7 +2197,7 @@ export const useGame = create<GameState>((set, get) => {
       if (!itemId) {
         // Phone action: do it where you stand.
         if (def.cost) pay(-def.cost, def.label);
-        set({ task: { itemId: null, actionId, label: def.label, icon: def.icon, phase: 'doing', remaining: def.minutes, total: def.minutes }, panel: null });
+        set({ task: { itemId: null, actionId, label: def.label, icon: def.icon, animation: def.animation, phase: 'doing', remaining: def.minutes, total: def.minutes }, panel: null });
         return;
       }
       let path;
@@ -2526,6 +2539,32 @@ export const useGame = create<GameState>((set, get) => {
         if (!next.inner) delete next.inner;
         return { housePaint: { ...s.housePaint, [house]: next } };
       });
+    },
+    setFinish(change) {
+      const s = get();
+      if (!validValue(change.part, change.value)) return false;
+      const layout = houseLayoutForState(s);
+      const cost = finishCost(change, layout);
+      if (cost > 0 && s.money < cost) {
+        toast(`You need ${naira(cost)}`);
+        return false;
+      }
+      const house = houseKeyOf(s);
+      const next = applyFinish(s.houseFinish[house], change, layout);
+      // Charged like building a wall: a plain spend the server books against the wallet.
+      if (cost > 0) pay(-cost, finishLabel(change), 'spend', 'finish');
+      set((st) => {
+        const all = { ...st.houseFinish };
+        if (Object.keys(next).length) all[house] = next;
+        else delete all[house];
+        return { houseFinish: all };
+      });
+      return true;
+    },
+    setLamp(id, light) {
+      const clean = cleanLamp(light);
+      if (!clean) return;
+      set((s) => ({ items: s.items.map((i) => (i.id === id && LIGHTS[i.type] ? { ...i, light: clean } : i)) }));
     },
     storeItem(id) {
       const s = get();

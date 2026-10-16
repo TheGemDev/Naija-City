@@ -1,3 +1,4 @@
+const q = new URLSearchParams(location.search);
 // TEMP harness (delete after): ?mode=city&city=kaduna&night=1&low=1&x=..&z=.. | ?mode=species | ?mode=place&m=park
 import { createRoot } from 'react-dom/client';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -11,11 +12,14 @@ import { pinWeather, type WeatherKind } from '../src/game/weather';
 import { avatar } from '../src/game/avatar';
 import { Scene } from '../src/three/Scene';
 import { CityTree, PlaceModel } from '../src/three/cityModels';
+import { Kit, KitModel } from '../src/three/placeKit';
+import { plantTree, setTreeDust } from '../src/three/trees';
+if (q.get('dust')) setTreeDust(Number(q.get('dust')));
 import { cityMap } from '../src/game/city';
 (window as unknown as { __cm: unknown }).__cm = cityMap; (window as unknown as { __maps: unknown }).__maps = Object.fromEntries(['kaduna', 'abuja', 'lagos', 'kano'].map((c) => { const m = cityMap(c); return [c, { w: m.w, h: m.h, trees: m.trees.length, nearWater: m.trees.filter((t) => [[2,0],[-2,0],[0,2],[0,-2]].some(([a,b]) => m.isWater(t.x+a, t.z+b))).length }]; }));
 
-const q = new URLSearchParams(location.search);
 const mode = q.get('mode') ?? 'city';
+if (q.get('month')) { const real = Date.now.bind(Date); const off = Date.UTC(2027, Number(q.get('month')), 10) - real(); Date.now = () => real() + off; }
 if (q.get('low') === '1') useQuality.setState({ quality: 'low' });
 else useQuality.setState({ quality: 'high' });
 
@@ -46,7 +50,8 @@ document.head.appendChild(st);
 function Gallery({ children, dist = 6, y = 0.8 }: { children: React.ReactNode; dist?: number; y?: number }) {
   const { camera } = useThree();
   useLayoutEffect(() => {
-    camera.position.set(0, y + dist * 0.55, dist);
+    if (q.get('top') === '1') camera.position.set(0, y + dist * 0.92, dist * 0.38);
+    else camera.position.set(0, y + dist * 0.55, dist);
     camera.lookAt(0, y, 0);
   }, [camera, dist, y]);
   return (
@@ -59,10 +64,21 @@ function Gallery({ children, dist = 6, y = 0.8 }: { children: React.ReactNode; d
   );
 }
 
+const KINDS = ['neem', 'mango', 'coconut', 'oilpalm', 'baobab', 'flame', 'acacia', 'shrub'] as const;
 function Species() {
+  const only = q.get('kind');
+  const kinds = only ? only.split(',') : KINDS;
+  const gap = Number(q.get('gap') ?? 2.6);
+  const shrubs = q.get('shrubs') === '1';
   return (
-    <Gallery dist={Number(q.get('dist') ?? 7)} y={1}>
-      {[-3, -1.5, 0, 1.5, 3].map((x, i) => <CityTree key={i} p={[x, 0, 0]} s={0.55 + i * 0.03} c={i % 3 ? '#3f7d2a' : '#b88b49'} />)}
+    <Gallery dist={Number(q.get('dist') ?? 11)} y={Number(q.get('y') ?? 1.2)}>
+      {shrubs
+        ? [0, 1, 2, 3, 4].map((pi) => <KitModel key={pi} deps={[pi]} build={(low) => { const k = new Kit(); plantTree(k, 'shrub', (pi - 2) * 0.9, 0, 2.2, { low, palette: pi }); return { parts: k.build() }; }} />)
+        : kinds.map((k, i) => (
+          <group key={k}>
+            <CityTree p={[(i - (kinds.length - 1) / 2) * gap, 0, 0]} s={0.6} kind={k as never} seed={Number(q.get('seed') ?? 0)} />
+          </group>
+        ))}
     </Gallery>
   );
 }

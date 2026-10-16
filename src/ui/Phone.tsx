@@ -50,6 +50,7 @@ import { Mall } from './Mall';
 import { HelpApp } from './Help';
 import { HireApp } from './HireApp';
 import { ForbesApp } from './ForbesApp';
+import { CribsApp } from './CribsApp';
 import { BlackMarketApp } from './BlackMarket';
 import { FixerApp, GrindApp, PlugApp } from './Vice';
 import { ElectionBoard } from './Election';
@@ -68,7 +69,7 @@ import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
-  | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
+  | 'cribs' | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
 
 interface AppDef {
   id: AppId;
@@ -87,6 +88,7 @@ const APPS: Record<AppId, AppDef> = {
   bank: { id: 'bank', label: 'Bank', icon: '🏦', vectorIcon: 'bank', bg: ['#a78bfa', '#5b21b6'], tint: '#5b21b6' },
   invest: { id: 'invest', label: 'Invest', icon: '📈', vectorIcon: 'invest', bg: ['#34d399', '#059669'], tint: '#047857' },
   forbes: { id: 'forbes', label: 'Forbes', icon: '👑', vectorIcon: 'forbes', bg: ['#fbbf24', '#b45309'], tint: '#b45309' },
+  cribs: { id: 'cribs', label: 'Cribs', icon: '🏡', bg: ['#f0abfc', '#7c3aed'], tint: '#6d28d9' },
   cars: { id: 'cars', label: 'Autos', icon: '🚗', vectorIcon: 'cars', bg: ['#38bdf8', '#0284c7'], tint: '#0284c7' },
   gida: { id: 'gida', label: 'House', icon: '🏠', vectorIcon: 'home', bg: ['#fcd34d', '#b45309'], tint: '#92400e' },
   jobs: { id: 'jobs', label: 'Jobs', icon: '💼', vectorIcon: 'jobs', bg: ['#34d399', '#047857'], tint: '#047857' },
@@ -123,7 +125,7 @@ const APPS: Record<AppId, AppDef> = {
   games: { id: 'games', label: 'Games', icon: '🎲', bg: ['#fb7185', '#7c3aed'], tint: '#7c3aed' },
 };
 /** Downloaded apps (src/game/apps.ts) only show once installed from the store. */
-const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'hire', 'forbes', 'closet', 'radio', 'civic', 'police', 'efcc', ...(ADS_ON_SALE ? ['ads' as const] : [])];
+const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'hire', 'forbes', 'cribs', 'closet', 'radio', 'civic', 'police', 'efcc', ...(ADS_ON_SALE ? ['ads' as const] : [])];
 // 'topup' (buying money) is left off the home screen while card payments are switched off.
 /** Always last: the store, help and settings. */
 const TAIL_APPS: AppId[] = ['store', 'help', 'settings'];
@@ -1776,6 +1778,7 @@ const SCREENS: Record<AppId, () => ReactNode> = {
   bank: Bank,
   invest: Invest,
   forbes: ForbesApp,
+  cribs: CribsApp,
   cars: Cars,
   gida: House,
   jobs: Jobs,

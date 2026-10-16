@@ -37,15 +37,15 @@ type V3 = [number, number, number];
  * when the house has light. Transparent, so the hover outline and the cut-away sort leave it alone.
  */
 export const glassMat = new MeshStandardMaterial({
-  color: '#b9dbe3', transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0.35, depthWrite: false,
-  emissive: new Color('#ffcf8a'), emissiveIntensity: 0, envMapIntensity: 1.4,
+  color: '#d4ecf2', transparent: true, opacity: 0.12, roughness: 0.08, metalness: 0, depthWrite: false,
+  emissive: new Color('#ffcf8a'), emissiveIntensity: 0, envMapIntensity: 1.2,
 });
 glassMat.onBeforeCompile = (shader) => {
   shader.fragmentShader = shader.fragmentShader.replace(
     '#include <normal_fragment_maps>',
     `#include <normal_fragment_maps>
     float fres = pow(1.0 - abs(dot(normalize(vViewPosition), normal)), 3.0);
-    diffuseColor.a = mix(diffuseColor.a, 0.72, fres);`,
+    diffuseColor.a = mix(diffuseColor.a, 0.42, fres);`,
   );
 };
 glassMat.customProgramCacheKey = () => 'naija-glass';
@@ -146,7 +146,12 @@ function edgeFaces(layout: HouseLayout, e: { dir: 'h' | 'v'; x: number; z: numbe
 }
 
 /** Signature of what changes the built geometry, so batches remount when (and only when) it changes. */
-const sig = (layout: HouseLayout, finish?: HouseFinish, extra = '') => `${layout.edges.length}|${[...layout.edgeSet].length}|${JSON.stringify(finish ?? {})}|${extra}`;
+const layoutIds = new WeakMap<HouseLayout, number>();
+let nextLayoutId = 1;
+const sig = (layout: HouseLayout, finish?: HouseFinish, extra = '') => {
+  if (!layoutIds.has(layout)) layoutIds.set(layout, nextLayoutId++);
+  return `${layoutIds.get(layout)}|${JSON.stringify(finish ?? {})}|${extra}`;
+};
 
 // ── Floors, partitions, skirting, doors ──────────────────────────────────────────────────────────
 
@@ -200,9 +205,9 @@ function InnerDoor({ e }: { e: { dir: 'h' | 'v'; x: number; z: number } }) {
   const horiz = e.dir === 'h';
   const jamb: V3 = horiz ? [0.07, SHORT, T + 0.05] : [T + 0.05, SHORT, 0.07];
   const p = (a: number): V3 => (horiz ? [e.x + a, SHORT / 2, e.z] : [e.x, SHORT / 2, e.z + a]);
-  // Hinged on the low end, opening into the high side (+z or +x), swung most of the way back.
-  const yaw = horiz ? -Math.PI * 0.9 : Math.PI / 2 + Math.PI * 0.9;
-  const hinge: V3 = horiz ? [e.x + 0.06, 0, e.z + 0.04] : [e.x + 0.04, 0, e.z + 0.06];
+  // Hinged on the low end, standing open a little past square into the high side (+z or +x).
+  const yaw = horiz ? -Math.PI * 0.6 : Math.PI * 0.1;
+  const hinge: V3 = horiz ? [e.x + 0.06, 0, e.z + T / 2 + 0.02] : [e.x + T / 2 + 0.02, 0, e.z + 0.06];
   return (
     <group>
       <mesh position={p(0.035)} castShadow>
@@ -213,10 +218,8 @@ function InnerDoor({ e }: { e: { dir: 'h' | 'v'; x: number; z: number } }) {
         <boxGeometry args={jamb} />
         <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
       </mesh>
-      <group position={hinge} rotation={[0, horiz ? -yaw : yaw - Math.PI / 2, 0]}>
-        <group rotation={[0, horiz ? 0 : 0, 0]}>
-          <DoorLeaf w={0.84} h={SHORT - 0.04} />
-        </group>
+      <group position={hinge} rotation={[0, yaw, 0]}>
+        <DoorLeaf w={0.84} h={SHORT - 0.04} />
       </group>
     </group>
   );
@@ -392,8 +395,8 @@ export function SideScaled({ edges, layout, finish, wall, innerColour, height }:
           </StaticBatch>
           {/* A heavy panelled front door, open into the house */}
           <group
-            position={doorEdge.dir === 'h' ? [doorEdge.x + 0.07, 0, doorEdge.z + inward * 0.05] : [doorEdge.x + 0.05, 0, doorEdge.z + 0.07]}
-            rotation={[0, doorEdge.dir === 'h' ? (inward < 0 ? Math.PI * 0.55 : -Math.PI * 0.55) : -Math.PI * 0.05, 0]}
+            position={doorEdge.dir === 'h' ? [doorEdge.x + 0.07, 0, doorEdge.z + inward * (T / 2 + 0.02)] : [doorEdge.x + T / 2 + 0.02, 0, doorEdge.z + 0.07]}
+            rotation={[0, doorEdge.dir === 'h' ? (inward < 0 ? Math.PI * 0.55 : -Math.PI * 0.55) : Math.PI * 0.05, 0]}
             scale={[1, k, 1]}
           >
             <DoorLeaf w={0.86} h={DOOR_H - 0.04} c="#5a3418" />
@@ -426,7 +429,7 @@ function Window({ e, normal }: { e: Edge; normal: [number, number] }) {
       <FaceBox f={fin} a0={mid - 0.02} a1={mid + 0.02} y0={SILL} y1={HEAD} d0={-0.03} d1={0.03} c={W} m />
       <FaceBox f={fin} a0={WIN_A} a1={WIN_B} y0={1.64} y1={1.675} d0={-0.03} d1={0.03} c={W} m />
       {/* Glass */}
-      <mesh position={at(frame(fin).o, frame(fin).u, frame(fin).n, mid, (SILL + HEAD) / 2, 0)} material={glassMat} renderOrder={3} raycast={() => null}>
+      <mesh position={at(frame(fin).o, frame(fin).u, frame(fin).n, mid, (SILL + HEAD) / 2, 0)} material={glassMat} renderOrder={3} raycast={() => null} userData={{ dynamic: true }}>
         <boxGeometry args={e.dir === 'h' ? [WIN_B - WIN_A - 0.08, HEAD - SILL - 0.08, 0.008] : [0.008, HEAD - SILL - 0.08, WIN_B - WIN_A - 0.08]} />
       </mesh>
       {/* Sills: a tiled ledge inside, a sloped concrete one outside */}
@@ -478,7 +481,7 @@ export function SideTall({ edges, normal, layout, finish }: { edges: Edge[]; nor
           <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.12} y1={TALL} d0={T / 2} d1={T / 2 + 0.36} c={CEILING_BY_ID[pop].trim} />
           <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.22} y1={TALL - 0.12} d0={T / 2} d1={T / 2 + 0.18} c={CEILING_BY_ID[pop].trim} />
           {pop === 'pop_gold' && <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.135} y1={TALL - 0.115} d0={T / 2 + 0.18} d1={T / 2 + 0.365} c="#c9a227" m />}
-          <mesh position={at(frame(f).o, frame(f).u, frame(f).n, 0.5, TALL + 0.004, T / 2 + 0.345)} material={coveMat}>
+          <mesh position={at(frame(f).o, frame(f).u, frame(f).n, 0.5, TALL + 0.004, T / 2 + 0.345)} material={coveMat} userData={{ dynamic: true }}>
             <boxGeometry args={f.dir === 'h' ? [1 + T, 0.012, 0.03] : [0.03, 0.012, 1 + T]} />
           </mesh>
         </group>

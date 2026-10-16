@@ -170,12 +170,17 @@ export const LIGHTS: Record<string, LightSpec> = {
 
 // ── Rooms, faces and runs ────────────────────────────────────────────────────────────────────────
 
-/** Rooms under the roof: the ones that take finishes (not the yard or compound). */
-export const interiorRooms = (layout: HouseLayout): HouseRoom[] =>
-  layout.rooms.filter((r) => r.x1 <= layout.width && r.z1 <= layout.depth);
+/** Rooms open to the sky (game/mount.ts indoor() uses the same test). */
+const OUTDOOR = /yard|compound|carport|balcony|terrace/i;
+const roomCache = new WeakMap<HouseLayout, HouseRoom[]>();
+/** Rooms under a roof, the house's own and any walled extension: the ones that take finishes. */
+export function interiorRooms(layout: HouseLayout): HouseRoom[] {
+  let r = roomCache.get(layout);
+  if (!r) roomCache.set(layout, (r = layout.rooms.filter((room) => !OUTDOOR.test(room.name))));
+  return r;
+}
 
 export function roomAt(layout: HouseLayout, c: Cell): HouseRoom | null {
-  if (c.x < 0 || c.z < 0 || c.x >= layout.width || c.z >= layout.depth) return null;
   return interiorRooms(layout).find((r) => c.x >= r.x0 && c.x < r.x1 && c.z >= r.z0 && c.z < r.z1) ?? null;
 }
 
@@ -334,4 +339,14 @@ export function faceValue(layout: HouseLayout, f: HouseFinish | undefined, face:
   if (own) return own;
   const room = roomAt(layout, faceCell(face));
   return (room && f.wall?.[room.name]) || null;
+}
+
+/** The line a finish purchase gets in your transactions. */
+export function finishLabel(c: FinishChange): string {
+  if (c.part === 'mood') return `Mood: ${MOOD_BY_ID[c.value]?.name ?? c.value}`;
+  const v = c.value;
+  const what = v === null ? 'As built' : FLOOR_BY_ID[v]?.name ?? WALL_BY_ID[v]?.name ?? CEILING_BY_ID[v]?.name ?? 'Paint';
+  if (c.part === 'face') return `Feature wall: ${what}`;
+  const where = c.rooms.length === 1 ? c.rooms[0] : `${c.rooms.length} rooms`;
+  return `${c.part === 'floor' ? 'Floor' : c.part === 'wall' ? 'Walls' : 'Ceiling'}: ${what} (${where})`;
 }

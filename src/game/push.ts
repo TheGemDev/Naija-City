@@ -6,6 +6,7 @@ export const PUSH_CATEGORIES = [
   { id: 'invites', name: 'Invitations', blurb: 'Parties, house visits, dates and game challenges' },
   { id: 'crime', name: 'Crime & police', blurb: 'Break-ins, CCTV and EFCC cases' },
   { id: 'news', name: 'Government news', blurb: 'Elections and gazette notices' },
+  { id: 'family', name: 'Family', blurb: 'Your children: hungry, sleepy, sick, and Social Welfare' },
 ] as const;
 
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]['id'];

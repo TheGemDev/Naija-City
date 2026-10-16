@@ -15,7 +15,7 @@ import { followHost, roomOf } from './shards';
 import { houseOf } from './social';
 import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W, arrivalCell, placementError, type PlacedItem } from '../src/game/grid';
-import { PAINT_BY_ID, type HousePaint } from '../src/game/paint';
+import { isColourRef, type HousePaint } from '../src/game/paint';
 import { REGION_BY_ID, STAGES } from '../src/game/property';
 import { getRegion } from '../src/game/regions';
 import { skillLevel } from '../src/game/career';
@@ -37,7 +37,7 @@ const CITIES = ['kaduna', 'abuja', 'lagos', 'kano'];
 
 /* ---------- Reading houses out of a save ---------- */
 
-type SaveProperty = { id?: string; region?: string; design?: string | null; stage?: number; items?: unknown; extensions?: string[]; rooms?: Record<string, { type?: string }>; [k: string]: unknown };
+type SaveProperty = { id?: string; region?: string; design?: string | null; stage?: number; items?: unknown; extensions?: string[]; rooms?: Record<string, { type?: string; name?: string }>; [k: string]: unknown };
 export type SaveJson = Record<string, unknown> & {
   items?: unknown;
   furnitureInventory?: unknown;
@@ -65,7 +65,7 @@ const cleanPaint = (raw: unknown): HousePaint => {
   const out: HousePaint = {};
   for (const part of ['outer', 'inner'] as const) {
     const id = (raw as Record<string, unknown> | undefined)?.[part];
-    if (typeof id === 'string' && PAINT_BY_ID[id]) out[part] = id;
+    if (isColourRef(id)) out[part] = id;
   }
   return out;
 };
@@ -695,7 +695,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
          ON CONFLICT(uid, client_id) DO NOTHING`,
       ).bind(job.client_uid, `dj-buy:${id}`, def.type, now)];
     } else if (b.op === 'paint') {
-      if ((b.part !== 'inner' && b.part !== 'outer') || (b.colour !== null && !PAINT_BY_ID[b.colour ?? ''])) return err(400, 'Pick a wall and a colour');
+      if ((b.part !== 'inner' && b.part !== 'outer') || (b.colour !== null && !isColourRef(b.colour))) return err(400, 'Pick a wall and a colour');
       draft.paint = { ...draft.paint, [b.part]: b.colour ?? undefined };
       if (!draft.paint[b.part]) delete draft.paint[b.part];
       detail = `Painted the ${b.part === 'inner' ? 'inside' : 'outside'} walls ${b.colour ?? 'back to plain'}`;

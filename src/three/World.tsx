@@ -2,7 +2,15 @@ import { useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { ExtrudeGeometry, Shape, type Group } from 'three';
 import { edgeKey, houseLayout, isEditableEdge, pathToCell, wallBuildError, type Edge, type HouseLayout, type PlacedItem, type WallEdge } from '../game/grid';
-import { useGame } from '../game/store';
+import { houseKeyOf, useGame } from '../game/store';
+import { edgeHasWindow } from '../game/mount';
+import { aimAt, toHouseRay, useDecor } from '../game/decor';
+import { wallMountGroups } from './DecorEdit';
+import { applyFinish, type HouseFinish } from '../game/finishes';
+import { finishToolOn, useFinishUi } from '../game/finishUi';
+import { HouseInterior, SideScaled, SideTall } from './HouseShell';
+import { HouseLights } from './HouseLights';
+import { FinishGuides, finishTap } from './FinishGuides';
 import { avatar, avatarCell } from '../game/avatar';
 import { Tree } from './models';
 import { CarModel } from './CarModel';
@@ -42,15 +50,9 @@ function outwardNormal(e: Edge): [number, number] | null {
   return e.x === 0 ? [-1, 0] : [1, 0];
 }
 
-function hasWindow(e: Edge, layout: HouseLayout) {
-  if (!e.tall) return false;
-  if (e.dir === 'h') return (e.z === 0 || e.z === layout.depth) && e.x % 5 === 2;
-  return (e.x === 0 || e.x === layout.width) && e.z % 4 === 2;
-}
-
 /** All wall edges on one side of the house. Outer walls drop to half height when they face the
  *  camera; every edge on a side moves together, so each side is merged and animated as one. */
-function WallSide({ edges, normal, center, layout, paint }: { edges: Edge[]; normal: [number, number] | null; center: { x: number; z: number }; layout: HouseLayout; paint?: HousePaint }) {
+function WallSide({ edges, normal, center, layout, paint, finish }: { edges: Edge[]; normal: [number, number] | null; center: { x: number; z: number }; layout: HouseLayout; paint?: HousePaint; finish?: HouseFinish }) {
   const outerColour = paintHex(paint?.outer) ?? layout.shell.wall;
   const innerColour = paintHex(paint?.inner) ?? DEFAULT_INNER_WALL;
   const bodies = useRef<Group>(null!);
@@ -68,6 +70,9 @@ function WallSide({ edges, normal, center, layout, paint }: { edges: Edge[]; nor
     bodies.current.scale.y = h;
     caps.current.position.y = h;
     wins.current.visible = h > 2;
+    // Pictures, TVs and the like hung on this side drop out of sight with it (three/DecorEdit.tsx).
+    const mounted = wallMountGroups.get(normal.join(','));
+    if (mounted) for (const g of mounted) g.visible = h > 1.8;
   });
 
   return (
@@ -78,6 +83,8 @@ function WallSide({ edges, normal, center, layout, paint }: { edges: Edge[]; nor
           {edges.map((e, i) => {
             const horiz = e.dir === 'h';
             const base = normal ? 1 : e.kind === 'fence' ? FENCE : SHORT;
+            // Walls with a window are built round their opening (HouseShell SideScaled).
+            if (normal && edgeHasWindow(e, layout)) return null;
             return (
               <mesh key={i} position={[horiz ? e.x + 0.5 : e.x, base / 2, horiz ? e.z : e.z + 0.5]} scale={[1, base, 1]} castShadow receiveShadow>
                 <boxGeometry args={horiz ? [1 + WALL_T, 1, WALL_T] : [WALL_T, 1, 1 + WALL_T]} />
@@ -86,6 +93,7 @@ function WallSide({ edges, normal, center, layout, paint }: { edges: Edge[]; nor
             );
           })}
         </StaticBatch>
+        {normal && <SideScaled edges={edges} layout={layout} finish={finish} wall={outerColour} innerColour={innerColour} height={height} />}
       </group>
       <group ref={caps} position={[0, normal ? tallHeight : 0, 0]}>
         <StaticBatch>
@@ -101,19 +109,9 @@ function WallSide({ edges, normal, center, layout, paint }: { edges: Edge[]; nor
           })}
         </StaticBatch>
       </group>
+      {/* Windows, cornices, POP borders and switches: only while the side stands tall (HouseShell SideTall). */}
       <group ref={wins}>
-        <StaticBatch>
-          {edges.map((e, i) => {
-            const horiz = e.dir === 'h';
-            if (!normal || !hasWindow(e, layout)) return null;
-            return [1.5].map((y) => (
-              <mesh key={`${i}-${y}`} position={[horiz ? e.x + 0.5 : e.x, y, horiz ? e.z : e.z + 0.5]}>
-                <boxGeometry args={horiz ? [0.7, 0.8, WALL_T + 0.02] : [WALL_T + 0.02, 0.8, 0.7]} />
-                <meshStandardMaterial color="#9bb7bd" roughness={0.62} metalness={0.05} />
-              </mesh>
-            ));
-          })}
-        </StaticBatch>
+        {normal && <SideTall edges={edges} normal={normal} layout={layout} finish={finish} />}
       </group>
     </group>
   );
@@ -155,7 +153,7 @@ function EntryPorch({ layout }: { layout: HouseLayout }) {
   );
 }
 
-function Walls({ layout, paint }: { layout: HouseLayout; paint?: HousePaint }) {
+function Walls({ layout, paint, finish }: { layout: HouseLayout; paint?: HousePaint; finish?: HouseFinish }) {
   const sides = useMemo(() => {
     const out = new Map<string, { normal: [number, number] | null; edges: Edge[] }>();
     for (const e of layout.edges) {
@@ -170,7 +168,7 @@ function Walls({ layout, paint }: { layout: HouseLayout; paint?: HousePaint }) {
   return (
     <group>
       {sides.map(([key, side]) => (
-        <WallSide key={key} edges={side.edges} normal={side.normal} center={center} layout={layout} paint={paint} />
+        <WallSide key={key} edges={side.edges} normal={side.normal} center={center} layout={layout} paint={paint} finish={finish} />
       ))}
     </group>
   );
@@ -315,7 +313,10 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
         if (wallTool()) {
           const edge = nearestEdge(toLocal(e));
           useGame.getState().setWallHover(isEditableEdge(layout, edge) ? edge : null);
-        } else if (useGame.getState().placing) useGame.getState().setHover(toCell(e));
+        } else if (useGame.getState().placing && !readOnly && e.nativeEvent.pointerType === 'mouse') {
+          // The piece follows the mouse; on a phone a tap (or dragging the ghost) moves it instead.
+          aimAt(toHouseRay(e.ray.origin, e.ray.direction));
+        }
       }}
       onPointerOut={() => {
         if (wallTool()) useGame.getState().setWallHover(null);
@@ -323,6 +324,10 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
       onClick={(e) => {
         if (e.delta > 8) return;
         const s = useGame.getState();
+        if (!readOnly && s.mode === 'buy' && finishToolOn()) {
+          finishTap(toLocal(e), layout);
+          return;
+        }
         if (wallTool()) {
           s.tapWall(nearestEdge(toLocal(e)));
           return;
@@ -337,9 +342,11 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
           return;
         }
         if (s.placing) {
-          s.setHover(c);
+          // The editor works out the real spot: a wall, a table top, a whole group (game/decor.ts).
+          aimAt(toHouseRay(e.ray.origin, e.ray.direction));
+          const pose = useDecor.getState().pose;
           // Touch: a tap only moves the preview; the Place button in the bar confirms (so you can rotate first).
-          if (!coarsePointer()) s.placeAt(c);
+          if (!coarsePointer() && pose) s.placeAt({ x: pose.x, z: pose.z });
         } else if (s.selectedId) {
           s.select(null);
         } else if (s.mode === 'live') {
@@ -355,17 +362,25 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
 
 const coarsePointer = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
-export function World({ readOnly = false, items = [], origin, design, walls, paint, visitCars }: { readOnly?: boolean; items?: PlacedItem[]; origin?: string; design?: string | null; walls?: string[]; paint?: HousePaint; visitCars?: string[] }) {
+export function World({ readOnly = false, items = [], origin, design, walls, paint, finish: visitFinish, visitCars }: { readOnly?: boolean; items?: PlacedItem[]; origin?: string; design?: string | null; walls?: string[]; paint?: HousePaint; finish?: HouseFinish; visitCars?: string[] }) {
   const ownedCars = useGame((s) => readOnly ? null : s.ownedCars);
   const parked = parkedCars(visitCars ?? ownedCars ?? []);
   const homeItems = useGame((s) => s.items);
   const layout = houseLayout(design, walls);
+  // Your own house shows the finish you are trying out in the Finishes tab over what you have bought.
+  const ownFinish = useGame((s) => (readOnly ? undefined : s.houseFinish[houseKeyOf(s)]));
+  const draft = useFinishUi((s) => (readOnly ? null : s.draft));
+  const finish = useMemo(() => (readOnly ? visitFinish : draft ? applyFinish(ownFinish, draft, layout) : ownFinish), [readOnly, visitFinish, draft, ownFinish, layout]);
+  const innerColour = paintHex(paint?.inner) ?? DEFAULT_INNER_WALL;
   return (
     <group>
       <Island layout={layout} parked={parked.length} />
       {/* StaticBatch reads its children once, so remount floors and walls when the layout changes. */}
       <Floors key={design ?? 'starter'} layout={layout} />
-      <Walls key={`${design ?? 'starter'}|${(walls ?? []).slice().sort().join(',')}|${paint?.outer ?? ''}|${paint?.inner ?? ''}`} layout={layout} paint={paint} />
+      <Walls key={`${design ?? 'starter'}|${(walls ?? []).slice().sort().join(',')}|${paint?.outer ?? ''}|${paint?.inner ?? ''}`} layout={layout} paint={paint} finish={finish} />
+      <HouseInterior layout={layout} finish={finish} innerColour={innerColour} />
+      <HouseLights items={readOnly ? items : homeItems} layout={layout} finish={finish} />
+      {!readOnly && <FinishGuides layout={layout} />}
       {!readOnly && <WallGuides layout={layout} items={homeItems} />}
       <EntryPorch layout={layout} />
       {parked.map((id, i) => (

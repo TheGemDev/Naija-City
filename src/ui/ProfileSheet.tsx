@@ -1,3 +1,4 @@
+import { CribBadge } from './CribsApp';
 import { PerfSettings } from './PerfSettings';
 import { GuideSettings } from './Guide';
 import { startGuide } from '../game/guide';
@@ -174,6 +175,7 @@ function StatsTab() {
           </small>
         </span>
       </div>
+      <CribBadge />
       <h4>Life</h4>
       <div className="list-card">
         {rows.map(([ico, label, value]) => (

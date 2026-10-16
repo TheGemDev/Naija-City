@@ -16,6 +16,9 @@
 // out the bars, spikes, paving joints, flowers and small props.
 
 import { BufferGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry } from 'three';
+// cityModels before placeKit: placeKit needs its night materials, and cityModels' own imports (trainKit) need placeKit
+// finished first. Loading this file first (the House app's pictures) would otherwise start that circle from the wrong end.
+import './cityModels';
 import { Glow, Kit, prep, scale, type Built, type RGB, type V3 } from './placeKit';
 import { exteriorHex, type Exterior } from '../game/exterior';
 
