@@ -78,7 +78,7 @@ export function DecorPlaceBar() {
               </button>
             ) : null}
             <button onClick={cancel}>{placing.moveId ? 'Cancel' : 'Done'}</button>
-            {!touch && <small className="decor-hint">{wall ? 'Click to hang' : 'Click to place · R 90° · Q/E turn'}</small>}
+            {!touch && group <= 1 && <small className="decor-hint">{wall ? 'Click to hang' : 'Click to place · R 90° · Q/E turn'}</small>}
           </div>
         </>
       )}

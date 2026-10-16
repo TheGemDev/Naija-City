@@ -68,12 +68,12 @@ export function SnapSendSheet({ busy, onBack, onSend }: { busy: boolean; onBack:
       <div className="snap-send-list">
         <h4>Stories</h4>
         <button type="button" className={`snap-pick ${story ? 'on' : ''}`} aria-pressed={story} onClick={() => setStory(!story)}>
-          <span className="snap-pick-icon story"><Emoji char="👻" size={20} /></span>
+          <span className="snap-pick-icon my-story"><Emoji char="👻" size={20} /></span>
           <span className="snap-pick-name"><b>My Story</b><small>Friends see it for 24 hours</small></span>
           <i className="snap-tick" aria-hidden />
         </button>
         <button type="button" className={`snap-pick ${spotlight ? 'on' : ''}`} aria-pressed={spotlight} onClick={() => setSpotlight(!spotlight)}>
-          <span className="snap-pick-icon spot"><Emoji char="⭐" size={20} /></span>
+          <span className="snap-pick-icon to-spot"><Emoji char="⭐" size={20} /></span>
           <span className="snap-pick-name"><b>Spotlight</b><small>The whole city sees it, and can like it</small></span>
           <i className="snap-tick" aria-hidden />
         </button>

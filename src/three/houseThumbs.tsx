@@ -5,7 +5,8 @@
 // house or adding a carport draws a fresh one and the rest stay cached.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createRoot, useThree, type ReconcilerRoot } from '@react-three/fiber';
+import { createRoot, extend, useThree, type ReconcilerRoot } from '@react-three/fiber';
+import * as THREE from 'three';
 import { Box3, Sphere, Vector3, type Group, type PerspectiveCamera } from 'three';
 import { lampMat, windowMat } from './cityModels';
 import { KitModel } from './placeKit';
@@ -30,7 +31,7 @@ function Shot({ look, frame, onDone }: { look: HouseLook; frame: HouseFrame; onD
     const sphere = new Box3().setFromObject(ref.current).getBoundingSphere(new Sphere());
     const cam = camera as PerspectiveCamera;
     const dist = sphere.radius / Math.sin(((cam.fov / 2) * Math.PI) / 180);
-    cam.position.copy(sphere.center).addScaledVector(VIEW, dist * 0.82);
+    cam.position.copy(sphere.center).addScaledVector(VIEW, dist * 0.7);
     cam.lookAt(sphere.center.x, sphere.center.y - sphere.radius * 0.08, sphere.center.z);
     cam.updateProjectionMatrix();
     // Always a daytime picture: the shared window and lamp materials are lit while the town is dark.
@@ -72,6 +73,8 @@ async function pump() {
   busy = true;
   try {
     if (!root) {
+      // A root made outside <Canvas> needs the three classes registered (Canvas does this for the game's own scene).
+      extend(THREE as unknown as Parameters<typeof extend>[0]);
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = H;

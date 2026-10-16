@@ -214,6 +214,7 @@ export function PhotoMode() {
                     <button key={l.id} type="button" aria-label={l.label} aria-pressed={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ lens: l.id })}>
                       <i style={{ filter: lensFilter(l) }} />
                       <i style={{ background: lensVeil(l) }} />
+                      <Emoji char={l.icon} size={20} />
                     </button>
                   ))}
                 </div>

@@ -213,15 +213,26 @@ export function applySnapshot(snap: LayoutSnapshot, opts: { keepRest?: boolean; 
   const placed: PlacedItem[] = [...fixed, ...kept];
   const stored: PlacedItem[] = [];
   const here = avatarCell();
-  for (const want of snap.items) {
+  // Pieces standing on others (game/mount.ts) go last, onto whatever their table became here.
+  const onTop = (i: { on?: unknown }) => typeof i.on === 'string';
+  const order = [...snap.items.filter((i) => !onTop(i)), ...snap.items.filter(onTop)];
+  const ids = new Map<string, string>();
+  for (const want of order) {
     if (!ITEMS[want.type] || ITEMS[want.type].fixed) continue;
     const idx = pool.findIndex((p) => p.type === want.type && !p.stolen);
     const piece: PlacedItem = idx >= 0 ? pool.splice(idx, 1)[0] : { id: newId(), type: want.type, x: 0, z: 0, rot: 0 };
     if (idx < 0) toBuy.push(want.type);
-    const { id: _id, ...fields } = want;
+    const { id: was, ...fields } = want as typeof want & { on?: string };
     const next = { ...piece, ...fields, id: piece.id } as PlacedItem;
-    if (placementError(next, placed, here, undefined, layout)) stored.push({ ...piece });
-    else placed.push(next);
+    if (onTop(want)) next.on = ids.get((want as { on?: string }).on!) ?? '__gone';
+    if (placementError(next, placed, here, undefined, layout)) {
+      // Back to plain storage: no pose left over from the layout.
+      const { mount: _m, on: _o, px: _x, pz: _z, y: _y, rotDeg: _r, ...plain } = piece;
+      stored.push(plain);
+    } else {
+      placed.push(next);
+      if (was) ids.set(was, piece.id);
+    }
   }
   const spent = toBuy.reduce((sum, t) => sum + ITEMS[t].price, 0);
   buyPieces(toBuy, opts.label);

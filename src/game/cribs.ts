@@ -6,6 +6,7 @@ import { CATEGORIES, ITEMS, type Category } from './catalog';
 import { arrivalCell, footprint, houseLayout, placementError, type HouseLayout, type HouseRoom, type PlacedItem } from './grid';
 import { hexHsl, isColourRef, paintHex, type HousePaint } from './paint';
 import { layoutKey } from './exterior';
+import { CEILING_BY_ID, FLOOR_BY_ID, LIGHTS, WALL_BY_ID, cleanFinish, type HouseFinish } from './finishes';
 
 /* ---------- Tiers ---------- */
 
@@ -27,7 +28,7 @@ export const tierOf = (score: number): CribTier => [...CRIB_TIERS].reverse().fin
 /* ---------- What the score reads ---------- */
 
 /** A placed item as the score sees it. Extra fields (wall mounts, stacking, free rotation) are carried through untouched. */
-export type CribItem = Pick<PlacedItem, 'type' | 'x' | 'z' | 'rot'> & { id?: string; paint?: (string | null)[] | null; stolen?: boolean; broken?: boolean };
+export type CribItem = Omit<Partial<PlacedItem>, 'paint'> & Pick<PlacedItem, 'type' | 'x' | 'z' | 'rot'> & { paint?: (string | null)[] | null };
 
 export interface CribInput {
   items: CribItem[];
@@ -43,6 +44,8 @@ export interface CribInput {
    */
   finishes?: unknown;
   lighting?: unknown;
+  /** The house's floors, walls, ceilings and mood (game/finishes.ts, save.houseFinish[house]). */
+  finish?: HouseFinish | null;
 }
 
 /** One line of the breakdown. */
@@ -110,7 +113,7 @@ export const ROOM_NEEDS: Record<RoomRole, { label: string; met: (type: string) =
 };
 
 /** Items that light a room up. Finishes (light fittings) count too, see finishesOf. */
-export const LIGHT_ITEMS = new Set(['floor_lamp', 'chandelier_lamp', 'garden_lamp', 'security_light', 'aquarium', 'fountain']);
+export const LIGHT_ITEMS = new Set([...Object.keys(LIGHTS), 'floor_lamp', 'chandelier_lamp', 'garden_lamp', 'security_light', 'aquarium', 'fountain']);
 
 const inRoom = (room: HouseRoom, item: CribItem) => {
   if (!ITEMS[item.type]) return false;
@@ -248,12 +251,25 @@ export function scoreCrib(input: CribInput): CribScore {
     ...(lightShare < 1 ? { tip: unlit ? `Add lighting to ${input.rooms?.[unlit.room.name]?.name || unlit.room.name}` : 'Add lighting', gain: Math.min(10 - lp, (10 / Math.max(1, scored.length)) * 2) } : {}),
   });
 
-  // Finishing touches: decor pieces and the house's own finishes (floors, wall finishes...).
+  // Finishing touches: decor pieces, and the house's own finishes: floors and walls done room by room, a POP
+  // ceiling, and luxury stone or wallpaper (game/finishes.ts). Other finishing data the house keeps counts too.
   const decor = placed.filter((i) => ITEMS[i.type].category === 'decor' || ['plant', 'gilded_mirror', 'ming_vase', 'bronze_head', 'lion_statue', 'wall_clock', 'ankara_rug', 'rug', 'velvet_rug'].includes(i.type)).length;
-  const fp = Math.min(8, Math.min(4, decor) + Math.min(4, (fin.filled - fin.lights) * 0.75));
+  const finish = cleanFinish(input.finish ?? undefined);
+  const named = scored.map(({ room }) => room.name);
+  const floored = named.filter((n) => FLOOR_BY_ID[finish?.floor?.[n] ?? '']).length;
+  const walled = named.filter((n) => finish?.wall?.[n]).length;
+  const ceilinged = named.some((n) => (CEILING_BY_ID[finish?.ceiling?.[n] ?? '']?.rate ?? 0) > 0);
+  const luxe = named.some((n) => FLOOR_BY_ID[finish?.floor?.[n] ?? '']?.luxury || WALL_BY_ID[finish?.wall?.[n] ?? '']?.luxury || CEILING_BY_ID[finish?.ceiling?.[n] ?? '']?.luxury);
+  const coverage = named.length ? (floored + walled * 0.5) / (named.length * 1.5) : 0;
+  const finishPts = Math.min(4, coverage * 3 + (ceilinged ? 0.5 : 0) + (luxe ? 0.5 : 0) + Math.min(1, (fin.filled - fin.lights) * 0.25));
+  const fp = Math.min(8, Math.min(4, decor) + finishPts);
+  const bare = scored.find(({ room }) => !FLOOR_BY_ID[finish?.floor?.[room.name] ?? '']);
   parts.push({
     key: 'finish', label: 'Finishing touches', icon: '🪴', got: fp, max: 8,
-    ...(fp < 8 ? { tip: decor < 4 ? 'Add rugs, plants or art' : 'Choose floor and wall finishes', gain: Math.min(8 - fp, 2) } : {}),
+    ...(fp < 8 ? {
+      tip: decor < 4 ? 'Add rugs, plants or art' : bare ? `Lay a floor finish in ${input.rooms?.[bare.room.name]?.name || bare.room.name}` : !ceilinged ? 'Put up a POP ceiling' : 'Finish the walls',
+      gain: Math.min(8 - fp, 2),
+    } : {}),
   });
 
   for (const p of parts) {
@@ -303,8 +319,8 @@ const NOT_DECOR = new Set(['wallEdits', 'properties', 'items', 'furnitureInvento
 export const PROPERTY_DECOR_KEYS = ['finishes', 'lighting', 'lights', 'floors', 'decor', 'interior', 'fittings'] as const;
 
 /**
- * A house's arrangement as a layout snapshot: its furniture (every field but the id and theft marks, so new fields
- * ride along), its paint, and every other per-house decorating value in the save. Generic on purpose: data added
+ * A house's arrangement as a layout snapshot: its furniture (every field but theft and breakage marks, so new fields
+ * ride along; the ids only to link a piece to the table it stands on), its paint, and every other per-house decorating value in the save. Generic on purpose: data added
  * later by other parts of the game under a house's key is included without changes here.
  */
 export interface LayoutSnapshot {
@@ -334,7 +350,7 @@ export function snapshotHouse(save: SaveLike, houseKey: string, items: CribItem[
   return {
     v: 1,
     design,
-    items: items.filter((i) => ITEMS[i.type] && !ITEMS[i.type].fixed).slice(0, LAYOUTS.maxItems).map(({ id: _id, stolen: _s, broken: _b, ...rest }) => rest as CribItem),
+    items: items.filter((i) => ITEMS[i.type] && !ITEMS[i.type].fixed).slice(0, LAYOUTS.maxItems).map(({ stolen: _s, broken: _b, ...rest }) => rest as CribItem),
     ...(paint && Object.keys(paint).length ? { paint } : {}),
     ...(Object.keys(decor).length ? { decor } : {}),
     ...(Object.keys(prop).length ? { prop } : {}),

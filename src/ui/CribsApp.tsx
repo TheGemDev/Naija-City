@@ -133,7 +133,8 @@ function useLocalScore() {
   const walls = useGame((s) => s.wallEdits[key]);
   const paint = useGame((s) => s.housePaint[key]);
   const rooms = useGame((s) => s.properties.find((p) => p.id === key)?.rooms);
-  return useMemo(() => scoreCrib({ items, design, walls, paint, rooms }), [items, design, walls, paint, rooms]);
+  const finish = useGame((s) => s.houseFinish?.[key]);
+  return useMemo(() => scoreCrib({ items, design, walls, paint, rooms, finish }), [items, design, walls, paint, rooms, finish]);
 }
 
 /* ---------- My crib ---------- */

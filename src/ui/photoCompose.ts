@@ -81,6 +81,8 @@ type Step = ['brightness' | 'contrast' | 'saturate' | 'sepia' | 'grayscale' | 'h
 export interface Lens {
   id: string;
   label: string;
+  /** Shown on its button in the camera's lens carousel. */
+  icon: string;
   /** CSS filter functions, in order: the live preview on the scene uses them as they are, the picture as one colour matrix. */
   steps: Step[];
   /** A wash of colour over it, top to bottom (or left to right), and a dark edge. */
@@ -88,14 +90,14 @@ export interface Lens {
   vignette?: number;
 }
 export const LENSES: Lens[] = [
-  { id: 'none', label: 'Normal', steps: [] },
-  { id: 'golden', label: 'Golden hour', steps: [['sepia', 0.25], ['saturate', 1.35], ['brightness', 1.06], ['contrast', 1.05]], wash: ['rgba(255,170,60,0.2)', 'rgba(255,90,40,0.1)', 'v'] },
-  { id: 'owambe', label: 'Owambe', steps: [['saturate', 1.8], ['contrast', 1.12], ['brightness', 1.04]], wash: ['rgba(236,72,153,0.16)', 'rgba(250,204,21,0.16)', 'v'], vignette: 0.25 },
-  { id: 'harmattan', label: 'Harmattan', steps: [['sepia', 0.4], ['contrast', 0.84], ['brightness', 1.1], ['saturate', 0.8]], wash: ['rgba(235,205,150,0.32)', 'rgba(200,160,110,0.14)', 'v'] },
-  { id: 'eko', label: 'Eko nights', steps: [['hue-rotate', -12], ['saturate', 1.25], ['contrast', 1.2], ['brightness', 0.9]], wash: ['rgba(30,64,175,0.26)', 'rgba(147,51,234,0.14)', 'v'], vignette: 0.35 },
-  { id: 'naija', label: 'Green white', steps: [['saturate', 1.2], ['contrast', 1.05]], wash: ['rgba(0,135,81,0.34)', 'rgba(0,135,81,0.34)', 'h'] },
-  { id: 'nolly', label: 'Nollywood', steps: [['contrast', 1.3], ['saturate', 0.75], ['sepia', 0.2]], vignette: 0.55 },
-  { id: 'bw', label: 'Black & white', steps: [['grayscale', 1], ['contrast', 1.15]] },
+  { id: 'none', icon: '✨', label: 'Normal', steps: [] },
+  { id: 'golden', icon: '🌅', label: 'Golden hour', steps: [['sepia', 0.25], ['saturate', 1.35], ['brightness', 1.06], ['contrast', 1.05]], wash: ['rgba(255,170,60,0.2)', 'rgba(255,90,40,0.1)', 'v'] },
+  { id: 'owambe', icon: '🎉', label: 'Owambe', steps: [['saturate', 1.8], ['contrast', 1.12], ['brightness', 1.04]], wash: ['rgba(236,72,153,0.16)', 'rgba(250,204,21,0.16)', 'v'], vignette: 0.25 },
+  { id: 'harmattan', icon: '🌫️', label: 'Harmattan', steps: [['sepia', 0.4], ['contrast', 0.84], ['brightness', 1.1], ['saturate', 0.8]], wash: ['rgba(235,205,150,0.32)', 'rgba(200,160,110,0.14)', 'v'] },
+  { id: 'eko', icon: '🌃', label: 'Eko nights', steps: [['hue-rotate', -12], ['saturate', 1.25], ['contrast', 1.2], ['brightness', 0.9]], wash: ['rgba(30,64,175,0.26)', 'rgba(147,51,234,0.14)', 'v'], vignette: 0.35 },
+  { id: 'naija', icon: '🇳🇬', label: 'Green white', steps: [['saturate', 1.2], ['contrast', 1.05]], wash: ['rgba(0,135,81,0.34)', 'rgba(0,135,81,0.34)', 'h'] },
+  { id: 'nolly', icon: '🎬', label: 'Nollywood', steps: [['contrast', 1.3], ['saturate', 0.75], ['sepia', 0.2]], vignette: 0.55 },
+  { id: 'bw', icon: '🖤', label: 'Black & white', steps: [['grayscale', 1], ['contrast', 1.15]] },
 ];
 export const LENS_BY_ID: Record<string, Lens> = Object.fromEntries(LENSES.map((l) => [l.id, l]));
 

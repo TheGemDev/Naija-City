@@ -101,13 +101,12 @@ export function DecorRig() {
 
 type Press = { id: string | null; x: number; y: number; pointerId: number; started: boolean; long: boolean; timer: number };
 let press: Press | null = null;
-/** A long-press picks; the click that follows it must not also select. */
-let swallowClick = false;
-export const takeSwallowedClick = () => {
-  const s = swallowClick;
-  swallowClick = false;
-  return s;
+/** A long-press picks and a drag moves; the click that follows either must not also select. It comes straight after. */
+let swallowUntil = 0;
+const swallowClick = () => {
+  swallowUntil = performance.now() + 350;
 };
+export const takeSwallowedClick = () => performance.now() < swallowUntil;
 
 const DRAG_PX = 7;
 const LONG_MS = 450;
@@ -124,8 +123,9 @@ function stop(commit: boolean) {
   if (was.started) {
     // Placed pieces land where they were dropped; a ghost being placed just stays put for the ✓ button.
     endDrag(commit && !!was.id);
-    swallowClick = true;
   }
+  // The click the browser sends after this release is the drag's or the long-press's, not a tap.
+  if (was.started || was.long) swallowClick();
 }
 
 function onMove(e: PointerEvent) {
@@ -158,7 +158,7 @@ function startPress(id: string | null, e: ThreeEvent<PointerEvent>) {
       if (!press || press.started) return;
       press.long = true;
       toggleSel(id);
-      swallowClick = true;
+      swallowClick();
       if (rig.controls) rig.controls.enabled = true;
     }, LONG_MS);
   }

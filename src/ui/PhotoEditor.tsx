@@ -179,7 +179,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
     const layer: Layer = kind === 'caption'
       ? { id, kind, text, x: 0.5, y: 0.7, size: 0.058, rot: 0, tone: 0, style: 'outline' }
       : kind === 'info'
-      ? { id, kind, text, x: 0.5 + nudge * 0.5, y: 0.22 + nudge, size: 0.045, rot: 0, tone: 0, style: 'outline' }
+      ? { id, kind, text, x: 0.5, y: 0.16 + (id % 5) * 0.075, size: 0.045, rot: 0, tone: 0, style: 'outline' }
       : { id, kind, text, x: 0.5 + nudge, y: 0.4 + nudge * 0.6, size: kind === 'emoji' ? 0.16 : 0.05, rot: kind === 'tag' ? -0.08 : 0, tone: id % TAG_TONES.length, style: 'outline' };
     setLayers((ls) => [...ls.filter((l) => l.kind !== 'caption' || l.text.trim()), layer]);
     setSelected(id);

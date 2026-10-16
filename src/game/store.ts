@@ -3460,4 +3460,13 @@ useGame.subscribe((s, prev) => {
   if (s.destinationId !== prev.destinationId) setActiveMap(s.destinationId);
 });
 
+// Buying or selling a car at home grows or shrinks the car bay (game/grid.ts), which moves the compound gate down or
+// up: the gate is a placed item, so it follows.
+useGame.subscribe((s, prev) => {
+  if (s.view !== 'home' || Math.min(3, s.ownedCars.length) === Math.min(3, prev.ownedCars.length)) return;
+  const layout = houseLayout(activeDesignOf(s), s.wallEdits[houseKeyOf(s)]);
+  const gate = s.items.find((i) => i.type === 'gate');
+  if (gate && (gate.x !== layout.gate.x || gate.z !== layout.gate.z)) useGame.setState({ items: s.items.map((i) => (i === gate ? { ...i, x: layout.gate.x, z: layout.gate.z, rot: 0 } : i)) });
+});
+
 export { naira };

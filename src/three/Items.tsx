@@ -71,7 +71,9 @@ function Item({ item, powered, running, selected, picked, readOnly }: { item: Pl
         rotation={[0, yaw, 0]}
         onPointerDown={readOnly ? undefined : (e) => pressItem(item.id, e)}
         onClick={(e) => {
-          if (e.delta > 8 || (!readOnly && takeSwallowedClick())) return;
+          if (e.delta > 8) return;
+          // The click after a drag or a long-press is not a tap (and this handler hears it once per mesh hit).
+          if (!readOnly && takeSwallowedClick()) return e.stopPropagation();
           const s = useGame.getState();
           if (readOnly) {
             const visit = useVisit.getState().current;

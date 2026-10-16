@@ -524,10 +524,13 @@ export interface PlantOpts {
   seed?: number;
 }
 
+/** Below this size a tree is a few pixels across from the map camera: it gets the low-performance shape anyway. */
+const SMALL = 0.7;
+
 /** Plants a tree `size` times its usual size at (x, z) into a kit (placeKit's Kit or a place's pen). */
 export function plantTree(sink: TreeSink, kind: TreeKind, x: number, z: number, size = 1, o: PlantOpts = {}) {
   const pick = treePick(kind, x, z, o.seed);
-  const g = treeGeometry(kind, pick.variant, o.palette ?? pick.palette, !!o.low, o.dust ?? season);
+  const g = treeGeometry(kind, pick.variant, o.palette ?? pick.palette, !!o.low || size < SMALL, o.dust ?? season);
   const s = size * pick.scale;
   sink.shape(TREE_KEY, g, [x, o.y ?? 0, z], [s, s, s], [pick.lx, pick.yaw, pick.lz]);
 }

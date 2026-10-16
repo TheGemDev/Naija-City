@@ -42,7 +42,7 @@ export function ColourPicker({ value, onPick, none = true }: { value: string | n
         </button>
       </div>
       {open && <CustomColour value={custom ? value! : paintHex(value) ?? '#c4623a'} onPick={onPick} />}
-      <small className="colour-name">{colourName(value)}</small>
+      <small className="colour-name">{value || none ? colourName(value) : 'Pick a colour'}</small>
     </div>
   );
 }

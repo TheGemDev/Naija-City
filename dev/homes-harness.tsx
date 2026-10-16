@@ -20,6 +20,15 @@ useGame.setState({
     mk('h8', 11, 'duplex', 'full', 2), mk('h9', 12, null, 'full', 0), mk('h10', 13, 'mansion', 'double', 3), mk('h11', 14, 'bungalow', 'half'), mk('h12', 2, 'selfcon', 'full'), mk('h13', 10, 'flats', 'full', 1)] as never,
   housePaint: { h1: { outer: 'sky' }, h2: { outer: 'terracotta' }, h4: { outer: 'cream' } },
 });
+if (q.get('custom') === '1') useGame.setState((s) => ({
+  housePaint: { ...s.housePaint, h3: { outer: 'blush' }, h5: { outer: 'sage' } },
+  properties: s.properties.map((p) => ({
+    h1: { exterior: { fence: 'railing', gate: 'ornate', roofColour: 'green', paving: 'checker', carport: 'tensile', carportColour: 'red' } },
+    h2: { exterior: { fence: 'stone', gate: 'sliding', roof: 'flat', items: ['tank', 'genhouse', 'carport', 'pool', 'palm', 'lawn'] }, extensions: ['bq', 'balcony', 'terrace'] },
+    h3: { exterior: { fence: 'hedge', roof: 'gable', roofFinish: 'tile', roofColour: 'terracotta', items: ['mango', 'gazebo', 'grill', 'tank', 'garden'] }, extensions: ['floor2', 'balcony'] },
+    h5: { exterior: { fence: 'block', fenceColour: 'white', roof: 'hipped', roofColour: 'blue', items: ['tank', 'bar', 'palm'] }, extensions: ['bq'] },
+  } as Record<string, object>)[p.id] ? { ...p, ...({ h1: { exterior: { fence: 'railing', gate: 'ornate', roofColour: 'green', paving: 'checker', carport: 'tensile', carportColour: 'red' } }, h2: { exterior: { fence: 'stone', gate: 'sliding', roof: 'flat', items: ['tank', 'genhouse', 'carport', 'pool', 'palm', 'lawn'] }, extensions: ['bq', 'balcony', 'terrace'] }, h3: { exterior: { fence: 'hedge', roof: 'gable', roofFinish: 'tile', roofColour: 'terracotta', items: ['mango', 'gazebo', 'grill', 'tank', 'garden'] }, extensions: ['floor2', 'balcony'] }, h5: { exterior: { fence: 'block', fenceColour: 'white', roof: 'hipped', roofColour: 'blue', items: ['tank', 'bar', 'palm'] }, extensions: ['bq'] } } as Record<string, object>)[p.id] } : p) as never,
+}));
 
 function Cam() {
   const { camera } = useThree();

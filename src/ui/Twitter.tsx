@@ -1255,9 +1255,11 @@ export function GistApp() {
         {view?.t === 'profile' && <Profile key={JSON.stringify(view.who)} who={view.who} />}
         {view?.t === 'explore' && <Explore key={view.q ?? ''} q={view.q} />}
         {showFab && (
-          <button type="button" className="tw-fab" aria-label="New post" onClick={() => setComposer({ reply: null })}>
-            {I.plus(24)}
-          </button>
+          <div className="tw-fab-dock">
+            <button type="button" className="tw-fab" aria-label="New post" onClick={() => setComposer({ reply: null })}>
+              {I.plus(26)}
+            </button>
+          </div>
         )}
         {composer && (
           <Composer reply={composer.reply} onClose={(sent) => {

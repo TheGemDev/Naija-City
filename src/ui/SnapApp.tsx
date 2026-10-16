@@ -275,7 +275,7 @@ function StoriesTab({ now, myUid, play }: { now: number; myUid: string; play: (p
           const last = g[g.length - 1];
           const unseen = g.some((s) => !s.seen);
           return (
-            <button key={last.uid} type="button" className={`snap-tile story ${unseen ? 'unseen' : ''}`} onClick={() => open(k)}>
+            <button key={last.uid} type="button" className={`snap-tile is-story ${unseen ? 'unseen' : ''}`} onClick={() => open(k)}>
               <img src={last.url} alt="" loading="lazy" draggable={false} />
               <span className="snap-tile-who">
                 <Face uid={last.uid} username={last.username} size="sm" />
@@ -331,7 +331,7 @@ function SpotlightTab({ play }: { play: (p: Playing) => void }) {
       )}
       <div className="snap-tiles">
         {live.map((s, k) => (
-          <button key={s.id} type="button" className="snap-tile spot" onClick={() => play({ groups: live.map((x) => [x]), g: k, i: 0, mode: 'spotlight' })}>
+          <button key={s.id} type="button" className="snap-tile is-spot" onClick={() => play({ groups: live.map((x) => [x]), g: k, i: 0, mode: 'spotlight' })}>
             <img src={s.url} alt={s.caption || ''} loading="lazy" draggable={false} />
             {s.caption && <span className="snap-tile-cap">{s.caption}</span>}
             <span className="snap-tile-stats">
@@ -496,7 +496,7 @@ function Player({ start, myUid, onClose }: { start: Playing; myUid?: string; onC
   };
 
   return (
-    <div className={`snap-player ${mode}`} role="dialog" aria-label={`Snap by @${snap.username ?? 'someone'}`} style={{ transform: dy > 0 ? `translateY(${dy}px) scale(${1 - Math.min(dy, 300) / 1500})` : undefined }}>
+    <div className={`snap-player mode-${mode}`} role="dialog" aria-label={`Snap by @${snap.username ?? 'someone'}`} style={{ transform: dy > 0 ? `translateY(${dy}px) scale(${1 - Math.min(dy, 300) / 1500})` : undefined }}>
       <div className="snap-player-bg" style={{ backgroundImage: `url("${snap.url}")` }} aria-hidden />
       <div className="snap-player-stage" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; setPaused(false); setDy(0); }}>
         <img key={snap.id} src={snap.url} alt={snap.caption || `Snap by @${snap.username ?? 'someone'}`} draggable={false} />
@@ -601,7 +601,7 @@ function CommentsSheet({ snap, mine, myUid, onClose }: { snap: Snap; mine: boole
         {comments?.map((c) => (
           <li key={c.id}>
             <Face uid={c.uid} username={c.username} size="sm" />
-            <span>
+            <span className="snap-c-body">
               <b><TileName uid={c.uid} username={c.username} /> <small>{ago(c.at, now)}</small></b>
               <p>{c.text}</p>
             </span>
@@ -642,7 +642,7 @@ function ViewersSheet({ id, onClose }: { id: number; onClose: () => void }) {
         {list?.map((v) => (
           <li key={v.uid}>
             <Face uid={v.uid} username={v.username} size="sm" />
-            <span><b><TileName uid={v.uid} username={v.username} /></b></span>
+            <span className="snap-c-body"><b><TileName uid={v.uid} username={v.username} /></b></span>
             <small className="snap-muted">{ago(v.at, now)}</small>
           </li>
         ))}

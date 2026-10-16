@@ -143,7 +143,11 @@ function ChildFigure({ kid, index, now, layout, items, cot, bed }: {
     seated.current = false;
     let w = walk.current;
     if (!w) {
-      const c = cells.length ? cells[(kid.id * 7 + index * 3) % cells.length] : { x: 1, z: 1 };
+      // They start out where the family is: the living room, when the house has one.
+      const lounge = layout.rooms.find((r) => /living|parlour|lounge/i.test(r.name));
+      const pool = lounge ? cells.filter((c) => c.x >= lounge.x0 && c.x < lounge.x1 && c.z >= lounge.z0 && c.z < lounge.z1) : [];
+      const from = pool.length ? pool : cells;
+      const c = from.length ? from[(kid.id * 7 + index * 5) % from.length] : { x: 1, z: 1 };
       w = walk.current = { x: c.x + 0.5, z: c.z + 0.5, tx: c.x + 0.5, tz: c.z + 0.5, wait: 1 + index, yaw: 0 };
     }
     const speed = stage === 'toddler' ? 0.35 : 0.6;

@@ -16,6 +16,7 @@ import { houseOf } from './social';
 import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W, arrivalCell, placementError, type PlacedItem } from '../src/game/grid';
 import { isColourRef, type HousePaint } from '../src/game/paint';
+import type { HouseFinish } from '../src/game/finishes';
 import { REGION_BY_ID, STAGES } from '../src/game/property';
 import { getRegion } from '../src/game/regions';
 import { skillLevel } from '../src/game/career';
@@ -102,13 +103,14 @@ export function savedHouses(save: SaveJson): SavedHouse[] {
 /** The decorating data of one house, every per-house value in the save, as the score's finishes. */
 function decorOf(save: SaveJson, house: SavedHouse) {
   const snap = snapshotHouse(save, house.pid, house.items, house.design);
-  const { lighting, ...rest } = { ...(snap.decor ?? {}), ...(snap.prop ?? {}) } as Record<string, unknown>;
-  return { finishes: rest, lighting };
+  // houseFinish is read on its own (the score knows its shape); anything else per house counts generically.
+  const { lighting, houseFinish, ...rest } = { ...(snap.decor ?? {}), ...(snap.prop ?? {}) } as Record<string, unknown>;
+  return { finishes: rest, lighting, finish: houseFinish as HouseFinish | undefined };
 }
 
 export function scoreSaved(save: SaveJson, house: SavedHouse): CribScore {
-  const { finishes, lighting } = decorOf(save, house);
-  return scoreCrib({ items: house.items, design: house.layout, walls: house.walls, paint: house.paint, rooms: house.property?.rooms ?? null, finishes, lighting });
+  const { finishes, lighting, finish } = decorOf(save, house);
+  return scoreCrib({ items: house.items, design: house.layout, walls: house.walls, paint: house.paint, rooms: house.property?.rooms ?? null, finishes, lighting, finish });
 }
 
 async function loadSave(db: D1Database, uid: string): Promise<SaveJson | null> {
