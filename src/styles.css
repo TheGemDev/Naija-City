@@ -3303,3 +3303,15 @@ body.corner-hud .time-card .sky svg, body.corner-hud .time-card .sky img { width
 body.corner-hud .corner-fan .chat-fab { position: absolute; right: 60px; bottom: calc(18px + 68px + 10px + var(--safe-b)); }
 body.corner-hud .corner-fan .chat-fab .chat-form { margin: 0 -48px 0 0; width: min(300px, calc(100vw - 24px)); }
 body.corner-hud .corner-fan .chat-fab .chat-fab-btn { width: 54px; height: 54px; }
+
+/* Icons dead centre; Chat right above the Phone; the lit Home/Decor tab a full pill. */
+.corner-fan > button, body.corner-hud .corner-fan .chat-fab-btn { display: flex; align-items: center; justify-content: center; }
+.corner-fan > button > *, body.corner-hud .corner-fan .chat-fab-btn > * { margin: 0 !important; }
+body.corner-hud .corner-fan .chat-fab { right: calc(12px + (68px - 54px) / 2); bottom: calc(18px + 68px + 10px + var(--safe-b)); }
+body.corner-hud .corner-fan .chat-fab .chat-form { margin: 0 calc(-1 * (12px + (68px - 54px) / 2 - 12px)) 0 0; }
+.corner-pill button { border-radius: 999px; }
+.corner-pill button.on { background: rgba(15, 107, 58, 0.14); }
+.corner-pill button { width: 70px; }
+/* You stay at the top whatever you are doing (Decor, a venue, a drive): nothing moves you off it. */
+body.corner-hud .needs { top: 10px !important; bottom: auto !important; }
+body.corner-hud .ui .needs { display: flex !important; }

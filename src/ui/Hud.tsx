@@ -1110,7 +1110,7 @@ export function Hud() {
       <GazetteBanner />
       {!CORNER_HUD && <ChatButton />}
       <MoneyRain />
-      {mode === 'live' && <Needs />}
+      <Needs />
       <GameTips />
       {/* In someone's house you are still "inside" the venue you came from: its card, pills and desks wait until you are back. */}
       {!visiting && <RoomCard />}
