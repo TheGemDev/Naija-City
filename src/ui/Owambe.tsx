@@ -267,7 +267,7 @@ export function Owambe() {
     const s = useGame.getState();
     s.bump('danceBest', score, true);
     needs({ fun: 25, energy: -12, social: 10 });
-    const tips = score >= 30 ? s.earn('dance_tips', score * 150, 'Owambe dance tips') : 0;
+    const tips = score >= 30 ? s.earn('dance_tips', score * 250, 'Owambe dance tips') : 0;
     say(score >= 90 ? `🕺🏾 LEGENDARY! Score ${score}. Guests sprayed you ${naira(tips)}!` : score >= 60 ? `💃🏾 Sharp moves! Score ${score}. ${naira(tips)} in tips.` : score >= 30 ? `🙂 Not bad. Score ${score}. ${naira(tips)} in tips.` : `😅 Score ${score}. An uncle laughed so hard he cried. No tips.`);
   };
 

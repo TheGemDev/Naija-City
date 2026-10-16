@@ -20,6 +20,7 @@ import { PersonPreview } from './Closet';
 import { PushNotifications, needColor } from './Hud';
 import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
+import { useKids } from '../net/kids';
 
 type Tab = 'profile' | 'stats' | 'settings';
 const TABS: { id: Tab; label: string }[] = [
@@ -64,6 +65,8 @@ function ProfileTab() {
   const origin = useGame((s) => originOf(s.origin));
   const user = useSession((s) => s.user);
   const mood = moodOf(useNeeds());
+  // Children you adopted (Phone → Adopt) who are at home: they show on your profile for everyone.
+  const kids = useKids((s) => s.kids).filter((k) => k.status === 'home');
   return (
     <div className="profile-tab">
       <div className="profile-stage">
@@ -94,6 +97,14 @@ function ProfileTab() {
             <b>{maskEmail(user?.email)}</b>
           </span>
         </div>
+        {kids.length > 0 && (
+          <div className="profile-row">
+            <span>
+              <small>Children</small>
+              <b>👶🏾 {kids.map((k) => k.name).join(', ')}</b>
+            </span>
+          </div>
+        )}
       </div>
       {user?.username && (
         <div className="profile-invite">

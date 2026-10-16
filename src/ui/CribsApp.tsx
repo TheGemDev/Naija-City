@@ -115,7 +115,7 @@ function Tips({ parts }: { parts: CribPart[] }) {
   return (
     <div className="cb-tips">
       {tips.map((t) => (
-        <div key={t.key} className="cb-tip"><Emoji char={t.icon} size={16} /><span>{t.tip}</span><b>+{t.gain}</b></div>
+        <div key={t.key} className="cb-tip"><Emoji char={t.icon} size={16} /><span className="cb-tip-text">{t.tip}</span><b>+{t.gain}</b></div>
       ))}
     </div>
   );

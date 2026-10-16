@@ -17,7 +17,9 @@ import { PlaceShopsLine, PlaceShopsPanel } from './Market';
 import { usePlaceShops } from '../net/market';
 import { useHeldOffice } from '../net/office';
 import { TravelSheet, carDry, fareOf, tripCost } from './TravelSheet';
-import { ITEM_PAINT, PAINT_COLOURS, WALL_PARTS } from '../game/paint';
+import { ITEM_PAINT, WALL_PARTS } from '../game/paint';
+import { LIGHTS } from '../game/finishes';
+import { ColourPicker, FinishesTab, LampControls } from './Finishes';
 import { placeLink, shareLink } from '../net/deeplink';
 import { Emoji, Icon } from './Icons';
 import { useApps } from '../game/apps';
@@ -146,6 +148,7 @@ export function BuyPanel() {
       : [{ key: 'stolen' as const, icon: '📦', label: 'Storage', sub: 'Put things back', count: stolen }]) : []),
     { key: 'walls', icon: '🧱', label: 'Walls', sub: 'Build & knock' },
     { key: 'paint', icon: '🎨', label: 'Paint', sub: 'Pick colours' },
+    { key: 'finishes', icon: '✨', label: 'Finishes', sub: 'Floors, walls, lights' },
   ];
   return (
     <div className={`sheet catalogue ${hidden ? 'collapsed' : ''}`}>
@@ -234,12 +237,13 @@ export function BuyPanel() {
       )}
       {!hidden && tab === 'walls' && <WallTools />}
       {!hidden && tab === 'paint' && <PaintTools />}
+      {!hidden && tab === 'finishes' && <FinishesTab />}
       </div>
     </div>
   );
 }
 
-type HouseTab = 'furniture' | 'stolen' | 'walls' | 'paint';
+type HouseTab = 'furniture' | 'stolen' | 'walls' | 'paint' | 'finishes';
 
 /** Walls tab: pick an edge in the house, then confirm build / knock down. */
 function WallTools() {
@@ -296,18 +300,9 @@ export function PlaceBar() {
   return <DecorPlaceBar />;
 }
 
-/** One row of the 8 palette colours plus a "original" swatch. */
+/** The palette (24 colours and a custom one, ui/Finishes.tsx) plus an "original" swatch. */
 function Swatches({ value, onPick }: { value: string | null | undefined; onPick: (id: string | null) => void }) {
-  return (
-    <div className="paint-row">
-      <button className={`paint-swatch none ${!value ? 'on' : ''}`} title="Original" aria-label="Original colour" onClick={() => onPick(null)}>
-        ∅
-      </button>
-      {PAINT_COLOURS.map((c) => (
-        <button key={c.id} className={`paint-swatch ${value === c.id ? 'on' : ''}`} style={{ background: c.hex }} title={c.name} aria-label={c.name} onClick={() => onPick(c.id)} />
-      ))}
-    </div>
-  );
+  return <ColourPicker value={value} onPick={onPick} />;
 }
 
 /** Buy mode: tap an owned item → move or sell. */
@@ -351,6 +346,7 @@ export function OwnedSheet() {
               ))}
             </div>
           )}
+          {LIGHTS[item.type] && <LampControls item={item} />}
           <OwnedDecorTools id={item.id} />
           <div className="owned-actions">
             <button className="action tile" onClick={() => move(item.id)}>

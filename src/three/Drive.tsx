@@ -86,9 +86,9 @@ function Beacon({ x, z, colour, label }: { x: number; z: number; colour: string;
 function PassengerMarkers() {
   const p = useDrive((s) => s.passenger);
   if (!p) return null;
-  if (!p.boarded) return <Beacon x={p.pickup.x + 0.5} z={p.pickup.z + 0.5} colour="#facc15" label={`🙋🏾 ${p.name}`} />;
+  if (!p.boarded) return <Beacon x={p.pickup.x + 0.5} z={p.pickup.z + 0.5} colour="#facc15" label={p.order ? `🥡 Collect at ${p.order.fromName}` : `🙋🏾 ${p.name}`} />;
   const to = placeHere(p.to)!;
-  return <Beacon x={to.door.x + 0.5} z={to.door.z + 0.5} colour="#22c55e" label={`📍 ${p.toName}`} />;
+  return <Beacon x={to.door.x + 0.5} z={to.door.z + 0.5} colour="#22c55e" label={p.order ? `📦 ${p.name} · ${p.toName}` : `📍 ${p.toName}`} />;
 }
 
 /** Same uniform as the officers at the station (Interior.tsx). */

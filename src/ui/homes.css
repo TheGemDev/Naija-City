@@ -1,0 +1,80 @@
+/* House app, going-home picker and house switcher: property cards with the house's picture (ui/homesKit.tsx). */
+
+.hm-thumb { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 3 / 2; background: linear-gradient(180deg, #bfe0f5 0%, #e3f1f8 62%, #b9d58a 62%, #a9c97a 100%); }
+.hm-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hm-thumb-wait { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.7; animation: hm-pulse 1.4s ease-in-out infinite; }
+@keyframes hm-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .hm-thumb-wait { animation: none; } }
+
+/* A property card in the list. */
+.hm-card { display: flex; flex-direction: column; gap: 0; padding: 0; border: 0; text-align: left; background: var(--surface); color: var(--ink); border-radius: 18px; overflow: hidden; box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.07), 0 2px 6px rgba(15, 23, 42, 0.06); cursor: pointer; width: 100%; font: inherit; }
+.hm-card .hm-thumb { border-radius: 0; }
+.hm-card-pic { position: relative; }
+.hm-chip { position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 800; background: rgba(255, 255, 255, 0.94); color: #0f172a; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18); max-width: calc(100% - 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-chip.home { background: #15803d; color: #fff; }
+.hm-chip.let { background: #1d4ed8; color: #fff; }
+.hm-chip.build { background: #f59e0b; color: #1c1917; }
+.hm-chip.land { background: #fef3c7; color: #78350f; }
+.hm-worth { position: absolute; right: 10px; bottom: 10px; padding: 4px 10px; border-radius: 10px; font-size: 13px; font-weight: 900; background: rgba(15, 23, 42, 0.78); color: #fff; }
+.hm-card-body { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px 12px; min-width: 0; }
+.hm-card-body .hm-title { font-size: 16px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-sub { font-size: 12px; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-where { font-size: 12.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.hm-facts span { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: var(--surface-3); color: var(--ink); }
+.hm-progress { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin-top: 6px; }
+.hm-progress i { display: block; height: 100%; background: #f59e0b; }
+.hm-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.hm-actions .btn { flex: 1 1 auto; min-height: 38px; }
+
+/* Rename in place. */
+.hm-rename { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.hm-rename .hm-title { font-size: 16px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-rename.big .hm-title { font-size: 20px; }
+.hm-pencil { font-size: 13px; opacity: 0.7; flex: none; }
+.hm-rename-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hm-rename-form .text-input { flex: 1 1 160px; min-width: 0; }
+.hm-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* The detail page. */
+.hm-detail-hero { border-radius: 18px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.07); }
+.hm-detail-hero .hm-thumb { border-radius: 0; }
+.hm-detail-hero .hm-card-body { gap: 4px; }
+.hm-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hm-stat { background: var(--surface); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.06); min-width: 0; }
+.hm-stat small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.hm-stat b { font-size: 14px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-section { display: flex; flex-direction: column; gap: 8px; }
+.hm-section > h4 { margin: 6px 0 0; }
+.hm-opts { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.hm-opts::-webkit-scrollbar { display: none; }
+.hm-opt { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 104px; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.hm-opt b { font-size: 12.5px; }
+.hm-opt small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.hm-opt.on { border-color: #15803d; background: rgba(21, 128, 61, 0.08); }
+.hm-opt:disabled { opacity: 0.45; cursor: default; }
+.hm-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.hm-swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(var(--ink-rgb), 0.12); cursor: pointer; padding: 0; }
+.hm-swatch.on { outline: 3px solid #15803d; outline-offset: 2px; }
+.hm-row-label { font-size: 12px; font-weight: 800; color: var(--muted); margin-top: 2px; }
+.hm-buy { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.1); z-index: 1; }
+.hm-buy span { flex: 1; font-size: 13px; font-weight: 700; }
+.hm-room { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface); box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.06); }
+.hm-room .text-input { flex: 1 1 auto; min-width: 0; }
+.hm-room select { min-width: 0; max-width: 46%; padding: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; }
+
+/* Going-home picker: picture tiles in a sideways strip. */
+.travel-homes.hm-strip button { flex-direction: column; align-items: stretch; width: 172px; padding: 6px; gap: 6px; }
+.travel-homes.hm-strip .hm-thumb { width: 100%; border-radius: 10px; }
+.travel-homes.hm-strip .hm-strip-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; }
+.travel-homes.hm-strip .hm-strip-text b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.travel-homes.hm-strip .hm-strip-text small { font-size: 11px; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.travel-homes.hm-strip .hm-strip-text small.tag { font-weight: 800; }
+.travel-homes.hm-strip .hm-strip-text small.tag.home { color: #15803d; }
+.travel-homes.hm-strip .hm-strip-text small.tag.warn { color: #b45309; }
+
+/* House card switcher: big ‹ › either side of the house name. */
+.house-card.hm-switch { pointer-events: auto; padding: 4px 6px; gap: 4px; }
+.hm-arrow { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--ink); font-size: 22px; font-weight: 900; display: grid; place-items: center; cursor: pointer; }
+.hm-arrow:disabled { opacity: 0.35; cursor: default; }
+.hm-switch .house-facts { flex: 1; padding: 0 4px; }

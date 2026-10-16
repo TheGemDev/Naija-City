@@ -82,6 +82,17 @@ export function rankMults(shifts: Record<string, number>): Record<string, number
   return out;
 }
 
+/** New in town: the first shifts anyone ever works pay extra, so a fresh life gets going (counted across every job). */
+export const NEWCOMER = { shifts: 10, pay: 1.5 } as const;
+
+/** Every multiplier the server allows on a job's pay beyond streak and origin: rank, and the newcomer boost. */
+export function payMults(shifts: Record<string, number>): Record<string, number> {
+  const out = rankMults(shifts);
+  const total = Object.values(shifts).reduce((a, n) => a + n, 0);
+  if (total < NEWCOMER.shifts) for (const id of Object.keys(out)) out[id] *= NEWCOMER.pay;
+  return out;
+}
+
 /** What the client uses to price a shift; kept in step with the server by net/career.ts. */
 export const careerState: { mult: Record<string, number> } = { mult: {} };
 

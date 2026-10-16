@@ -25,7 +25,7 @@ import '../src/game/lagos';
 import '../src/game/kano';
 import { CITY_MAPS, type Place } from '../src/game/city';
 import {
-  BIZ, BIZ_COLOURS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESS_BY_ID, BUSINESSES, JOB_RANKS, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, NPC_SHOP, OPERATE_XP_PER_HOUR, SKILLS, SKILL_BY_ID, STALLS, TRAIN, allowedIcon, deliveryFee, demandAt, hourlyOf, nextSkillXp, rankIndex, rankMults, registrationFee,
+  BIZ, BIZ_COLOURS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESS_BY_ID, BUSINESSES, JOB_RANKS, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, NPC_SHOP, OPERATE_XP_PER_HOUR, SKILLS, SKILL_BY_ID, STALLS, TRAIN, allowedIcon, deliveryFee, demandAt, hourlyOf, nextSkillXp, rankIndex, NEWCOMER, payMults, registrationFee,
   openCost, rentOf, resizeCost, shelfOf, sizeOf, skillLevel, slotsOf, trainFee, upgradeCost, wageOf, type BusinessDef, type SkillId,
 } from '../src/game/career';
 
@@ -67,7 +67,7 @@ export async function shiftCounts(db: D1Database, uid: string): Promise<Record<s
 
 /** Pay multiplier per job for the wallet's work check (worker/wallet.ts). */
 export async function careerPayMults(db: D1Database, uid: string) {
-  return rankMults(await shiftCounts(db, uid));
+  return payMults(await shiftCounts(db, uid));
 }
 
 /* ---------- Businesses ---------- */
@@ -473,7 +473,8 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
         const r = rankIndex(n);
         return { id: j.id, shifts: n, rank: r, title: JOB_RANKS[r].title, mult: JOB_RANKS[r].pay, nextAt: JOB_RANKS[r + 1]?.shifts ?? null };
       }),
-      mults: rankMults(shifts),
+      mults: payMults(shifts),
+      newcomer: Math.max(0, NEWCOMER.shifts - Object.values(shifts).reduce((a, n) => a + n, 0)),
       businesses: rows.map((r) => ({
         ...bizView(r, skillLevel(xp[BUSINESS_BY_ID[r.type].skill]), now, visitors.get(spot(r.city, r.place_id)) ?? 0),
         listings: listingsByBusiness.get(r.id) ?? [],

@@ -1,7 +1,10 @@
 // TEMP harness (delete after): the real phone with the Cribs app, against the local test API. ?as=amaka&view=phone|visit
 import { createRoot } from 'react-dom/client';
 import '../src/game/theme';
+import '../src/theme.css';
 import '../src/styles.css';
+import '../src/ui/phone-ui.css';
+import '../src/ui/safe-area.css';
 import { useGame } from '../src/game/store';
 import { hydrate, type SaveData } from '../src/game/save';
 import { useSession, api } from '../src/net/session';

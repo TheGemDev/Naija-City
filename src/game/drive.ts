@@ -203,11 +203,14 @@ export function startDrive(vehicle: Vehicle, opts: { gig?: Gig; carId?: string }
   if (!inCity()) return;
   if (g.task) useGame.getState().cancelTask();
   if (opts.gig) {
-    g.charge(RENTAL[opts.gig], `Rented a ${opts.gig} for the day`, `rent-${opts.gig}`);
+    const what = opts.gig === 'dispatch' ? 'dispatch bike' : opts.gig;
+    g.charge(RENTAL[opts.gig], `Rented a ${what} for the day`, `rent-${opts.gig}`);
     const park = placeHere(parkIn(activeMap().id).place)!;
     place(park.door, Math.PI);
     useGame.setState((s) => ({ teleportId: s.teleportId + 1 }));
-    g.toast(`${SPEC[vehicle].icon} Picked up your rented ${opts.gig} at ${park.name}. Look for passengers waving! 🙋🏾`);
+    g.toast(opts.gig === 'dispatch'
+      ? `📦 Your dispatch bike is ready at ${park.name}. Orders will come in: collect at the yellow beam, deliver to the green one.`
+      : `${SPEC[vehicle].icon} Picked up your rented ${opts.gig} at ${park.name}. Look for passengers waving! 🙋🏾`);
   } else if (vehicle === 'horse') {
     const gates = durbarGates();
     place({ x: Math.floor(gates[0].x), z: Math.floor(gates[0].z) + 1 }, Math.PI);
@@ -254,7 +257,8 @@ export function stopDrive(quiet = false) {
   driveState.stall = 0;
   if (!quiet) {
     const g = useGame.getState();
-    if (ui.gig) g.toast(`🅿️ Returned the ${ui.gig}. ${ui.trips} trip${ui.trips === 1 ? '' : 's'}, ${naira(ui.earned)} earned today.`);
+    if (ui.gig === 'dispatch') g.toast(`🅿️ Returned the dispatch bike. ${ui.trips} deliver${ui.trips === 1 ? 'y' : 'ies'}, ${naira(ui.earned)} earned.`);
+    else if (ui.gig) g.toast(`🅿️ Returned the ${ui.gig}. ${ui.trips} trip${ui.trips === 1 ? '' : 's'}, ${naira(ui.earned)} earned today.`);
     else if (ui.vehicle === 'horse') g.toast('🐎 You handed the horse back to its rider.');
     else g.toast('🅿️ Parked.');
   }
@@ -548,7 +552,7 @@ export function stepDrive(dt: number) {
     if (ui.gig) {
       const p = ui.passenger;
       if (!p && now > spawnAt) (ui.gig === 'dispatch' ? spawnOrder() : spawnPassenger(ui.gig));
-      else if (p && !p.boarded && Math.hypot(p.pickup.x + 0.5 - avatar.x, p.pickup.z + 0.5 - avatar.z) < 1.4 && Math.abs(driveState.speed) < 3) {
+      else if (p && !p.boarded && Math.hypot(p.pickup.x + 0.5 - avatar.x, p.pickup.z + 0.5 - avatar.z) < (p.order ? 1.8 : 1.4) && Math.abs(driveState.speed) < 3) {
         const to = placeHere(p.to)!;
         const dist = Math.hypot(to.door.x - avatar.x, to.door.z - avatar.z);
         useDrive.setState({ passenger: { ...p, boarded: true, deadline: now + (dist / (SPEC[v].max * 0.45) + 15) * 1000 } });

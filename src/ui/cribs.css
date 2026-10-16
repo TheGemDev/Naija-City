@@ -42,7 +42,7 @@
 
 .cb-tips { display: flex; flex-direction: column; gap: 6px; }
 .cb-tip { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px rgba(var(--ink-rgb), 0.06); font-size: 13px; }
-.cb-tip span { flex: 1; min-width: 0; }
+.cb-tip-text { flex: 1; min-width: 0; }
 .cb-tip b { padding: 2px 8px; border-radius: 99px; font-size: 12px; color: #14532d; background: #bbf7d0; }
 
 .cb-ladder { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }

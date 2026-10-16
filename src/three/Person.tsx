@@ -649,11 +649,13 @@ function applyPose(r: Rig, p: Pose, armOut = 0) {
   r.footR.current.rotation.x = p.footR;
 }
 
-export function Person({ look, clipRef, seatedRef }: {
+export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
   look: string;
   clipRef: React.RefObject<Clip | null>;
   /** True while the body is on a seat: the legs sit, whatever the clip is doing up top. */
   seatedRef?: React.RefObject<boolean>;
+  /** A child's head is big for their body (three/Children.tsx): the head grows from the neck by this much. */
+  headScale?: number;
 }) {
   const a = useMemo(() => decodeLook(look), [look]);
   const rig: Rig = {
@@ -769,7 +771,7 @@ export function Person({ look, clipRef, seatedRef }: {
         <M color={pelvisColor} geometry={sphere(0.16)} position={[0, 0.0, 0]} scale={[f ? 1.08 : 1, 0.62, 0.62]} />
         <group ref={rig.torso}>
           <Torso a={a} top={top} color={topColor} skin={skin} bag={bagG} />
-          <group ref={rig.head} position={[0, NECK_PIVOT, 0]} rotation-order="YXZ">
+          <group ref={rig.head} position={[0, NECK_PIVOT, 0]} rotation-order="YXZ" scale={headScale}>
             <group position={[0, HEAD_Y - NECK_PIVOT, 0]}>
               <Head a={a} skin={skin} />
             </group>

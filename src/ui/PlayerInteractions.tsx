@@ -473,17 +473,20 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
   const setAlias = useGame((s) => s.setAlias);
   const [draft, setDraft] = useState(alias);
   const [plots, setPlots] = useState<number | null>(null);
+  // Their children at home (Phone → Adopt), from the public profile.
+  const [children, setChildren] = useState<{ name: string }[]>([]);
   const username = player.username;
   const name = player.name ?? live?.name;
 
   useEffect(() => setDraft(alias), [alias, player.uid]);
   useEffect(() => {
     setPlots(null);
+    setChildren([]);
     if (!username) return;
     let stale = false;
     fetch(`/api/profile/${username}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((p: { plots?: number } | null) => { if (!stale && p) setPlots(p.plots ?? 0); })
+      .then((p: { plots?: number; children?: { name: string }[] } | null) => { if (!stale && p) { setPlots(p.plots ?? 0); setChildren(p.children ?? []); } })
       .catch(() => {});
     return () => { stale = true; };
   }, [username]);
@@ -502,6 +505,7 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
         {name && name !== username && alias && <span>{name}</span>}
         <span className={live ? 'online-label' : 'muted'}>{live ? 'Online' : 'Offline'}</span>
         {plots !== null && <span>🏠 {plots} {plots === 1 ? 'plot' : 'plots'}</span>}
+        {children.length > 0 && <span>👶🏾 {children.map((c) => c.name).join(', ')}</span>}
       </div>
       <form className="player-alias" onSubmit={save}>
         <label htmlFor="player-alias">Nickname</label>

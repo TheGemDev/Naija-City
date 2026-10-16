@@ -12,6 +12,7 @@ import { placeLink, shareLink } from '../net/deeplink';
 import { STALLS } from '../game/career';
 import { loadPlaceShops, usePlaceShops } from '../net/market';
 import { PlaceShopsPanel } from './Market';
+import { oddJobPay } from '../game/gigs';
 
 
 export type ActivityTab = 'all' | 'wild' | 'spend' | 'social' | 'work' | 'shops';
@@ -192,7 +193,7 @@ export function PlaceActivityTabs({ place, insideVenue, onClose }: PlaceActivity
                       <b className="hub-tile-title">{a.label}</b>
                       <span className="hub-tile-sub">
                         {a.payout ? (
-                          <span className="hub-tile-meta earn">+{naira(a.payout)}</span>
+                          <span className="hub-tile-meta earn">+{naira(oddJobPay(a.payout))}</span>
                         ) : a.cost ? (
                           <span className="hub-tile-meta cost">{cantAfford ? `Need ${naira(a.cost)}` : naira(a.cost)}</span>
                         ) : (
@@ -226,7 +227,7 @@ export function PlaceActivityTabs({ place, insideVenue, onClose }: PlaceActivity
                     <div className="hub-card-meta">
                       {a.minutes ? <span className="meta-pill time">⏱️ {taskDurationSeconds(a.minutes, a.minutes, !!(a.cookingPerHour || a.fast))} sec</span> : null}
                       {a.payout ? (
-                        <span className="meta-pill payout">💰 +{naira(a.payout)} earn</span>
+                        <span className="meta-pill payout">💰 +{naira(oddJobPay(a.payout))} earn</span>
                       ) : a.cost ? (
                         <span className="meta-pill cost">🏷️ {naira(a.cost)}</span>
                       ) : (

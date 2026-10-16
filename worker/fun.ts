@@ -223,7 +223,10 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
 
   /* ----- Kaduna Gist feed ----- */
 
-  /** Twitter's Friends tab: tweets by my friends and me, and city news about them. */
+  /**
+   * Twitter's Following tab: tweets by my friends and me, city news about them, and any post one of us reposted
+   * (`reposter` names who, the latest of them).
+   */
   if (path === '/api/feed' && req.method === 'GET' && url.searchParams.get('scope') === 'friends') {
     const before = Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
     const { results } = await db
@@ -232,16 +235,54 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
-                ${REPOST_COLS}
+                ${REPOST_COLS},
+                (SELECT rpp.username FROM feed_reposts rp JOIN players rpp ON rpp.uid = rp.uid
+                  WHERE rp.post_id = f.id AND (rp.uid = ?1 OR ${FRIEND_OF_ME('rp.uid')}) ORDER BY rp.created_at DESC LIMIT 1) AS reposter
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
-         WHERE f.parent_id IS NULL AND f.id < ?2 AND f.uid IS NOT NULL AND f.created_at >= ?4
-           AND (f.uid = ?1 OR EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted'
-                AND fr.a = MIN(f.uid, ?1) AND fr.b = MAX(f.uid, ?1)))
+         WHERE f.parent_id IS NULL AND f.id < ?2 AND f.created_at >= ?4
+           AND ((f.uid IS NOT NULL AND (f.uid = ?1 OR ${FRIEND_OF_ME('f.uid')}))
+                OR EXISTS (SELECT 1 FROM feed_reposts rp WHERE rp.post_id = f.id AND (rp.uid = ?1 OR ${FRIEND_OF_ME('rp.uid')})))
          ORDER BY f.id DESC LIMIT ?3`,
       )
       .bind(me, before, FEED_PAGE, now - FEED_KEEP_MS)
       .all();
     return json({ posts: results });
+  }
+
+  /**
+   * A player's Twitter profile: who they are (job, origin, where they are, friends) and their posts of the day.
+   * Their own tweets and news about them are for their friends (as on the Following tab); anyone else sees only
+   * the national news about them.
+   */
+  if (path === '/api/feed' && req.method === 'GET' && url.searchParams.get('scope') === 'user') {
+    const name = (url.searchParams.get('username') ?? '').toLowerCase();
+    const who = await db
+      .prepare(
+        `SELECT p.uid, p.username, p.name, p.created_at AS joined,
+                json_extract(s.data, '$.look') AS look, json_extract(s.data, '$.origin') AS origin,
+                json_extract(s.data, '$.jobId') AS jobId, json_extract(s.data, '$.destinationId') AS city,
+                (SELECT COUNT(*) FROM friendships fr WHERE fr.status = 'accepted' AND (fr.a = p.uid OR fr.b = p.uid)) AS friends,
+                (SELECT COUNT(*) FROM estate_plots e WHERE e.uid = p.uid) AS plots,
+                (p.uid = ?1 OR ${FRIEND_OF_ME('p.uid')}) AS friend
+         FROM players p LEFT JOIN saves s ON s.uid = p.uid WHERE p.username = ?2`,
+      )
+      .bind(me, name)
+      .first<{ uid: string; friend: number }>();
+    if (!who) return err(404, 'No such player');
+    const { results } = await db
+      .prepare(
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+                (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
+                EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
+                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
+                ${REPOST_COLS}
+         FROM feed f LEFT JOIN players p ON p.uid = f.uid
+         WHERE f.parent_id IS NULL AND f.uid = ?2 AND f.created_at >= ?4 ${who.friend ? '' : `AND ${NEWS_SQL}`}
+         ORDER BY f.id DESC LIMIT ?3`,
+      )
+      .bind(me, who.uid, FEED_PAGE, now - FEED_KEEP_MS)
+      .all();
+    return json({ player: who, posts: results });
   }
 
   /**
@@ -291,6 +332,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
 
   const replies = path.match(/^\/api\/feed\/(\d+)\/replies$/);
   if (replies && req.method === 'GET') {
+    // Opening a post's thread is a view of it.
+    ctx.waitUntil(db.prepare('UPDATE feed SET views = views + 1 WHERE id = ? AND parent_id IS NULL').bind(Number(replies[1])).run().catch(() => {}));
     const { results } = await db
       .prepare(
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.parent_id AS parent, p.username,
@@ -381,6 +424,22 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
       tweetCountStmt(db, me, mine.created_at, -1),
     ]);
     return json({ ok: true });
+  }
+
+  /** Repost (or undo it): the post shows on my friends' Following tab. Only today's top-level posts. */
+  const repost = path.match(/^\/api\/feed\/(\d+)\/repost$/);
+  if (repost && req.method === 'POST') {
+    const id = Number(repost[1]);
+    const had = await db.prepare('DELETE FROM feed_reposts WHERE post_id = ? AND uid = ? RETURNING post_id').bind(id, me).first();
+    if (!had) {
+      const r = await db
+        .prepare('INSERT OR IGNORE INTO feed_reposts (post_id, uid, created_at) SELECT id, ?, ? FROM feed WHERE id = ? AND parent_id IS NULL AND created_at >= ?')
+        .bind(me, now, id, now - FEED_KEEP_MS)
+        .run();
+      if (!r.meta.changes) return err(404, 'That post is gone');
+    }
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM feed_reposts WHERE post_id = ?').bind(id).first<{ n: number }>();
+    return json({ reposted: !had, reposts: n?.n ?? 0 });
   }
 
   const like = path.match(/^\/api\/feed\/(\d+)\/like$/);

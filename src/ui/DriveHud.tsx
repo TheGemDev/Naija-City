@@ -145,7 +145,7 @@ export function DriveHud() {
           <span className="drive-speed"><b>{speed}</b><small>km/h</small></span>
           {gig && (
             <span className="drive-stats">
-              <b>{trips} trips</b>
+              <b>{trips} {gig === 'dispatch' ? 'drops' : 'trips'}</b>
               <small>{naira(earned)} today</small>
             </span>
           )}
@@ -154,10 +154,12 @@ export function DriveHud() {
         {gig && (
           <div className={`drive-job ${left !== null && left < 0 ? 'late' : ''}`}>
             {!passenger
-              ? '🔎 Cruise around: a passenger will flag you down…'
+              ? gig === 'dispatch' ? '📲 Waiting for the next order…' : '🔎 Cruise around: a passenger will flag you down…'
               : !passenger.boarded
-                ? `🙋🏾 ${passenger.name} is waving (yellow beam). Pull up next to them.`
-                : `📍 ${passenger.toName} · ${naira(passenger.fare)}${left !== null ? ` · ${left > 0 ? `${left}s` : 'LATE: half fare'}` : ''}`}
+                ? passenger.order
+                  ? `🥡 Collect ${passenger.order.item} at ${passenger.order.fromName} (yellow beam) · ${naira(passenger.fare)}`
+                  : `🙋🏾 ${passenger.name} is waving (yellow beam). Pull up next to them.`
+                : `${passenger.order ? '📦' : '📍'} ${passenger.toName} · ${naira(passenger.fare)}${left !== null ? ` · ${left > 0 ? `${left}s` : passenger.order ? 'LATE: half pay' : 'LATE: half fare'}` : ''}`}
           </div>
         )}
         {durbar && (
