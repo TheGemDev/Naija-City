@@ -3,7 +3,7 @@ import { GlBoundary } from './NoWebGL';
 import { originOf } from '../game/origins';
 import { toastApp, toastHome, toastPlace } from '../game/toastTarget';
 import { tipOfToast, useHelp } from '../game/tips';
-import { Children, memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, memo, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useNet } from '../net/multiplayer';
 import { api, useSession } from '../net/session';
@@ -519,6 +519,7 @@ function ChatButton() {
       )}
       <button type="button" className={`chat-fab-btn ${open ? 'on' : ''}`} aria-label={open ? 'Close chat' : 'Open chat'} aria-expanded={open} onClick={() => setOpen(!open)}>
         <Emoji char={open ? '✖️' : '💬'} size={24} />
+        <ArcLabel text={open ? 'Close' : 'Chat'} />
       </button>
     </div>
   );
@@ -775,6 +776,26 @@ export const ProfilePortrait = memo(function ProfilePortrait({ look }: { look: s
  */
 const CORNER_HUD = true;
 
+/** A button's name bent along the bottom curve of its circle, the icon sitting above it. */
+function ArcLabel({ text }: { text: string }) {
+  const id = `arc${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  return (
+    <svg className="arc-label" viewBox="0 0 100 100" aria-hidden="true">
+      <path id={id} d="M 8 50 A 42 42 0 0 0 92 50" fill="none" />
+      <text><textPath href={`#${id}`} startOffset="50%" textAnchor="middle">{text}</textPath></text>
+    </svg>
+  );
+}
+
+/** The corner buttons are made with their name as plain text after the icon: bend that text round the circle. */
+const withArc = (c: ReactElement<{ children?: ReactNode; className?: string }>): ReactElement => {
+  if (!isValidElement(c) || (c.props.className ?? '').includes('leave')) return c;
+  const kids = Children.toArray(c.props.children);
+  const label = kids.filter((k) => typeof k === 'string').join('').trim();
+  if (!label) return c;
+  return cloneElement(c, undefined, ...kids.filter((k) => typeof k !== 'string'), <ArcLabel key="arc" text={label} />);
+};
+
 function NavShell({ children }: { children: ReactNode }) {
   const mode = useGame((s) => s.mode);
   useEffect(() => {
@@ -783,7 +804,7 @@ function NavShell({ children }: { children: ReactNode }) {
     return () => document.body.classList.remove('corner-hud');
   }, []);
   if (!CORNER_HUD) return <nav className="nav">{children}</nav>;
-  const all = Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[];
+  const all = (Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[]).map((c) => withArc(c as never) as ReactElement<{ 'data-k'?: string }>);
   const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
   return (
     <>

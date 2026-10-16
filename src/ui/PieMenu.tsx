@@ -44,8 +44,7 @@ export function PieMenu() {
 
   return (
     <div className="pie" style={{ left: cx, top: cy }} role="menu" aria-label={sel.title}>
-      <button type="button" className="pie-hub" title="Close (Esc)" onClick={() => select(null)}>
-        <b>{sel.title}</b>
+      <button type="button" className="pie-hub" title="Close (Esc)" aria-label={`Close the ${sel.title} menu`} onClick={() => select(null)}>
         <span aria-hidden>✕</span>
       </button>
       {n === 0 && <span className="pie-none">Nothing to do with this one ✨</span>}

@@ -49,7 +49,7 @@ export function openSnapFirst() {
   return true;
 }
 
-/** From the Snap camera to the Spotlight feed on the phone. */
+/** From the Snap camera to the feed on the phone. */
 function goSnap() {
   usePhoto.getState().close();
   useSnaps.setState({ tab: 'spotlight' });
@@ -219,7 +219,7 @@ export function PhotoMode() {
               <nav className="snap-cam-nav" aria-label="Snap">
                 <button type="button" onClick={goSnap}>
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 4l12 8-12 8z" /></svg>
-                  <small>Spotlight</small>
+                  <small>Feed</small>
                 </button>
               </nav>
             )}

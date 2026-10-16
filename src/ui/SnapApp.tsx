@@ -1,5 +1,5 @@
-// Snap: one feed, Spotlight (the whole city's snaps, most liked or newest first). The + camera button takes a snap
-// (photo mode over the scene, ui/PhotoMode.tsx) and posts it to Spotlight. Everything is gone after a day.
+// Snap: one feed with two tabs, Friends and Global. The camera button takes a snap (photo mode over the scene,
+// ui/PhotoMode.tsx) and posts it for the whole city. Everything is gone after a day.
 
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -59,6 +59,7 @@ export function SnapApp() {
   const me = useSession((s) => s.user);
   const shared = useSnaps((s) => s.shared);
   const [playing, setPlaying] = useState<Playing | null>(null);
+  const [feed, setFeed] = useState<'friends' | 'global'>('global');
   const [host, setHost] = useState<Element | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
 
@@ -80,11 +81,20 @@ export function SnapApp() {
         setHost(el?.closest('.screen') ?? null);
       }}
     >
+      {me && (
+        <nav className="snap-tabs" role="tablist">
+          {(['friends', 'global'] as const).map((id) => (
+            <button key={id} type="button" role="tab" aria-selected={feed === id} className={feed === id ? 'on' : ''} onClick={() => (feed === id ? document.querySelector('.snap-scroll')?.scrollTo({ top: 0, behavior: 'smooth' }) : setFeed(id))}>
+              <span>{id === 'friends' ? 'Friends' : 'Global'}</span>
+            </button>
+          ))}
+        </nav>
+      )}
       <div className="snap-scroll">
         {!me ? (
-          <div className="snap-empty big"><Emoji char="👻" size={44} /><b>Sign in to use Snap</b><span>Snaps from the whole city show here.</span></div>
+          <div className="snap-empty big"><Emoji char="👻" size={44} /><b>Sign in to use Snap</b><span>Snaps from your friends and the whole city show here.</span></div>
         ) : (
-          <SpotlightTab play={setPlaying} />
+          <FeedTab key={feed} scope={feed} play={setPlaying} />
         )}
       </div>
       {me && (
@@ -95,28 +105,24 @@ export function SnapApp() {
   );
 }
 
-/* ---------- Spotlight ---------- */
+/* ---------- The feed: friends' snaps, and everyone's ---------- */
 
-function SpotlightTab({ play }: { play: (p: Playing) => void }) {
-  const [sort, setSort] = useState<'top' | 'global'>('top');
-  const snaps = useSnaps((s) => s[sort]);
-  const end = useSnaps((s) => s.end[sort]);
+function FeedTab({ scope, play }: { scope: 'friends' | 'global'; play: (p: Playing) => void }) {
+  const me = useSession((s) => s.user);
+  const snaps = useSnaps((s) => s[scope]);
+  const end = useSnaps((s) => s.end[scope]);
   const loading = useSnaps((s) => s.loading);
   useEffect(() => {
-    void loadSnaps(sort);
-  }, [sort]);
-  const live = snaps.filter((s) => s.until > Date.now());
+    void loadSnaps(scope);
+  }, [scope]);
+  const live = snaps.filter((s) => s.until > Date.now() && (scope === 'global' || s.uid !== me?.uid));
   return (
     <>
-      <div className="snap-seg" role="tablist">
-        <button type="button" role="tab" aria-selected={sort === 'top'} className={sort === 'top' ? 'on' : ''} onClick={() => setSort('top')}>🔥 Top</button>
-        <button type="button" role="tab" aria-selected={sort === 'global'} className={sort === 'global' ? 'on' : ''} onClick={() => setSort('global')}>✨ New</button>
-      </div>
       {!live.length && (
         <div className="snap-empty big">
           <Emoji char="⭐" size={40} />
-          <b>{loading ? 'Loading Spotlight…' : 'Nothing in Spotlight today'}</b>
-          <span>Send a snap to Spotlight and the whole city sees it.</span>
+          <b>{loading ? 'Loading snaps…' : scope === 'friends' ? 'Nothing from your friends today' : 'Nothing posted today'}</b>
+          <span>{scope === 'friends' ? 'Text someone in Messages: once they reply you are friends, and their snaps show here.' : 'Post a snap and the whole city sees it.'}</span>
         </div>
       )}
       <div className="snap-tiles">
@@ -131,7 +137,7 @@ function SpotlightTab({ play }: { play: (p: Playing) => void }) {
           </button>
         ))}
       </div>
-      {sort === 'global' && !end && live.length > 0 && <button type="button" className="snap-more" disabled={loading} onClick={() => void loadSnaps('global', true)}>More snaps</button>}
+      {!end && live.length > 0 && <button type="button" className="snap-more" disabled={loading} onClick={() => void loadSnaps(scope, true)}>More snaps</button>}
     </>
   );
 }

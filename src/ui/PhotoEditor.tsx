@@ -52,7 +52,7 @@ type Tray = 'stickers' | 'naija' | 'words' | 'mark' | 'lens';
 
 /** Snaps go up at phone-screen size: the longest side this many pixels, which keeps the upload small. They last a day, so they need no more. */
 const SNAP_SIDE = 960;
-/** Every snap goes to Spotlight. */
+/** Every snap is posted for the whole city. */
 const TO_SPOTLIGHT: SnapSend = { story: false, spotlight: true, to: [] };
 const encode = (canvas: HTMLCanvasElement, type: string, quality: number) => new Promise<Blob | null>((done) => canvas.toBlob(done, type, quality));
 
@@ -256,7 +256,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
     void navigator.share({ files: [fileOf(blob)], title: 'Naija City', text: `${line}\nPlay here 👉 ${username ? inviteLink(username) : 'https://naija.city'}` }).catch(() => { /* closed the share sheet */ });
   };
 
-  /** Posts the dressed-up picture to Snap's Spotlight, then opens the app on it. */
+  /** Posts the dressed-up picture to Snap, then opens the app on it. */
   const snap = async (send: SnapSend) => {
     setBusy(true);
     try {
@@ -276,7 +276,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
       await postSnap(blob, snapNote, send);
       usePhoto.getState().close();
       const g = useGame.getState();
-      g.toast('👻 Posted to Spotlight. It disappears in 24 hours.');
+      g.toast('👻 Posted. It disappears in 24 hours.');
       useSnaps.setState({ tab: 'spotlight' });
       useGame.setState({ openApp: 'flex' });
       g.setPanel('phone');
@@ -410,7 +410,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
         {/* Only a picture taken from the Snap app can be sent there. */}
         {forSnap && (
           <button type="button" className="photo-primary snap-send-to" disabled={busy || !username} onClick={() => void snap(TO_SPOTLIGHT)}>
-            {busy ? 'Posting…' : 'Post to Spotlight'}
+            {busy ? 'Posting…' : 'Post'}
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M3 20.5 21 12 3 3.5v6.6l11 1.9-11 1.9z" /></svg>
           </button>
         )}

@@ -3058,9 +3058,8 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 /* Desktop pie menu (ui/PieMenu.tsx): a clicked object's activities in a ring round where you clicked, like The Sims. */
 .pie { position: fixed; z-index: 45; width: 0; height: 0; pointer-events: none; }
 .pie-hub, .pie-item { position: absolute; pointer-events: auto; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,.85); background: rgba(var(--surface-rgb), .96); color: var(--ink); box-shadow: 0 6px 22px rgba(15,23,42,.22); backdrop-filter: blur(10px); cursor: pointer; font: inherit; }
-.pie-hub { left: 0; top: 0; display: flex; max-width: 150px; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 12px; animation: pie-in .16s ease-out both; }
-.pie-hub b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pie-hub span { opacity: .55; font-size: 11px; }
+.pie-hub { left: 0; top: 0; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 12px; animation: pie-in .16s ease-out both; }
+.pie-hub span { opacity: .7; font-size: 13px; }
 .pie-item { display: flex; min-width: 0; max-width: 190px; align-items: center; gap: 8px; padding: 7px 13px 7px 8px; border-radius: 999px; text-align: left; animation: pie-in .2s cubic-bezier(.2,.9,.3,1.3) both; animation-delay: calc(var(--i) * 22ms); }
 .pie-item:hover { background: #fff; color: #0f172a; transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 8px 26px rgba(15,23,42,.3), 0 0 0 2px #22c55e; }
 .pie-item.dim { opacity: .55; }
@@ -3164,11 +3163,11 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .sheet.catalogue.on-finishes { max-height: 42vh; }
 
 /* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, then along the bottom right: chat, Map, Phone (Phone in the corner). Icons alone, in the chat button's own look. */
-.corner-left { position: absolute; left: 12px; bottom: calc(20px + 54px + 10px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 10px; max-width: calc(100% - 24px); pointer-events: none; }
+.corner-left { position: absolute; left: 12px; bottom: calc(20px + var(--me, 54px) + 10px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 10px; max-width: calc(100% - 24px); pointer-events: none; }
 .corner-left > * { pointer-events: auto; }
 /* Home sits right above you and what is here (Decor, Activities, Estates) beside it: round icons in the same look as the chat, Map and Phone buttons. */
 .corner-ctx { display: flex; align-items: center; gap: 10px; }
-.corner-side { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(21px + var(--safe-b)); z-index: 20; display: flex; align-items: center; gap: 10px; }
+.corner-side { position: absolute; left: calc(12px + var(--me, 54px) + 10px); bottom: calc(21px + var(--safe-b)); z-index: 20; display: flex; align-items: center; gap: 10px; }
 :is(.corner-ctx, .corner-side) button { font-size: 0; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 0; border-radius: 50%; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); color: var(--fg-0f172a); }
 :is(.corner-ctx, .corner-side) button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
 /* Leaving and clocking out say what they do. */
@@ -3182,11 +3181,29 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: row; align-items: center; gap: 10px; }
 .corner-right button[data-k="phone"] { width: 68px; height: 68px; }
 .corner-right button[data-k="map"] { width: 60px; height: 60px; }
-.corner-right button svg, .corner-right button img { width: 36px !important; height: 36px !important; }
+.corner-right button svg:not(.arc-label), .corner-right button img { width: 28px !important; height: 28px !important; }
 body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
 /* Chat sits on top of the Map and Phone row, on the right. */
 body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 68px + 10px); }
 body.corner-hud .chat-fab .chat-form { margin-right: 0; }
 /* The low-need bubbles sit past the button beside you, so the space above you is free for Home. */
-body.corner-hud .need-alerts { position: absolute; left: calc(100% + 8px + 62px); bottom: 0; flex-direction: row; align-items: center; }
+body.corner-hud .need-alerts { position: absolute; left: calc(100% + 8px + 68px); bottom: 0; flex-direction: row; align-items: center; }
 body.corner-hud .need-alerts .thought-dot { display: none; }
+
+/* Every corner button says what it is: the name bent along the bottom of its circle, the icon above it. */
+.arc-label { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.arc-label text { font-size: 19px; font-weight: 800; letter-spacing: 2.2px; fill: var(--muted); font-family: inherit; }
+:is(.corner-ctx, .corner-side) button:not(.leave), .corner-right button, body.corner-hud .chat-fab-btn { position: relative; }
+:is(.corner-ctx, .corner-side) button:not(.leave), body.corner-hud .chat-fab-btn { width: 58px; height: 58px; }
+.corner-right button[data-k="map"] { width: 62px; height: 62px; }
+.corner-right button[data-k="phone"] { width: 70px; height: 70px; }
+:is(.corner-ctx, .corner-side) button:not(.leave) > span, .corner-right button > span, body.corner-hud .chat-fab-btn > :first-child { margin-top: -9px; }
+.corner-right button svg:not(.arc-label), .corner-right button img { width: 28px !important; height: 28px !important; }
+.corner-right button[data-k="phone"] svg:not(.arc-label), .corner-right button[data-k="phone"] img { width: 30px !important; height: 30px !important; }
+body.corner-hud .chat-fab { bottom: calc(20px + var(--safe-b) + 70px + 10px); }
+.corner-side { bottom: calc(18px + var(--safe-b)); }
+
+/* A bigger you in the corner: everything round it follows --me. */
+body.corner-hud { --me: 74px; }
+body.corner-hud .needs .avatar-badge { width: var(--me); height: var(--me); }
+body.corner-hud .corner-side { bottom: calc(20px + (var(--me) - 58px) / 2 + var(--safe-b)); }

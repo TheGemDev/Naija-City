@@ -4,9 +4,10 @@
 // settings (game/exterior.ts), like the one on the estate plot: a sloped sheet, a curved polycarbonate canopy or a
 // tensile shade, on slim steel posts over interlocking pavers. Merged per colour with the place kit.
 
-import { useRef, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
-import type { Group } from 'three';
+import { DoubleSide, MeshStandardMaterial, type Group } from 'three';
+import { sky } from '../game/weather';
 import type { HouseLayout } from '../game/grid';
 import { exteriorHex, type Exterior } from '../game/exterior';
 import './cityModels';
@@ -167,5 +168,50 @@ function DoorSet({ doors, trim }: { doors: HouseLayout['doors']; trim: string })
         return k.done();
       }}
     />
+  );
+}
+
+/**
+ * Rain puddles on the compound's open ground, never inside the house: flat sheets of water that fade in with the wet
+ * (game/weather.ts sky.wet, which lingers after the rain stops) and dry away again. Placed from the layout alone, so
+ * the same yard always has its puddles in the same hollows, clear of the cars' bay, the gate path and the fence.
+ */
+export function YardPuddles({ layout, low }: { layout: HouseLayout; low?: boolean }) {
+  const group = useRef<Group>(null!);
+  const mat = useMemo(() => new MeshStandardMaterial({ color: '#8fb4d0', roughness: 0.03, metalness: 0.3, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: DoubleSide }), []);
+  const puddles = useMemo(() => {
+    let seed = (layout.gridW * 73856093) ^ (layout.gridH * 19349663) ^ (layout.depth * 83492791);
+    const rnd = () => {
+      seed = Math.imul(seed ^ (seed >>> 15), 2246822507) ^ Math.imul(seed ^ (seed >>> 13), 3266489909);
+      return ((seed ^ (seed >>> 16)) >>> 0) / 4294967296;
+    };
+    const out: { x: number; z: number; rx: number; rz: number; yaw: number }[] = [];
+    const want = low ? 4 : 9;
+    for (let tries = 0; out.length < want && tries < 200; tries++) {
+      const rx = 0.45 + rnd() * 0.7, rz = rx * (0.55 + rnd() * 0.4);
+      const x = 0.8 + rnd() * (layout.gridW - 1.6), z = 0.8 + rnd() * (layout.gridH - 1.6);
+      // Open ground only: not under the house, not in the cars' bay, not on the path from the gate, not on another puddle.
+      const inHouse = x > -rx && x < layout.width + rx && z > -rz && z < layout.depth + rz;
+      const inBay = !!layout.bay && z > layout.bay.z0 - rz && z < layout.bay.z1 + rz && layout.cars.length > 0;
+      const onPath = Math.abs(x - (layout.gate.x + 0.5)) < 0.9 + rx;
+      const clash = out.some((o) => Math.hypot(o.x - x, o.z - z) < o.rx + rx + 0.4);
+      if (inHouse || inBay || onPath || clash) continue;
+      out.push({ x, z, rx, rz, yaw: rnd() * Math.PI });
+    }
+    return out;
+  }, [layout, low]);
+  useFrame(() => {
+    const wet = sky.wet;
+    group.current.visible = wet > 0.04;
+    mat.opacity = 0.72 * wet;
+  });
+  return (
+    <group ref={group} visible={false}>
+      {puddles.map((p, i) => (
+        <mesh key={i} position={[p.x, 0.018, p.z]} rotation={[-Math.PI / 2, 0, p.yaw]} scale={[p.rx, p.rz, 1]} material={mat} raycast={() => null}>
+          <circleGeometry args={[1, 20]} />
+        </mesh>
+      ))}
+    </group>
   );
 }

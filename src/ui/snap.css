@@ -36,7 +36,7 @@
 .snap-me { flex-shrink: 0; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--sn-yellow); cursor: pointer; }
 .snap-me .convo-avatar, .snap-ring .convo-avatar, .snap-profile-face .convo-avatar { width: 100%; height: 100%; }
 
-.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 12px 88px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
+.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 0 88px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
 .snap-scroll::-webkit-scrollbar { display: none; }
 .snap-h { margin: 14px 2px 8px; font-size: 15px; font-weight: 800; }
 
@@ -53,7 +53,7 @@
 .snap-nav-cam:active { transform: scale(0.88); }
 
 .snap-empty { margin: 8px 2px; color: var(--sn-sub); font-size: 13px; }
-.snap-empty.big { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 18px; border-radius: 22px; background: var(--sn-soft); text-align: center; }
+.snap-empty.big { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 12px; padding: 28px 18px; border-radius: 22px; background: var(--sn-soft); text-align: center; }
 .snap-empty.big b { color: var(--sn-ink); font-size: 16px; }
 .snap-empty.big span { line-height: 1.4; }
 .snap-muted { color: var(--sn-sub); }
@@ -84,9 +84,9 @@
 .snap-ring.add { background: var(--sn-line); }
 .snap-ring em { position: absolute; right: -1px; bottom: -1px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--sn-blue, #0fadff); box-shadow: 0 0 0 2.5px var(--sn-bg); color: #fff; font-size: 17px; font-style: normal; font-weight: 800; line-height: 1; }
 
-.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
 .snap-app .snap-tile { color: #fff; }
-.snap-tile { position: relative; overflow: hidden; aspect-ratio: 9 / 15; padding: 0; border: 0; border-radius: 16px; background: #111; color: #fff; text-align: left; cursor: pointer; animation: snap-pop 0.3s ease-out both; transition: transform 0.15s ease; }
+.snap-tile { position: relative; overflow: hidden; aspect-ratio: 9 / 15; padding: 0; border: 0; border-radius: 0; background: #111; color: #fff; text-align: left; cursor: pointer; animation: snap-pop 0.3s ease-out both; transition: transform 0.15s ease; }
 .snap-tile:active { transform: scale(0.97); }
 .snap-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .snap-tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 45%); pointer-events: none; }
@@ -280,3 +280,11 @@
 /* The camera button, where Twitter has its + button. */
 .snap-fab { position: absolute; right: 16px; bottom: 18px; z-index: 6; display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: var(--sn-yellow); color: #111; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18); cursor: pointer; transition: transform 0.15s; }
 .snap-fab:active { transform: scale(0.92); }
+
+/* Friends and Global: flush tabs along the top, like the other apps'. */
+.snap-tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--sn-line); background: var(--sn-bg); }
+.snap-tabs button { flex: 1; height: 46px; display: flex; justify-content: center; align-items: center; border: 0; background: none; color: var(--sn-sub); font-size: 14px; font-weight: 600; cursor: pointer; transition: color 0.15s; }
+.snap-tabs button span { position: relative; display: inline-flex; align-items: center; height: 100%; }
+.snap-tabs button.on { color: var(--sn-ink); font-weight: 800; }
+.snap-tabs button.on span::after { content: ''; position: absolute; left: -2px; right: -2px; bottom: 0; height: 4px; border-radius: 4px; background: var(--sn-yellow); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.snap-more { width: calc(100% - 24px); margin: 12px; }

@@ -13,7 +13,7 @@ import { FinishGuides, finishTap } from './FinishGuides';
 import { avatar, avatarCell } from '../game/avatar';
 import { Tree } from './models';
 import { CarModel } from './CarModel';
-import { HomeCarport, HouseDoors } from './homeYard';
+import { HomeCarport, HouseDoors, YardPuddles } from './homeYard';
 import { designOfKey, exteriorOf, withPark } from '../game/exterior';
 import { useVisit } from '../game/visits';
 import { useParkedCar } from '../ui/parkedCarStore';
@@ -375,6 +375,7 @@ export function World({ readOnly = false, items = [], origin, design, walls, pai
   return (
     <group>
       <Island layout={layout} parked={0} />
+      <YardPuddles layout={layout} />
       {/* StaticBatch reads its children once, so remount floors and walls when the layout changes. */}
       <Floors key={design ?? 'starter'} layout={layout} />
       <Walls key={`${design ?? 'starter'}|${(walls ?? []).slice().sort().join(',')}|${paint?.outer ?? ''}|${paint?.inner ?? ''}`} layout={layout} paint={paint} finish={finish} />
