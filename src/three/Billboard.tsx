@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { AdditiveBlending, CanvasTexture, Color, DataTexture, NearestFilter, RedFormat, SRGBColorSpace, UnsignedByteType, Vector2, type ShaderMaterial } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, DataTexture, NearestFilter, RedFormat, SRGBColorSpace, UnsignedByteType, Vector2, type MeshBasicMaterial, type ShaderMaterial } from 'three';
 import { cityMap, type BillboardSpot } from '../game/city';
 import { BILLBOARDS_HIDDEN, cityBoard, cityBoardOpen, ESTATE_BILLBOARDS, estateBoard, parseSea, SEA_MARGIN, seaCellOpen } from '../game/boards';
 import { ADS_ON_SALE, type Ad } from '../game/ads';
@@ -409,15 +409,21 @@ export function SeaAds({ region, x = 30, z = 42 }: { region: string; x?: number;
     () => live.flatMap((a) => { const r = a.board ? parseSea(a.board) : null; return r && (r.region ?? 'kaduna') === region ? [{ ad: a, r }] : []; }),
     [live, region],
   );
-  // The sea has two colours, one per appearance. It does not follow the sky through dusk, which turned it brown.
   // A visitor's tour of a city is always shown by day (game/theme.ts), so there it is the day sea in either appearance.
   const touring = useTour((s) => !!s.city);
   const dark = useTheme((s) => s.mode === 'dark') && !touring;
+  // The sea is the sky the island floats in, so it takes the sky's colour (three/Scene.tsx): day blue, night navy,
+  // greyed by cloud and dusted by harmattan. It is drawn before everything else so the sun and moon can sit on it.
+  const sea = useRef<MeshBasicMaterial>(null);
+  useFrame(({ scene }) => {
+    const bg = scene.background as Color | null;
+    if (sea.current && bg?.isColor) sea.current.color.copy(bg);
+  });
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, SEA_WATER_Y, z]} raycast={() => null}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, SEA_WATER_Y, z]} raycast={() => null} renderOrder={-20}>
         <circleGeometry args={[160, 48]} />
-        <meshBasicMaterial color={dark ? '#0b1430' : '#bfe3f5'} toneMapped={false} />
+        <meshBasicMaterial ref={sea} color={dark ? '#0b1430' : '#bfe3f5'} toneMapped={false} />
       </mesh>
       <SeaGrid key={region} region={region} />
       {boards.map(({ ad, r }) => (

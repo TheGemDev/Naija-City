@@ -5,7 +5,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import {
-  AdditiveBlending, BufferGeometry, CanvasTexture, Color, Float32BufferAttribute, MathUtils, Object3D, ShaderMaterial, Vector2, Vector3,
+  AdditiveBlending, BufferGeometry, CanvasTexture, Color, CustomBlending, Float32BufferAttribute, MathUtils, Object3D, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor,
+  Vector2, Vector3,
   type InstancedMesh, type LineSegments, type Mesh, type MeshBasicMaterial, type PerspectiveCamera, type Points, type PointsMaterial,
 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -140,26 +141,29 @@ export function SkyBodies() {
     }
   });
 
-  // Drawn first, with the background, so everything in the world covers them.
-  const common = { transparent: true, depthWrite: false, fog: false, toneMapped: false } as const;
+  // Painted straight onto the sky, before the world and without depth, so anything in the world covers them: the
+  // island, and nothing else (the sea round it is the sky, three/Billboard.tsx, drawn just before these). They stay
+  // in the opaque pass for that, blending by hand.
+  const common = { depthTest: false, depthWrite: false, fog: false, toneMapped: false } as const;
+  const over = { ...common, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor } as const;
   return (
     <group>
       {!low && (
-        <points ref={stars} geometry={starGeo} renderOrder={-10} frustumCulled={false}>
-          <pointsMaterial color="#e8eeff" size={1.6} sizeAttenuation={false} {...common} opacity={0} />
+        <points ref={stars} geometry={starGeo} renderOrder={-12} frustumCulled={false}>
+          <pointsMaterial color="#e8eeff" size={1.6} sizeAttenuation={false} blending={AdditiveBlending} {...common} opacity={0} />
         </points>
       )}
-      <mesh ref={halo} renderOrder={-9} frustumCulled={false}>
+      <mesh ref={halo} renderOrder={-11} frustumCulled={false}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial map={glow} blending={AdditiveBlending} {...common} opacity={0} />
       </mesh>
-      <mesh ref={sun} renderOrder={-8} frustumCulled={false}>
+      <mesh ref={sun} renderOrder={-10} frustumCulled={false}>
         <circleGeometry args={[1, 32]} />
-        <meshBasicMaterial {...common} opacity={0} />
+        <meshBasicMaterial {...over} opacity={0} />
       </mesh>
-      <mesh ref={moon} renderOrder={-8} frustumCulled={false}>
+      <mesh ref={moon} renderOrder={-10} frustumCulled={false}>
         <planeGeometry args={[2, 2]} />
-        <meshBasicMaterial map={moonMap} {...common} opacity={0} />
+        <meshBasicMaterial map={moonMap} {...over} opacity={0} />
       </mesh>
     </group>
   );
@@ -229,7 +233,7 @@ export function Rain() {
     depthWrite: false,
     uniforms: {
       uTime: { value: 0 }, uHeight: { value: 30 }, uLen: { value: 0.9 }, uWind: { value: 0.18 },
-      uCenter: { value: new Vector3() }, uHalf: { value: new Vector2(20, 16) }, uColor: { value: new Color('#dfe9f5') }, uOpacity: { value: 0 },
+      uCenter: { value: new Vector3() }, uHalf: { value: new Vector2(20, 16) }, uColor: { value: new Color('#f1f6fc') }, uOpacity: { value: 0 },
     },
   }), []);
   useLayoutEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);
@@ -246,10 +250,10 @@ export function Rain() {
     u.uHeight.value = Math.max(6, camera.position.y * 0.85);
     u.uCenter.value.set(t.x, 0, t.z);
     u.uHalf.value.set(dist * 0.62, dist * 0.5);
-    u.uLen.value = 0.5 + dist * 0.012;
+    u.uLen.value = 0.7 + dist * 0.02;
     // A storm drives the rain sideways.
     u.uWind.value = 0.12 + sky.rain * 0.18;
-    u.uOpacity.value = Math.min(1, sky.rain * 1.1) * (low ? 0.75 : 0.55);
+    u.uOpacity.value = Math.min(1, sky.rain * 1.2) * 0.85;
   });
 
   return <lineSegments ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={5} visible={false} />;

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
-import { BufferGeometry, Float32BufferAttribute, MeshStandardMaterial, Object3D, Shape, ShapeGeometry, type Group, type InstancedMesh, type Mesh } from 'three';
+import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, Object3D, Shape, ShapeGeometry, type Group, type InstancedMesh, type Mesh } from 'three';
 import {
   BRIDGE_RAMP, BRIDGE_Y, cityMap, isOpen, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
 } from '../game/city';
@@ -18,7 +18,10 @@ import { avatar } from '../game/avatar';
 import { B, Bike, Keke } from './models';
 import { Helicopter } from './aircraft';
 import { heli } from '../game/heli';
-import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat } from './cityModels';
+import { Bus, Car, CityTree, HouseModel, LandmarkModel, lampMat, PlaceModel, windowMat, windowsLit } from './cityModels';
+import { GroundShade, LampPools, poolMat } from './CityFx';
+import { sky } from '../game/weather';
+import { gridOn } from '../game/live';
 import { Slab } from './Slab';
 import { brokenAsset, useRoads } from '../net/roads';
 import { lampCity, lampSites, streetLamps, type StreetLamp } from '../game/roads';
@@ -195,6 +198,11 @@ function RiverNames({ map }: { map: CityMap }) {
   );
 }
 
+/** Tarmac, darkened and given a sheen by rain (MapEffects). */
+const ROAD = new Color('#555b63');
+const ROAD_WET = new Color('#363b42');
+const roadMat = new MeshStandardMaterial({ color: ROAD });
+
 /** Every road tile, plus dashed centre lines on the main roads that stop at junctions. */
 function Roads({ map }: { map: CityMap }) {
   const { tiles, dashes } = useMemo(() => {
@@ -245,9 +253,8 @@ function Roads({ map }: { map: CityMap }) {
 
   return (
     <group>
-      <instancedMesh ref={tileRef} args={[undefined, undefined, tiles.length]} receiveShadow>
+      <instancedMesh ref={tileRef} args={[undefined, roadMat, tiles.length]} receiveShadow>
         <planeGeometry args={[1.001, 1.001]} />
-        <meshStandardMaterial color="#555b63" />
       </instancedMesh>
       <instancedMesh ref={dashRef} args={[undefined, undefined, dashes.length]}>
         <planeGeometry args={[0.07, 0.45]} />
@@ -435,6 +442,7 @@ function LampHeads({ city }: { city: string }) {
     <group key={[...dead].join(',')}>
       <LampHeadMeshes list={lamps.filter((_, i) => !dead.has(i))} lit />
       <LampHeadMeshes list={lamps.filter((_, i) => dead.has(i))} />
+      <LampPools list={lamps.filter((_, i) => !dead.has(i))} />
     </group>
   );
 }
@@ -1060,14 +1068,30 @@ function LandmarkMesh({ l }: { l: Landmark }) {
   );
 }
 
-/** Windows and street lamps glow after dark; labels shrink to icons when zoomed out. */
+/** Share of windows with a light on: most of them through the evening, fewer as the night wears on, a few early risers before dawn. */
+function litShare(h: number) {
+  if (h >= LIGHTS_ON) return 0.8;
+  if (h < 4) return 0.8 - (h / 4) * 0.6;
+  return 0.35;
+}
+
+/**
+ * Windows and street lamps glow after dark, and the lamps throw pools of light on the road; rain leaves the roads
+ * dark and shiny. Labels shrink to icons when zoomed out.
+ */
 function MapEffects() {
   const far = useRef(false);
   useFrame(({ camera }) => {
     const h = photoHour() ?? sceneHour(hourOf(useGame.getState().minutes));
     const night = h < 6.3 || h >= LIGHTS_ON ? 1 : 0;
     windowMat.emissiveIntensity = night * 0.9;
+    // When NEPA takes the light, only the houses with a generator stay lit.
+    windowsLit.value = litShare(h) * (gridOn() ? 1 : 0.4);
     lampMat.emissiveIntensity = night * 2.5;
+    // Wet tarmac throws more of the lamplight back.
+    poolMat.opacity = night * (0.5 + 0.35 * sky.wet);
+    roadMat.color.copy(ROAD).lerp(ROAD_WET, sky.wet * 0.85);
+    roadMat.roughness = 1 - sky.wet * 0.6;
     const isFar = camera.position.y > 48;
     if (isFar !== far.current) {
       far.current = isFar;
@@ -1152,6 +1176,7 @@ export function City() {
   const kaduna = map.id === 'kaduna';
   const landmarks = regionLandmarks(destinationId);
   const places = regionPlaces(destinationId).filter((place) => place.id !== 'home' || hasHome);
+  const buildings = useRef<Group>(null);
   return (
     <group key={map.id}>
       <MapEffects />
@@ -1164,23 +1189,26 @@ export function City() {
       <LampHeads city={map.id} />
       {/* Everything that never moves, merged into a few draw calls (see StaticBatch). */}
       <StaticBatch key={`${destinationId}|${hasHome}`}>
-        <Bridges map={map} />
-        <StreetLamps map={map} />
-        {map.houses.map((h, i) => (
-          <group key={i} position={[h.x + h.w / 2, 0, h.z + h.d / 2]} rotation={[0, h.yaw, 0]}>
-            <HouseModel {...h} />
-          </group>
-        ))}
-        {map.trees.map((t, i) => (
-          <CityTree key={i} p={[t.x + 0.5, 0, t.z + 0.5]} s={t.s} c={i % 3 ? region.accent : '#b88b49'} />
-        ))}
-        {landmarks.map((l) => (
-          <LandmarkMesh key={l.name} l={l} />
-        ))}
-        {places.map((p) => (
-          <PlaceMesh key={p.id} place={p} />
-        ))}
+        <group ref={buildings}>
+          <Bridges map={map} />
+          <StreetLamps map={map} />
+          {map.houses.map((h, i) => (
+            <group key={i} position={[h.x + h.w / 2, 0, h.z + h.d / 2]} rotation={[0, h.yaw, 0]}>
+              <HouseModel {...h} />
+            </group>
+          ))}
+          {map.trees.map((t, i) => (
+            <CityTree key={i} p={[t.x + 0.5, 0, t.z + 0.5]} s={t.s} c={i % 3 ? region.accent : '#b88b49'} />
+          ))}
+          {landmarks.map((l) => (
+            <LandmarkMesh key={l.name} l={l} />
+          ))}
+          {places.map((p) => (
+            <PlaceMesh key={p.id} place={p} />
+          ))}
+        </group>
       </StaticBatch>
+      <GroundShade key={`shade|${destinationId}|${hasHome}`} source={buildings} />
       <Html position={[CITY_W / 2, 27, 2]} center zIndexRange={[9, 0]} style={{ pointerEvents: 'auto' }}>
         <RegionBadge region={region} />
       </Html>

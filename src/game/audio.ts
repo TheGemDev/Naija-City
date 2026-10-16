@@ -1,5 +1,6 @@
 // Naija City Background Music & Sound System
-// Uses the Web Audio API to synthesize smooth Afrobeat & Arewa lofi chill beats with zero external assets.
+// Uses the Web Audio API to synthesize calm Arewa lofi with zero external assets: a slow warm pad, soft FM keys, a
+// kalimba line and a round bass, all through a small room reverb.
 // That synth is the game's music. Live FM stations are the radio: they only play where there is one
 // (house speakers, the club: see radio.ts) and the music steps aside while they do.
 
@@ -72,16 +73,21 @@ class AudioManager {
     this.listeners.forEach((fn) => fn());
   }
 
-  // F major pentatonic scale frequencies (Hz): F3, G3, A3, C4, D4, F4, G4, A4, C5
-  private pentatonic = [174.61, 196.0, 220.0, 261.63, 293.66, 349.23, 392.0, 440.0, 523.25];
-  // Chords progression: Fmaj9 -> Dm7 -> Bbmaj7 -> C7
+  // Two bars per chord, F major: Fmaj9 → Dm9 → Bb6/9 → C9sus. Each is [bass, ...voicing] in Hz.
   private chords = [
-    [174.61, 261.63, 329.63, 349.23], // Fmaj7
-    [146.83, 220.0, 261.63, 349.23],  // Dm7
-    [116.54, 174.61, 220.0, 293.66],  // Bbmaj7
-    [130.81, 196.0, 261.63, 329.63],  // C9
+    [87.31, 220.0, 261.63, 329.63, 392.0],
+    [73.42, 174.61, 220.0, 261.63, 329.63],
+    [58.27, 220.0, 261.63, 293.66, 349.23],
+    [65.41, 233.08, 293.66, 329.63, 392.0],
   ];
-  private bassNotes = [87.31, 73.42, 58.27, 65.41]; // F1, D1, Bb0, C1
+  // F major pentatonic, F4 to F5, for the kalimba line.
+  private melody = [349.23, 392.0, 440.0, 523.25, 587.33, 698.46];
+  private melodyAt = 2;
+  // The music's own bus: voices → (dry + reverb) → a warm lowpass → master. Faded, not cut, when the music stops.
+  private bus: GainNode | null = null;
+  private reverb: GainNode | null = null;
+  // Look-ahead scheduling: notes go on the audio clock, so the timer's jitter never reaches the beat.
+  private nextAt = 0;
 
   constructor() {
     // Restore last station from localStorage
@@ -135,10 +141,6 @@ class AudioManager {
   public setStation(station: RadioStation) {
     this.station = station;
     this.step = 0;
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = window.setInterval(() => this.tick(), station === 'kannywood' ? 185 : 139);
-    }
     this.emit();
   }
 
@@ -178,14 +180,19 @@ class AudioManager {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+      // Let what is ringing fade out instead of cutting it off.
+      if (this.ctx && this.bus) this.bus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
       return;
     }
     try {
       this.initContext();
       if (!this.ctx || !this.masterGain) return;
+      this.musicBus();
+      this.bus!.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.bus!.gain.setTargetAtTime(1, this.ctx.currentTime, 0.3);
       this.step = 0;
-      // 108 BPM, 16th-note step interval = (60 / 108) / 4 * 1000 ≈ 138.8ms
-      this.timer = window.setInterval(() => this.tick(), this.station === 'kannywood' ? 185 : 139);
+      this.nextAt = this.ctx.currentTime + 0.1;
+      this.timer = window.setInterval(() => this.tick(), 50);
     } catch {
       // Audio context might be restricted before gesture
     }
@@ -201,104 +208,184 @@ class AudioManager {
     }
   }
 
-  // Plays a synthesized marimba/kalimba note
-  private playPluck(freq: number, time: number, vel = 0.15) {
-    if (!this.ctx || !this.masterGain) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, time);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1800, time);
-    filter.frequency.exponentialRampToValueAtTime(300, time + 0.35);
-
-    gain.gain.setValueAtTime(vel, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start(time);
-    osc.stop(time + 0.36);
-  }
-
-  // Warm Rhodes/Electric Piano chord pad
-  private playChord(chord: number[], time: number, duration: number, vel = 0.04) {
-    if (!this.ctx || !this.masterGain) return;
-    chord.forEach((freq) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
-      const filter = this.ctx!.createBiquadFilter();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, time);
-
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(800, time);
-
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(vel, time + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.masterGain!);
-
-      osc.start(time);
-      osc.stop(time + duration);
-    });
-  }
-
-  // Deep smooth sub bass
-  private playBass(freq: number, time: number, duration: number, vel = 0.22) {
-    if (!this.ctx || !this.masterGain) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, time);
-
-    gain.gain.setValueAtTime(vel, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start(time);
-    osc.stop(time + duration);
-  }
-
-  // Subtle shaker rhythm (gentle white noise pulse)
-  private playShaker(time: number, vel = 0.02) {
-    if (!this.ctx || !this.masterGain) return;
-    const bufferSize = this.ctx.sampleRate * 0.05;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+  /** Builds the music bus once: a short generated room reverb on a send, and a gentle lowpass to take the edge off. */
+  private musicBus() {
+    if (this.bus || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 4200;
+    tone.Q.value = 0.4;
+    tone.connect(this.masterGain);
+    this.bus = ctx.createGain();
+    this.bus.gain.value = 0;
+    this.bus.connect(tone);
+    // 2.4 s of decaying stereo noise is the room. Made once; the convolver does the rest.
+    const len = Math.floor(ctx.sampleRate * 2.4);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
     }
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.32;
+    conv.connect(wet);
+    wet.connect(this.bus);
+    this.reverb = ctx.createGain();
+    this.reverb.connect(conv);
+  }
 
-    const whiteNoise = this.ctx.createBufferSource();
-    whiteNoise.buffer = buffer;
+  /** A voice's way out: straight to the bus, and `send` of it into the reverb. */
+  private out(node: AudioNode, send: number) {
+    node.connect(this.bus!);
+    if (send > 0 && this.ctx) {
+      const g = this.ctx.createGain();
+      g.gain.value = send;
+      node.connect(g);
+      g.connect(this.reverb!);
+    }
+  }
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(5000, time);
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(vel, time);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
-
-    whiteNoise.connect(filter);
+  // Slow, warm pad: two softly detuned saws per note, filtered dark, swelling in and out.
+  private playPad(notes: number[], time: number, duration: number, vel = 0.01) {
+    if (!this.ctx || !this.bus) return;
+    const ctx = this.ctx;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.3;
+    filter.frequency.setValueAtTime(380, time);
+    filter.frequency.linearRampToValueAtTime(900, time + duration * 0.5);
+    filter.frequency.linearRampToValueAtTime(420, time + duration);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(vel, time + 1.4);
+    gain.gain.setValueAtTime(vel, time + duration - 1.2);
+    gain.gain.linearRampToValueAtTime(0, time + duration + 0.6);
     filter.connect(gain);
-    gain.connect(this.masterGain);
+    this.out(gain, 0.6);
+    for (const f of notes) {
+      for (const cents of [-7, 6]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = f;
+        osc.detune.value = cents;
+        osc.connect(filter);
+        osc.start(time);
+        osc.stop(time + duration + 0.7);
+      }
+    }
+  }
 
-    whiteNoise.start(time);
-    whiteNoise.stop(time + 0.05);
+  // Soft electric-piano note: a sine with a sine modulating it, the bell fading out fast so it settles to a round tone.
+  private playKeys(freq: number, time: number, vel = 0.03) {
+    if (!this.ctx || !this.bus) return;
+    const ctx = this.ctx;
+    const car = ctx.createOscillator();
+    const mod = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const gain = ctx.createGain();
+    car.type = mod.type = 'sine';
+    car.frequency.value = freq;
+    mod.frequency.value = freq;
+    depth.gain.setValueAtTime(freq * 1.1, time);
+    depth.gain.exponentialRampToValueAtTime(freq * 0.05, time + 0.5);
+    mod.connect(depth);
+    depth.connect(car.frequency);
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(vel, time + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 2.2);
+    car.connect(gain);
+    this.out(gain, 0.45);
+    car.start(time);
+    mod.start(time);
+    car.stop(time + 2.3);
+    mod.stop(time + 2.3);
+  }
+
+  // Kalimba: a sine that rings out, with the metal tine's high partial as a quick tick on top.
+  private playKalimba(freq: number, time: number, vel = 0.05) {
+    if (!this.ctx || !this.bus) return;
+    const ctx = this.ctx;
+    const body = ctx.createOscillator();
+    const tine = ctx.createOscillator();
+    const bodyGain = ctx.createGain();
+    const tineGain = ctx.createGain();
+    body.type = tine.type = 'sine';
+    body.frequency.value = freq;
+    tine.frequency.value = freq * 5.4;
+    bodyGain.gain.setValueAtTime(0.0001, time);
+    bodyGain.gain.linearRampToValueAtTime(vel, time + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, time + 1.4);
+    tineGain.gain.setValueAtTime(vel * 0.35, time);
+    tineGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
+    body.connect(bodyGain);
+    tine.connect(tineGain);
+    this.out(bodyGain, 0.5);
+    this.out(tineGain, 0.5);
+    body.start(time);
+    tine.start(time);
+    body.stop(time + 1.5);
+    tine.stop(time + 0.1);
+  }
+
+  // Round, soft bass: a sine with a gentle attack, so it hums instead of thumping.
+  private playBass(freq: number, time: number, duration: number, vel = 0.13) {
+    if (!this.ctx || !this.bus) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(vel, time + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    osc.connect(gain);
+    this.out(gain, 0);
+    osc.start(time);
+    osc.stop(time + duration + 0.05);
+  }
+
+  // A muffled kick and a brushed shaker, quiet enough to sit under everything.
+  private playKick(time: number, vel = 0.09) {
+    if (!this.ctx || !this.bus) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, time);
+    osc.frequency.exponentialRampToValueAtTime(48, time + 0.12);
+    gain.gain.setValueAtTime(vel, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.3);
+    osc.connect(gain);
+    this.out(gain, 0);
+    osc.start(time);
+    osc.stop(time + 0.32);
+  }
+
+  private shakerNoise: AudioBuffer | null = null;
+  private playShaker(time: number, vel = 0.008) {
+    if (!this.ctx || !this.bus) return;
+    const ctx = this.ctx;
+    if (!this.shakerNoise) {
+      this.shakerNoise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.08), ctx.sampleRate);
+      const d = this.shakerNoise.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.shakerNoise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 6500;
+    filter.Q.value = 0.8;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(vel, time + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
+    src.connect(filter);
+    filter.connect(gain);
+    this.out(gain, 0.2);
+    src.start(time);
+    src.stop(time + 0.08);
   }
 
   // --- Live radio streaming ---
@@ -447,46 +534,57 @@ class AudioManager {
     }
   }
 
+  /** Schedules every 16th note that falls in the next 150 ms on the audio clock. */
   private tick() {
     // A suspended context's clock stands still: notes scheduled now would all sound at once when it wakes
     if (!this.ctx || this.timer === null || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;
+    // Back from a pause (a hidden tab throttles the timer): pick up from now, don't rush to catch up.
+    if (this.nextAt < now) this.nextAt = now + 0.05;
+    // 16th notes: 72 BPM, slower still for the Kannywood mood.
+    const stepDur = 60 / (this.station === 'kannywood' ? 64 : 72) / 4;
+    while (this.nextAt < now + 0.15) {
+      this.playStep(this.step, this.nextAt, stepDur);
+      this.nextAt += stepDur;
+      this.step = (this.step + 1) % 128;
+    }
+  }
+
+  private playStep(step: number, t: number, stepDur: number) {
+    const bar = Math.floor(step / 16);
+    const sub = step % 16;
+    const [bass, ...voicing] = this.chords[Math.floor(bar / 2) % this.chords.length];
+    const chordLen = stepDur * 32;
+
     if (this.station === 'talk') {
-      if (this.step % 16 === 0) this.playShaker(now, 0.035);
-      if (this.step % 32 === 8) this.playPluck(this.step % 64 === 8 ? 220 : 261.63, now, 0.045);
-      this.step = (this.step + 1) % 64;
+      // Talk radio bed: just the pad, very low, and a stray kalimba note now and then.
+      if (step % 32 === 0) this.playPad(voicing, t, chordLen, 0.005);
+      if (sub === 8 && Math.random() < 0.3) this.playKalimba(this.melody[Math.floor(Math.random() * 4)], t, 0.025);
       return;
     }
-    const chordIndex = Math.floor((this.step % 64) / 16);
-    const chord = this.chords[chordIndex];
-    const bass = this.bassNotes[chordIndex];
     const cinematic = this.station === 'kannywood';
 
-    // Every 16 steps (bar downbeat): play new chord pad & bass
-    if (this.step % 16 === 0) {
-      this.playChord(chord, now, cinematic ? 2.8 : 2.2, cinematic ? 0.025 : 0.04);
-      this.playBass(bass, now, cinematic ? 1.6 : 1.2, cinematic ? 0.12 : 0.2);
-    } else if (this.step % 16 === 8) {
-      // Mid-bar bass bounce
-      this.playBass(bass * 1.5, now, 0.6, 0.14);
+    // Each chord: the pad swells across both bars, the keys lay it down once per bar.
+    if (step % 32 === 0) this.playPad(voicing, t, chordLen, cinematic ? 0.011 : 0.008);
+    if (sub === 0) voicing.forEach((f, k) => this.playKeys(f, t + k * 0.018, cinematic ? 0.018 : 0.024));
+    if (!cinematic && sub === 10 && bar % 2 === 1) voicing.slice(1).forEach((f, k) => this.playKeys(f, t + k * 0.018, 0.014));
+
+    // Bass on the one, and a soft fifth on the and-of-three.
+    if (sub === 0) this.playBass(bass, t, stepDur * 7, 0.12);
+    if (!cinematic && sub === 10) this.playBass(bass * 1.5, t, stepDur * 4, 0.07);
+
+    // A laid-back pulse under it all (none for the cinematic mood).
+    if (!cinematic) {
+      if (sub === 0 || sub === 10) this.playKick(t, sub === 0 ? 0.08 : 0.05);
+      if (sub % 4 === 2) this.playShaker(t, 0.007);
     }
 
-    // Shaker on every even 16th note
-    if (this.step % 2 === 0) {
-      this.playShaker(now, this.step % 4 === 2 ? 0.03 : 0.015);
+    // The kalimba wanders the pentatonic in small steps on the 8th notes, leaving plenty of space.
+    if (sub % 2 === 0 && Math.random() < (cinematic ? 0.18 : 0.3)) {
+      const move = [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)];
+      this.melodyAt = Math.max(0, Math.min(this.melody.length - 1, this.melodyAt + move));
+      this.playKalimba(this.melody[this.melodyAt], t, 0.035 + Math.random() * 0.02);
     }
-
-    // Melodic kalimba / marimba plucks in pentatonic scale
-    // Afrobeat syncopated pattern on select 16ths
-    const pattern = cinematic ? [0, 7, 12] : [0, 3, 6, 8, 11, 14];
-    const subStep = this.step % 16;
-    if (pattern.includes(subStep)) {
-      const noteIdx = (subStep * 2 + chordIndex * 3) % this.pentatonic.length;
-      const note = this.pentatonic[noteIdx];
-      this.playPluck(note, now, 0.12);
-    }
-
-    this.step = (this.step + 1) % 64;
   }
 }
 

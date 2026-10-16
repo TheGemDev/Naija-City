@@ -11,10 +11,16 @@ import {
   type Group, type Material, type MeshStandardMaterial, type Object3D,
 } from 'three';
 
-interface Bucket { material: Material; ownColor: boolean; cast: boolean; receive: boolean; pos: number[]; nor: number[]; col: number[] }
+interface Bucket { material: Material; ownColor: boolean; cast: boolean; receive: boolean; pos: number[]; nor: number[]; col: number[]; seed: number[] }
 
 const v = new Vector3();
 const n = new Vector3();
+
+/** A steady number from 0 to 1 for a spot in the world: the same window always gets the same one. */
+function seedAt(x: number, y: number, z: number) {
+  const h = Math.sin(x * 12.9898 + y * 4.1414 + z * 78.233) * 43758.5453;
+  return h - Math.floor(h);
+}
 
 function signature(m: MeshStandardMaterial, cast: boolean, receive: boolean) {
   return [
@@ -45,7 +51,9 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
     g.traverse((o) => { if (o !== g && !skip(o)) meshes.push(o as Mesh); });
 
     // Materials shared between meshes (window glass, lamp heads) are changed from code at night,
-    // so those keep their own material instead of being folded into a vertex-coloured copy.
+    // so those keep their own material instead of being folded into a vertex-coloured copy. Each of
+    // their meshes gets a `seed` (0 to 1, from where it stands) so the material can tell one window
+    // from the next: which are lit at night is worked out from it (cityModels.tsx).
     const uses = new Map<Material, number>();
     for (const m of meshes) uses.set(m.material as Material, (uses.get(m.material as Material) ?? 0) + 1);
 
@@ -61,7 +69,7 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       const shared = (uses.get(mat) ?? 0) > 1;
       const key = `${cell}|${shared ? mat.uuid : signature(mat, mesh.castShadow, mesh.receiveShadow)}`;
       let b = buckets.get(key);
-      if (!b) buckets.set(key, (b = { material: mat, ownColor: shared, cast: mesh.castShadow, receive: mesh.receiveShadow, pos: [], nor: [], col: [] }));
+      if (!b) buckets.set(key, (b = { material: mat, ownColor: shared, cast: mesh.castShadow, receive: mesh.receiveShadow, pos: [], nor: [], col: [], seed: [] }));
       b.cast ||= mesh.castShadow;
       b.receive ||= mesh.receiveShadow;
 
@@ -72,6 +80,7 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       const count = idx ? idx.count : P.count;
       const flip = rel.determinant() < 0;
       const { r, g: gr, b: bl } = mat.color ?? { r: 1, g: 1, b: 1 };
+      const seed = shared ? seedAt(v.x, v.y, v.z) : 0;
       for (let i = 0; i < count; i++) {
         // Mirrored meshes wind the other way; swap two corners so faces still point out.
         const k = flip ? i - (i % 3) + [0, 2, 1][i % 3] : i;
@@ -82,6 +91,7 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
         else n.set(0, 1, 0);
         b.nor.push(n.x, n.y, n.z);
         b.col.push(r, gr, bl);
+        if (shared) b.seed.push(seed);
       }
     }
 
@@ -91,7 +101,8 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       geo.setAttribute('position', new Float32BufferAttribute(b.pos, 3));
       geo.setAttribute('normal', new Float32BufferAttribute(b.nor, 3));
       let material = b.material;
-      if (!b.ownColor) {
+      if (b.ownColor) geo.setAttribute('seed', new Float32BufferAttribute(b.seed, 1));
+      else {
         geo.setAttribute('color', new Float32BufferAttribute(b.col, 3));
         material = b.material.clone();
         (material as MeshStandardMaterial).color?.setRGB(1, 1, 1);

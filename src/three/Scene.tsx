@@ -81,6 +81,8 @@ const WHITE = new Color('#ffffff');
 /** The sun through harmattan dust: a soft orange. */
 const SUN_DUST = new Color('#ffcf9a');
 const SKY_DUST = new Color('#f3dcb5');
+/** Rain light: cool and grey. */
+const SKY_RAIN = new Color('#b9c6d6');
 const LAMPS: [number, number, number][] = [[4, 2.2, 3], [11, 2.2, 2.5], [11, 2.2, 7.5], [2.5, 2.2, 8], [6.5, 2.2, 8], [7, 2.2, 11.5]];
 
 /** Out under the sky, where weather reaches: not inside a building or on a plane. */
@@ -151,7 +153,9 @@ function DayNight() {
     sun.current.target.position.set(t.x, 0, t.z);
     sun.current.target.updateMatrixWorld();
     // Haze closes in round the middle of the screen; rain greys the far side. Clear air has no fog at all.
-    const thick = Math.max(haze, rain * 0.6);
+    // A flight's terrain brings its own fog (FlightTerrain) and clears it on landing: take ours back.
+    if (!flightOf(s) && scene.fog !== fog) scene.fog = fog;
+    const thick = Math.max(haze, rain * 0.8);
     const dist = camera.position.distanceTo(sun.current.target.position);
     const open = (1 - thick) ** 2.5;
     fog.color.copy(bg.current);
@@ -172,8 +176,8 @@ function DayNight() {
     sun.current.shadow.intensity = 0.25 + 0.75 * sunK;
     // High mode's room environment already fills the shadows, so its sky light is turned down by as much: stacked
     // together at noon they washed the whole map out to white. Some of the sunlight cloud takes away comes back as sky light.
-    hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + day * (1 - sunK) * 0.9 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85) + flash * 2.2;
-    hemi.current.color.copy(SKY_DAY).lerp(SKY_DUST, haze * 0.6).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8).lerp(FLASH, flash);
+    hemi.current.intensity = 0.35 + day * (low ? 0.9 : 0.6) + day * (1 - sunK) * 0.3 + moon * 0.9 + bulbs * (low ? 1.1 : 0.85) + flash * 2.2;
+    hemi.current.color.copy(SKY_DAY).lerp(SKY_DUST, haze * 0.6).lerp(SKY_RAIN, rain * 0.7).lerp(SKY_MOON, night * 0.6).lerp(SKY_BULB, bulbs * 0.8).lerp(FLASH, flash);
     hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, night * (1 - bulbs));
 
     scene.environmentIntensity = 0.05 + day * 0.1;
