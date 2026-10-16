@@ -265,6 +265,8 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
         return say(choose(prefer(lines(`${praise!.key}.tail`, praise!.def.tail), lines('tail', GEN.tail)), P), P);
       }
       case 'rat':
+        // His Ratels are a signature: called on about half the times a shape leaves room for them.
+        if (rng() < 0.5) return null;
         return tone === 'praise' ? say(choose([lines('rat.p', GEN.ratPraise)], P), P) : say(choose([lines('rat.d', GEN.ratDrag)], D), D);
       case 'sign':
         return tone === 'praise' ? say(choose([lines('sign.p', GEN.signPraise)], P), P) : say(choose([lines('sign.d', GEN.signDrag)], D), D);
