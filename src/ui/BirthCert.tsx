@@ -6,7 +6,6 @@ import { naira } from '../game/store';
 import { regionOf } from '../game/regions';
 import { inviteLink, shareLink, userLink } from '../net/deeplink';
 import { useSession } from '../net/session';
-import { Emoji } from './Icons';
 import { saveImage } from './saveImage';
 import './birthcert.css';
 
@@ -78,13 +77,18 @@ export function BirthCert({ name, look, origin, state, onBack, onStart }: { name
           <h3 className="fate-title">You were born…</h3>
           <p className="muted small">It’s official. Keep your certificate or show your people.</p>
         </div>
-        <div className="cert-tools">
-          <button type="button" className="cert-tool" aria-label="Share certificate" title="Share or save" disabled={busy} onClick={() => void share()}>
-            <Emoji char="📤" size={18} />
-          </button>
-        </div>
+        <button type="button" className="cert-share" aria-label="Share certificate" title="Share or save" disabled={busy} onClick={() => void share()}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 15V3" />
+            <path d="M7.5 7.5 12 3l4.5 4.5" />
+            <path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+          </svg>
+          Share
+        </button>
       </div>
-      <img className="cert-paper" src={src} width={CERT_W} height={CERT_H} alt={`Naija City birth certificate of ${name}${username ? ` (@${username})` : ''}, born in ${stateName}. Status: ${status}. Destiny: ${destiny}`} draggable={false} />
+      <div className="cert-wrap">
+        <img className="cert-paper" src={src} width={CERT_W} height={CERT_H} alt={`Naija City birth certificate of ${name}${username ? ` (@${username})` : ''}, born in ${stateName}. Status: ${status}. Destiny: ${destiny}`} draggable={false} />
+      </div>
       <div className="row-btns wiz-foot">
         {onBack && (
           <button className="btn" onClick={onBack}>
