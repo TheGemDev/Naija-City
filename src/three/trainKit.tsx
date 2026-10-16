@@ -20,14 +20,15 @@ const TINT = '#1e293b';
 export const BODY_Y = 0.95;
 export const BODY_H = 2.05;
 export const CAR_W = 1.8;
+const CAR_WIDTH = CAR_W;
 
 /** Two bogies under a car of length `len`: frames, wheels on both rails, and the underframe and its equipment boxes. */
-function running(k: Kit, len: number) {
+function running(k: Kit, len: number, gauge = 0.78, w = CAR_W) {
   for (const z of [-(len / 2 - 1.6), len / 2 - 1.6]) {
-    k.box([1.5, 0.28, 2.1], [0, 0.45, z], DARK, 'satin');
-    for (const dz of [-0.55, 0.55]) for (const x of [-0.78, 0.78]) k.cyl(0.3, 0.3, 0.1, [x, 0.3, z + dz], '#374151', 'metal', [0, 0, Math.PI / 2], 14);
+    k.box([gauge * 2 - 0.06, 0.28, 2.1], [0, 0.45, z], DARK, 'satin');
+    for (const dz of [-0.55, 0.55]) for (const x of [-gauge, gauge]) k.cyl(0.3, 0.3, 0.1, [x, 0.3, z + dz], '#374151', 'metal', [0, 0, Math.PI / 2], 14);
   }
-  k.box([1.6, 0.32, len - 0.6], [0, 0.78, 0], DARK, 'satin');
+  k.box([w - 0.2, 0.32, len - 0.6], [0, 0.78, 0], DARK, 'satin');
   for (const z of [-len * 0.12, len * 0.12]) k.box([1.2, 0.3, len * 0.16], [0, 0.6, z], '#374151', 'satin');
 }
 
@@ -35,8 +36,9 @@ function running(k: Kit, len: number) {
  * A passenger coach: white, a green skirt with a yellow line over it, the tinted window band down both sides, a door
  * at each end of each side, a grey roof with its air-conditioning pods, and the gangway bellows at both ends.
  */
-export function coach(k: Kit, len: number, opts: { roof?: boolean; band?: boolean } = {}) {
-  running(k, len);
+export function coach(k: Kit, len: number, opts: { roof?: boolean; band?: boolean; w?: number; gauge?: number } = {}) {
+  const CAR_W = opts.w ?? CAR_WIDTH;
+  running(k, len, opts.gauge, CAR_W);
   const y = BODY_Y + BODY_H / 2;
   k.soft([CAR_W, BODY_H, len], [0, y, 0], RAIL_WHITE, 'satin', undefined, 0.08);
   k.box([CAR_W + 0.02, 0.36, len - 0.1], [0, BODY_Y + 0.18, 0], RAIL_GREEN, 'satin');
@@ -58,8 +60,9 @@ export function coach(k: Kit, len: number, opts: { roof?: boolean; band?: boolea
 }
 
 /** The diesel at the head of the train, its cab at the +z end: green, a white band, a yellow nose, a sloped windscreen and headlamps. */
-export function loco(k: Kit, len: number) {
-  running(k, len);
+export function loco(k: Kit, len: number, opts: { w?: number; gauge?: number } = {}) {
+  const CAR_W = opts.w ?? CAR_WIDTH;
+  running(k, len, opts.gauge, CAR_W);
   const front = len / 2;
   k.soft([CAR_W, 2.0, len - 1.4], [0, BODY_Y + 1.0, -0.7], RAIL_GREEN, 'satin', undefined, 0.08);
   k.box([CAR_W + 0.02, 0.32, len - 0.2], [0, BODY_Y + 0.55, -0.1], RAIL_WHITE, 'satin');

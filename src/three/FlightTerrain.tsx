@@ -17,6 +17,7 @@ import {
 import { useGame } from '../game/store';
 import { useLowPerf } from '../game/quality';
 import type { RegionId } from '../game/regions';
+import { Kit, KitMeshes } from './cabinKit';
 
 /** What the flight tells the land each frame: how far it has flown, how high it is (0 to 1), and how far through it is. */
 export interface FlightMotion { travel: number; alt: number; progress: number }
@@ -609,6 +610,8 @@ function buildLand(seed: number, low: boolean, climate: number, geo: Shapes, mat
       batch(rocks, geo.rock, mat.rock, GRANITE),
     ],
     clouds: batch(puffs, geo.cloud, mat.cloud, WHITE),
+    // Where the river crosses the middle of the tile, and how wide it is there: a railway bridges it (railBed).
+    river0: { z: crossAt(river, 0), w: river.w[Math.round((0 - river.start) / river.step)] ?? 8, seed },
   };
 }
 
@@ -636,11 +639,11 @@ function colourIn(mesh: InstancedMesh, b: Batch) {
   b.geometry.setAttribute('instanceWetColor', new InstancedBufferAttribute(wet, 3));
 }
 
-/** Where you are flying from and to: from the city you are in, to the one in the flight's action id (fly_lagos, fly_kano_jet). */
+/** Where you are flying from and to: from the city you are in, to the one in the flight's action id (fly_lagos, fly_kano_jet, train_kano_biz). */
 function route() {
   const s = useGame.getState();
   const from = (s.destinationId in WET ? s.destinationId : 'kaduna') as RegionId;
-  const to = /^fly_([a-z]+)/.exec(s.task?.actionId ?? '')?.[1];
+  const to = /^(?:fly|train)_([a-z]+)/.exec(s.task?.actionId ?? '')?.[1];
   return { from, to: (to && to in WET ? to : from) as RegionId };
 }
 
@@ -651,7 +654,76 @@ const palmShare = (wet: number) => smoothstep(0.3, 0.9, wet);
  * The land under the plane. Sits inside the Sky's ground group (which rises and falls with the climb and the landing)
  * and reads how far you have flown from `motion`. It also hangs a haze over the far distance while you are in the air.
  */
-export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
+/** How high the tops of the rails stand over the tile's flat middle, for a train ride (three/TrainRide.tsx). */
+export const RAIL_TOP = 1.06;
+
+/**
+ * The railway down the middle of the tile, for a train ride: an embankment of ballast with concrete sleepers and two
+ * rails, a steel truss bridge where the river crosses, telegraph poles and their wires along the far side, scrub by the
+ * line, a signal, and a little halt with a shelter that the train runs through without stopping. One Kit per tile.
+ */
+function railBed({ z: rz, w: rw, seed }: { z: number; w: number; seed: number }, low: boolean) {
+  const k = new Kit(low);
+  const rand = seeded(seed + 77);
+  const span = rw + 16;
+  const b0 = rz - span, b1 = rz + span;
+  // The embankment and ballast, broken where the bridge carries the line over the river
+  for (const [z0, z1] of [[-HALF_D, b0], [b1, HALF_D]]) {
+    if (z1 <= z0) continue;
+    const len = z1 - z0, mid = (z0 + z1) / 2;
+    k.box([7, 0.3, len], [0, 0.42, mid], '#9a8c78');
+    k.box([4.2, 0.36, len], [0, 0.62, mid], '#8b8178');
+  }
+  // Sleepers, every 0.75 so they meet themselves across the tile's seam
+  const every = low ? 1.5 : 0.75;
+  for (let z = -HALF_D + every / 2; z < HALF_D; z += every) k.box([2.6, 0.1, 0.26], [0, 0.85, z], z > b0 && z < b1 ? '#57534e' : '#a8a29e');
+  for (const x of [-0.75, 0.75]) k.box([0.08, 0.13, TILE_D], [x, 0.965, 0], '#6b7280', 'metal');
+  // The bridge: a deck on concrete piers, and a steel truss either side
+  k.box([5, 0.42, span * 2], [0, 0.6, rz], '#6b7280', 'satin');
+  for (let z = b0; z <= b1 + 0.01; z += (b1 - b0) / 4) k.box([4.4, 4.2, 1.6], [0, -1.6, z], '#a8a29e', 'satin');
+  for (const x of [-2.5, 2.5]) {
+    k.box([0.3, 0.3, span * 2], [x, 1.0, rz], '#64748b', 'metal');
+    k.box([0.3, 0.3, span * 2 - 4], [x, 4.2, rz], '#64748b', 'metal');
+    const bays = Math.round((span * 2) / 4);
+    for (let i = 0; i <= bays; i++) {
+      const z = b0 + (i * (b1 - b0)) / bays;
+      if (i > 0 && i < bays) k.box([0.22, 3.2, 0.22], [x, 2.6, z], '#64748b', 'metal');
+      if (i < bays) k.box([0.16, 0.16, 5.1], [x, 2.6, z + (b1 - b0) / bays / 2], '#64748b', 'metal', [i % 2 ? 0.66 : -0.66, 0, 0]);
+    }
+  }
+  for (let z = b0 + 2; z < b1 - 1; z += 4) k.box([5, 0.2, 0.2], [0, 4.25, z], '#64748b', 'metal');
+  // Telegraph poles along the far side every 45, and their wires
+  for (let z = -HALF_D + 22.5; z < HALF_D; z += 45) {
+    k.cyl(0.1, 0.13, 6, [-7, 3.3, z], '#7c5a3a', 'matte', undefined, 6);
+    k.box([1.6, 0.1, 0.1], [-7, 6.0, z], '#7c5a3a');
+  }
+  for (const x of [-7.6, -6.4]) k.box([0.03, 0.03, TILE_D], [x, 5.9, 0], '#334155', 'matte');
+  // Scrub along the line, on both sides
+  for (let i = 0, n = low ? 40 : 110; i < n; i++) {
+    const side = rand() < 0.5 ? -1 : 1, z = -HALF_D + rand() * TILE_D;
+    if (z > b0 - 4 && z < b1 + 4) continue;
+    const s = 0.5 + rand() * 0.9;
+    k.ball(s, [side * (4.2 + rand() * 7), 0.3 + s * 0.3, z], rand() < 0.5 ? '#4d6b2a' : '#6b7a33', 'matte', [1, 0.6, 1]);
+  }
+  // A signal ahead of the bridge
+  const sz = rz - span - 60;
+  k.cyl(0.08, 0.08, 4, [3, 2.6, sz], '#334155', 'metal', undefined, 8);
+  k.box([0.4, 0.9, 0.3], [3, 4.6, sz], '#111827', 'satin');
+  k.box([0.18, 0.18, 0.02], [3, 4.8, sz + 0.16], '#22c55e', 'glow');
+  // A halt the train runs straight through: a low platform on the near side, a shelter, a name board, benches
+  const hz = ((rz + 230 + HALF_D) % TILE_D) - HALF_D;
+  k.box([3.6, 0.9, 44], [4.4, 0.45, hz], '#d6d3d1');
+  k.box([3.6, 0.02, 0.15], [2.75, 0.91, hz], '#facc15');
+  k.box([3, 0.12, 9], [5.4, 3.1, hz], RAIL_ROOF);
+  for (const dz of [-4, 0, 4]) k.box([0.14, 2.2, 0.14], [6.6, 2, hz + dz], '#94a3b8', 'metal');
+  k.box([0.1, 0.7, 3.2], [6.4, 2.2, hz + 9], '#14532d', 'satin');
+  k.box([0.12, 0.5, 3], [6.35, 2.2, hz + 9], '#f8fafc', 'glow');
+  for (const dz of [-2, 2]) k.box([0.5, 0.08, 1.6], [6.1, 1.35, hz + dz], '#92400e', 'satin');
+  return k.build();
+}
+const RAIL_ROOF = '#15803d';
+
+export function FlightTerrain({ motion, rail = false }: { motion: RefObject<FlightMotion>; rail?: boolean }) {
   const low = useLowPerf();
   const { from, to } = useMemo(route, []);
   const geo = useMemo(shapes, []);
@@ -662,6 +734,7 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
     for (const ch of `${from}>${to}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
     return buildLand(seed, low, (WET[from] + WET[to]) / 2, geo, mat);
   }, [from, to, low, geo, mat]);
+  const railKit = useMemo(() => (rail ? railBed(land.river0, low) : null), [rail, land, low]);
   const tile = useRef<Group>(null!);
   const cloudLayer = useRef<Group>(null!);
   const meshes = useRef<(InstancedMesh | null)[]>([]);
@@ -731,6 +804,7 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
             <mesh geometry={land.plots} material={mat.plots} />
             <mesh geometry={land.water} material={mat.water} />
             <mesh geometry={land.roads} material={mat.roads} />
+            {railKit && <KitMeshes kit={railKit} shadows={false} />}
           </group>
         ))}
         {land.batches.map((b, i) => (

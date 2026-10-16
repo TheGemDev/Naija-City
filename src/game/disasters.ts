@@ -159,7 +159,7 @@ export function seasonWeight(kind: DisasterKind, city: string, month: number) {
   const [south, far] = SEASON[kind];
   const w = BASE[kind] * (south[month] * (1 - north) + far[month] * north);
   const map = cityMap(city);
-  if (kind === 'flood' && map.riverDraw.length < 6 && !map.lakes.length) return 0;
+  if (kind === 'flood' && map.riverDraw.length < 6) return map.lakes.length ? w * 0.4 : 0;
   return w;
 }
 

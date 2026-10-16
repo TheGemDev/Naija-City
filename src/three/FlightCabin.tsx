@@ -109,7 +109,8 @@ function toTouch(p: number, f: Shape3) {
   return p <= f.touch ? d : -d;
 }
 
-function Seated({ x, z, look, clip = 'sit', me }: { x: number; z: number; look: string; clip?: Clip; me?: boolean }) {
+/** Somebody in a seat whose cushion top is at SEAT_Y, facing +z (or turned by `yaw`). The train's coach seats people too (three/TrainRide.tsx). */
+export function Seated({ x, z, look, clip = 'sit', me, yaw = 0 }: { x: number; z: number; look: string; clip?: Clip; me?: boolean; yaw?: number }) {
   const clipRef = useRef<Clip>(clip);
   const seated = useRef(true);
   const marker = useRef<Mesh>(null);
@@ -122,7 +123,7 @@ function Seated({ x, z, look, clip = 'sit', me }: { x: number; z: number; look: 
     marker.current.position.y = 2.0 + Math.sin(clock.elapsedTime * 2) * 0.05;
   });
   return (
-    <group position={[x, SEAT_Y - seatDrop(SEAT_Y), z]} visible={!hidden}>
+    <group position={[x, SEAT_Y - seatDrop(SEAT_Y), z]} rotation-y={yaw} visible={!hidden}>
       <Person look={look} clipRef={clipRef} seatedRef={seated} />
       {me && !photo && (
         <mesh ref={marker} scale={[0.12, 0.2, 0.12]}>
@@ -399,8 +400,8 @@ function Hull() {
   );
 }
 
-/** Cabin crew pacing the aisle with the trolley. */
-function Attendant({ length }: { length: number }) {
+/** Cabin crew pacing the aisle with the trolley (the train's coach has one too). */
+export function Attendant({ length }: { length: number }) {
   const group = useRef<Group>(null!);
   const clip = useRef<Clip>('walk');
   const look = useMemo(() => encodeLook({ body: 'f', skin: 3, hair: 'bun', hairColor: 0, outfit: { top: 'blouse_yellow', bottom: 'skirt_navy', shoes: 'slippers_black' } }), []);
