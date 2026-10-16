@@ -14,6 +14,7 @@ import {
   postContract, reportRacket, rescue, sellGood, sellInside, startOp, strikeContract, struggle, takeContract, consumeGood, useVice,
 } from '../net/vice';
 import { AskBail } from './Police';
+import { GunCounter } from './Guns';
 import { Emoji, Icon } from './Icons';
 import './vice.css';
 import { Face } from './Face';
@@ -281,10 +282,10 @@ function UserPick({ value, onChange, placeholder = 'Search username' }: { value:
 
 /* ==================================================== Fixer ==================================================== */
 
-type FixerTab = 'protection' | 'contracts' | 'ransoms' | 'cell';
+type FixerTab = 'protection' | 'contracts' | 'ransoms' | 'cell' | 'guns';
 
 /** A Fixer card: an icon tile, a title with an optional pill, a line under it, and whatever the card does below. */
-function FxCard({ icon, title, pill, tone, sub, children }: {
+export function FxCard({ icon, title, pill, tone, sub, children }: {
   icon: string;
   title: ReactNode;
   pill?: ReactNode;
@@ -306,7 +307,7 @@ function FxCard({ icon, title, pill, tone, sub, children }: {
 }
 
 /** The rules of a tab, folded away so they don't push everything else down. */
-function HowItWorks({ children }: { children: ReactNode }) {
+export function HowItWorks({ children }: { children: ReactNode }) {
   return (
     <details className="fx-how">
       <summary>How it works</summary>
@@ -315,7 +316,7 @@ function HowItWorks({ children }: { children: ReactNode }) {
   );
 }
 
-function Section({ title, count, extra }: { title: string; count?: number; extra?: ReactNode }) {
+export function Section({ title, count, extra }: { title: string; count?: number; extra?: ReactNode }) {
   return <h4 className="fx-h">{title}{!!count && <i>{count}</i>}{extra && <small>{extra}</small>}</h4>;
 }
 
@@ -351,6 +352,7 @@ export function FixerApp() {
     { id: 'protection', label: 'Racket', count: s?.rackets.asPayer.filter((r) => r.status === 'demanded').length ?? 0, alert: true },
     { id: 'contracts', label: 'Jobs', count: s?.contracts.taking.length ?? 0, alert: false },
     { id: 'ransoms', label: 'Ransom', count: (s?.contracts.ransoms.length ?? 0) + (me.ransom ? 1 : 0), alert: !!me.ransom || !!s?.contracts.ransoms.some((r) => r.friend) },
+    { id: 'guns', label: 'Guns', count: 0, alert: false },
     { id: 'cell', label: 'Cell', count: s?.cell.jailed ? 1 : s?.cell.breakouts.length ?? 0, alert: !!s?.cell.jailed },
   ];
   return (
@@ -370,6 +372,7 @@ export function FixerApp() {
       {s && tab === 'contracts' && <Contracts busy={busy} />}
       {s && tab === 'ransoms' && <Ransoms busy={busy} />}
       {s && tab === 'cell' && <Cell busy={busy} />}
+      {tab === 'guns' && <GunCounter source="black" />}
     </>
   );
 }

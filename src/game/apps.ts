@@ -23,6 +23,7 @@ export const STORE_APPS: StoreApp[] = [
   { id: 'area', label: 'Area', icon: '🕴🏾', bg: ['#64748b', '#0f172a'], tint: '#0f172a', blurb: 'The streets have an app now. Run the area.', mb: 31, rating: 3.2, shady: true },
   { id: 'blackmarket', label: 'Black Market', icon: '🕶️', bg: ['#44403c', '#0c0a09'], tint: '#1c1917', blurb: 'Hot goods, cold prices. Sell what you “found”. Your name is on every listing.', mb: 17, rating: 2.7, shady: true },
   { id: 'plug', label: 'Plug', icon: '🌿', bg: ['#4ade80', '#14532d'], tint: '#14532d', blurb: 'Cana, Colorado, codeine, tramadol. “Delivery” only. The police do check phones.', mb: 14, rating: 2.3, shady: true },
+  { id: 'gunshop', label: 'Gun Shop', icon: '🔫', bg: ['#78716c', '#292524'], tint: '#292524', blurb: 'Licensed firearms dealer. Pistols, pump-actions, vests and armed bodyguards. Clean record only.', mb: 11, rating: 3.6 },
   { id: 'fixer', label: 'Fixer', icon: '🕴🏾', bg: ['#a8a29e', '#1c1917'], tint: '#1c1917', blurb: 'Protection rackets, hit and kidnap contracts, ransoms and jailbreaks.', mb: 19, rating: 1.9, shady: true },
   { id: 'grind', label: 'Dirty Work', icon: '🛠️', bg: ['#fb923c', '#7c2d12'], tint: '#7c2d12', blurb: 'Fake papers, fake naira, fuel bunkering, pirate radio and backstreet betting.', mb: 24, rating: 2.5, shady: true },
   { id: 'legacy', label: 'Legacy', icon: '🏆', bg: ['#fde047', '#a16207'], tint: '#a16207', blurb: 'Your hall of fame. See how your past lives ended.', mb: 12, rating: 4.7 },

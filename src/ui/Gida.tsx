@@ -13,7 +13,19 @@ import { leaveRental, listForRent, loadRentals, rentHouse, unlistRental, useRent
 import {
   builtOn, cityEstates, CONTRACTORS, costOf, DESIGN_BY_ID, DESIGNS, isComplete, landAuthority, LAND_RECLAIM_MINUTES, MATERIAL_BY_ID, materialPrice, PLOTS, REGION_BY_ID,
   PLAYER_RENT, remainingBuildMinutes, remainingStageMaterials, rentDue, rentPerDay, saleValue, weeklyRentOf, stageLabour, stageMaterials, STAGES, type Property,
+  type RentalListing,
 } from '../game/property';
+
+const ago = (at: number) => {
+  const m = Math.floor((Date.now() - at) / 60_000);
+  return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`;
+};
+
+/** Who lives in one of my listed houses: a player's handle, or an NPC household's name. */
+const tenantTitle = (l: RentalListing) => (l.npc ? `${l.tenant} · NPC tenant` : `Rented by @${l.tenant}`);
+/** When they moved in and what they have paid me so far. */
+const tenantSince = (l: RentalListing) =>
+  [l.movedIn ? `Moved in ${ago(l.movedIn)}` : '', l.received !== undefined ? `${naira(l.received)} received` : ''].filter(Boolean).join(' · ');
 
 /** Asks the phone to open House, optionally on one property (from the estate area). */
 export const useHouseNav = create<{ want: number; property: string | null }>(() => ({ want: 0, property: null }));
@@ -352,14 +364,18 @@ function RentOut({ p, isHome }: { p: Property; isHome: boolean }) {
       <div className="tile">
         <span className="tile-icon">🔑</span>
         <span className="tile-info">
-          <b>{mine?.tenant ? `Rented by @${mine.tenant}` : mine ? 'Listed for rent' : 'Empty'}</b>
+          <b>{mine?.tenant ? tenantTitle(mine) : mine ? 'Listed for rent' : 'Empty'}</b>
           <small>
-            {mine?.tenant ? `${naira(mine.weekly)}/week, paid straight to you` : `Other players can rent it from the For rent tab. ${naira(min)} to ${naira(max)} a week.`}
+            {mine?.tenant
+              ? `${naira(mine.weekly)}/week, paid straight to you`
+              : `Other players can rent it from the For rent tab, and NPC households look too: near ${naira(base)} fills fastest. ${naira(min)} to ${naira(max)} a week.`}
           </small>
+          {mine?.tenant && <small>{tenantSince(mine)}</small>}
         </span>
         {mine && <button className="btn sm" disabled={busy} onClick={() => unlistRental(p.id)}>{mine.tenant ? 'Evict' : 'Unlist'}</button>}
       </div>
-      {!mine?.tenant && (
+      {/* An NPC household's rent can still be changed; raise it and they may move out. */}
+      {(!mine?.tenant || mine.npc) && (
         <div className="tile">
           <input className="text-input" inputMode="numeric" value={weekly} onChange={(e) => setWeekly(e.target.value.replace(/\D/g, ''))} aria-label="Weekly rent" />
           <button className="btn sm go" disabled={busy || !(price >= min && price <= max)} onClick={() => listForRent(p.id, price)}>
@@ -421,7 +437,8 @@ function RentTab() {
               <span className="tile-icon" style={{ fontSize: 28 }}>🏠</span>
               <span className="tile-info">
                 <b>{DESIGN_BY_ID[l.design]?.name ?? 'House'} · {REGION_BY_ID[l.region]?.name ?? 'Kaduna'}</b>
-                <small>{l.tenant ? `Rented by @${l.tenant}` : 'Waiting for a tenant'}</small>
+                <small>{l.tenant ? tenantTitle(l) : 'Waiting for a tenant'}</small>
+                {l.tenant && <small>{tenantSince(l)}</small>}
                 <small style={{ color: '#059669', fontWeight: 600 }}>{naira(l.weekly)}/week</small>
               </span>
               <button className="btn sm" disabled={busy} onClick={() => unlistRental(l.propertyId)}>{l.tenant ? 'Evict' : 'Unlist'}</button>

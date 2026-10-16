@@ -3,6 +3,8 @@ import { ALIAS_MAX, naira, useGame } from '../game/store';
 import { cityNameHere } from '../game/regions';
 import { useNet } from '../net/multiplayer';
 import { arrestPlayer, payBail, steal, usePolice } from '../net/crime';
+import { loadGuns, robAtGunpoint, shootPlayer, useGuns } from '../net/guns';
+import { GUNS } from '../game/guns';
 import { bailFor, POLICE } from '../game/crime';
 import { requestMoney, sendMoney, sendHomeInvite, useSocial, type PlayerRef } from '../net/social';
 import { shareLink, userLink } from '../net/deeplink';
@@ -16,6 +18,9 @@ export function PlayerInteractions() {
   const setPanel = useGame((s) => s.setPanel);
   const connected = useNet((s) => s.connected);
   const busyStealing = usePolice((s) => s.busy);
+  // A loaded gun on me puts robbing and shooting on the menu (game/guns.ts).
+  const gun = useGuns((s) => s.state?.gun ?? null);
+  const busyGun = useGuns((s) => s.busy);
   const me = useSession((s) => s.user);
   const myUsername = me?.username ?? useGame((s) => s.name) ?? 'Odogwu';
   const money = useGame((s) => s.money);
@@ -35,6 +40,10 @@ export function PlayerInteractions() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (player) void loadGuns();
+  }, [player?.uid]);
 
   useEffect(() => {
     setCategory(player?.tab === 'profile' ? 'profile' : 'wild');
@@ -310,6 +319,24 @@ export function PlayerInteractions() {
             >
               🥷 Pickpocket
             </button>
+            {gun && (
+              <>
+                <button
+                  className="player-steal"
+                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds}
+                  onClick={() => { close(); void robAtGunpoint(player.uid, username); }}
+                >
+                  🔫 Rob at gunpoint
+                </button>
+                <button
+                  className="player-steal"
+                  disabled={!me || !connected || busyGun || gun.ammo < GUNS[gun.id].rounds}
+                  onClick={() => { close(); void shootPlayer(player.uid, username); }}
+                >
+                  💥 Shoot{gun.ammo < GUNS[gun.id].rounds ? ' · no rounds' : ''}
+                </button>
+              </>
+            )}
             {wanted && (officer || wanted.bounty > 0) && (
               <button
                 className="player-steal"

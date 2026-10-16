@@ -35,8 +35,8 @@ export function RobbedCard() {
   };
   const item = crime.item ? ITEMS[crime.item]?.name.toLowerCase() : null;
   const took = [crime.amount ? naira(crime.amount) : '', item ? `your ${item}` : ''].filter(Boolean).join(' and ');
-  const how = crime.kind === 'burglary' ? 'burgled your house' : 'picked your pocket';
-  const tried = crime.kind === 'burglary' ? 'tried to break into your house' : 'tried to pick your pocket';
+  const how = crime.armed === 'shoot' ? 'shot you' : crime.armed ? 'robbed you at gunpoint' : crime.kind === 'burglary' ? 'burgled your house' : 'picked your pocket';
+  const tried = crime.armed === 'shoot' ? 'shot at you' : crime.armed ? 'pulled a gun on you' : crime.kind === 'burglary' ? 'tried to break into your house' : 'tried to pick your pocket';
   // A guard who catches a thief puts the warrant out already: only the bounty is left to add.
   const wanted = crime.status === 'wanted';
   const bounty = suggestBounty(crime.amount, money);

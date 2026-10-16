@@ -5,7 +5,7 @@
 import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { DoubleSide, Shape, type Group, type Mesh, type MeshStandardMaterial } from 'three';
-import { useGame } from '../game/store';
+import { taskDurationSeconds, useGame } from '../game/store';
 import { usePhoto } from '../game/photo';
 import { useLowPerf } from '../game/quality';
 import { encodeLook, randomAppearance } from '../game/wardrobe';
@@ -25,18 +25,56 @@ const JET_AXIS = 0.7;
 export const FLIGHT_SEAT: Record<Kind, { x: number; z: number }> = { ticket: { x: 1.75, z: CABIN_LENGTH.ticket / 2 - 2.3 - 2 * 1.45 }, jet: { x: 1.0, z: 1.9 } };
 
 const SEAT_Y = 0.45;
-/** How far through the flight the climb ends and the descent begins. */
+/** How far through the flight the climb ends. */
 const CLIMB = 0.18;
-const DESCENT = 0.8;
 
 const smooth = (t: number) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
-/** 0 on the ground, 1 at cruising height. */
-const altitude = (p: number) => (p < CLIMB ? smooth(p / CLIMB) : p > DESCENT ? smooth((1 - p) / (1 - DESCENT)) : 1);
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 /** How far through the flight you are, 0 to 1. */
 const progress = () => {
   const t = useGame.getState().task;
   return t && t.total > 0 ? 1 - t.remaining / t.total : 0;
 };
+
+/**
+ * The landing, timed in real seconds so even a five-second hop gets one: the approach (the runway coming up ahead, a
+ * glide, the flare) and the roll down the runway after the wheels touch. As shares of the flight: where the descent
+ * starts, where the wheels touch, and how long the whole flight is in seconds.
+ */
+interface Shape3 { descent: number; touch: number; seconds: number }
+const APPROACH_S: [number, number] = [3, 9];
+const ROLL_S: [number, number] = [1.2, 3.5];
+const shape = (): Shape3 => {
+  const t = useGame.getState().task;
+  const seconds = t && t.total > 0 ? taskDurationSeconds(t.total, t.total, t.fast) : 30;
+  const roll = clamp(seconds * 0.14, ...ROLL_S);
+  const approach = clamp(seconds * 0.3, ...APPROACH_S);
+  const touch = 1 - roll / seconds;
+  return { descent: Math.max(CLIMB, touch - approach / seconds), touch, seconds };
+};
+/** How far along the approach you are: 0 as the descent starts, 1 as the wheels touch. */
+const approachOf = (p: number, f: Shape3) => clamp((p - f.descent) / Math.max(1e-6, f.touch - f.descent), 0, 1);
+/** 0 on the ground, 1 at cruising height. The approach eases off as it nears the ground: that is the flare. */
+const altitude = (p: number, f = shape()) => Math.min(p < CLIMB ? smooth(p / CLIMB) : 1, p >= f.touch ? 0 : 1 - smooth(approachOf(p, f)));
+/** How fast the land goes by: slow on the runway, fast once you are up, landing speed on the way in, braking to a crawl after touchdown. */
+function groundSpeed(p: number, f: Shape3) {
+  if (p >= f.touch) {
+    const r = clamp((p - f.touch) / (1 - f.touch), 0, 1);
+    return 9 - 7.8 * (1 - (1 - r) * (1 - r));
+  }
+  const alt = altitude(p, f);
+  return p >= f.descent ? 9 + alt * 17 : 6 + alt * 20;
+}
+/** How far the plane still has to go before the wheels touch (negative once they have): the speed, added up over the time left. */
+function toTouch(p: number, f: Shape3) {
+  const from = Math.min(p, f.touch);
+  const to = Math.max(p, f.touch);
+  const n = 16;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += groundSpeed(from + ((i + 0.5) / n) * (to - from), f);
+  const d = (sum / n) * (to - from) * f.seconds * 1.6;
+  return p <= f.touch ? d : -d;
+}
 
 function Seated({ x, z, look, clip = 'sit', me }: { x: number; z: number; look: string; clip?: Clip; me?: boolean }) {
   const clipRef = useRef<Clip>(clip);
@@ -243,10 +281,14 @@ function Partition({ z, r, axis, cut, door, colour, trim }: { z: number; r: numb
   );
 }
 
-/** The undercarriage: down on the runway, up once you are climbing. */
+/** The undercarriage: down on the runway, up once you are climbing, and down again early on the approach. */
 function WheelsDown({ children }: { children: ReactNode }) {
   const group = useRef<Group>(null!);
-  useFrame(() => { group.current.visible = altitude(progress()) < 0.22; });
+  useFrame(() => {
+    const p = progress();
+    const f = shape();
+    group.current.visible = p < CLIMB ? altitude(p, f) < 0.22 : p >= f.descent && approachOf(p, f) > 0.3;
+  });
   return <group ref={group}>{children}</group>;
 }
 
@@ -647,13 +689,27 @@ function PrivateJet({ myLook }: { myLook: string }) {
 const PUFFS: [number, number, number, number][] = [[0, 0, 0, 1.6], [1.5, -0.2, 0.4, 1.2], [-1.4, -0.1, -0.3, 1.3], [0.4, 0.5, -0.2, 1.1]];
 /** How far the runway lies over the ground the land is on. */
 const RUNWAY = 0.74;
-const DASHES = Array.from({ length: 12 }, (_, i) => -82.5 + i * 15);
+/** The runway: its length, its half width, and how far past its start the wheels touch down. */
+const RW_LEN = 420;
+const RW_HALF = 9;
+const TOUCHDOWN_PAST = 30;
+/** Where the runway sits at touchdown: its start TOUCHDOWN_PAST behind the wheels. */
+const RW_AT_TOUCH = RW_LEN / 2 - TOUCHDOWN_PAST;
+const DASHES = Array.from({ length: 28 }, (_, i) => -RW_LEN / 2 + 7.5 + i * 15);
+const EDGE_LIGHTS = Array.from({ length: 22 }, (_, i) => -RW_LEN / 2 + 5 + i * 19.5);
+/** The approach lights reach back from the start of the runway, so you see where to aim long before you get there. */
+const APPROACH_LIGHTS = Array.from({ length: 9 }, (_, i) => -RW_LEN / 2 - 8 - i * 9);
+/** Where the main wheels meet the runway, as offsets from the plane's centre line. */
+const MAIN_GEAR: Record<Kind, number> = { ticket: 2.3, jet: 1.7 };
 
 /** Cloud streaming past, the runway under the wheels, and the land (three/FlightTerrain.tsx) dropping away below on the climb and coming back up to land. */
-function Sky({ floor }: { floor: number }) {
+function Sky({ kind, floor }: { kind: Kind; floor: number }) {
   const clouds = useRef<Group>(null!);
   const ground = useRef<Group>(null!);
   const runway = useRef<Group>(null!);
+  const dashes = useRef<Group>(null!);
+  const smoke = useRef<Group>(null!);
+  const smokeMat = useRef<MeshStandardMaterial>(null!);
   const tarmac = useRef<MeshStandardMaterial>(null!);
   const marks = useRef<MeshStandardMaterial>(null!);
   const low = useLowPerf();
@@ -665,10 +721,10 @@ function Sky({ floor }: { floor: number }) {
   const motion = useRef<FlightMotion>({ travel: 0, alt: 0, progress: 0 });
   useFrame((_, dt) => {
     const p = progress();
-    const alt = altitude(p);
+    const f = shape();
+    const alt = altitude(p, f);
     const step = Math.min(dt, 0.1);
-    // Slow on the runway, fast once you are up.
-    const speed = 6 + alt * 20;
+    const speed = groundSpeed(p, f);
     for (const c of clouds.current.children) {
       c.position.z -= speed * step;
       if (c.position.z < -70) c.position.z += 140;
@@ -679,17 +735,35 @@ function Sky({ floor }: { floor: number }) {
     motion.current.travel += speed * 1.6 * step;
     motion.current.alt = alt;
     motion.current.progress = p;
-    for (const f of runway.current.children) {
-      if (!f.userData.field) continue;
-      f.position.z -= speed * 1.6 * step;
-      if (f.position.z < -90) f.position.z += 180;
+    const landing = p >= f.descent;
+    let fade: number;
+    if (landing) {
+      // The destination's runway: far ahead as the descent starts, coming up to meet the wheels, then rolling away under them.
+      runway.current.position.z = RW_AT_TOUCH + toTouch(p, f);
+      dashes.current.position.z = 0;
+      fade = smooth(approachOf(p, f) / 0.15);
+    } else {
+      // Taking off: the runway stays under you and its centre line streams past.
+      runway.current.position.z = 0;
+      dashes.current.position.z -= speed * 1.6 * step;
+      if (dashes.current.position.z < -15) dashes.current.position.z += 15;
+      // It is left behind as you climb: it fades into the land rather than following you there.
+      fade = 1 - smooth(alt / 0.3);
     }
-    // The runway is left behind as you climb: it fades into the land rather than following you there.
-    const fade = 1 - smooth(alt / 0.3);
     runway.current.visible = fade > 0.01;
     tarmac.current.opacity = fade;
     marks.current.opacity = fade;
+    // Tyre smoke: the wheels hit the runway and leave two puffs behind on it.
+    const since = p >= f.touch ? (p - f.touch) * f.seconds : -1;
+    const puff = since >= 0 && since < 1.1;
+    smoke.current.visible = puff;
+    if (puff) {
+      const k = since / 1.1;
+      smoke.current.scale.setScalar(0.4 + k * 1.6);
+      smokeMat.current.opacity = 0.55 * (1 - k);
+    }
   });
+  const gear = MAIN_GEAR[kind];
   return (
     <>
       <group ref={clouds}>
@@ -708,21 +782,61 @@ function Sky({ floor }: { floor: number }) {
         <FlightTerrain motion={motion} />
         <group ref={runway} position={[0, RUNWAY - 0.006, 0]}>
           <mesh rotation-x={-Math.PI / 2}>
-            <planeGeometry args={[18, 420]} />
+            <planeGeometry args={[RW_HALF * 2, RW_LEN]} />
             <meshStandardMaterial ref={tarmac} color="#3f3f46" transparent />
           </mesh>
-          {[-8.2, 8.2].map((x) => (
+          {[-(RW_HALF - 0.8), RW_HALF - 0.8].map((x) => (
             <mesh key={x} position={[x, 0.005, 0]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[0.3, 420]} />
+              <planeGeometry args={[0.3, RW_LEN]} />
               <meshStandardMaterial ref={x < 0 ? marks : undefined} color="#f8fafc" transparent />
             </mesh>
           ))}
-          {DASHES.map((z) => (
-            <mesh key={z} userData={{ field: true }} position={[0, 0.005, z]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[0.4, 7]} />
+          <group ref={dashes}>
+            {DASHES.map((z) => (
+              <mesh key={z} position={[0, 0.005, z]} rotation-x={-Math.PI / 2}>
+                <planeGeometry args={[0.4, 7]} />
+                <meshStandardMaterial color="#f8fafc" />
+              </mesh>
+            ))}
+          </group>
+          {/* The start of the runway: the white "piano keys", and the aiming bars where the wheels should land. */}
+          {[-1, 1].flatMap((side) => [1.2, 2.6, 4, 5.4, 6.8].map((x) => (
+            <mesh key={`k${side}${x}`} position={[side * x, 0.006, -RW_LEN / 2 + 6]} rotation-x={-Math.PI / 2}>
+              <planeGeometry args={[0.7, 9]} />
+              <meshStandardMaterial color="#f8fafc" />
+            </mesh>
+          )))}
+          {[-1, 1].map((side) => (
+            <mesh key={`a${side}`} position={[side * 4.2, 0.006, -RW_LEN / 2 + TOUCHDOWN_PAST]} rotation-x={-Math.PI / 2}>
+              <planeGeometry args={[2.2, 11]} />
               <meshStandardMaterial color="#f8fafc" />
             </mesh>
           ))}
+          {/* Edge lights down both sides, and the approach lights reaching back from the start, bright enough to see from the air. */}
+          {[-1, 1].flatMap((side) => EDGE_LIGHTS.map((z) => (
+            <mesh key={`e${side}${z}`} position={[side * (RW_HALF + 0.5), 0.15, z]}>
+              <boxGeometry args={[0.25, 0.3, 0.25]} />
+              <meshStandardMaterial color="#fef3c7" emissive="#fde68a" emissiveIntensity={1.2} />
+            </mesh>
+          )))}
+          {APPROACH_LIGHTS.map((z, i) => (
+            <group key={`l${z}`} position={[0, 0.2, z]}>
+              {[-2.4, -1.2, 0, 1.2, 2.4].slice(i % 2 ? 1 : 0, i % 2 ? 4 : 5).map((x) => (
+                <mesh key={x} position={[x, 0, 0]}>
+                  <boxGeometry args={[0.3, 0.3, 0.3]} />
+                  <meshStandardMaterial color="#ffffff" emissive="#e0f2fe" emissiveIntensity={1.5} />
+                </mesh>
+              ))}
+            </group>
+          ))}
+          <group ref={smoke} position={[0, 0.5, -RW_LEN / 2 + TOUCHDOWN_PAST]} visible={false}>
+            {[-gear, gear].map((x) => (
+              <mesh key={x} position={[x, 0, 0]} scale={[1, 0.6, 1.6]}>
+                <sphereGeometry args={[0.6, 10, 8]} />
+                <meshStandardMaterial ref={x < 0 ? smokeMat : undefined} color="#e5e7eb" transparent opacity={0} depthWrite={false} />
+              </mesh>
+            ))}
+          </group>
         </group>
       </group>
     </>
@@ -735,16 +849,32 @@ export function FlightCabin({ kind }: { kind: Kind }) {
   const official = useGame((s) => !!s.task?.official);
   useFrame(({ clock }) => {
     const p = progress();
+    const f = shape();
     const t = clock.elapsedTime;
-    // Nose up on the climb, down a little on the way in, and a gentle sway the whole way.
-    const pitch = p < CLIMB ? Math.sin((p / CLIMB) * Math.PI) * 0.1 : p > DESCENT ? -Math.sin(((p - DESCENT) / (1 - DESCENT)) * Math.PI) * 0.06 : 0;
+    const alt = altitude(p, f);
+    const u = approachOf(p, f);
+    // Seconds since the wheels touched (negative before).
+    const since = (p - f.touch) * f.seconds;
+    let pitch = 0;
+    let bank = 0;
+    if (p < CLIMB) pitch = Math.sin((p / CLIMB) * Math.PI) * 0.1;
+    else if (p >= f.touch) pitch = 0.055 * (1 - smooth(since / 0.8)); // the nose comes down onto its wheel
+    else if (p >= f.descent) {
+      // Nose a touch down on the glide, then up for the flare just before the wheels touch.
+      pitch = u < 0.7 ? -0.035 * smooth(u / 0.2) : -0.035 + 0.09 * smooth((u - 0.7) / 0.3);
+      // A gentle bank early on, turning to line up with the runway.
+      bank = 0.07 * Math.sin(clamp(u / 0.45, 0, 1) * Math.PI);
+    }
+    // The touchdown bump, then the runway rumbling under the wheels for as long as you are rolling on it.
+    const bump = since >= 0 ? -0.07 * Math.sin(Math.min(since * 9, Math.PI)) * Math.exp(-since * 2.5) : 0;
+    const rumble = alt === 0 ? Math.sin(t * 47) * 0.006 * Math.min(1, groundSpeed(p, f) / 6) : 0;
     plane.current.rotation.x = -pitch;
-    plane.current.rotation.z = Math.sin(t * 0.5) * 0.015 * altitude(p);
-    plane.current.position.y = Math.sin(t * 0.9) * 0.05 * altitude(p);
+    plane.current.rotation.z = bank + Math.sin(t * 0.5) * 0.015 * alt;
+    plane.current.position.y = Math.sin(t * 0.9) * 0.05 * alt + bump + rumble;
   });
   return (
     <>
-      <Sky floor={GROUND[kind]} />
+      <Sky kind={kind} floor={GROUND[kind]} />
       <group ref={plane}>
         {kind === 'jet' ? <JetHull official={official} /> : <Hull />}
         {kind === 'jet' ? <PrivateJet myLook={myLook} /> : <Airliner myLook={myLook} />}

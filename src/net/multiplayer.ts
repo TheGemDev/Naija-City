@@ -9,6 +9,8 @@ import { onSocialEvent, type Message, type PlayerRef } from './social';
 import { onFriendEvent } from './community';
 import type { CrimeReport } from '../game/crime';
 import { onCrimeEvent } from './crime';
+import { onShotEvent } from './guns';
+import type { ShotEvent } from '../game/guns';
 import { onElectionEvent, onGazetteEvent, onImpeachedEvent, type ElectionEvent, type GazetteEvent, type ImpeachedEvent } from './civic';
 import { loadRentals, onRentalEvent } from './rentals';
 import { shoutoutHooks, useShoutouts, type LobbyActionKind } from '../game/shoutout';
@@ -114,6 +116,7 @@ type ServerMsg =
   | ElectionEvent
   | GazetteEvent
   | ImpeachedEvent
+  | ShotEvent
   | { t: 'intruder'; thief: string; username: string; until: number }
   | { t: 'beaten'; by: string; until: number; amount: number; items: string[] }
   | { t: 'rental'; text: string }
@@ -204,6 +207,8 @@ function onMessage(m: ServerMsg) {
     onGazetteEvent(m);
   } else if (m.t === 'impeached') {
     onImpeachedEvent(m);
+  } else if (m.t === 'shot') {
+    onShotEvent(m);
   } else if (m.t === 'meter-report') {
     useGame.getState().meterReported(m.by);
   } else if (m.t === 'blackmarket') {

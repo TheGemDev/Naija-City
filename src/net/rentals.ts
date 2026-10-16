@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import type { RentalListing } from '../game/property';
-import { rentalHooks, useGame } from '../game/store';
+import { naira, rentalHooks, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { api, useSession } from './session';
 import { refreshBalance } from './wallet';
@@ -74,8 +74,11 @@ async function act(fn: () => Promise<unknown>, fail: string) {
 
 export const listForRent = (propertyId: string, weekly: number) =>
   act(async () => {
-    await call('/api/rentals/list', { propertyId, weekly });
-    toast('🔑 Your house is on the market. Players can rent it from the House app.');
+    const { left } = await call<{ left?: string | null }>('/api/rentals/list', { propertyId, weekly });
+    // An NPC household may walk out rather than pay a raised rent (worker/rentals.ts).
+    if (left) toast(`📦 ${left} moved out rather than pay ${naira(weekly)} a week. The house is back on the market.`);
+    else if (useRentals.getState().mine.some((l) => l.propertyId === propertyId && l.npc && l.tenant)) toast('🔑 Rent updated. Your tenant pays the new price from next week.');
+    else toast('🔑 Your house is on the market. Players (or an NPC household) can rent it from the House app.');
   }, 'Could not list the house');
 
 export const unlistRental = (propertyId: string) =>

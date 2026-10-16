@@ -25,6 +25,7 @@ import { handleVice } from './vice';
 import { handleLoans } from './loans';
 import { handleRoads } from './roads';
 import { handleCrime } from './crime';
+import { handleGuns } from './guns';
 import { handleEfcc } from './efcc';
 import { handleBank } from './bank';
 import { handleFun } from './fun';
@@ -464,6 +465,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const crime = await handleCrime(req, env, ctx, user, path);
   if (crime) return crime;
+
+  const guns = await handleGuns(req, env, ctx, user, path);
+  if (guns) return guns;
 
   const owambe = await handleOwambe(req, env, ctx, user, path);
   if (owambe) return owambe;

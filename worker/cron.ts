@@ -20,7 +20,7 @@ import { tickMarket } from './market';
 import { track } from './metrics';
 import { vdmGrumbles } from './news';
 import { pruneOldData } from './prune';
-import { settle as settleRentals } from './rentals';
+import { settle as settleRentals, settleNpcTenants } from './rentals';
 import { spawn as spawnPotholes } from './roads';
 import { onlineEverywhere } from './shards';
 import { pruneSnaps } from './snaps';
@@ -31,6 +31,7 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
   const jobs: [string, () => Promise<unknown>][] = [
     ['rentals', () => settleRentals(env, ctx)],
+    ['npc-tenants', () => settleNpcTenants(env, ctx)],
     ['bets', () => settleBets(env, ctx)],
     ['games', () => sweepGames(env, ctx, now)],
     ['elections', () => settleElections(env, now, ctx)],

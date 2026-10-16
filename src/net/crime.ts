@@ -438,6 +438,12 @@ export function onCrimeEvent(e: CrimeEvent) {
     markSeen([c]);
     // I know who it was and they're still at large: offer payback while it stings.
     if (!unsolved(c) && c.thief !== 'someone' && c.status !== 'arrested') useRobbed.setState({ crime: c });
+    if (!c.success && c.armed) {
+      g.toast(c.guard === 'bodyguard'
+        ? `🕶️ @${c.thief} pulled a gun on you and your armed bodyguard stopped them.${c.status === 'wanted' ? ' The police are after them.' : ''}`
+        : `🔫 @${c.thief} pulled a gun on you and it went wrong for them.${c.status === 'wanted' ? ' The police are after them.' : ' Report them in the Police app.'}`);
+      return;
+    }
     if (!c.success) {
       if (c.guard === 'camera') g.toast(`📹 Your CCTV identified @${c.thief}. Open the Police app to file a report.`);
       else if (c.guard) g.toast(`${CATCHERS[c.guard].icon} Your ${CATCHERS[c.guard].label.toLowerCase()} caught @${c.thief} ${c.kind === 'burglary' ? 'at your fence' : 'reaching for your pocket'}! Warrant out. Add a bounty in the Police app.`);
@@ -466,7 +472,7 @@ export function onCrimeEvent(e: CrimeEvent) {
       g.toast(`🏚️ Someone broke into your house${what ? ` and took ${what}` : ''}! Nobody saw who. Accuse up to ${ACCUSE.max} suspects in the Police app 🚔`);
       return;
     }
-    g.toast(`😱 @${c.thief} ${c.kind === 'burglary' ? 'burgled your house' : 'picked your pocket'}${what ? ` and took ${what}` : ''}! Report them in the Police app 🚔`);
+    g.toast(`😱 @${c.thief} ${c.armed ? 'robbed you at gunpoint' : c.kind === 'burglary' ? 'burgled your house' : 'picked your pocket'}${what ? ` and took ${what}` : ''}! ${c.status === 'wanted' ? 'The police are already after them 🚔' : 'Report them in the Police app 🚔'}`);
   } else if (e.t === 'wanted') {
     const c = e.crime;
     usePolice.setState((s) => ({ by: s.by.map((x) => (x.id === c.id ? c : x)) }));

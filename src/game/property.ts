@@ -298,6 +298,73 @@ export const weeklyRentOf = (design: string, region: string) => {
   return d && r ? Math.round((d.rentPerDay * r.rent * 7) / 100) * 100 : 0;
 };
 
+/**
+ * NPC households who take houses listed on the player market when no player has (worker/rentals.ts, every
+ * five-minute cron tick). A listing is never sure of a tenant: the dice decide, and the asking price against
+ * weeklyRentOf (the fair price) loads them. A game week is about 34 ticks, so the per-tick odds stay small.
+ */
+export const NPC_TENANTS = {
+  /** Chance per tick that a vacant house listed at the fair price gets an NPC tenant: about four real hours on average. */
+  moveInChance: 0.02,
+  /**
+   * How hard the price bites, both ways: move-in odds × (fair / price) ^ this, leave odds × (price / fair) ^ this.
+   * At 3, a house at 2× fair fills an eighth as often and empties eight times as fast; at half price it fills 8× as often.
+   */
+  priceSensitivity: 3,
+  /** However cheap the listing, never better than this per tick (half price would otherwise be a sure thing). */
+  maxMoveInChance: 0.12,
+  /** How long a household means to stay, in game weeks (PLAYER_RENT.weekMs each), picked at random when they move in. */
+  minWeeks: 2,
+  maxWeeks: 8,
+  /** Chance per tick they move out early at the fair price (about 6% a week); a raised rent pushes it up. */
+  leaveChance: 0.002,
+  /** However dear the rent, never worse than this per tick. */
+  maxLeaveChance: 0.05,
+};
+
+/** NPC tenants live in the rentals table under a made-up uid with this prefix, never a real player's. */
+export const NPC_TENANT_PREFIX = 'npc:';
+export const isNpcTenant = (uid: string | null | undefined) => !!uid && uid.startsWith(NPC_TENANT_PREFIX);
+
+/** Chance this tick that an NPC household takes a vacant house listed at `weekly`. */
+export function npcMoveInChance(design: string, region: string, weekly: number) {
+  const fair = weeklyRentOf(design, region);
+  if (!fair || weekly <= 0) return 0;
+  return Math.min(NPC_TENANTS.maxMoveInChance, NPC_TENANTS.moveInChance * (fair / weekly) ** NPC_TENANTS.priceSensitivity);
+}
+
+/**
+ * Chance an NPC household stays on when the owner raises their rent from `from` to `to` (they leave on the spot
+ * otherwise). (from / to) ^ priceSensitivity: it multiplies out the same over many small raises as one big one, so
+ * listing cheap to pull a tenant in and then doubling the rent loses them nearly every time.
+ */
+export const npcStaysAfterRaise = (from: number, to: number) => (to <= from ? 1 : (from / to) ** NPC_TENANTS.priceSensitivity);
+
+/** Chance this tick that an NPC household moves out early, now that the rent is `weekly`. */
+export function npcLeaveChance(design: string, region: string, weekly: number) {
+  const fair = weeklyRentOf(design, region);
+  if (!fair) return 1;
+  return Math.min(NPC_TENANTS.maxLeaveChance, NPC_TENANTS.leaveChance * (weekly / fair) ** NPC_TENANTS.priceSensitivity);
+}
+
+const NPC_TITLES = ['Mr', 'Mrs', 'Mallam', 'Alhaji', 'Hajiya', 'Pastor', 'Dr', 'Engr', 'Barrister', 'Madam', 'Chief', 'Corper'];
+const NPC_FIRST = [
+  'Musa', 'Tunde', 'Chidi', 'Amina', 'Emeka', 'Bisi', 'Sani', 'Ngozi', 'Kunle', 'Zainab', 'Femi', 'Halima', 'Obinna', 'Kemi', 'Yusuf',
+  'Adaeze', 'Bayo', 'Hauwa', 'Uche', 'Segun', 'Ifeoma', 'Danjuma', 'Tolu', 'Efe', 'Aisha', 'Ibrahim', 'Funmi', 'Nnamdi', 'Blessing', 'Garba',
+];
+const NPC_SURNAMES = [
+  'Bello', 'Okafor', 'Adeyemi', 'Abubakar', 'Eze', 'Ogunleye', 'Ibrahim', 'Nwosu', 'Danladi', 'Okonkwo', 'Adebayo', 'Yakubu', 'Chukwu',
+  'Olawale', 'Usman', 'Obi', 'Akpan', 'Etim', 'Lawal', 'Ojo', 'Suleiman', 'Ekwueme', 'Balogun', 'Ahmed', 'Okoro', 'Gambo',
+];
+
+/** A made-up Nigerian name for an NPC tenant, e.g. "Mallam Sani Bello" or "Ngozi Okafor & family". */
+export function npcTenantName(rand: () => number = Math.random) {
+  const pick = (list: string[]) => list[Math.floor(rand() * list.length)];
+  const name = `${pick(NPC_FIRST)} ${pick(NPC_SURNAMES)}`;
+  const roll = rand();
+  return roll < 0.45 ? `${pick(NPC_TITLES)} ${name}` : roll < 0.7 ? `${name} & family` : name;
+}
+
 /** One house on the player rental market. */
 export interface RentalListing {
   propertyId: string;
@@ -306,6 +373,13 @@ export interface RentalListing {
   design: string;
   region: string;
   weekly: number;
+  /** The tenant's username, or an NPC household's name when `npc` is set. */
   tenant: string | null;
+  /** The tenant is an NPC household (NPC_TENANTS), not a player. */
+  npc?: boolean;
+  /** When the tenant moved in (real ms). */
+  movedIn?: number | null;
+  /** Rent the owner has had from this tenant so far, less refunds. Only on the owner's own listings. */
+  received?: number;
   paidThrough: number | null;
 }

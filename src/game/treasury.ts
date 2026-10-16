@@ -17,9 +17,9 @@ export const TRANSFER_FEE_LIMITS = [0, 10] as const;
 export const transferFeeOf = (amount: number, pct: number) => Math.floor((amount * pct) / 100);
 
 /** Charges that are paid to "nobody" on the server but are really the state's: they land in the treasury. */
-export const STATE_KINDS = new Set(['fine', 'bail', 'hospital', 'owambe_fee']);
-/** ...except what the EFCC (or customs) recovers: its fines go to the federal treasury, not the payer's state. */
-export const FEDERAL_KINDS = new Set(['efcc_fine']);
+export const STATE_KINDS = new Set(['owambe_fee']);
+/** Fines (police and EFCC), bail and hospital bills go to the federal treasury, not the payer's state. */
+export const FEDERAL_KINDS = new Set(['fine', 'efcc_fine', 'bail', 'hospital']);
 
 
 /** The president's cut of every state's revenue, sent up to the federal treasury each round: a percent, in these steps. */

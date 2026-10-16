@@ -7,6 +7,8 @@ export type CrimeKind = 'pickpocket' | 'burglary';
 export interface CrimeReport {
   id: number;
   kind: CrimeKind;
+  /** A street robbery done with a gun (game/guns.ts): at gunpoint, or a shooting. */
+  armed?: 'rob' | 'shoot' | null;
   success: boolean;
   /** Cash taken (for a burglary, including what the stolen furniture fetched). */
   amount: number;

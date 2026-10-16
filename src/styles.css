@@ -2760,7 +2760,7 @@ body.high .scene-wrap { animation: high-sway 6s ease-in-out infinite; }
 .garage-meter .bar { height: 8px; }
 .garage-meter b { text-align: right; white-space: nowrap; }
 .garage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.garage-actions .btn { flex: 1 1 auto; white-space: nowrap; }
+.garage-actions .btn { flex: 1 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .garage-more { align-self: flex-start; padding: 6px 2px; background: none; color: var(--fg-0369a1); font-size: 12px; font-weight: 800; }
 .garage-parts { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
 .garage-part { display: grid; grid-template-columns: minmax(96px, 1.1fr) 1fr 48px auto; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; font-weight: 700; }

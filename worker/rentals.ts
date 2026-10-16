@@ -2,14 +2,20 @@
 // player rents it and lives there (they walk in like an invited guest, src/net/rentals.ts). Rent moves
 // straight from the tenant's wallet to the owner's, a week up front, and is charged lazily the next
 // time anyone looks after the week runs out. A tenant who can't pay is evicted.
+// When no player takes a listing, an NPC household may (settleNpcTenants, from the cron): they pay the owner each week
+// out of nowhere, like wages, and move out again in time. They sit in tenant_uid as 'npc:<uuid>', so a house they live
+// in is taken like any other, but nothing that reaches a tenant (wallet, push, visits) may be pointed at them.
 
 import type { FirebaseUser } from './auth';
 import { handle, naira } from './feed';
-import { getBalance } from './wallet';
-import { transfer, usernames } from './crime';
+import { applyStmts, ensureWallet, getBalance } from './wallet';
+import { rand, transfer, usernames } from './crime';
 import { houseOf } from './social';
 import { sendPush } from './push';
-import { CONTRACTORS, DESIGN_BY_ID, PLAYER_RENT, REGION_BY_ID, STAGES, costOf, landPrice, remainingStageMaterials, stageLabour, weeklyRentOf, type RentalListing } from '../src/game/property';
+import {
+  CONTRACTORS, DESIGN_BY_ID, NPC_TENANT_PREFIX, NPC_TENANTS, PLAYER_RENT, REGION_BY_ID, STAGES, costOf, isNpcTenant, landPrice, npcLeaveChance,
+  npcMoveInChance, npcStaysAfterRaise, npcTenantName, remainingStageMaterials, stageLabour, weeklyRentOf, type RentalListing,
+} from '../src/game/property';
 import { propertyBooks } from './progress';
 import { followHost, notifyPlayer, roomOf } from './shards';
 
@@ -22,12 +28,15 @@ const body = async <T>(req: Request) => (await req.json().catch(() => null)) as 
 interface RentalRow {
   property_id: string; owner_uid: string; region: string; design: string; weekly: number; listed_at: number;
   tenant_uid: string | null; rented_at: number | null; paid_through: number | null;
+  /** NPC tenants only (migrations/0097_npc_tenants.sql): their name, and when they mean to move out. */
+  npc_name?: string | null; npc_until?: number | null;
 }
 
 type SaveProperty = { id?: string; region?: string; design?: string | null; stage?: number; rented?: boolean };
 
 
 function tell(env: Env, ctx: ExecutionContext, uid: string, title: string, text: string) {
+  if (isNpcTenant(uid)) return;
   ctx.waitUntil(notifyPlayer(env, uid, { t: 'rental', text }));
   sendPush(env, ctx, uid, { title, body: text, tag: 'rental', category: 'money' });
 }
@@ -74,18 +83,20 @@ async function endLease(db: D1Database, r: RentalRow, refund: boolean) {
   const now = Date.now();
   if (refund && r.tenant_uid && r.paid_through && r.paid_through > now) {
     const back = Math.floor((r.weekly * (r.paid_through - now)) / PLAYER_RENT.weekMs);
-    if (back > 0) await transfer(db, r.owner_uid, r.tenant_uid, back, 'rent_refund_out', 'rent_refund', `lease-refund:${r.property_id}`);
+    // An NPC household has no wallet: the unused rent just leaves the owner's account with them.
+    if (back > 0 && isNpcTenant(r.tenant_uid)) await db.batch(applyStmts(db, r.owner_uid, `npc-refund:${r.tenant_uid}`, 'rent_refund_out', r.tenant_uid, -back));
+    else if (back > 0) await transfer(db, r.owner_uid, r.tenant_uid, back, 'rent_refund_out', 'rent_refund', `lease-refund:${r.property_id}`);
   }
   await db.prepare('UPDATE rentals SET tenant_uid = NULL, rented_at = NULL, paid_through = NULL WHERE property_id = ? AND tenant_uid IS ?')
     .bind(r.property_id, r.tenant_uid).run();
 }
 
-/** Charge every lease whose week has run out; evict tenants who can't pay. */
+/** Charge every player's lease whose week has run out; evict tenants who can't pay. NPC tenants pay in settleNpcTenants. */
 export async function settle(env: Env, ctx: ExecutionContext) {
   const db = env.DB;
   const now = Date.now();
   const { results } = await db
-    .prepare('SELECT * FROM rentals WHERE tenant_uid IS NOT NULL AND paid_through <= ? LIMIT 25')
+    .prepare(`SELECT * FROM rentals WHERE tenant_uid IS NOT NULL AND tenant_uid NOT LIKE '${NPC_TENANT_PREFIX}%' AND paid_through <= ? LIMIT 25`)
     .bind(now)
     .all<RentalRow>();
   for (const r of results) {
@@ -114,12 +125,129 @@ export async function settle(env: Env, ctx: ExecutionContext) {
   }
 }
 
-async function toListings(db: D1Database, rows: RentalRow[]): Promise<RentalListing[]> {
-  const names = await usernames(db, rows.flatMap((r) => [r.owner_uid, r.tenant_uid]));
-  return rows.map((r) => ({
-    propertyId: r.property_id, ownerUid: r.owner_uid, owner: names.get(r.owner_uid) ?? 'someone', design: r.design, region: r.region,
-    weekly: r.weekly, tenant: r.tenant_uid ? names.get(r.tenant_uid) ?? 'someone' : null, paidThrough: r.paid_through,
+/**
+ * One week of an NPC household's rent into the owner's wallet, starting at `weekStart`. Keyed on the tenant and the
+ * week, so a retry never pays twice. The ledger row names the tenant, like a player's rent does, which is how the
+ * owner's "received so far" is added up.
+ */
+const npcRentStmts = (db: D1Database, owner: string, npc: string, weekly: number, weekStart: number) =>
+  [ensureWallet(db, owner), ...applyStmts(db, owner, `npc-rent:${npc}:${weekStart}`, 'rent_in', npc, weekly)];
+
+/** The owner's take from this tenant since they moved in: rent in, less anything handed back. */
+async function rentReceived(db: D1Database, r: RentalRow) {
+  if (!r.tenant_uid) return 0;
+  const row = await db
+    .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM ledger WHERE uid = ? AND ref = ? AND kind IN ('rent_in', 'rent_refund_out') AND created_at >= ?`)
+    .bind(r.owner_uid, r.tenant_uid, r.rented_at ?? 0)
+    .first<{ n: number }>()
+    .catch(() => null);
+  return Math.max(0, row?.n ?? 0);
+}
+
+async function toListings(db: D1Database, rows: RentalRow[], withReceived = false): Promise<RentalListing[]> {
+  const names = await usernames(db, rows.flatMap((r) => [r.owner_uid, isNpcTenant(r.tenant_uid) ? null : r.tenant_uid]));
+  return Promise.all(rows.map(async (r) => {
+    const npc = isNpcTenant(r.tenant_uid);
+    return {
+      propertyId: r.property_id, ownerUid: r.owner_uid, owner: names.get(r.owner_uid) ?? 'someone', design: r.design, region: r.region,
+      weekly: r.weekly, tenant: r.tenant_uid ? (npc ? r.npc_name ?? 'A family' : names.get(r.tenant_uid) ?? 'someone') : null,
+      npc, movedIn: r.rented_at, paidThrough: r.paid_through,
+      ...(withReceived && r.tenant_uid ? { received: await rentReceived(db, r) } : {}),
+    };
   }));
+}
+
+/** An NPC household moves out: the house is back on the market (or gone from it, if `drop`). */
+async function npcLeaves(db: D1Database, r: RentalRow, drop = false) {
+  const res = drop
+    ? await db.prepare('DELETE FROM rentals WHERE property_id = ? AND tenant_uid = ?').bind(r.property_id, r.tenant_uid).run()
+    : await db
+      .prepare('UPDATE rentals SET tenant_uid = NULL, rented_at = NULL, paid_through = NULL, npc_name = NULL, npc_until = NULL WHERE property_id = ? AND tenant_uid = ?')
+      .bind(r.property_id, r.tenant_uid)
+      .run();
+  return res.meta.changes > 0;
+}
+
+/**
+ * The NPC side of the market, once per cron tick (NPC_TENANTS in src/game/property.ts). Households already in a house
+ * pay as each week comes round, and leave when their stay is up, or now and then early (more often when the rent is
+ * dear). Then every vacant listing has its chance of a new household, best when it is fairly priced. Does nothing
+ * until migrations/0097_npc_tenants.sql has run.
+ */
+export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
+  const db = env.DB;
+  const now = Date.now();
+  const living = await db
+    .prepare(`SELECT * FROM rentals WHERE tenant_uid LIKE '${NPC_TENANT_PREFIX}%' AND npc_until IS NOT NULL ORDER BY paid_through LIMIT 500`)
+    .all<RentalRow>()
+    .catch(() => null);
+  // No npc_until column: the migration hasn't been applied yet.
+  if (!living) return;
+  const emptied = new Set<string>();
+  const where = (r: RentalRow) => `${DESIGN_BY_ID[r.design]?.name ?? 'house'} in ${REGION_BY_ID[r.region]?.name ?? 'Kaduna'}`;
+
+  for (const r of living.results) {
+    const npc = r.tenant_uid!;
+    let leave = rand() < npcLeaveChance(r.design, r.region, r.weekly);
+    let gone = false;
+    let paidThrough = r.paid_through ?? now;
+    while (!leave && paidThrough <= now) {
+      // Their stay is up at the end of a paid week: they go rather than pay another.
+      if (paidThrough >= (r.npc_until ?? 0)) {
+        leave = true;
+        break;
+      }
+      // Rent from nowhere must still come for a house the owner really has: sold, seized or moved into, and they go.
+      if (paidThrough === r.paid_through && typeof (await ownedHouse(db, r.owner_uid, r.property_id, true)) === 'string') {
+        leave = gone = true;
+        break;
+      }
+      // Claim the week first, as settle() does, so a tenant evicted meanwhile never pays (and a retry is keyed on the week).
+      const claimed = await db
+        .prepare('UPDATE rentals SET paid_through = ?3 WHERE property_id = ?1 AND paid_through = ?2 AND tenant_uid = ?4')
+        .bind(r.property_id, paidThrough, paidThrough + PLAYER_RENT.weekMs, npc)
+        .run();
+      if (!claimed.meta.changes) break;
+      await db.batch(npcRentStmts(db, r.owner_uid, npc, r.weekly, paidThrough));
+      paidThrough += PLAYER_RENT.weekMs;
+    }
+    if (!leave || !(await npcLeaves(db, r, gone))) continue;
+    emptied.add(r.property_id);
+    if (!gone) tell(env, ctx, r.owner_uid, '🔑 Tenant moved out', `${r.npc_name ?? 'Your NPC tenant'} moved out of your ${where(r)}. It's back on the market.`);
+  }
+
+  const { results: open } = await db
+    .prepare('SELECT * FROM rentals WHERE tenant_uid IS NULL ORDER BY RANDOM() LIMIT 200')
+    .all<RentalRow>();
+  for (const r of open) {
+    if (emptied.has(r.property_id) || rand() >= npcMoveInChance(r.design, r.region, r.weekly)) continue;
+    if (typeof (await ownedHouse(db, r.owner_uid, r.property_id, true)) === 'string') {
+      await db.prepare('DELETE FROM rentals WHERE property_id = ? AND tenant_uid IS NULL').bind(r.property_id).run();
+      continue;
+    }
+    const npc = `${NPC_TENANT_PREFIX}${crypto.randomUUID()}`;
+    const name = npcTenantName(rand);
+    const weeks = NPC_TENANTS.minWeeks + Math.floor(rand() * (NPC_TENANTS.maxWeeks - NPC_TENANTS.minWeeks + 1));
+    // Only at the price they saw: an owner who changed it meanwhile has a different listing.
+    const taken = await db
+      .prepare(
+        `UPDATE rentals SET tenant_uid = ?2, rented_at = ?3, paid_through = ?4, npc_name = ?5, npc_until = ?6
+         WHERE property_id = ?1 AND tenant_uid IS NULL AND weekly = ?7`,
+      )
+      .bind(r.property_id, npc, now, now + PLAYER_RENT.weekMs, name, now + weeks * PLAYER_RENT.weekMs, r.weekly)
+      .run()
+      .catch(() => null);
+    if (!taken?.meta.changes) continue;
+    // The first week up front, like a player tenant. If that fails they never moved in.
+    try {
+      await db.batch(npcRentStmts(db, r.owner_uid, npc, r.weekly, now));
+    } catch (error) {
+      console.error('NPC tenant could not pay', error);
+      await npcLeaves(db, { ...r, tenant_uid: npc });
+      continue;
+    }
+    tell(env, ctx, r.owner_uid, '🔑 New tenant', `${name} rented your ${where(r)}. ${naira(r.weekly)} is in your account.`);
+  }
 }
 
 export async function handleRentals(req: Request, env: Env, ctx: ExecutionContext, user: FirebaseUser, path: string): Promise<Response | null> {
@@ -145,7 +273,7 @@ export async function handleRentals(req: Request, env: Env, ctx: ExecutionContex
     const lease = await db.prepare('SELECT * FROM rentals WHERE tenant_uid = ?').bind(me).first<RentalRow>();
     return json({
       listings: await toListings(db, live),
-      mine: await toListings(db, mine),
+      mine: await toListings(db, mine, true),
       lease: lease ? (await toListings(db, [lease]))[0] : null,
     });
   }
@@ -165,15 +293,19 @@ export async function handleRentals(req: Request, env: Env, ctx: ExecutionContex
     }
     const existing = await db.prepare('SELECT * FROM rentals WHERE property_id = ?').bind(b.propertyId).first<RentalRow>();
     if (existing && existing.owner_uid !== me) return err(409, 'That house is already listed');
-    if (existing?.tenant_uid) return err(409, 'You can’t change the rent while someone lives there');
+    // A player tenant agreed a price; an NPC household can have theirs changed under them, and pays the new one from next week.
+    const npc = isNpcTenant(existing?.tenant_uid) ? existing : null;
+    if (existing?.tenant_uid && !npc) return err(409, 'You can’t change the rent while someone lives there');
+    // Raised on them, they may pack up there and then (no refund: they walked out).
+    const left = npc && rand() >= npcStaysAfterRaise(npc.weekly, weekly) && (await npcLeaves(db, npc)) ? npc.npc_name ?? 'Your tenant' : null;
     await db
       .prepare(
         `INSERT INTO rentals (property_id, owner_uid, region, design, weekly, listed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT(property_id) DO UPDATE SET weekly = ?5, region = ?3, design = ?4 WHERE tenant_uid IS NULL`,
+         ON CONFLICT(property_id) DO UPDATE SET weekly = ?5, region = ?3, design = ?4 WHERE tenant_uid IS NULL OR tenant_uid LIKE '${NPC_TENANT_PREFIX}%'`,
       )
       .bind(b.propertyId, me, house.region, house.design, weekly, Date.now())
       .run();
-    return json({ ok: true });
+    return json({ ok: true, left });
   }
 
   /** Take my house off the market. If someone lives there they're put out with the unused rent back. */
@@ -183,7 +315,8 @@ export async function handleRentals(req: Request, env: Env, ctx: ExecutionContex
       ? await db.prepare('SELECT * FROM rentals WHERE property_id = ? AND owner_uid = ?').bind(b.propertyId, me).first<RentalRow>()
       : null;
     if (!r) return err(404, 'That house is not listed');
-    if (r.tenant_uid) {
+    if (isNpcTenant(r.tenant_uid)) await endLease(db, r, true);
+    else if (r.tenant_uid) {
       await endLease(db, r, true);
       ctx.waitUntil((await roomOf(env, r.tenant_uid)).revokeHomeVisit(r.tenant_uid).catch(() => {}));
       const names = await usernames(db, [me]);

@@ -384,6 +384,8 @@ export interface GameState {
   release(): void;
   /** Kidnapped until `until`: dragged to the bush camp, no leaving until freed. */
   abduct(until: number): void;
+  /** Shot (game/guns.ts): whatever you were doing ends and you wake up in the hospital. */
+  hospitalize(): void;
   /** Freed (ransom met, escaped or time up): out of the camp and back home. */
   freed(): void;
   /** The ransom ran out: kidnappers take your phone, your accessories and the car you were snatched in. */
@@ -2222,6 +2224,14 @@ export const useGame = create<GameState>((set, get) => {
       resetAvatar({ x: 7, z: 5 });
       avatar.yaw = Math.PI;
       set((st) => ({ view: 'place', insideId: 'camp', estateId: null, mode: 'live', placeHubOpen: false, teleportId: st.teleportId + 1 }));
+    },
+
+    hospitalize() {
+      const s = get();
+      if (s.task) get().cancelTask();
+      set({ panel: null, placing: null, selectedId: null, placeId: null, shopId: null });
+      if (s.view === 'place' && s.insideId === 'hospital') return;
+      enterPlace('hospital');
     },
 
     seize(carId) {

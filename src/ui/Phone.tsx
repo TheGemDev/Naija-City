@@ -52,6 +52,7 @@ import { HireApp } from './HireApp';
 import { ForbesApp } from './ForbesApp';
 import { BlackMarketApp } from './BlackMarket';
 import { FixerApp, GrindApp, PlugApp } from './Vice';
+import { GunShopApp } from './Guns';
 import { ElectionBoard } from './Election';
 import { LoansPanel } from './Loans';
 import { openAdsSheet } from '../net/ads';
@@ -67,7 +68,7 @@ import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
-  | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
+  | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games' | 'gunshop';
 
 interface AppDef {
   id: AppId;
@@ -96,6 +97,7 @@ const APPS: Record<AppId, AppDef> = {
   blackmarket: { id: 'blackmarket', label: 'Black Market', icon: '🕶️', bg: ['#44403c', '#0c0a09'], tint: '#1c1917' },
   plug: { id: 'plug', label: 'Plug', icon: '🌿', bg: ['#4ade80', '#14532d'], tint: '#14532d' },
   fixer: { id: 'fixer', label: 'Fixer', icon: '🕴🏾', bg: ['#a8a29e', '#1c1917'], tint: '#1c1917' },
+  gunshop: { id: 'gunshop', label: 'Gun Shop', icon: '🔫', bg: ['#78716c', '#292524'], tint: '#292524' },
   grind: { id: 'grind', label: 'Dirty Work', icon: '🛠️', bg: ['#fb923c', '#7c2d12'], tint: '#7c2d12' },
   area: { id: 'area', label: 'Area', icon: '🕴🏾', bg: ['#64748b', '#0f172a'], tint: '#0f172a' },
   legacy: { id: 'legacy', label: 'Legacy', icon: '🏆', bg: ['#fde047', '#a16207'], tint: '#a16207' },
@@ -690,7 +692,8 @@ function Cars() {
             </div>
           </div>
           {jetFlightsLeft(jetWear, id) < 1 && <p className="garage-alert">⚠️ Grounded: service is due. It will not fly until the engineers sign it off.</p>}
-          <div className="inv-actions">
+          {/* Wraps like a car's: a long refuel or service price must not push the other buttons off the screen. */}
+          <div className="garage-actions">
             <button className="btn sm" onClick={() => window.confirm(`Sell your ${JET_BY_ID[id]?.name ?? 'jet'} for ${naira(jetResale(id))}?`) && sellJet(id)}>Sell {naira(jetResale(id))}</button>
             {jetServiceCost(jetWear, id) > 0 && (
               <button className="btn sm" disabled={money < jetServiceCost(jetWear, id)} onClick={() => serviceJet(id)}>🔧 Service {naira(jetServiceCost(jetWear, id))}</button>
@@ -1784,6 +1787,7 @@ const SCREENS: Record<AppId, () => ReactNode> = {
   blackmarket: BlackMarketApp,
   plug: PlugApp,
   fixer: FixerApp,
+  gunshop: GunShopApp,
   grind: GrindApp,
   games: () => <Suspense fallback={null}><GamesApp /></Suspense>,
   area: AreaApp,

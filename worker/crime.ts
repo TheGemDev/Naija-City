@@ -50,6 +50,8 @@ const SAME_VISIT_MS = 3600_000;
 
 interface CrimeRow {
   id: number;
+  /** Done with a gun (migration 0098): at gunpoint, or a shooting. */
+  armed?: string | null;
   thief_uid: string;
   victim_uid: string;
   kind: CrimeKind;
@@ -87,6 +89,7 @@ const toReport = (r: NamedRow, forVictim = false): CrimeReport => ({
   confiscated: !!r.recovered && !!r.held,
   vdm: !!r.vdm_at,
   vdmAsked: r.vdm_asked_at ?? null,
+  armed: r.armed === 'rob' || r.armed === 'shoot' ? r.armed : null,
 });
 
 /** Give a stolen piece of furniture back: into the owner's storage, and off the thief if they kept it. */

@@ -66,6 +66,10 @@ const ago = (at: number) => {
 };
 
 function what(c: CrimeReport) {
+  if (c.armed) {
+    const label = c.armed === 'shoot' ? 'Shooting' : 'Armed robbery';
+    return c.success ? `${label}${c.amount ? ` · took ${naira(c.amount)}` : ''}` : `${label} · attempted`;
+  }
   if (!c.success) return c.kind === 'burglary' ? 'Tried to break into the house' : 'Tried to pick a pocket';
   const item = c.item ? ITEMS[c.item]?.name ?? c.item : null;
   const loot = [c.amount ? naira(c.amount) : '', item ? `a ${item}` : ''].filter(Boolean).join(' incl. ') || 'nothing';
@@ -123,7 +127,7 @@ export function PoliceApp() {
             const waiting = !c.vdm && !!c.vdmAsked && now < c.vdmAsked + VDM.retryMs;
             return (
               <div className="tile police-case" key={c.id}>
-                <span className="tile-icon">{c.vdm ? '✅' : c.kind === 'burglary' ? '🏚️' : '💸'}</span>
+                <span className="tile-icon">{c.vdm ? '✅' : c.armed ? '🔫' : c.kind === 'burglary' ? '🏚️' : '💸'}</span>
                 <span className="tile-info">
                   <b>{mystery ? 'Unknown burglar' : `@${c.thief}`}</b>
                   <small>{what(c)} · {ago(c.at)}</small>
@@ -202,7 +206,7 @@ export function PoliceApp() {
         const bountyOk = c.status === 'wanted' && money >= BOUNTY.min;
         return (
           <div className="tile police-case" key={c.id}>
-            <span className="tile-icon">{c.kind === 'burglary' ? '🏚️' : '💸'}</span>
+            <span className="tile-icon">{c.armed ? '🔫' : c.kind === 'burglary' ? '🏚️' : '💸'}</span>
             <span className="tile-info">
               <b>{mystery && c.status !== 'arrested' ? 'Unknown burglar' : `@${c.thief}`}</b>
               <small>{what(c)} · {ago(c.at)}</small>
