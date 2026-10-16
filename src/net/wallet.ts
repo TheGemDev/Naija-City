@@ -79,6 +79,15 @@ export function setServerBalance(balance: number, debt?: number) {
 
 export const walletBalance = () => serverBalance;
 
+/** The server paid today's installment of this life's starting money (worker/wallet.ts payStarter). */
+function starterPaid(starter: { paid: number; left: number } | null | undefined) {
+  if (!starter?.paid) return;
+  const naira = (n: number) => `₦${n.toLocaleString('en-NG')}`;
+  useGame.getState().toast(starter.left > 0
+    ? `💸 Starter money: +${naira(starter.paid)} today. ${naira(starter.left)} more to come, a bit each day you play`
+    : `💸 The last of your starter money: +${naira(starter.paid)}`);
+}
+
 /** Money changes the server hasn't answered yet. */
 export const walletPending = () => pending.length > 0;
 
@@ -90,7 +99,7 @@ export async function flushWalletNow(): Promise<void> {
     const batch = pending.slice(0, 100);
     const res = await api('/api/wallet/events', { method: 'POST', body: JSON.stringify({ events: batch }) });
     if (!res.ok) throw new Error(`${res.status}`);
-    const { balance, debt, rejected, taxRate, stateTax, okadaBan, fares } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; stateTax?: number; okadaBan?: string[]; fares?: FareSubsidy };
+    const { balance, debt, rejected, taxRate, stateTax, okadaBan, fares, starter } = (await res.json()) as { balance: number; debt?: number; rejected: Record<string, string>; taxRate?: number; stateTax?: number; okadaBan?: string[]; fares?: FareSubsidy; starter?: { paid: number; left: number } | null };
     // The fare subsidy the ticket desks show (worker/wallet.ts prices every ticket the same way).
     if (fares) {
       const was = useGame.getState().fares;
@@ -103,6 +112,7 @@ export async function flushWalletNow(): Promise<void> {
     pending = pending.filter((e) => !done.has(e.id));
     persist();
     setServerBalance(balance, debt);
+    starterPaid(starter);
     const lost = batch.filter((e) => rejected[e.id] && e.kind !== 'debt').reduce((a, e) => a + e.amount, 0);
     if (lost > 0) useGame.getState().toast('⚠️ Some earnings didn’t go through and were taken back');
   }
@@ -122,11 +132,12 @@ function schedule(ms = 1500) {
 export async function initWallet() {
   const res = await api('/api/wallet');
   if (!res.ok) throw new Error(`${res.status}`);
-  const { balance, debt, origin, state } = (await res.json()) as { balance: number; debt?: number; origin: string | null; state?: string | null };
+  const { balance, debt, origin, state, starter } = (await res.json()) as { balance: number; debt?: number; origin: string | null; state?: string | null; starter?: { paid: number; left: number } | null };
   serverOrigin = origin === null ? null : normalizeOrigin(origin);
   serverState = state ?? null;
   pending = restore();
   setServerBalance(balance, debt);
+  starterPaid(starter);
   void loadLoans();
   if (pending.length) schedule(0);
 }
@@ -229,7 +240,8 @@ export function refreshBalance() {
   return serial(async () => {
     const res = await api('/api/wallet');
     if (!res.ok) return;
-    const { balance } = (await res.json()) as { balance: number };
+    const { balance, starter } = (await res.json()) as { balance: number; starter?: { paid: number; left: number } | null };
     setServerBalance(balance);
+    starterPaid(starter);
   }).catch(() => {});
 }

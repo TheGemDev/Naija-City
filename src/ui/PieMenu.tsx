@@ -15,9 +15,6 @@ export const PIE_MENU = typeof window !== 'undefined';
 const last = { x: 0, y: 0 };
 if (PIE_MENU) window.addEventListener('pointerdown', (e) => { last.x = e.clientX; last.y = e.clientY; }, { capture: true });
 
-/** Room the labels need past the ring, so a menu near the edge of the window slides in instead of being cut off. */
-const EDGE = 90;
-
 export function PieMenu() {
   const sel = useSelectedActions();
   const start = useGame((s) => s.startAction);
@@ -61,13 +58,16 @@ export function PieMenu() {
   // The ring grows with the number of activities so the labels never overlap.
   // On a phone the ring is smaller and sits closer to the edge, so it stays round what you touched.
   const narrow = window.innerWidth < 600;
-  const edge = narrow ? 64 : EDGE;
-  const r = Math.min(narrow ? 110 : 170, Math.max(narrow ? 70 : 84, n * (narrow ? 18 : 22)));
-  const cx = Math.min(window.innerWidth - r - edge, Math.max(r + edge, at.x));
+  const r = Math.min(narrow ? 100 : 150, Math.max(narrow ? 62 : 80, n * (narrow ? 16 : 20)));
+  // Side pills grow outwards from the ring (see below), so they need room past it: on a phone the ring sits in the
+  // middle and the labels get narrower rather than run off the screen.
+  const maxW = narrow ? Math.max(96, Math.min(170, window.innerWidth / 2 - r - 10)) : 200;
+  const reach = r + maxW + 8;
+  const cx = narrow ? window.innerWidth / 2 : Math.min(window.innerWidth - reach, Math.max(reach, at.x));
   const cy = Math.min(window.innerHeight - r - 40, Math.max(r + 40, at.y));
 
   return (
-    <div className="pie" style={{ left: cx, top: cy }} role="menu" aria-label={sel.title}>
+    <div className="pie" style={{ left: cx, top: cy, ['--pie-maxw' as string]: `${maxW}px` }} role="menu" aria-label={sel.title}>
       <button type="button" className="pie-hub" title="Close (Esc)" aria-label={`Close the ${sel.title} menu`} onClick={() => select(null)}>
         <span aria-hidden>✕</span>
       </button>
@@ -75,6 +75,10 @@ export function PieMenu() {
       {sel.rows.map(({ action: a, sub, dim }, i) => {
         // First activity at the top, the rest clockwise.
         const ang = -Math.PI / 2 + (i / n) * Math.PI * 2;
+        // Each pill is pinned by its inner edge: right of the ring it grows rightwards, left of it leftwards, and only
+        // the ones at the very top and bottom stay centred. Long labels then never run into each other.
+        const c = Math.cos(ang);
+        const tx = c > 0.25 ? '0%' : c < -0.25 ? '-100%' : '-50%';
         return (
           <button
             key={a.id}
@@ -82,7 +86,7 @@ export function PieMenu() {
             role="menuitem"
             className={`pie-item ${dim ? 'dim' : ''}`}
             title={sub || a.label}
-            style={{ left: Math.cos(ang) * r, top: Math.sin(ang) * r, ['--i' as string]: i }}
+            style={{ left: Math.cos(ang) * r, top: Math.sin(ang) * r, ['--i' as string]: i, ['--tx' as string]: tx }}
             onClick={() => start(sel.selectedId, a.id)}
           >
             <span className="pie-icon">{a.icon}</span>

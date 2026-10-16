@@ -29,6 +29,7 @@ import { handleDisasters, readDisasters } from './disasters';
 import { handleCrime } from './crime';
 import { handleGuns } from './guns';
 import { handleEfcc } from './efcc';
+import { recordDevice } from './links';
 import { handleBank } from './bank';
 import { handleFun } from './fun';
 import { handleGames } from './games';
@@ -260,6 +261,8 @@ const handler = {
       track(env, 'rate_limited', { blobs: [sensitive ? 'sensitive' : 'api'] });
       return new Response(JSON.stringify({ error: 'Too many requests. Slow down a little.' }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '10' } });
     }
+    // Which device and network this account plays from, for the EFCC's linked-account checks (worker/links.ts).
+    recordDevice(env, ctx, user.uid, req);
     return handleApi(req, env, ctx, user);
   },
 

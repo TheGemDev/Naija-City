@@ -174,7 +174,7 @@ const TOPICS: Topic[] = [
     apps: ['store', 'settings'],
     body: [
       'There are 35 achievements and a street-reputation ladder. When a life ends you get a legacy score in your hall of fame.',
-      'Settings → Account → Born again. Everyone starts the same: ₦300,000 in hand and a small one-room house. No loans, no rich parents. Where you end up is on you.',
+      'Settings → Account → Born again. Everyone starts the same: ₦300,000 (₦50,000 on day one, then ₦50,000 more each day you play) and a small one-room house. No loans, no rich parents. Where you end up is on you.',
     ],
   },
 ];

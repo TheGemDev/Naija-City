@@ -955,13 +955,15 @@ function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () 
   );
 }
 
-/** Delivery marks on your own messages: one tick when sent, two blue ones once they have seen it. */
+/** Delivery marks on your own messages, the WhatsApp way: one grey tick when sent; two identical ticks, the second
+ *  slid right and tucked behind the first, in blue once they have read it. */
 function Ticks({ seen }: { seen: boolean }) {
   return (
-    <svg className={`bub-ticks ${seen ? 'seen' : ''}`} viewBox="0 0 18 11" width="16" height="10" role="img" aria-label={seen ? 'Seen' : 'Sent'}>
-      <title>{seen ? 'Seen' : 'Sent'}</title>
-      <path d="M1 5.8 4.6 9.4 11.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-      {seen && <path d="M7.2 8.2 7.8 9 16.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />}
+    <svg className={`bub-ticks ${seen ? 'seen' : ''}`} viewBox="0 0 18 11" width="17" height="11" role="img" aria-label={seen ? 'Read' : 'Sent'}>
+      <title>{seen ? 'Read' : 'Sent'}</title>
+      <path d="M1.3 6.1 4.3 9.1 10.9 1.9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      {/* The second tick's short stroke starts where the first's long one crosses it, so they read as one double tick. */}
+      {seen && <path d="M8.4 7.6 9.9 9.1 16.5 1.9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
   );
 }

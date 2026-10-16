@@ -234,7 +234,8 @@ const list: ItemDef[] = [
   },
   {
     type: 'gold_toilet', name: 'Gold-Plated WC', icon: '🚽', category: 'luxury', price: 1_800_000, w: 1, d: 1, layer: 'object', luxury: true,
-    actions: [{ id: 'use', label: 'Use the golden throne', icon: '✨', minutes: 10, untilFull: 'bladder', perHour: { bladder: 650, fun: 30 } }],
+    seat: { y: 0.42, z: 0.08 },
+    actions: [{ id: 'use', label: 'Use the golden throne', icon: '✨', minutes: 10, pose: 'sit', untilFull: 'bladder', perHour: { bladder: 650, fun: 30 } }],
   },
   {
     type: 'smart_fridge', name: 'Double-Door Smart Fridge', icon: '🧊', category: 'luxury', price: 2_400_000, w: 2, d: 1, layer: 'object', luxury: true,
@@ -423,7 +424,8 @@ const list: ItemDef[] = [
   // Bath
   {
     type: 'toilet', name: 'WC Toilet', icon: '🚽', category: 'bath', price: 45_000, w: 1, d: 1, layer: 'object',
-    actions: [{ id: 'use', label: 'Use toilet', icon: '🚽', minutes: 10, untilFull: 'bladder', perHour: { bladder: 650 } }],
+    seat: { y: 0.42, z: 0.08 },
+    actions: [{ id: 'use', label: 'Use toilet', icon: '🚽', minutes: 10, pose: 'sit', untilFull: 'bladder', perHour: { bladder: 650 } }],
   },
   {
     type: 'shower', name: 'Shower', icon: '🚿', category: 'bath', price: 90_000, w: 1, d: 1, layer: 'object', blocks: false,
@@ -460,11 +462,14 @@ const list: ItemDef[] = [
   },
   {
     type: 'bidet_toilet', name: 'Bidet Toilet', icon: '🚽', category: 'bath', price: 160_000, w: 1, d: 1, layer: 'object',
-    actions: [{ id: 'use_bidet', label: 'Use bidet toilet', icon: '🚽', minutes: 10, untilFull: 'bladder', waterUse: 1, perHour: { bladder: 650, hygiene: 40 } }],
+    seat: { y: 0.42, z: 0.08 },
+    actions: [{ id: 'use_bidet', label: 'Use bidet toilet', icon: '🚽', minutes: 10, pose: 'sit', untilFull: 'bladder', waterUse: 1, perHour: { bladder: 650, hygiene: 40 } }],
   },
   {
     type: 'squat_toilet', name: 'Squat Pan', icon: '🚽', category: 'bath', price: 18_000, w: 1, d: 1, layer: 'floor',
-    actions: [{ id: 'use_squat', label: 'Use squat pan', icon: '🚽', minutes: 10, untilFull: 'bladder', perHour: { bladder: 600 } }],
+    // Low "seat": the body sits down near the floor, which reads as a squat over the pan.
+    seat: { y: 0.18, z: 0 },
+    actions: [{ id: 'use_squat', label: 'Use squat pan', icon: '🚽', minutes: 10, pose: 'sit', untilFull: 'bladder', perHour: { bladder: 600 } }],
   },
   {
     type: 'bath_mat', name: 'Bath Mat', icon: '🟦', category: 'bath', price: 12_000, w: 1, d: 1, layer: 'floor',

@@ -22,6 +22,7 @@ import { DecorGhost, DecorRig, OuterSide, PickMark, WALL_TV_AD_OFFSET, WallBacki
 import { toggleSel, useDecor } from '../game/decor';
 import { mountOf } from '../game/mount';
 import { DEFAULT_INNER_WALL, paintHex } from '../game/paint';
+import { RoomFx, itemFxSources } from './RoomFx';
 
 // Only a piece swapped for a .glb file needs the model loader, so the loader stays out of the first download.
 const GlbModel = lazy(() => import('./GlbModel'));
@@ -180,6 +181,8 @@ export function Items({ items: override, readOnly = false }: { items?: PlacedIte
         </OuterSide>
       ))}
       <WallBacking items={shown} layout={layout} colour={wallColour} />
+      {/* Steam off the pot, the gen's exhaust, the shower's spray... (three/RoomFx.tsx). */}
+      <RoomFx sources={itemFxSources(shown)} gen={running} layout={layout} />
     </group>
   );
 }

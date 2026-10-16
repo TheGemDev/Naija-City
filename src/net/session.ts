@@ -1,6 +1,7 @@
 // Who is playing, and keeping their save in sync with the Cloudflare API.
 
 import { getTurnstileToken } from './turnstile';
+import { deviceHeaders } from './device';
 import { claimReferral } from './referral';
 import { create } from 'zustand';
 import type { User } from 'firebase/auth';
@@ -57,7 +58,9 @@ export const useSession = create<Session>((set) => ({
 export async function api(path: string, init: RequestInit = {}) {
   const token = await idToken();
   if (!token) throw new Error('Not signed in');
-  return fetch(path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
+  // Which device this is, for the EFCC's linked-account checks (net/device.ts).
+  const device = await deviceHeaders();
+  return fetch(path, { ...init, headers: { ...device, ...init.headers, Authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
 }
 
 async function removePushSubscription() {

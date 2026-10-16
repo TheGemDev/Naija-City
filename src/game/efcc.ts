@@ -21,7 +21,63 @@ export const EFCC = {
   dirtyShare: 0.15,
   /** ...as does this much flagged money outright, however much clean income dilutes it. */
   dirtyFloor: 100_000,
+  /**
+   * Money from a player whose account or life is younger than this is flagged: a transfer, owambe spray, rent, or a game
+   * pot they paid into. Fresh accounts passing on their starting money look like a laundering ring to the EFCC.
+   */
+  freshAccountMs: 7 * 24 * 60 * 60_000,
 };
+
+/**
+ * A rigged election: the EFCC audits every vote a candidate got (worker/efcc.ts electionAudit). Linked accounts are ones
+ * played on the same device (worker/links.ts).
+ */
+export const ELECTION_FRAUD = {
+  /** Convicted when this share of their votes is flagged... */
+  flaggedShare: 0.25,
+  /** ...or this many votes, however many clean ones there are. */
+  flaggedFloor: 5,
+  /** A vote from someone the candidate paid this long before it was cast is a bought vote. */
+  paidWindowMs: 48 * 60 * 60_000,
+  /** After a case on a candidate, the next one on them in the same race waits this long (more votes may have come in). */
+  refileMs: 60 * 60_000,
+};
+
+/**
+ * What can be wrong with a vote:
+ *  device  cast from the candidate's own device: their second account
+ *  ring    cast from the same device as another of their voters: one person, several accounts
+ *  paid    the candidate sent the voter money shortly before
+ *  fresh   the voter's account or life is new (EFCC.freshAccountMs)
+ *  ip      the voter has used the candidate's network
+ */
+export type VoteFlag = 'device' | 'ring' | 'paid' | 'fresh' | 'ip';
+export const VOTE_FLAGS: Record<VoteFlag, { icon: string; label: string }> = {
+  device: { icon: '📱', label: 'Same device as the candidate' },
+  ring: { icon: '👥', label: 'Same device as another of their voters' },
+  paid: { icon: '💸', label: 'Paid by the candidate before voting' },
+  fresh: { icon: '🐣', label: 'Brand-new account' },
+  ip: { icon: '📶', label: 'Same network as the candidate' },
+};
+
+/** One vote in an election audit. Who cast it stays secret. */
+export interface EfccVote {
+  at: number;
+  flags: VoteFlag[];
+  illicit: boolean;
+}
+
+/** A shared device or a payment is enough on its own. A new account or a shared network only counts together. */
+export const voteIllicit = (flags: VoteFlag[]) =>
+  flags.includes('device') || flags.includes('ring') || flags.includes('paid') || (flags.includes('fresh') && flags.includes('ip'));
+
+export const electionConvicts = (votes: EfccVote[]) => {
+  const flagged = votes.filter((v) => v.illicit).length;
+  return flagged > 0 && (flagged >= ELECTION_FRAUD.flaggedFloor || flagged / votes.length >= ELECTION_FRAUD.flaggedShare);
+};
+
+/** Incomes another player paid, which the EFCC flags when that player is new (EFCC.freshAccountMs). */
+export const EFCC_FRESH_KINDS = ['transfer_in', 'spray_in', 'rent_in', 'game_win'];
 
 /** Dirty money in an audit: the total flagged, and its share of everything audited. */
 export const efccDirty = (audit: EfccIncome[]) => {
@@ -43,6 +99,8 @@ export const efccConvicts = (audit: EfccIncome[]) => {
  *  fence       proceeds from selling stolen goods on the black market
  *  embezzle    public funds skimmed from a civic office
  *  scam_win    Yahoo scam payouts (a plain transfer that matches a scam is also caught by the server)
+ * Money another player paid you is flagged too while that player's account or life is new, or when they play on your
+ * own device (EFCC_FRESH_KINDS).
  * Everything else (wages, gigs, sales, investments, property, bets, bounties) is clean.
  */
 export const EFCC_DIRTY_KINDS = [
@@ -63,6 +121,11 @@ export interface EfccIncome {
 
 export interface EfccCase {
   id: string;
+  /** Dirty money (the audit is incomes), or a rigged election (the audit is votes). */
+  kind: 'money' | 'election';
+  /** Election cases: the office they were running for. */
+  office?: string;
+  votes?: EfccVote[];
   targetUid: string;
   accuserUid: string;
   status: EfccStatus;

@@ -1,4 +1,4 @@
-// The Sims-style bath blur: a soft-edged mosaic of blue pixels over a bathing body, always turned to the camera and
+// The Sims-style bath blur: a soft-edged mosaic of frosted-glass greys over a bathing body, always turned to the camera and
 // shimmering a little (game/bathing.ts). One small canvas texture, redrawn a few times a second.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -7,9 +7,10 @@ import { CanvasTexture, NearestFilter, type Mesh } from 'three';
 
 const CELLS_X = 6;
 const CELLS_Y = 9;
-const BLUES = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8', '#38bdf8', '#0ea5e9', '#7dd3fc'];
+// Frosted greys, like bathroom privacy glass: reads as a blur without shouting.
+const TONES = ['#e5e7eb', '#d1d5db', '#f3f4f6', '#cbd5e1', '#e2e8f0', '#f8fafc', '#d4d4d8', '#e4e4e7'];
 
-/** Draws the mosaic: random blues, fading out towards the edges so it reads as a blur, not a box. */
+/** Draws the mosaic: random frosted greys, fading out towards the edges so it reads as a blur, not a box. */
 function paint(ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, CELLS_X, CELLS_Y);
   for (let y = 0; y < CELLS_Y; y++) {
@@ -18,7 +19,7 @@ function paint(ctx: CanvasRenderingContext2D) {
       const ey = Math.min(y + 0.5, CELLS_Y - y - 0.5) / (CELLS_Y / 2);
       const edge = Math.min(ex, ey);
       ctx.globalAlpha = Math.min(1, 0.35 + edge * 1.6) * (0.85 + Math.random() * 0.15);
-      ctx.fillStyle = BLUES[Math.floor(Math.random() * BLUES.length)];
+      ctx.fillStyle = TONES[Math.floor(Math.random() * TONES.length)];
       ctx.fillRect(x, y, 1, 1);
     }
   }

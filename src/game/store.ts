@@ -43,7 +43,7 @@ import { cleanExtensions, cleanHouseName, cleanRooms, ROOM_TYPE, EXTENSION_BY_ID
 import { audio } from './audio';
 import { CLUB_SHOUTS, clearSprayLog, shoutoutHooks, sprayKickChance, useMoneyRain } from './shoutout';
 import { entrance, estatePath, houseRect, PLOT, rowsFor, sectionOf, slotOrigin, type EstateLot } from './estate';
-import { ORIGINS, originOf, type OriginId } from './origins';
+import { firstInstallment, ORIGINS, originOf, type OriginId } from './origins';
 import { CAMPAIGN_EVENTS, OFFICE_RULES, STATE_FLEET, type CampaignEvent, type ExecutiveOffice, type PoliticalOffice } from './civic';
 import { decodeLook, encodeLook, fits, GARMENT_BY_ID, isFullOutfit, STARTER_WARDROBE, type ShopId, type Slot } from './wardrobe';
 import { getRegion, regionalAction, regionOf, regionPlace, regionPlaces, regionAirportDoor, regionStartDoor } from './regions';
@@ -133,6 +133,8 @@ export interface Task {
   official?: ExecutiveOffice;
   /** You started this yourself to fill this bar (game/selfCare.ts): it ends when the bar is full, and any tap stops it. */
   auto?: Need;
+  /** The bar this activity fills was already full when it began: it runs its length anyway, it just adds nothing. */
+  startFull?: boolean;
   /** A ride to an estate (game/estateRoads.ts): ends at its road out of town, then in at the gate, and to `home`'s door if set. */
   estate?: { region: string; no: number; home?: string };
 }
@@ -1546,7 +1548,8 @@ export const useGame = create<GameState>((set, get) => {
         origin,
         homeState,
         destinationId: homeState,
-        money: o.money,
+        // Born on the first installment; the server pays the rest a day at a time (worker/wallet.ts payStarter).
+        money: firstInstallment(o),
         debtOwed: o.debt ?? 0,
         items: o.items,
         ownedCars: o.car ? [o.car] : [],
@@ -2004,16 +2007,20 @@ export const useGame = create<GameState>((set, get) => {
       } else if (doing) {
         const remaining = doing.remaining - dt * timeRate(s);
         const st = get();
+        // An "until full" activity stops once its bar fills, but one started on a full bar (a shower when you're
+        // already clean) still runs its length: you can always use it, it just adds nothing.
+        const fills = def?.untilFull ? (def.untilFull === 'bladder' ? 'hygiene' : def.untilFull) : null;
+        const startFull = doing.startFull ?? (fills ? needs[fills] >= 100 : false);
         if (def?.needsPower && !litFor(st, doing.itemId)) {
           toast('No light! You had to stop 🕯️');
           finish(true);
-        } else if (remaining <= 0 || (def?.untilFull && needs[def.untilFull === 'bladder' ? 'hygiene' : def.untilFull] >= 100) || (doing.auto && needs[doing.auto] >= 100)) {
+        } else if (remaining <= 0 || (fills && !startFull && needs[fills] >= 100) || (doing.auto && needs[doing.auto] >= 100)) {
           if (doing.actionId === 'work') {
             set({ task: { ...doing, remaining: 0, over: Date.now() } });
             toast('🎉 Shift done! Clock out to collect your pay');
           } else finish();
         } else {
-          set({ task: { ...doing, remaining } });
+          set({ task: { ...doing, remaining, startFull } });
         }
       }
 

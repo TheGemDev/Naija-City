@@ -16,7 +16,7 @@ import { INVESTMENT_BY_ID, LIQUIDATION_FACTOR, MAX_TRADE_UNITS } from '../src/ga
 import { advance, changeUnits, checkWork, loadState, saveStateStmts, taskEnd, taskStart, unitsOf, type PlayerState } from './clock';
 import { bookProperty, ownedCounts, propertyBooks, type PropertyBook } from './progress';
 import { GAME_MINUTES_PER_REAL_MS_MAX, MAX_PROPERTY_COST, RENT_CAP_PER_DAY, SALE_FACTOR, DAY_MINUTES } from '../src/game/property';
-import { NEW_LIFE_ORIGIN, originOf, ORIGINS } from '../src/game/origins';
+import { firstInstallment, NEW_LIFE_ORIGIN, originOf, ORIGINS, STARTER_INSTALLMENT, starterDay } from '../src/game/origins';
 import { REGION_IDS } from '../src/game/regions';
 import { GIGS, isGig, maxShiftBonus } from '../src/game/gigs';
 import { PARK_BY_ID } from '../src/game/underworld';
@@ -26,7 +26,8 @@ import { STATE_CUT } from '../src/game/treasury';
 import { flightFare } from '../src/game/city';
 import { FARE_SUBSIDY, parseFareRef, railFare, subsidise, type FareSubsidy } from '../src/game/transport';
 
-export const START_MONEY = 150_000;
+/** A wallet before its life has drawn an origin; the draw then sets the life's own first installment. */
+export const START_MONEY = STARTER_INSTALLMENT;
 /** Cap when seeding a wallet from a save that predates wallets (or a guest's local progress). */
 const MAX_SEED = 500_000;
 const SELL_FACTOR = 0.5;
@@ -97,6 +98,34 @@ export async function getWallet(db: D1Database, uid: string): Promise<{ balance:
     read(),
   ]);
   return row.results[0];
+}
+
+/**
+ * Pays today's installment of the life's starting money, if one is due: one a day, on days the player is online. Returns
+ * what this call paid and what is still to come, or null when nothing was due (or another request paid it).
+ */
+export async function payStarter(db: D1Database, uid: string): Promise<{ paid: number; left: number } | null> {
+  const now = Date.now();
+  const day = starterDay(now);
+  const due = await db.prepare('SELECT starter_left FROM wallets WHERE uid = ? AND starter_left > 0 AND starter_day < ?').bind(uid, day).first();
+  if (!due) return null;
+  const id = `starter:${day}`;
+  const amount = `(SELECT amount FROM ledger WHERE uid = ?1 AND client_id = ?2)`;
+  const [, , applied, after] = await db.batch<{ amount?: number; starter_left?: number }>([
+    db.prepare(
+      `INSERT INTO ledger (uid, client_id, kind, ref, amount, created_at)
+       SELECT uid, ?2, 'start', 'installment', MIN(starter_left, ?3), ?4 FROM wallets WHERE uid = ?1 AND starter_left > 0 AND starter_day < ?5
+       ON CONFLICT(uid, client_id) DO NOTHING`,
+    ).bind(uid, id, STARTER_INSTALLMENT, now, day),
+    db.prepare(
+      `UPDATE wallets SET balance = balance + ${amount}, starter_left = starter_left - ${amount}, starter_day = ?3, updated_at = ?4
+       WHERE uid = ?1 AND EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)`,
+    ).bind(uid, id, day, now),
+    db.prepare('UPDATE ledger SET applied = 1 WHERE uid = ?1 AND client_id = ?2 AND applied = 0 RETURNING amount').bind(uid, id),
+    db.prepare('SELECT starter_left FROM wallets WHERE uid = ?').bind(uid),
+  ]);
+  const paid = applied.results[0]?.amount ?? 0;
+  return paid > 0 ? { paid, left: after.results[0]?.starter_left ?? 0 } : null;
 }
 
 export const getBalance = async (db: D1Database, uid: string) => (await getWallet(db, uid)).balance;
@@ -474,16 +503,19 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
 
   if (path === '/api/wallet' && req.method === 'GET') {
     const w = await getWallet(db, uid);
-    return json({ balance: w.balance, origin: w.origin, debt: w.debt, state: await birthState(db, uid) });
+    const starter = await payStarter(db, uid).catch(() => null);
+    return json({ balance: w.balance + (starter?.paid ?? 0), origin: w.origin, debt: w.debt, state: await birthState(db, uid), starter });
   }
 
   if (path === '/api/wallet/events' && req.method === 'POST') {
     const body = (await req.json().catch(() => null)) as { events?: unknown } | null;
     // Only asked when there is something to settle: where you stand decides which state is paid.
     const here = Array.isArray(body?.events) && body.events.length ? await cityNow(env, uid) : undefined;
+    // Playing today pays today's installment of the starting money, before the events so the balance below has it.
+    const starter = await payStarter(db, uid).catch(() => null);
     const result = await applyEvents(db, uid, body?.events, here);
     // The client keeps its events and sends them again (src/net/wallet.ts).
-    return result ? json(result) : json({ error: 'Busy. Try again' }, 503);
+    return result ? json({ ...result, starter }) : json({ error: 'Busy. Try again' }, 503);
   }
 
   if (path === '/api/wallet/reset' && req.method === 'POST') {
@@ -493,7 +525,8 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
     const w = await getWallet(db, uid);
     const now = Date.now();
     const keepOrigin = w.origin === NEW_LIFE_ORIGIN && now - (w.origin_at ?? 0) < REDRAW_COOLDOWN_MS;
-    const start = keepOrigin ? originOf(w.origin).money : START_MONEY;
+    // A kept origin starts its new life on the first installment, with the rest to come a day at a time.
+    const start = keepOrigin ? firstInstallment(originOf(w.origin)) : START_MONEY;
     const r = await db.prepare('SELECT reset_at FROM wallets WHERE uid = ?').bind(uid).first<{ reset_at: number | null }>();
     if (w.balance < start && r?.reset_at && now - r.reset_at < RESET_COOLDOWN_MS) {
       return json({ balance: w.balance, kept: true, origin: w.origin, state: await birthState(db, uid) });
@@ -511,10 +544,11 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
         .bind(uid, id, start, now, r?.reset_at ?? null),
       db
         .prepare(
-          `UPDATE wallets SET balance = ?3, updated_at = ?4, reset_at = ?4, origin = CASE WHEN ?5 THEN origin ELSE NULL END
+          `UPDATE wallets SET balance = ?3, updated_at = ?4, reset_at = ?4, origin = CASE WHEN ?5 THEN origin ELSE NULL END,
+             starter_left = ?6, starter_day = ?7
            WHERE uid = ?1 AND EXISTS (SELECT 1 FROM ledger WHERE uid = ?1 AND client_id = ?2 AND applied = 0)`,
         )
-        .bind(uid, id, start, now, keepOrigin ? 1 : 0),
+        .bind(uid, id, start, now, keepOrigin ? 1 : 0, keepOrigin ? originOf(w.origin).money - start : 0, starterDay(now)),
       db.prepare('UPDATE ledger SET applied = 1 WHERE uid = ?1 AND client_id = ?2').bind(uid, id),
     ]);
     // A life that draws a new origin is born in a new state too.
@@ -527,15 +561,18 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
     const w = await getWallet(db, uid);
     if (w.origin) return json({ origin: w.origin, balance: w.balance, already: true, state: await birthState(db, uid) });
     const origin = NEW_LIFE_ORIGIN;
+    // Born holding the first installment; the rest comes a day at a time (payStarter).
+    const first = firstInstallment(ORIGINS[origin]);
     const life = await db.prepare('SELECT reset_at FROM wallets WHERE uid = ?').bind(uid).first<{ reset_at: number | null }>();
     // One draw per life: the ledger id makes a second, racing request a no-op.
     await db.batch([
-      ...applyStmts(db, uid, `origin:${life?.reset_at ?? 0}`, 'start', origin, ORIGINS[origin].money - w.balance),
+      ...applyStmts(db, uid, `origin:${life?.reset_at ?? 0}`, 'start', origin, first - w.balance),
       db.prepare(
         `UPDATE bank_accounts SET debt = debt + ?2, updated_at = ?3
          WHERE uid = ?1 AND EXISTS (SELECT 1 FROM wallets WHERE uid = ?1 AND origin IS NULL)`,
       ).bind(uid, ORIGINS[origin].debt ?? 0, Date.now()),
-      db.prepare('UPDATE wallets SET origin = ?2, origin_at = ?3 WHERE uid = ?1 AND origin IS NULL').bind(uid, origin, Date.now()),
+      db.prepare('UPDATE wallets SET origin = ?2, origin_at = ?3, starter_left = ?4, starter_day = ?5 WHERE uid = ?1 AND origin IS NULL')
+        .bind(uid, origin, Date.now(), ORIGINS[origin].money - first, starterDay(Date.now())),
     ]);
     // The state is drawn at birth, every state as likely as the next. Only the request that won the draw sets it.
     const [pick] = crypto.getRandomValues(new Uint32Array(1));

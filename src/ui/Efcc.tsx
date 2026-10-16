@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { EFCC, EFCC_RECORD_MS, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
+import { EFCC, EFCC_RECORD_MS, ELECTION_FRAUD, VOTE_FLAGS, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
+import { OFFICE_RULES, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort } from '../game/store';
 import { useEfcc, loadEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
 import { searchPlayers, type PlayerRef } from '../net/social';
@@ -32,6 +33,7 @@ const KIND_ICON: Record<string, string> = {
   fence: '📦', theft_in: '🧤', embezzle: '🏛️', bank_heist: '🏦', scam_win: '💻',
   vice_sale: '💊', racket: '🥊', contract: '🔪', ransom: '⛓️', forgery: '📝', counterfeit: '🖨️',
   bunkering: '🛢️', pirate_ads: '📻', betting_shop: '🎰', breakout: '🔓',
+  spray_in: '💃🏾', rent_in: '🔑', game_win: '🎲',
 };
 
 type Filter = 'all' | 'open' | 'convicted' | 'cleared';
@@ -43,6 +45,8 @@ const FILTERS: { id: Filter; icon: string; label: string; match: (s: EfccStatus)
 ];
 
 type Tab = 'cases' | 'seized' | 'report' | 'rules';
+/** What a report is for: dirty money, or a candidate's fake votes. */
+type ReportKind = EfccCase['kind'];
 
 /** One arrest or raid, written up like an exhibit list: every thing taken, what it was worth, and the total. */
 function SeizureCard({ s }: { s: EfccSeizure }) {
@@ -122,14 +126,24 @@ function RulesReceipt() {
         <div className="law-signer"><span>Verdict</span><span>From the audit</span></div>
         {line('Convicted at', `${Math.round(EFCC.dirtyShare * 100)}% dirty`)}
         {line('...or flagged money of', naira(EFCC.dirtyFloor))}
+        {line('Money from accounts under', `${EFCC.freshAccountMs / 86_400_000} days old: flagged`)}
         {line('Wallet and savings seized', `${EFCC.walletSeizurePercent}%`)}
         {line('Property seized', 'one, can be bought back')}
         {line('Seized money goes to', 'federal treasury')}
         {line('Big clean income', 'never evidence')}
       </div>
       <div className="law-section">
+        <div className="law-signer"><span>Fake votes</span><span>Report a candidate</span></div>
+        {line('Votes audited', 'every vote they have in the race')}
+        {line('Convicted at', `${Math.round(ELECTION_FRAUD.flaggedShare * 100)}% fake, or ${ELECTION_FRAUD.flaggedFloor} fake votes`)}
+        {line('Sentence', 'fake votes struck, disqualified, barred, fined, jailed')}
+        {line('Paid voter', `paid by them within ${ELECTION_FRAUD.paidWindowMs / 3_600_000}h before voting`)}
+        {line('Same device as them or each other', 'fake')}
+        {line('New account on their network', 'fake')}
+      </div>
+      <div className="law-section">
         <div className="law-signer"><span>Flagged money</span><span /></div>
-        <small className="law-foot" style={{ textAlign: 'left' }}>Scams, theft, heists, fencing, embezzlement and every vice hustle: drugs, rackets, contracts, ransoms, forgery, fake notes, bunkering, pirate ads, betting shops and jailbreaks.</small>
+        <small className="law-foot" style={{ textAlign: 'left' }}>Scams, theft, heists, fencing, embezzlement and every vice hustle: drugs, rackets, contracts, ransoms, forgery, fake notes, bunkering, pirate ads, betting shops and jailbreaks. Also money from a brand-new account, or from another account played on the same phone.</small>
       </div>
       <small className="law-foot">Closed cases are struck off the record after {Math.round(EFCC_RECORD_MS / 86_400_000)} days. A seized property stays on file until it is bought back.</small>
     </div>
@@ -147,6 +161,8 @@ export function EfccApp() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [statement, setStatement] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<Filter>('all');
+  const [reportKind, setReportKind] = useState<ReportKind>('money');
+  const races = useCivic((s) => s.data?.races);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -176,19 +192,37 @@ export function EfccApp() {
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  // The candidates to pick from come with the Civic snapshot; fetch it if Civic hasn't been opened yet.
+  useEffect(() => {
+    if (tab === 'report' && reportKind === 'election' && !useCivic.getState().data) void useCivic.getState().refresh();
+  }, [tab, reportKind]);
+
   if (!user) return <div className="efcc-empty"><span>🕵🏾</span><b>EFCC</b><small>Sign in to use investigations</small></div>;
 
   // The search runs as you type (effect above); Enter just must not reload the page.
   const submitSearch = (event: FormEvent) => event.preventDefault();
 
   const act = (fn: () => Promise<void>) => void fn();
+  const reportVotes = (username: string) => {
+    if (!confirm(`Report @${username} for fake votes? This costs ${naira(EFCC.filingFee)}. The EFCC audits every vote they have in their race.`)) return;
+    act(async () => {
+      if (!(await fileEfccCase(username, 'election'))) return;
+      setQuery('');
+      setTab('cases');
+    });
+  };
   const caseCard = (item: EfccCase) => {
     const isTarget = item.target === user.username;
     const pending = item.status === 'investigating';
     const open = pending && now < item.resolvesAt;
     const response = statement[item.id] ?? '';
-    const flagged = item.audit.filter((entry) => entry.illicit).length;
-    const dirty = Math.round(efccDirty(item.audit).share * 100);
+    const election = item.kind === 'election';
+    const votes = item.votes ?? [];
+    const flagged = election ? votes.filter((v) => v.illicit).length : item.audit.filter((entry) => entry.illicit).length;
+    const dirty = election
+      ? Math.round((votes.length ? flagged / votes.length : 0) * 100)
+      : Math.round(efccDirty(item.audit).share * 100);
+    const race = election && item.office ? OFFICE_RULES[item.office as PoliticalOffice]?.title : null;
     const status = STATUS[item.status];
     return (
       <article className={`efcc-case ${item.status}`} key={item.id}>
@@ -196,6 +230,7 @@ export function EfccApp() {
           <Face uid={item.targetUid} username={item.target} size="lg" />
           <div>
             <b>@{item.target}{isTarget && <em>You</em>}</b>
+            {election && <small>🗳️ Fake votes{race ? ` · ${race} race` : ''}</small>}
             <small title={dateLabel(item.filedAt)}>
               {item.accuserHidden ? '🎭 Anonymous' : <><Face uid={item.accuserUid} username={item.accuser} size="xs" />@{item.accuser}</>} · {ago(item.filedAt, now)}
             </small>
@@ -208,14 +243,37 @@ export function EfccApp() {
             <b>{open ? `⏱ ${efccTimeLeft(item.resolvesAt - now)}` : '⚖️ Verdict due'}</b>
           </div>
         )}
-        {item.status === 'convicted' && (
+        {item.status === 'convicted' && election && (
+          <div className="efcc-verdict bad">
+            <span>🗳️ {flagged} vote{flagged === 1 ? '' : 's'} struck</span>
+            <span>⚖️ {naira(item.fine ?? 0)} fine · barred from running</span>
+          </div>
+        )}
+        {item.status === 'convicted' && !election && (
           <div className="efcc-verdict bad">
             <span>💰 {naira(item.fine ?? 0)} seized</span>
             {item.seizedProperty && <span>🏠 {item.seizedProperty.boughtBack ? 'Bought back ✓' : 'Property seized'}</span>}
           </div>
         )}
-        {item.status === 'cleared' && <div className="efcc-verdict good"><span>✅ Clean audit</span></div>}
+        {item.status === 'cleared' && <div className="efcc-verdict good"><span>{election ? '✅ Votes look genuine' : '✅ Clean audit'}</span></div>}
         {item.status === 'bribed' && <div className="efcc-verdict good"><span>🤝 Bribe accepted</span></div>}
+        {election ? (
+          <details className="efcc-audit">
+            <summary>
+              <span><b>🗳️ {votes.length} votes</b><b className={flagged ? 'bad' : 'good'}>{flagged ? `🚩 ${flagged} fake · ${dirty}%` : '✓ Nothing flagged'}</b></span>
+              <span className="efcc-meter"><i style={{ width: `${dirty}%` }} /><u style={{ left: `${ELECTION_FRAUD.flaggedShare * 100}%` }} /></span>
+            </summary>
+            {votes.map((vote, index) => (
+              <div className={`efcc-income${vote.illicit ? ' flagged' : ''}`} key={`${vote.at}-${index}`}>
+                <i aria-hidden>{vote.flags.length ? VOTE_FLAGS[vote.flags[0]].icon : '🗳️'}</i>
+                <span>
+                  <b>{vote.flags.length ? vote.flags.map((f) => VOTE_FLAGS[f].label).join(' · ') : 'Nothing unusual'}</b>
+                  <small title={dateLabel(vote.at)}>Vote {votes.length - index} · {ago(vote.at, now)}{vote.illicit ? ' · 🚩 fake' : ''}</small>
+                </span>
+              </div>
+            ))}
+          </details>
+        ) : (
         <details className="efcc-audit">
           <summary>
             <span><b>🧾 {item.audit.length} incomes</b><b className={flagged ? 'bad' : 'good'}>{flagged ? `🚩 ${flagged} flagged · ${dirty}% dirty` : '✓ Nothing flagged'}</b></span>
@@ -229,6 +287,7 @@ export function EfccApp() {
             </div>
           )) : <small className="efcc-note">No income on record.</small>}
         </details>
+        )}
         {isTarget && item.accuserHidden && (
           <div className="efcc-row">
             <i aria-hidden>🎭</i>
@@ -319,16 +378,34 @@ export function EfccApp() {
 
       {tab === 'report' && (
         <>
+          <div className="efcc-tabs">
+            <button type="button" className={reportKind === 'money' ? 'on' : ''} onClick={() => setReportKind('money')}><i aria-hidden>💰</i>Dirty money</button>
+            <button type="button" className={reportKind === 'election' ? 'on' : ''} onClick={() => setReportKind('election')}><i aria-hidden>🗳️</i>Fake votes</button>
+          </div>
+          {reportKind === 'election' && !query.trim() && (() => {
+            const running = (Object.entries(races ?? {}) as [PoliticalOffice, NonNullable<typeof races>[PoliticalOffice]][])
+              .flatMap(([office, race]) => (race?.candidates ?? []).map((c) => ({ ...c, office })))
+              .filter((c) => c.uid !== user.uid && c.username);
+            return running.length ? running.map((c) => (
+              <div className="efcc-row" key={`${c.office}-${c.uid}`}>
+                <Face uid={c.uid} username={c.username ?? undefined} />
+                <span><b>@{c.username}</b><small>{OFFICE_RULES[c.office].title} · {c.votes} vote{c.votes === 1 ? '' : 's'}</small></span>
+                <button className="btn sm danger" disabled={busy || !c.votes} onClick={() => reportVotes(c.username!)}>🗳️ Audit votes</button>
+              </div>
+            )) : <small className="efcc-note">Nobody is running in an election right now. Candidates show here once a race is on.</small>;
+          })()}
           <form className="efcc-search" onSubmit={submitSearch}>
             <i aria-hidden>{searching ? '⏳' : '🔍'}</i>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Who are you reporting?" aria-label="Find a player by username" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={reportKind === 'election' ? 'Or find a candidate by username' : 'Who are you reporting?'} aria-label="Find a player by username" />
           </form>
           {searchError && <small className="efcc-error">⚠️ {searchError}</small>}
           {found.filter((player) => player.uid !== user.uid).slice(0, 8).map((player) => (
             <div className="efcc-row" key={player.uid}>
               <Face uid={player.uid} username={player.username} look={player.look} />
               <span><b>{player.name ?? 'Naija City player'}</b><small>@{player.username ?? 'player'}</small></span>
-              <button className="btn sm danger" disabled={busy} onClick={() => {
+              {reportKind === 'election' ? (
+                <button className="btn sm danger" disabled={busy} onClick={() => reportVotes(player.username ?? '')}>🗳️ Audit votes</button>
+              ) : <button className="btn sm danger" disabled={busy} onClick={() => {
                 if (confirm(`File an investigation against @${player.username}? This costs ${naira(EFCC.filingFee)} and reviews their ${EFCC.auditSize} latest verified incomes.`)) {
                   act(async () => {
                     if (!(await fileEfccCase(player.username ?? ''))) return;
@@ -336,10 +413,13 @@ export function EfccApp() {
                     setTab('cases');
                   });
                 }
-              }}>⚖️ Accuse</button>
+              }}>⚖️ Accuse</button>}
             </div>
           ))}
-          {!query.trim() && (
+          {!query.trim() && reportKind === 'election' && (
+            <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits every vote the candidate has: votes from their own phone, from one phone running several accounts, from voters they paid, and from brand-new accounts on their network. See Rules for what gets them convicted.</small>
+          )}
+          {!query.trim() && reportKind === 'money' && (
             <small className="efcc-note">Filing costs {naira(EFCC.filingFee)}. The EFCC audits their last {EFCC.auditSize} incomes and gives them {EFCC.investigationMs / 1000}s to answer. See Rules for what gets someone convicted.</small>
           )}
         </>

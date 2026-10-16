@@ -11,7 +11,7 @@ import { useNet } from '../net/multiplayer';
 import { ChatBubble } from '../ui/ChatBubble';
 import { Person, seatDrop, type Clip } from './Person';
 import { Censor } from './Censor';
-import { bareLook, isBathing } from '../game/bathing';
+import { bareLook, isBathing, isOnToilet } from '../game/bathing';
 import { useVisit } from '../game/visits';
 import { sceneFor } from '../game/streetScenes';
 import { driveState } from '../game/driveState';
@@ -111,6 +111,7 @@ function MyBubble() {
 export function Avatar() {
   const look = useGame((s) => s.look);
   const bathing = useGame((s) => isBathing(s.task));
+  const onToilet = useGame((s) => isOnToilet(s.task));
   const bare = useMemo(() => bareLook(look), [look]);
   const photo = usePhoto((s) => s.active);
   const group = useRef<Group>(null!);
@@ -224,11 +225,15 @@ export function Avatar() {
   });
 
   return (
+    <>
+    {!photo && <GoalMarker />}
     <group ref={group} position={[avatar.x, 0, avatar.z]}>
       <group ref={body}>
-        {/* In the bath or shower: nothing on, and the blue blur over you (game/bathing.ts). */}
+        {/* In the bath or shower: nothing on, and the frosted blur over you (game/bathing.ts). */}
         <Person look={bathing ? bare : look} clipRef={clip} seatedRef={seated} />
         {bathing && <Censor />}
+        {/* Seated on the toilet: a smaller blur, lower down, over the lap. */}
+        {onToilet && <Censor height={0.77} w={0.5} h={0.36} />}
       </group>
       {/* Nothing floats over my head in a photo. */}
       {!photo && (
@@ -239,6 +244,46 @@ export function Avatar() {
           <ThoughtBubble />
         </>
       )}
+    </group>
+    </>
+  );
+}
+
+/**
+ * Where you're walking to: a pulsing green ring on the last cell of the route (the plumbob's green), shown while you
+ * walk and gone when you arrive or stop. Read from the route each frame, so it never re-renders anything.
+ */
+function GoalMarker() {
+  const ring = useRef<Group>(null!);
+  const ringMat = useRef<MeshBasicMaterial>(null!);
+  const dotMat = useRef<MeshBasicMaterial>(null!);
+  useFrame(({ clock }) => {
+    const g = ring.current;
+    const end = avatar.path[avatar.path.length - 1];
+    const s = useGame.getState();
+    // Driving or riding, the vehicle shows the way; the marker is for walking where you tapped.
+    const riding = (s.task?.travelMode ?? 'walk') !== 'walk' || driveState.vehicle;
+    g.visible = !!end && !riding;
+    if (!g.visible) return;
+    const x = end.x + 0.5;
+    const z = end.z + 0.5;
+    g.position.set(x, (s.view === 'city' ? mapGroundY(x, z) : 0) + 0.03, z);
+    const t = clock.elapsedTime;
+    const pulse = 0.85 + 0.15 * Math.sin(t * 5);
+    g.scale.setScalar(pulse);
+    ringMat.current.opacity = 0.55 + 0.3 * Math.sin(t * 5);
+    dotMat.current.opacity = 0.35;
+  });
+  return (
+    <group ref={ring} visible={false} userData={{ dynamic: true }}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null} renderOrder={3}>
+        <ringGeometry args={[0.3, 0.42, 40]} />
+        <meshBasicMaterial ref={ringMat} color="#22c55e" transparent depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null} renderOrder={3}>
+        <circleGeometry args={[0.16, 24]} />
+        <meshBasicMaterial ref={dotMat} color="#22c55e" transparent depthWrite={false} toneMapped={false} />
+      </mesh>
     </group>
   );
 }

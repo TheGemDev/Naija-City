@@ -21,6 +21,7 @@ import { StaticBatch } from './StaticBatch';
 import { Emoji } from '../ui/Icons';
 import { offHover, onHover } from './HoverOutline';
 import { JailMates } from './JailMates';
+import { RoomFx, type FxSource } from './RoomFx';
 
 const TALL = 2.6;
 const SHORT = 0.9;
@@ -355,6 +356,15 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
   );
 }
 
+/** Steam off the buka's pots, the hotel shower's spray, Zs over the bed... (three/RoomFx.tsx). */
+function PlaceFx({ it }: { it: InteriorDef }) {
+  const sources = useMemo<FxSource[]>(() => propsHere(it).map((p) => {
+    const { cx, cz, yaw } = propTransform(p);
+    return { id: p.id, type: p.type, x: cx, y: 0, z: cz, yaw };
+  }), [it]);
+  return <RoomFx sources={sources} ambient />;
+}
+
 function ClickPlane({ it }: { it: InteriorDef }) {
   return (
     <mesh
@@ -388,6 +398,7 @@ function Room({ it, place }: { it: InteriorDef; place: Place }) {
           <PropMesh key={p.id} prop={p} selected={p.id === selectedId} />
         ))}
       </StaticBatch>
+      <PlaceFx it={it} />
       <ClickPlane it={it} />
     </group>
   );
@@ -433,6 +444,7 @@ export function Interior() {
         ))}
       </StaticBatch>
       {!it.jungle && <InteriorAds placeId={place.id} it={it} />}
+      <PlaceFx it={it} />
       <ClickPlane it={it} />
     </group>
   );

@@ -1,4 +1,8 @@
-import { EFCC, EFCC_DIRTY_KINDS, EFCC_RECORD_MS, efccConvicts, efccSource, type EfccCase, type EfccIncome, type EfccStatus } from '../src/game/efcc';
+import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, efccConvicts, efccSource, electionConvicts, voteIllicit, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type VoteFlag } from '../src/game/efcc';
+import { banLeft, CHAOS, OFFICE_RULES, VOTE_BUYING_BAN_MS, type PoliticalOffice } from '../src/game/civic';
+import { linkedSql, sharedIpSql } from './links';
+import { transfer, usernames } from './crime';
+import { handle, naira, postFeed } from './feed';
 import { DESIGN_BY_ID, STAGES, type Property } from '../src/game/property';
 import { syncEstate } from './estate';
 import { sendPush } from './push';
@@ -6,7 +10,7 @@ import { applyStmts, ensureWallet } from './wallet';
 import { notifyPlayer } from './shards';
 import { loadLaws } from './crime';
 import { jail } from './fun';
-import { furnitureOf, houseReturned, recordExhibits, seizuresOf } from './exhibits';
+import { fineItem, furnitureOf, houseReturned, recordExhibits, seizuresOf } from './exhibits';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -16,14 +20,18 @@ function notify(env: Env, ctx: ExecutionContext, uid: string, event: object) {
   ctx.waitUntil(notifyPlayer(env, uid, event));
 }
 
-interface IncomeRow { at: number; kind: string; amount: number; scam: number }
+interface IncomeRow { at: number; kind: string; amount: number; scam: number; fresh: number; linked: number }
 interface SaveRow { data: string; saved_at: number; balance: number }
 interface CaseRow {
   id: string; accuser_uid: string; target_uid: string; status: EfccStatus; filed_at: number; resolves_at: number;
   audit_json: string; statement: string | null; bribe_attempted: number; bribe_succeeded: number | null; fine: number | null;
   seized_property_json: string | null; buyback_price: number | null; bought_back_at: number | null;
   accuser_revealed_at: number | null;
+  kind: 'money' | 'election';
+  election_id: number | null;
 }
+/** An election audit's vote as stored: who cast it is kept for striking it off, and never sent to players. */
+type StoredVote = EfccVote & { voter: string };
 interface SaveData {
   properties?: Property[];
   items?: Property['items'];
@@ -33,7 +41,16 @@ interface SaveData {
   [key: string]: unknown;
 }
 
-const isIllicit = (kind: string, scam: number) => EFCC_DIRTY_KINDS.includes(kind) || scam > 0;
+const isIllicit = (row: IncomeRow) => EFCC_DIRTY_KINDS.includes(row.kind) || row.scam > 0 || row.fresh > 0 || row.linked > 0;
+
+/**
+ * SQL: the player ?u was new when the money left them at ?at. New means the account was made, or a life was born or
+ * started over (its starting money, ledger kind 'start' or 'reset'), within EFCC.freshAccountMs before then.
+ */
+const freshAt = (u: string, at: string) =>
+  `(EXISTS (SELECT 1 FROM players fp WHERE fp.uid = ${u} AND fp.created_at > ${at} - ?4)
+    OR EXISTS (SELECT 1 FROM ledger fs WHERE fs.uid = ${u} AND fs.kind IN ('start', 'reset') AND fs.created_at > ${at} - ?4 AND fs.created_at <= ${at}))`;
+const FRESH_KINDS_SQL = EFCC_FRESH_KINDS.map((k) => `'${k}'`).join(', ');
 
 /** The target's latest incomes since `since` (the last case filed on them): money already judged is not read again. */
 async function audit(db: D1Database, uid: string, since = 0): Promise<EfccIncome[]> {
@@ -46,21 +63,58 @@ async function audit(db: D1Database, uid: string, since = 0): Promise<EfccIncome
            AND payment.to_uid = l.uid AND payment.from_uid = s.victim_uid
            AND payment.amount = l.amount AND ABS(payment.created_at - l.created_at) <= 2000
          WHERE s.scammer_uid = l.uid AND s.status IN ('paid', 'reported') AND s.amount = l.amount
-       ) THEN 1 ELSE 0 END AS scam
+       ) THEN 1 ELSE 0 END AS scam,
+       CASE
+         WHEN l.kind NOT IN (${FRESH_KINDS_SQL}) THEN 0
+         -- A game pot: new if any other player who staked in that match was.
+         WHEN l.kind = 'game_win' THEN EXISTS (
+           SELECT 1 FROM game_matches gm, json_each(gm.players) gp
+           JOIN ledger st ON st.uid = gp.value AND st.ref = gm.id AND st.kind = 'game_stake'
+           WHERE gm.id = l.ref AND gp.value != l.uid AND ${freshAt('st.uid', 'st.created_at')})
+         ELSE ${freshAt('l.ref', 'l.created_at')}
+       END AS fresh,
+       -- Money from another account on the target's own device: passing it between their own accounts.
+       CASE
+         WHEN l.kind NOT IN (${FRESH_KINDS_SQL}) THEN 0
+         WHEN l.kind = 'game_win' THEN EXISTS (
+           SELECT 1 FROM game_matches lm, json_each(lm.players) lp WHERE lm.id = l.ref AND ${linkedSql('lp.value', 'l.uid')})
+         ELSE ${linkedSql('l.ref', 'l.uid')}
+       END AS linked
      FROM ledger l
-     WHERE l.uid = ? AND l.applied = 1 AND l.amount > 0 AND l.created_at > ?
-     ORDER BY l.created_at DESC, l.id DESC LIMIT ?`,
-  ).bind(uid, since, EFCC.auditSize).all<IncomeRow>();
+     WHERE l.uid = ?1 AND l.applied = 1 AND l.amount > 0 AND l.created_at > ?2
+     ORDER BY l.created_at DESC, l.id DESC LIMIT ?3`,
+  ).bind(uid, since, EFCC.auditSize, EFCC.freshAccountMs).all<IncomeRow>();
   return results.map((row) => ({
     at: row.at,
     kind: row.kind,
-    source: efccSource(row.kind),
+    source: row.linked ? `${efccSource(row.kind)} from an account on their device` : row.fresh ? `${efccSource(row.kind)} from a new account` : efccSource(row.kind),
     amount: row.amount,
-    illicit: isIllicit(row.kind, row.scam),
+    illicit: isIllicit(row),
   }));
 }
 
-function fromRow(row: CaseRow, target: string, accuser: string, viewerUid: string, ownedPropertyIds: Set<string>): EfccCase {
+/** Every vote the candidate has in this race, and what is wrong with each (src/game/efcc.ts VoteFlag). */
+async function electionAudit(db: D1Database, electionId: number, candidate: string): Promise<StoredVote[]> {
+  type Row = { voter: string; at: number } & Record<VoteFlag, number>;
+  const { results } = await db.prepare(
+    `SELECT v.voter_uid AS voter, v.updated_at AS at,
+       ${linkedSql('v.voter_uid', '?2')} AS device,
+       EXISTS (SELECT 1 FROM civic_votes o WHERE o.election_id = ?1 AND o.candidate_uid = ?2 AND ${linkedSql('v.voter_uid', 'o.voter_uid')}) AS ring,
+       EXISTS (SELECT 1 FROM ledger pl WHERE pl.uid = v.voter_uid AND pl.ref = ?2 AND pl.kind IN ('transfer_in', 'spray_in')
+                 AND pl.created_at BETWEEN v.updated_at - ?3 AND v.updated_at) AS paid,
+       ${freshAt('v.voter_uid', 'v.updated_at')} AS fresh,
+       ${sharedIpSql('v.voter_uid', '?2')} AS ip
+     FROM civic_votes v WHERE v.election_id = ?1 AND v.candidate_uid = ?2
+     ORDER BY v.updated_at DESC`,
+  ).bind(electionId, candidate, ELECTION_FRAUD.paidWindowMs, EFCC.freshAccountMs).all<Row>();
+  return results.map((row) => {
+    const flags = (['device', 'ring', 'paid', 'fresh', 'ip'] as VoteFlag[]).filter((f) => row[f]);
+    return { voter: row.voter, at: row.at, flags, illicit: voteIllicit(flags) };
+  });
+}
+
+function fromRow(row: CaseRow & { office?: string | null }, target: string, accuser: string, viewerUid: string, ownedPropertyIds: Set<string>): EfccCase {
+  const election = row.kind === 'election';
   let property: Property | null = null;
   if (row.seized_property_json) {
     try {
@@ -73,6 +127,11 @@ function fromRow(row: CaseRow, target: string, accuser: string, viewerUid: strin
   const hidden = row.target_uid === viewerUid && row.accuser_revealed_at === null;
   return {
     id: row.id,
+    kind: election ? 'election' : 'money',
+    ...(election ? {
+      office: row.office ?? undefined,
+      votes: (JSON.parse(row.audit_json) as StoredVote[]).map(({ at, flags, illicit }) => ({ at, flags, illicit })),
+    } : {}),
     targetUid: row.target_uid,
     accuserUid: hidden ? '' : row.accuser_uid,
     status: row.status,
@@ -81,7 +140,7 @@ function fromRow(row: CaseRow, target: string, accuser: string, viewerUid: strin
     accuserHidden: hidden,
     filedAt: row.filed_at,
     resolvesAt: row.resolves_at,
-    audit: JSON.parse(row.audit_json) as EfccIncome[],
+    audit: election ? [] : JSON.parse(row.audit_json) as EfccIncome[],
     statement: row.statement,
     bribeAttempted: !!row.bribe_attempted,
     bribeSucceeded: row.bribe_succeeded === null ? null : !!row.bribe_succeeded,
@@ -108,6 +167,45 @@ async function caseRow(db: D1Database, id: string, uid: string) {
 
 async function settle(db: D1Database, row: CaseRow, now: number) {
   if (row.status !== 'investigating' || row.resolves_at > now) return;
+  return row.kind === 'election' ? settleElection(db, row, now) : settleMoney(db, row, now);
+}
+
+/**
+ * A rigged election: the flagged votes are struck off, and a convicted candidate is disqualified, barred from running,
+ * fined and jailed, as if caught in a vote-buying sting (worker/civic.ts).
+ */
+async function settleElection(db: D1Database, row: CaseRow, now: number) {
+  const votes = JSON.parse(row.audit_json) as StoredVote[];
+  const convicted = electionConvicts(votes);
+  const closed = await db.prepare(
+    `UPDATE efcc_cases SET status = ?, resolved_at = ? WHERE id = ? AND status = 'investigating' AND resolves_at <= ?`,
+  ).bind(convicted ? 'convicted' : 'cleared', now, row.id, now).run();
+  // Only the call that closed the case hands out the sentence.
+  if (!convicted || !closed.meta.changes) return;
+  const race = await db.prepare('SELECT office, status FROM civic_elections WHERE id = ?').bind(row.election_id).first<{ office: PoliticalOffice; status: string }>();
+  const struck = votes.filter((v) => v.illicit).map((v) => v.voter);
+  await db.batch([
+    db.prepare('DELETE FROM civic_votes WHERE election_id = ?1 AND candidate_uid = ?2 AND voter_uid IN (SELECT value FROM json_each(?3))')
+      .bind(row.election_id, row.target_uid, JSON.stringify(struck)),
+    // Disqualified while the race is still on (their remaining votes go with them); a race already over keeps its result.
+    db.prepare(`DELETE FROM civic_candidates WHERE election_id = ? AND uid = ? AND EXISTS (SELECT 1 FROM civic_elections WHERE id = ? AND status = 'open')`)
+      .bind(row.election_id, row.target_uid, row.election_id),
+    db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, row.target_uid),
+  ]);
+  const fine = await transfer(db, row.target_uid, null, CHAOS.stingFine, 'efcc_fine', '', `election-fraud:${row.id}`);
+  await db.prepare('UPDATE efcc_cases SET fine = ? WHERE id = ?').bind(fine, row.id).run();
+  const title = race ? OFFICE_RULES[race.office].title : 'election';
+  await recordExhibits(db, row.target_uid, `case:${row.id}`, `EFCC · rigging the ${title} race`, [fineItem(fine)], now);
+  await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes, `Election fraud · ${struck.length} fake vote${struck.length === 1 ? '' : 's'} in the ${title} race`);
+  const who = (await usernames(db, [row.target_uid])).get(row.target_uid);
+  await postFeed(
+    db, row.target_uid, 'election', '🗳️',
+    `EFCC: ${struck.length} of ${title} candidate ${handle(who)}’s ${votes.length} votes came from their own phones, fake accounts or paid voters. ${race?.status === 'open' ? 'Disqualified, ' : ''}barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a cell. 🚓`,
+    race ? OFFICE_RULES[race.office].city : undefined,
+  );
+}
+
+async function settleMoney(db: D1Database, row: CaseRow, now: number) {
   const convicted = efccConvicts(JSON.parse(row.audit_json) as EfccIncome[]);
   const saveRow = await db.prepare('SELECT data, saved_at FROM saves WHERE uid = ?').bind(row.target_uid)
     .first<{ data: string; saved_at: number }>();
@@ -214,15 +312,16 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
 
 async function refreshedRows(db: D1Database, uid: string) {
   const { results } = await db.prepare(
-    `SELECT c.*, target.username AS target, accuser.username AS accuser
+    `SELECT c.*, target.username AS target, accuser.username AS accuser, e.office
      FROM efcc_cases c
      JOIN players target ON target.uid = c.target_uid
      JOIN players accuser ON accuser.uid = c.accuser_uid
+     LEFT JOIN civic_elections e ON e.id = c.election_id
      WHERE (c.accuser_uid = ?1 OR c.target_uid = ?1)
        AND (c.status = 'investigating' OR COALESCE(c.resolved_at, c.resolves_at) > ?2
          OR (c.status = 'convicted' AND c.seized_property_json IS NOT NULL AND c.bought_back_at IS NULL))
      ORDER BY c.filed_at DESC LIMIT 50`,
-  ).bind(uid, Date.now() - EFCC_RECORD_MS).all<CaseRow & { target: string; accuser: string }>();
+  ).bind(uid, Date.now() - EFCC_RECORD_MS).all<CaseRow & { target: string; accuser: string; office: string | null }>();
   return results;
 }
 
@@ -253,7 +352,9 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
   }
 
   if (path === '/api/efcc/cases' && req.method === 'POST') {
-    const body = await req.json().catch(() => null) as { target?: unknown; requestId?: unknown } | null;
+    const body = await req.json().catch(() => null) as { target?: unknown; requestId?: unknown; kind?: unknown } | null;
+    // Dirty money (their latest incomes), or a rigged election (every vote they have in the race they are running in).
+    const kind = body?.kind === 'election' ? 'election' : 'money';
     const username = typeof body?.target === 'string' ? body.target.replace(/^@/, '').trim().toLowerCase() : '';
     if (!username || username.length > 32) return err(400, 'Enter a valid player username');
     if (body?.requestId !== undefined && (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId))) {
@@ -272,25 +373,42 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
     const expired = await env.DB.prepare("SELECT * FROM efcc_cases WHERE target_uid = ? AND status = 'investigating' AND resolves_at <= ?")
       .bind(target.uid, Date.now()).all<CaseRow>();
     for (const row of expired.results) await settle(env.DB, row, Date.now());
-    // One case at a time per person, and then a rest: the same player can't be reported over and over.
-    const since = target.efcc_case_at ?? 0;
-    const rest = since + EFCC.caseCooldownMs - Date.now();
-    if (rest > 0) {
-      const hours = Math.ceil(rest / 3_600_000);
-      return err(429, `@${username} was investigated recently. A new case can be filed in ${hours} hour${hours === 1 ? '' : 's'}`);
+    let evidence: EfccIncome[] | StoredVote[];
+    let electionId: number | null = null;
+    if (kind === 'election') {
+      const race = await env.DB.prepare(
+        `SELECT c.election_id AS id FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id WHERE c.uid = ? AND e.status = 'open'`,
+      ).bind(target.uid).first<{ id: number }>();
+      if (!race) return err(409, `@${username} is not running in any election right now`);
+      electionId = race.id;
+      // A cleared candidate can be looked at again once more votes may have come in.
+      const last = await env.DB.prepare(`SELECT MAX(filed_at) AS at FROM efcc_cases WHERE target_uid = ? AND kind = 'election' AND election_id = ?`)
+        .bind(target.uid, race.id).first<{ at: number | null }>();
+      const wait = (last?.at ?? 0) + ELECTION_FRAUD.refileMs - Date.now();
+      if (wait > 0) return err(429, `@${username}’s votes were audited recently. Try again in ${Math.ceil(wait / 60_000)} minutes`);
+      evidence = await electionAudit(env.DB, race.id, target.uid);
+      if (!evidence.length) return err(409, `Nobody has voted for @${username} yet. There is nothing to investigate`);
+    } else {
+      // One case at a time per person, and then a rest: the same player can't be reported over and over.
+      const since = target.efcc_case_at ?? 0;
+      const rest = since + EFCC.caseCooldownMs - Date.now();
+      if (rest > 0) {
+        const hours = Math.ceil(rest / 3_600_000);
+        return err(429, `@${username} was investigated recently. A new case can be filed in ${hours} hour${hours === 1 ? '' : 's'}`);
+      }
+      evidence = await audit(env.DB, target.uid, since);
+      // Everything older was already judged in their last case.
+      if (!evidence.length) return err(409, `@${username} has earned nothing since their last case. There is nothing new to investigate`);
     }
-    const evidence = await audit(env.DB, target.uid, since);
-    // Everything older was already judged in their last case.
-    if (!evidence.length) return err(409, `@${username} has earned nothing since their last case. There is nothing new to investigate`);
     const now = Date.now();
     const filing = await env.DB.batch([
       ensureWallet(env.DB, uid),
       env.DB.prepare(
-        `INSERT OR IGNORE INTO efcc_cases (id, accuser_uid, target_uid, status, filed_at, resolves_at, audit_json)
-         SELECT ?, ?, ?, 'investigating', ?, ?, ?
+        `INSERT OR IGNORE INTO efcc_cases (id, accuser_uid, target_uid, status, filed_at, resolves_at, audit_json, kind, election_id)
+         SELECT ?, ?, ?, 'investigating', ?, ?, ?, ?, ?
          WHERE EXISTS (SELECT 1 FROM wallets WHERE uid = ? AND balance >= ?)
            AND NOT EXISTS (SELECT 1 FROM efcc_cases WHERE target_uid = ? AND status = 'investigating')`,
-      ).bind(id, uid, target.uid, now, now + EFCC.investigationMs, JSON.stringify(evidence), uid, EFCC.filingFee, target.uid),
+      ).bind(id, uid, target.uid, now, now + EFCC.investigationMs, JSON.stringify(evidence), kind, electionId, uid, EFCC.filingFee, target.uid),
       env.DB.prepare(
         `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
          SELECT ?, 'efcc-file:' || ?, 'efcc_filing', ?, ?, 1, ?
@@ -305,8 +423,10 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
       ).bind(EFCC.filingFee, now, uid, EFCC.filingFee, uid, `efcc-file:${id}`),
       // The filing fee is the state's.
       env.DB.prepare('UPDATE civic_policies SET treasury = treasury + ? WHERE id = 1 AND changes() = 1').bind(EFCC.filingFee),
-      // The case is on their record from now: the cooldown starts, and the next audit reads only what comes after.
-      env.DB.prepare('UPDATE players SET efcc_case_at = ?1 WHERE uid = ?2 AND EXISTS (SELECT 1 FROM efcc_cases WHERE id = ?3 AND filed_at = ?1)').bind(now, target.uid, id),
+      // A money case is on their record from now: the cooldown starts, and the next audit reads only what comes after.
+      ...(kind === 'money'
+        ? [env.DB.prepare('UPDATE players SET efcc_case_at = ?1 WHERE uid = ?2 AND EXISTS (SELECT 1 FROM efcc_cases WHERE id = ?3 AND filed_at = ?1)').bind(now, target.uid, id)]
+        : []),
     ]);
     if (!filing[3].meta.changes) {
       const retry = await env.DB.prepare('SELECT id FROM efcc_cases WHERE id = ? AND accuser_uid = ? AND target_uid = ?')
@@ -319,8 +439,10 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
     }
     notify(env, ctx, target.uid, { t: 'fun', kind: 'efccCase', caseId: id });
     sendPush(env, ctx, target.uid, {
-      title: 'New EFCC investigation',
-      body: 'Someone has opened an investigation on you. Open the EFCC app to respond, or pay to see who filed it.',
+      title: kind === 'election' ? 'EFCC: your votes are being audited' : 'New EFCC investigation',
+      body: kind === 'election'
+        ? 'Someone reported your campaign for fake votes. Open the EFCC app to respond, or pay to see who filed it.'
+        : 'Someone has opened an investigation on you. Open the EFCC app to respond, or pay to see who filed it.',
       tag: `efcc-case-${id}`,
       category: 'crime', app: 'efcc',
     });

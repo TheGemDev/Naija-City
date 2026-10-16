@@ -50,7 +50,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
   starter: {
     id: 'starter', label: 'Fresh Start', emoji: '🌱', tagline: 'Everybody starts the same. The rest is on you.',
     home: 'Small one-room house', homeScale: 0.62, money: 300_000, pay: 1, items: HUSTLE, car: null, phone: 'tecno_spark', clothes: [],
-    perks: ['₦300,000 to start', 'A small starter home'], catches: [],
+    perks: ['₦300,000 to start: ₦50,000 now, ₦50,000 more each day you play', 'A small starter home'], catches: [],
     color: '#22c55e',
   },
   // Legacy starts, for lives already living them.
@@ -92,6 +92,17 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
 
 /** The start every new life gets. */
 export const NEW_LIFE_ORIGIN: OriginId = 'starter';
+
+/**
+ * A life's starting money comes in installments, so a throwaway account has little to hand over on day one: this much at
+ * birth, then this much more on each later day the player is online, until the origin's money is all paid
+ * (worker/wallet.ts payStarter).
+ */
+export const STARTER_INSTALLMENT = 50_000;
+/** What a life is born holding; the rest of its origin's money follows a day at a time. */
+export const firstInstallment = (o: OriginDef) => Math.min(o.money, STARTER_INSTALLMENT);
+/** Which day it is in Nigeria (UTC+1), for paying one installment a day. */
+export const starterDay = (ms: number) => Math.floor((ms + 3_600_000) / 86_400_000);
 export const isOrigin = (v: unknown): v is OriginId => typeof v === 'string' && Object.hasOwn(ORIGINS, v);
 const LEGACY_ORIGINS: Record<LegacyOriginId, OriginId> = { rich: 'nepo', ajebota: 'nepo', normal: 'nepo', ajepako: 'lapo' };
 export function normalizeOrigin(v: unknown): OriginId {

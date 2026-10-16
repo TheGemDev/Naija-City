@@ -316,7 +316,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
         </div>
       </div>
       {/* The message for Snap sits under the picture; it steps aside while a caption on the picture is being typed. */}
-      {forSnap && current?.kind !== 'caption' && (
+      {!!username && current?.kind !== 'caption' && (
         <input
           className="photo-caption-input photo-snap"
           value={snapNote}
@@ -406,11 +406,11 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
             <path d="M5 20h14" />
           </svg>
         </button>
-        {CAN_SHARE && <button type="button" className={forSnap ? 'photo-ghost' : 'photo-primary'} onClick={() => void share()}>Share</button>}
-        {/* Only a picture taken from the Snap app can be sent there. */}
-        {forSnap && (
-          <button type="button" className="photo-primary snap-send-to" disabled={busy || !username} onClick={() => void snap(TO_SPOTLIGHT)}>
-            {busy ? 'Posting…' : 'Post'}
+        {CAN_SHARE && <button type="button" className="photo-ghost" onClick={() => void share()}>Share</button>}
+        {/* Any picture can go to Snap: from the Snap camera it's "Post", from the Camera app "Post to Snap". */}
+        {!!username && (
+          <button type="button" className="photo-primary snap-send-to" disabled={busy} onClick={() => void snap(TO_SPOTLIGHT)}>
+            {busy ? 'Posting…' : forSnap ? 'Post' : 'Post to Snap'}
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M3 20.5 21 12 3 3.5v6.6l11 1.9-11 1.9z" /></svg>
           </button>
         )}

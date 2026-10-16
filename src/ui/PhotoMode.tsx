@@ -49,7 +49,7 @@ export function openSnapFirst() {
   return true;
 }
 
-/** From the Snap camera to the feed on the phone. */
+/** From the Snap camera to the app on the phone (its ✕ button). */
 function goSnap() {
   usePhoto.getState().close();
   useSnaps.setState({ tab: 'spotlight' });
@@ -149,7 +149,8 @@ export function PhotoMode() {
             <i style={{ ['--shape' as string]: FORMAT_BY_ID[format].w / FORMAT_BY_ID[format].h, background: lensVeil(LENS_BY_ID[lens] ?? LENSES[0]) }} />
           </div>
           <div className="photo-top">
-            <button type="button" className="photo-round" aria-label="Close photo mode" onClick={() => usePhoto.getState().close()}>
+            {/* In Snap, closing the camera shows the app itself; anywhere else it goes back to the game. */}
+            <button type="button" className="photo-round" aria-label={forSnap ? 'Close the camera and open Snap' : 'Close photo mode'} title={forSnap ? 'Close camera' : 'Close'} onClick={() => (forSnap ? goSnap() : usePhoto.getState().close())}>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
@@ -215,14 +216,6 @@ export function PhotoMode() {
             <button type="button" className={`photo-shutter ${forSnap ? 'snap-shutter' : ''}`} aria-label="Take photo" onClick={() => usePhoto.getState().snap()}>
               <i />
             </button>
-            {forSnap && (
-              <nav className="snap-cam-nav" aria-label="Snap">
-                <button type="button" onClick={goSnap}>
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 4l12 8-12 8z" /></svg>
-                  <small>Feed</small>
-                </button>
-              </nav>
-            )}
           </div>
         </>
       )}

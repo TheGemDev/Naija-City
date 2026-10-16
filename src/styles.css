@@ -3484,3 +3484,16 @@ body.corner-hud .time-card .time-radio .power-save { display: inline-flex; align
 body.corner-hud .time-card .time-radio .power-save span { font-size: 12px; font-weight: 700; }
 /* On a phone the notices on the left reach across: Low power keeps just its battery so they never overlap. */
 @media (max-width: 600px) { body.corner-hud .time-card .time-radio .power-save span { display: none; } body.corner-hud .time-card .time-radio .power-save { padding: 0 9px; } }
+
+/* Pie items are pinned by their inner edge (PieMenu.tsx --tx): side ones grow away from the ring, so labels never overlap. */
+.pie-item { transform: translate(var(--tx, -50%), -50%); max-width: var(--pie-maxw, 190px); animation-name: pie-in-side; }
+.pie-item:hover { transform: translate(var(--tx, -50%), -50%) scale(1.06); }
+@keyframes pie-in-side { from { opacity: 0; transform: translate(var(--tx, -50%), -50%) scale(0.55); } to { opacity: 1; transform: translate(var(--tx, -50%), -50%) scale(1); } }
+/* A long activity name wraps onto a second line rather than being cut short. */
+.pie-text b { white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }
+.pie-item { border-radius: 22px; }
+.pie-item { width: max-content; }
+
+/* WhatsApp's read blue for the double tick; grey for sent. */
+.bub-ticks.seen, .bub.mine .bub-ticks.seen { color: #53bdeb; }
+.bub.mine .bub-ticks:not(.seen) { color: rgba(255, 255, 255, 0.7); }
