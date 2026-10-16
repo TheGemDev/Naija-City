@@ -56,7 +56,9 @@ function footprints(root: Group) {
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh || (m as { isInstancedMesh?: boolean }).isInstancedMesh) return;
-    for (let p: Object3D | null = m; p; p = p.parent) if (p.userData.dynamic) return;
+    // Kit-built places (placeKit) merge parts spread over the whole plot into one mesh per colour: each would read as a
+    // plot-sized "building" and the shades would stack into a dark slab. They are skipped (userData.noShade).
+    for (let p: Object3D | null = m; p; p = p.parent) if (p.userData.dynamic || p.userData.noShade) return;
     if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
     box.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld);
     const w = box.max.x - box.min.x, d = box.max.z - box.min.z, h = box.max.y - box.min.y;

@@ -201,7 +201,8 @@ export function KitModel({ build, deps }: { build: (low: boolean) => Built; deps
     built.glow?.dispose();
   }, [built]);
   return (
-    <group>
+    // noShade: CityFx's GroundShade reads building footprints off mesh bounds, which a merged colour mesh doesn't have.
+    <group userData={{ noShade: true }}>
       {built.parts.map(({ key, g }) =>
         key.startsWith('lamp') ? (
           <mesh key={key} geometry={g} material={lampMat} />
