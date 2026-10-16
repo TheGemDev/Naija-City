@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { usePhoto } from '../game/photo';
@@ -10,6 +10,8 @@ import { NEEDS } from '../game/catalog';
 import { useNet } from '../net/multiplayer';
 import { ChatBubble } from '../ui/ChatBubble';
 import { Person, seatDrop, type Clip } from './Person';
+import { Censor } from './Censor';
+import { bareLook, isBathing } from '../game/bathing';
 import { useVisit } from '../game/visits';
 import { sceneFor } from '../game/streetScenes';
 import { driveState } from '../game/driveState';
@@ -108,6 +110,8 @@ function MyBubble() {
 
 export function Avatar() {
   const look = useGame((s) => s.look);
+  const bathing = useGame((s) => isBathing(s.task));
+  const bare = useMemo(() => bareLook(look), [look]);
   const photo = usePhoto((s) => s.active);
   const group = useRef<Group>(null!);
   const body = useRef<Group>(null!);
@@ -222,7 +226,9 @@ export function Avatar() {
   return (
     <group ref={group} position={[avatar.x, 0, avatar.z]}>
       <group ref={body}>
-        <Person look={look} clipRef={clip} seatedRef={seated} />
+        {/* In the bath or shower: nothing on, and the blue blur over you (game/bathing.ts). */}
+        <Person look={bathing ? bare : look} clipRef={clip} seatedRef={seated} />
+        {bathing && <Censor />}
       </group>
       {/* Nothing floats over my head in a photo. */}
       {!photo && (
