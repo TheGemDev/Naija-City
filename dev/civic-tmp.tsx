@@ -23,7 +23,7 @@ function Info() {
   useFrame(() => {
     lampMat.emissiveIntensity = night ? 2.5 : 0;
     windowMat.emissiveIntensity = night ? 0.9 : 0;
-    windowsLit.value = 0.55;
+    windowsLit.value = Number(q.get('lit') ?? 0.55);
   });
   useEffect(() => {
     (window as never as Record<string, unknown>).__tris = () => {
