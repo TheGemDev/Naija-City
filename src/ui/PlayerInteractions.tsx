@@ -1,3 +1,4 @@
+import { tierOf } from '../game/cribs';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ALIAS_MAX, naira, useGame } from '../game/store';
 import { cityNameHere } from '../game/regions';
@@ -475,6 +476,8 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
   const [plots, setPlots] = useState<number | null>(null);
   // Their children at home (Phone → Adopt), from the public profile.
   const [children, setChildren] = useState<{ name: string }[]>([]);
+  // Their best crib score (Cribs app), from the public profile.
+  const [crib, setCrib] = useState<number | null>(null);
   const username = player.username;
   const name = player.name ?? live?.name;
 
@@ -486,7 +489,7 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
     let stale = false;
     fetch(`/api/profile/${username}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((p: { plots?: number; children?: { name: string }[] } | null) => { if (!stale && p) { setPlots(p.plots ?? 0); setChildren(p.children ?? []); } })
+      .then((p: { plots?: number; children?: { name: string }[]; crib?: number | null } | null) => { if (!stale && p) { setPlots(p.plots ?? 0); setChildren(p.children ?? []); setCrib(p.crib ?? null); } })
       .catch(() => {});
     return () => { stale = true; };
   }, [username]);
@@ -506,6 +509,7 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
         <span className={live ? 'online-label' : 'muted'}>{live ? 'Online' : 'Offline'}</span>
         {plots !== null && <span>🏠 {plots} {plots === 1 ? 'plot' : 'plots'}</span>}
         {children.length > 0 && <span>👶🏾 {children.map((c) => c.name).join(', ')}</span>}
+        {crib !== null && <span>{tierOf(crib).icon} {tierOf(crib).name} crib · {crib}/100</span>}
       </div>
       <form className="player-alias" onSubmit={save}>
         <label htmlFor="player-alias">Nickname</label>

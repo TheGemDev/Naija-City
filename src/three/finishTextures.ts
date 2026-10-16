@@ -46,6 +46,9 @@ function speckle(g: G, S: number, rnd: Rnd, n: number, dark: string, light: stri
   g.globalAlpha = 1;
 }
 
+/** A '#rrggbb' colour, fully transparent. */
+const clear = (hex: string) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},0)`; };
+
 function blotches(g: G, S: number, rnd: Rnd, n: number, colours: string[], r: number, alpha: number) {
   for (let i = 0; i < n; i++) {
     const x = rnd() * S, y = rnd() * S, rr = r * (0.5 + rnd());
@@ -53,7 +56,8 @@ function blotches(g: G, S: number, rnd: Rnd, n: number, colours: string[], r: nu
     wrap(S, (dx, dy) => {
       const grad = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rr);
       grad.addColorStop(0, c);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      // Fade to the same colour, clear: fading to transparent black leaves grey rings.
+      grad.addColorStop(1, clear(c));
       g.globalAlpha = alpha;
       g.fillStyle = grad;
       g.fillRect(x + dx - rr, y + dy - rr, rr * 2, rr * 2);
@@ -431,10 +435,25 @@ const PAINTERS: Record<string, (g: G, S: number, rnd: Rnd, def: FinishDef) => vo
     g.fillRect(S / 2, 0, 1.5, S);
   },
   wood_panel(g, S, rnd, d) {
-    planks(g, S, rnd, 5, d.base, true);
-    g.fillStyle = 'rgba(30,18,10,0.45)';
-    for (let i = 0; i < 5; i++) g.fillRect(i * (S / 5), 0, 2.5, S);
-    // A dado rail
+    // Tongue-and-groove boards running floor to ceiling, a dado rail across.
+    const n = 5, w = S / n;
+    for (let i = 0; i < n; i++) {
+      g.fillStyle = shadeHex(d.base, (rnd() - 0.5) * 0.18);
+      g.fillRect(i * w, 0, w, S);
+      for (let k = 0; k < 9; k++) {
+        g.globalAlpha = 0.07 + rnd() * 0.1;
+        g.strokeStyle = rnd() < 0.5 ? shadeHex(d.base, -0.35) : shadeHex(d.base, 0.18);
+        g.lineWidth = 0.6 + rnd();
+        const x = i * w + 2 + rnd() * (w - 4);
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.bezierCurveTo(x + (rnd() - 0.5) * 4, S * 0.33, x + (rnd() - 0.5) * 4, S * 0.66, x, S);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      g.fillStyle = 'rgba(30,18,10,0.5)';
+      g.fillRect(i * w, 0, 2, S);
+    }
     g.fillStyle = shadeHex(d.base, -0.3);
     g.fillRect(0, S * 0.08, S, 4);
   },

@@ -478,11 +478,13 @@ export function SideTall({ edges, normal, layout, finish }: { edges: Edge[]; nor
       {tops.map(({ f, pop }, i) => pop ? (
         // Stepped POP border: a deep upper tier, a shallow lower one, and the cove where the light hides.
         <group key={i}>
-          <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.12} y1={TALL} d0={T / 2} d1={T / 2 + 0.36} c={CEILING_BY_ID[pop].trim} />
-          <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.22} y1={TALL - 0.12} d0={T / 2} d1={T / 2 + 0.18} c={CEILING_BY_ID[pop].trim} />
-          {pop === 'pop_gold' && <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.135} y1={TALL - 0.115} d0={T / 2 + 0.18} d1={T / 2 + 0.365} c="#c9a227" m />}
-          <mesh position={at(frame(f).o, frame(f).u, frame(f).n, 0.5, TALL + 0.004, T / 2 + 0.345)} material={coveMat} userData={{ dynamic: true }}>
-            <boxGeometry args={f.dir === 'h' ? [1 + T, 0.012, 0.03] : [0.03, 0.012, 1 + T]} />
+          <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.12} y1={TALL} d0={T / 2} d1={T / 2 + 0.46} c={CEILING_BY_ID[pop].trim} />
+          <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.24} y1={TALL - 0.12} d0={T / 2} d1={T / 2 + 0.24} c={darker(CEILING_BY_ID[pop].trim, 0.93)} />
+          {/* The upturned lip that hides the cove light */}
+          <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL} y1={TALL + 0.05} d0={T / 2 + 0.42} d1={T / 2 + 0.46} c={darker(CEILING_BY_ID[pop].trim, 0.9)} />
+          {pop === 'pop_gold' && <FaceBox f={f} a0={-T / 2} a1={1 + T / 2} y0={TALL - 0.135} y1={TALL - 0.115} d0={T / 2 + 0.24} d1={T / 2 + 0.465} c="#c9a227" m />}
+          <mesh position={at(frame(f).o, frame(f).u, frame(f).n, 0.5, TALL + 0.006, T / 2 + 0.38)} material={coveMat} userData={{ dynamic: true }}>
+            <boxGeometry args={f.dir === 'h' ? [1 + T, 0.012, 0.06] : [0.06, 0.012, 1 + T]} />
           </mesh>
         </group>
       ) : (

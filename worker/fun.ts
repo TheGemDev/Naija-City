@@ -332,8 +332,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
 
   const replies = path.match(/^\/api\/feed\/(\d+)\/replies$/);
   if (replies && req.method === 'GET') {
-    // Opening a post's thread is a view of it.
-    ctx.waitUntil(db.prepare('UPDATE feed SET views = views + 1 WHERE id = ? AND parent_id IS NULL').bind(Number(replies[1])).run().catch(() => {}));
+    // Opening a post's thread is a view of it (?view=1: refreshing an open thread is not).
+    if (url.searchParams.has('view')) ctx.waitUntil(db.prepare('UPDATE feed SET views = views + 1 WHERE id = ? AND parent_id IS NULL').bind(Number(replies[1])).run().catch(() => {}));
     const { results } = await db
       .prepare(
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.parent_id AS parent, p.username,

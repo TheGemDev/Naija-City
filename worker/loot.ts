@@ -53,11 +53,15 @@ export async function lootBoard(db: D1Database, uid: string, now: number): Promi
   }
 }
 
-/** Take a seat away from whoever holds it, lock them up, and tell everyone. Returns the minutes served. */
-export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number, taken: ExhibitItem[] = []) {
+/**
+ * Take a seat away from whoever holds it, lock them up, and tell everyone. Returns the minutes served. `chair`: the EFCC
+ * chair who turned down the looter's bribe, whom VDM may credit in the same post.
+ */
+export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number, taken: ExhibitItem[] = [], chair?: string) {
   const db = env.DB;
   const laws = await loadLaws(db);
-  const who = (await usernames(db, [uid])).get(uid);
+  const names = await usernames(db, [uid, chair ?? null]);
+  const who = names.get(uid);
   const fine = await transfer(db, uid, null, TREASURY.embezzle.fine, 'efcc_fine', '', `case:${office}:${uid}:${now}`);
   // The exhibit book: the fine, and whatever the caller took back (the loot, the bags, the ghosts' pay).
   await recordExhibits(db, uid, `office:${office}:${now}`, why, [...taken, fineItem(fine)], now);
@@ -66,7 +70,10 @@ export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: 
   await db.batch([
     db.prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, updated_at = ? WHERE id = 1 AND ${office}_uid = ?`).bind(now, uid),
     feedStmt(db, uid, 'politics', '🐍', news.replace('{who}', handle(who)).replace('{fine}', naira(fine)), OFFICE_RULES[office].city),
-    ...vdmGov(db, uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city),
+    ...(await vdmGov(db, uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city, false, {
+      but: chair ? { about: 'efccCatch', matter: { who: official('efcc', names.get(chair)), amount: naira(amount), chair: true }, uid: chair } : null,
+      seed: `office:${office}:${uid}:${now}`,
+    })),
   ]);
   await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
   await gazette(env, ctx, [{ uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} is out of office, ${why.toLowerCase()}.` }]);
@@ -90,8 +97,8 @@ const refund = (env: Env, c: CaseRow) =>
 const release = (env: Env, c: CaseRow, keep: number) =>
   c.held && keep > 0 ? env.DB.batch([ensureWallet(env.DB, c.looter_uid), ...applyStmts(env.DB, c.looter_uid, `loot-release:${c.id}`, 'embezzle', c.office, keep)]) : Promise.resolve([]);
 
-/** The looter goes down: the office, the loot and a cell. */
-async function convict(env: Env, ctx: Ctx, c: CaseRow, now: number) {
+/** The looter goes down: the office, the loot and a cell. `refused`: the chair turned the bribe down (not just the odds). */
+async function convict(env: Env, ctx: Ctx, c: CaseRow, now: number, refused = false) {
   await refund(env, c);
   const back = await returnLoot(env, c, now);
   await removeFromOffice(
@@ -100,6 +107,7 @@ async function convict(env: Env, ctx: Ctx, c: CaseRow, now: number) {
     `SCANDAL: ${OFFICE_RULES[c.office].title} {who} looted ${naira(c.amount)} and the EFCC chair would not look away. Out of office, {fine} fine, ${naira(back)} taken back, and a cell. 🐍`,
     c.amount,
     [{ kind: 'loot', icon: '🐍', label: c.held ? 'The frozen loot' : 'Loot taken back', value: back }],
+    refused ? c.chair_uid : undefined,
   );
 }
 
@@ -136,7 +144,7 @@ export async function lootAction(env: Env, ctx: Ctx, uid: string, body: LootActi
   if (!body.accept) {
     const shut = await db.prepare("UPDATE loot_cases SET status = 'refused', decided_at = ? WHERE id = ? AND status = 'open' RETURNING id").bind(now, c.id).first();
     if (!shut) return { error: 'That case is closed', status: 409 };
-    await convict(env, ctx, c, now);
+    await convict(env, ctx, c, now, true);
     await sendCaseNote(env, ctx, uid, c.looter_uid, '⚖️ No deal. See you in court.');
     return { done: 'refused' };
   }

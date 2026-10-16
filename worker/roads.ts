@@ -8,9 +8,10 @@ import { fixCostOf, lampCity, lampOf, LAMPS, lampSites, roadOf, ROADWORK, type R
 import { GOV_RANT, VDM_ROADS_ICON } from '../src/game/news';
 import { applyStmts, getBalance } from './wallet';
 import { rand } from './crime';
-import { feedStmt, handle, naira } from './feed';
+import { feedStmt, naira } from './feed';
 import { gazette, official } from './gazette';
 import { vdmGov } from './news';
+import { vdmStatements } from './vdm';
 import { capsOf, conditionsOf, loadStates, spendState } from './state';
 import { STATE_LAW_KEYS, type StateLaws } from '../src/game/treasury';
 
@@ -25,7 +26,6 @@ const COLUMNS: Record<CivicCity, { funding: string; at: string; lampAt: string }
   lagos: { funding: 'roads_funding_lagos', at: 'pothole_at_lagos', lampAt: 'lamp_at_lagos' },
   kano: { funding: 'roads_funding_kano', at: 'pothole_at_kano', lampAt: 'lamp_at_kano' },
 };
-/** "Governor" or "Minister", as VDM says it. */
 /** Whether this player runs the city's roads: its head, or the president while the seat is empty or its head impeached. */
 async function runsRoads(db: D1Database, city: CivicCity, uid: string) {
   const office = CITY_HEAD[city];
@@ -34,28 +34,9 @@ async function runsRoads(db: D1Database, city: CivicCity, uid: string) {
   const out = suspendedUntil(p, office) > 0;
   return (head === uid && !out) || ((!head || out) && p?.president_uid === uid);
 }
-const headTitle = (city: CivicCity) => (CITY_HEAD[city] === 'minister' ? 'Minister' : 'Governor');
 
 /** Marks VDM's roadwork posts apart from his crime exposés, so they can be spaced out. */
 const ROADS_ICON = VDM_ROADS_ICON;
-
-/** What VDM says when a city's government fixes a road. */
-function vdmRoads(city: CivicCity, who: string, road: string, cost: number, from: 'pocket' | 'treasury') {
-  const title = headTitle(city);
-  const lines = from === 'pocket'
-    ? [
-      `Credit where e due. ${title} ${who} use ${naira(cost)} from own pocket fix pothole for ${road}. I no dey praise politician, but this one I see. 👏🏾`,
-      `${title} ${who} carry own money, ${naira(cost)}, go fix ${road}. Election dey come or na good heart? Either way the road smooth. I dey observe. 👀`,
-      `So ${title} ${who} fit bring ${naira(cost)} from own pocket fix ${road}? Other politicians, una dey see am? No excuse again. 🎤`,
-    ]
-    : [
-      `I dey watch o. ${title} ${who} don fix pothole for ${road} with ${naira(cost)} of public money. Na your job, no be favour. Ratels, we dey count the rest. 👀`,
-      `Road update: ${title} ${who} don patch ${road}. ${naira(cost)} comot from treasury. I go drive pass there myself to confirm. If e open again next week, we go talk. 🚧`,
-      `Dem say ${title} ${who} fix pothole for ${road} for ${naira(cost)}. Okay, I see am. One road no be achievement. Plenty still dey spoil people motor. 🕳️`,
-      `${title} ${who} don remember say road dey ${CITY_NAME[city]}. ${road} get repair today, ${naira(cost)} from our money. Keep going, I dey here dey monitor. 🔦`,
-    ];
-  return lines[Math.floor(rand() * lines.length)];
-}
 
 /** Open whatever potholes, and put out whatever street lights, have come due in every city. */
 export async function spawn(db: D1Database, now: number) {
@@ -130,7 +111,7 @@ async function spawnIn(db: D1Database, now: number, city: CivicCity, p: Record<s
     feedStmt(db, null, 'roads', '🕳️', picks.length === 1
       ? `A fresh pothole has opened on ${roadOf(picks[0])}, ${CITY_NAME[city]}. Drivers are already swerving into oncoming traffic. 🚗💨`
       : `${picks.length} new potholes have opened across ${CITY_NAME[city]}, including ${roadOf(picks[0])}. The roads are crying. 😩`, city),
-    ...(head ? vdmGov(db, head.uid, 'potholes', { who: official(office, head.username), n: openNow, other: CITY_NAME[city] }, city) : []),
+    ...(head ? await vdmGov(db, head.uid, 'potholes', { who: official(office, head.username), n: openNow, other: CITY_NAME[city] }, city) : []),
   ]);
 }
 
@@ -203,14 +184,19 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
       }
     }
     const who = await db.prepare('SELECT username FROM players WHERE uid = ?').bind(uid).first<{ username: string | null }>();
+    // Twitter gets one VDM post per spell of roadwork, not one per pothole: the rest are in the Gazette. From their own
+    // pocket he gives credit; from the treasury it is their job, and the potholes still open may get a mention.
+    const name = official(office, who?.username);
+    const left = (await db.prepare('SELECT site FROM potholes').all<{ site: number }>()).results.filter((r) => potholeCity(r.site) === city).length;
+    const vdm = await vdmStatements(db, {
+      topic: from === 'pocket' ? 'potholeFixedPocket' : 'potholeFixed', facts: { who: name, what: roadOf(site!), amount: naira(cost) }, uid, city, icon: ROADS_ICON,
+      but: left >= 2 && rand() < GOV_RANT.mixedChance ? { topic: 'potholesStill', facts: { who: name, n: left, other: CITY_NAME[city] }, uid } : null,
+      seed: `pothole:${site}:${now}`, rest: { icons: [ROADS_ICON], ms: ROADWORK.fixPostMs }, now,
+    }).catch(() => []);
     await db.batch([
       ...(from === 'pocket' ? applyStmts(db, uid, `pothole:${site}:${now}`, 'civic', 'pothole', -cost) : []),
       db.prepare('INSERT INTO pothole_fixes (site, uid, cost, paid_from, created_at) VALUES (?, ?, ?, ?, ?)').bind(site, uid, cost, from, now),
-      // Twitter gets one VDM post per spell of roadwork, not one per pothole: the rest are in the Gazette.
-      db.prepare(
-        `INSERT INTO feed (uid, kind, icon, text, created_at, city) SELECT ?1, 'vdm', ?2, ?3, ?4, ?6
-         WHERE NOT EXISTS (SELECT 1 FROM feed WHERE kind = 'vdm' AND icon = ?2 AND created_at > ?5)`,
-      ).bind(uid, ROADS_ICON, vdmRoads(city, handle(who?.username), roadOf(site!), cost, from).slice(0, 280), now, now - ROADWORK.fixPostMs, city),
+      ...vdm,
     ]);
     if (env) {
       await gazette(env, ctx, [{ uid, office, kind: 'project', icon: '🚧', text: from === 'pocket'
@@ -250,6 +236,15 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
       await gazette(env, ctx, [{ uid, office, kind: 'project', icon: '💡', text: from === 'pocket'
         ? `${official(office, who?.username)} fixed a street light on ${road} from their own pocket (${naira(cost)}).`
         : `${official(office, who?.username)} fixed a street light on ${road} with ${naira(cost)} from the treasury.` }]);
+    }
+    // Now and then VDM notices a light back on, on the same rest as his roadwork posts.
+    if (rand() < GOV_RANT.praiseChance) {
+      const who = await db.prepare('SELECT username FROM players WHERE uid = ?').bind(uid).first<{ username: string | null }>();
+      const vdm = await vdmStatements(db, {
+        topic: 'lampFixed', facts: { who: official(office, who?.username), what: lampOf(site!)!.road, amount: naira(cost), pocket: from === 'pocket' }, uid, city, icon: ROADS_ICON,
+        seed: `lamp:${site}:${now}`, rest: { icons: [ROADS_ICON], ms: ROADWORK.fixPostMs }, now,
+      }).catch(() => []);
+      if (vdm.length) await db.batch(vdm).catch(() => {});
     }
     return json({ snapshot: await snapshot(db), balance: await getBalance(db, uid) });
   }

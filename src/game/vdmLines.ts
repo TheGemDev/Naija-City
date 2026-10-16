@@ -552,7 +552,7 @@ export const VDM_TOPICS = {
       '{who} dey pay imself {amount} a day, but {other} dey collect zero. ZERO!',
       '{other} never see one kobo salary under this government, while {who} dey smile go bank with {amount} daily.',
       'Chop-alone government: {who} on {amount} a day, {other} on nothing.',
-      '{other} dey work for free while {who} collect {amount} a day. Na slavery be this?',
+      '{other} dey work for free while {who} collect {amount} a day. Na free labour be this?',
       '{who} sign {amount} a day for imself, zero for {other}. Selfishness with stamp.',
     ],
     jab: ['Pay people their money!'],

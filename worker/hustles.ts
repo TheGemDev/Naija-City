@@ -155,12 +155,17 @@ export async function handleHustles(req: Request, env: Env, user: FirebaseUser, 
     const [seed] = crypto.getRandomValues(new Uint32Array(1));
     const id = crypto.randomUUID();
     const pay = freelancePay(kind, knowledge);
-    await db.batch([
+    const [, , made] = await db.batch([
       // Old gigs are only kept for the day's count.
       db.prepare('DELETE FROM freelance_tasks WHERE uid = ? AND started_at < ?').bind(me, now - 2 * 86_400_000),
       db.prepare('UPDATE freelance_tasks SET done_at = ?2, earned = 0 WHERE uid = ?1 AND done_at IS NULL').bind(me, now),
-      db.prepare('INSERT INTO freelance_tasks (id, uid, kind, seed, pay, started_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, me, kind, seed, pay, now),
+      // The day's count is checked again as the row goes in, so two gigs taken at once cannot pass the cap.
+      db.prepare(
+        `INSERT INTO freelance_tasks (id, uid, kind, seed, pay, started_at)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT COUNT(*) FROM freelance_tasks WHERE uid = ?2 AND started_at >= ?7) < ?8`,
+      ).bind(id, me, kind, seed, pay, now, dayStart(day), FREELANCE_RULES.perDay),
     ]);
+    if (!made.meta.changes) return err(429, `That’s ${FREELANCE_RULES.perDay} gigs today. Clients are back tomorrow`);
     return json({ task: taskView({ id, uid: me, kind, seed, pay, started_at: now, done_at: null }) });
   }
 

@@ -104,5 +104,14 @@ export async function toggleRepost(p: FeedPost) {
   }
 }
 
-/** Opening a thread counts as a view on the server (GET replies); show it here too. */
-export const sawPost = (id: number) => patchPost(id, (q) => ({ ...q, views: (q.views ?? 0) + 1 }));
+/** Open a post's thread: its replies, counted as a view of it on the server (and shown here at once). */
+export async function openThread(id: number) {
+  patchPost(id, (q) => ({ ...q, views: (q.views ?? 0) + 1 }));
+  try {
+    const { replies } = await call<{ replies: FeedPost[] }>(`/api/feed/${id}/replies?view=1`);
+    useLive.setState((s) => ({ replies: { ...s.replies, [id]: replies } }));
+    patchPost(id, (q) => ({ ...q, replies: replies.length }));
+  } catch {
+    /* offline */
+  }
+}

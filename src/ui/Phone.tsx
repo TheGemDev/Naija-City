@@ -24,7 +24,7 @@ import { attemptBankHeist, crewAction, moveSavings, refreshBank, repayDebt, useB
 import { CREW } from '../game/heist';
 import { Messages } from './Messages';
 import { House, useHouseNav } from './Gida';
-import { formatClock } from './Hud';
+import { formatClock, TaskTimeLeft } from './Hud';
 import { Hand } from './Hand';
 import { Emoji, type IconName } from './Icons';
 import { audio, LIVE_STATIONS, type LiveStation } from '../game/audio';
@@ -68,7 +68,7 @@ import { ThemeSettings } from './ThemeSettings';
 import './duo.css';
 import './phones.css';
 import { Face } from './Face';
-import { openCamera } from './PhotoMode';
+import { openCamera, openSnapFirst } from './PhotoMode';
 import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
 
@@ -1710,7 +1710,7 @@ function RideApp() {
         <small>Pick a place, then choose how to get there</small>
         {activeTask?.actionId === 'enter' && activeTask.phase === 'walking' && (
           <div className="ride-active-chip">
-            <span>{activeTask.icon} {activeTask.label}</span>
+            <span>{activeTask.icon} {activeTask.label}<TaskTimeLeft /></span>
           </div>
         )}
       </div>
@@ -2185,7 +2185,8 @@ export function Phone() {
   const duo = !!device.duo;
   const buttons = !duo && navOf(device) !== 'bar';
   const leave = () => (current ? setApp(null) : setPanel(null));
-  const openFromHome = (id: AppId) => (id === 'closet' ? useGame.getState().setPanel('closet') : id === 'camera' ? openCamera() : id === 'ads' ? openAdsSheet() : setApp(id));
+  // Snap opens on its camera, like Snapchat (when the camera can come out; otherwise on its stories).
+  const openFromHome = (id: AppId) => (id === 'closet' ? useGame.getState().setPanel('closet') : id === 'camera' ? openCamera() : id === 'ads' ? openAdsSheet() : id === 'flex' && openSnapFirst() ? undefined : setApp(id));
   return (
     <div className={`phone-wrap ${open ? '' : 'closing'}`} onClick={() => setPanel(null)}>
       <div className={`phone-rig ${device.fold ? 'fold' : ''} ${device.flip ? 'flip' : ''} ${duo ? 'duo' : ''}`} onClick={(e) => e.stopPropagation()}>

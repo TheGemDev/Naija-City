@@ -59,10 +59,14 @@ export interface SnapComment {
 }
 
 export type SnapScope = 'friends' | 'global' | 'top';
+/** The Snap app's screens on the phone (its camera is photo mode itself, over the scene). */
+export type SnapTab = 'chat' | 'stories' | 'spotlight' | 'me';
 export const SNAP_CAPTION_MAX = 120;
 export const SNAP_COMMENT_MAX = 200;
 
 interface SnapState {
+  /** The screen the app is on. */
+  tab: SnapTab;
   friends: Snap[];
   global: Snap[];
   /** Spotlight's most liked of the day. */
@@ -77,7 +81,7 @@ interface SnapState {
   shared: Snap | null;
 }
 
-export const useSnaps = create<SnapState>(() => ({ friends: [], global: [], top: [], chats: null, end: { friends: false, global: false, top: true }, loading: false, comments: {}, shared: null }));
+export const useSnaps = create<SnapState>(() => ({ tab: 'stories', friends: [], global: [], top: [], chats: null, end: { friends: false, global: false, top: true }, loading: false, comments: {}, shared: null }));
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await api(path, init);

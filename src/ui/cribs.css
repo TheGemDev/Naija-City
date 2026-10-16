@@ -106,7 +106,9 @@
 /* ---------- Tours ---------- */
 .cb-feed { display: flex; flex-direction: column; gap: 10px; }
 .cb-tour-head { display: flex; align-items: center; gap: 9px; }
-.cb-tour-head > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cb-tour-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cb-tour-who small { color: var(--muted); font-size: 11.5px; }
+.cb-tour-head .cb-tier { align-self: center; }
 .cb-tour-head b { font-size: 14px; }
 .cb-tour-photo { width: 100%; border-radius: 14px; aspect-ratio: 4 / 3; object-fit: cover; }
 .cb-tour-caption { margin: 0; font-size: 13.5px; }

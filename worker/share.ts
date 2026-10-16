@@ -27,15 +27,17 @@ export async function readProfile(db: D1Database, username: string): Promise<Res
     .prepare(
       `SELECT p.uid, p.username, p.name, COALESCE(w.balance, 0) AS balance,
               (SELECT COUNT(*) FROM estate_plots e WHERE e.uid = p.uid) AS plots,
-              ${profileKidsSql} AS children
+              ${profileKidsSql} AS children,
+              (SELECT MAX(c.score) FROM crib_scores c WHERE c.uid = p.uid AND c.items > 0) AS crib
        FROM players p LEFT JOIN wallets w ON w.uid = p.uid WHERE p.username = ?`,
     )
     .bind(name)
-    .first<{ uid: string; username: string; name: string | null; balance: number; plots: number; children: string | null }>();
+    .first<{ uid: string; username: string; name: string | null; balance: number; plots: number; children: string | null; crib: number | null }>();
   if (!p) return json({ error: 'Not found' }, 404);
   // The children at home (Phone → Adopt): first names and ages, shown on their profile card.
   const children = JSON.parse(p.children ?? '[]') as { name: string; sex: string; bornAt: number }[];
-  return json({ uid: p.uid, username: p.username, name: p.name, plots: p.plots, children });
+  // Their best house's crib score (worker/cribs.ts), for the Cribs badge on their card.
+  return json({ uid: p.uid, username: p.username, name: p.name, plots: p.plots, children, crib: p.crib ?? null });
 }
 
 /** GET /api/plot/<region>/<slot>: public card for a plot. */

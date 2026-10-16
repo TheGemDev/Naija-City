@@ -36,8 +36,15 @@ async function boot() {
   Object.assign(window, { ready: true, useGame, useVisit });
 }
 
+/** The game's toasts, drawn plainly at the top (the real ones live in the HUD). */
+function Toasts() {
+  const toasts = useGame((s) => s.toasts);
+  return <div style={{ position: 'fixed', top: 8, left: 8, right: 8, zIndex: 99, display: 'flex', flexDirection: 'column', gap: 6 }}>{toasts.filter((t) => !t.text.startsWith('📱')).slice(-2).map((t) => <div key={t.id} style={{ background: '#0f172a', color: '#fff', padding: '10px 14px', borderRadius: 14, fontSize: 14, boxShadow: '0 6px 16px rgba(0,0,0,.3)' }}>{t.text}</div>)}</div>;
+}
+
 createRoot(document.getElementById('root')!).render(
   <>
+    <Toasts />
     <Phone />
     {view === 'visit' && <HouseVisitBar />}
     {view === 'profile' && <ProfileSheet />}

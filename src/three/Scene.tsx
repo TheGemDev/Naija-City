@@ -179,7 +179,7 @@ function DayNight() {
     // two real lights are HouseLights.tsx's. A public place always has light.
     const house = s.view !== 'place' || !!visit;
     const glow = house ? houseGlow(s, clock.elapsedTime) : null;
-    const bulbs = !indoors ? 0 : glow ? night * Math.min(1.15, glow.level) : night;
+    const bulbs = !indoors ? 0 : glow ? night * Math.min(1, glow.level) : night;
     bulbTint.copy(SKY_BULB);
     if (glow) bulbTint.lerp(glow.color, 0.7);
     const moon = night * (low ? 0.75 : 0.55) * (1 - cloud * 0.4);

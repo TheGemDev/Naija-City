@@ -591,6 +591,12 @@ function useTaskReading() {
 
 const timeLeft = (secs: number) => (secs <= 1 ? 'Arriving' : secs >= 120 ? `${Math.round(secs / 60)} min left` : `${secs} sec left`);
 
+/** The time left on what you are doing or where you are going, as the task card says it: for the phone's Ride app. */
+export function TaskTimeLeft() {
+  const { secs } = useTaskReading();
+  return secs === null ? null : <> · {timeLeft(secs)}</>;
+}
+
 /** On a trip to another city (game/trip.ts): where it ends, and which leg of it this is. */
 function useTripLine() {
   const going = useTrip((s) => s.going);
@@ -614,7 +620,8 @@ function TaskChip() {
   const { pct, secs } = useTaskReading();
   const trip = useTripLine();
   // Between the legs of a trip (the search at the gate, the moment after landing) there is no task: the trip still shows.
-  if (!task && trip) {
+  // (Not a trip that stalled at the airport: that one is called off, or forgotten, and the card would only linger.)
+  if (!task && trip && (trip.landed || boarding)) {
     const rail = trip.going.via === 'rail';
     return (
       <div className="task-chip" role="status">
@@ -622,7 +629,7 @@ function TaskChip() {
         <div className="task-body">
           <b>{trip.title}</b>
           <div className="bar"><i style={{ width: trip.landed ? '100%' : '0%' }} /></div>
-          <small>{trip.landed ? 'Landed · your ride is coming' : boarding ? 'Security check at the gate…' : 'Getting to the gate…'}</small>
+          <small>{trip.landed ? 'Landed · your ride is coming' : 'Security check at the gate…'}</small>
         </div>
       </div>
     );

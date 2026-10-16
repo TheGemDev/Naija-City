@@ -171,6 +171,8 @@ function startPress(id: string | null, e: ThreeEvent<PointerEvent>) {
 export function pressItem(id: string, e: ThreeEvent<PointerEvent>) {
   const s = useGame.getState();
   if (s.mode !== 'buy' || s.wallMode || finishToolOn() || s.placing || useVisit.getState().current || ITEMS[s.items.find((i) => i.id === id)?.type ?? '']?.fixed) return;
+  // The nearest piece under the finger takes it, not the floor or the piece behind.
+  e.stopPropagation();
   startPress(id, e);
 }
 

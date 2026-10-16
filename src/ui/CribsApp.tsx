@@ -207,7 +207,8 @@ function TierLadder({ score }: { score: number }) {
 
 function TourComposer({ pid, onClose }: { pid: string; onClose(): void }) {
   const me = useSession((s) => s.user?.uid);
-  const snaps = useSnaps((s) => s.global.filter((x) => x.uid === me));
+  const all = useSnaps((s) => s.global);
+  const snaps = useMemo(() => all.filter((x) => x.uid === me), [all, me]);
   const [caption, setCaption] = useState('');
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<number | null>(null);
@@ -439,7 +440,7 @@ function TourCard({ t, mine }: { t: Tour; mine: boolean }) {
     <div className="cb-card cb-tour">
       <div className="cb-tour-head">
         <Face uid={t.uid} username={t.username} className="cb-face" />
-        <span><b>@{t.username}</b><small>{designName(t.layout.design)} · {t.region ? `${REGION_BY_ID[t.region]?.name ?? ''}, ` : ''}{cityName(t.city)} · {ago(t.at)}</small></span>
+        <span className="cb-tour-who"><b>@{t.username}</b><small>{designName(t.layout.design)} · {t.region ? `${REGION_BY_ID[t.region]?.name ?? ''}, ` : ''}{cityName(t.city)} · {ago(t.at)}</small></span>
         <TierChip tier={t.tier} score={t.score} />
       </div>
       {t.photo && <img className="cb-tour-photo" src={t.photo} alt={`@${t.username}’s house`} />}

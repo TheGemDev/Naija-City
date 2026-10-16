@@ -872,7 +872,7 @@ function itemShape({ type, powered, running }: ModelProps): ReactNode {
         </group>
       );
     case 'mango_tree':
-      return <TreeModel kind="mango" size={3.2} />;
+      return <TreeModel kind="mango" size={2.3} />;
     case 'suya_grill':
       return (
         <group>

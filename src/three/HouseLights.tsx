@@ -241,11 +241,11 @@ export function HouseLights({ items, layout, finish }: { items: PlacedItem[]; la
         if (r) {
           l.position.set(r.e.real.x, r.e.real.y, r.e.real.z);
           l.color.copy(L.col[r.i]);
-          l.intensity = L.k[r.i] * r.e.real.k * 2.4;
+          l.intensity = L.k[r.i] * r.e.real.k * 1.3;
         } else if (j === ranked.length && room && on * m.ceiling > 0.01) {
           l.position.set((room.x0 + room.x1) / 2, 2.3, (room.z0 + room.z1) / 2);
           l.color.copy(moodCol);
-          l.intensity = on * m.ceiling * 2.6;
+          l.intensity = on * m.ceiling * 1.4;
         } else l.intensity = 0;
       });
     }
@@ -303,9 +303,9 @@ export function HouseLights({ items, layout, finish }: { items: PlacedItem[]; la
       <Instanced count={balls.length} geometry={ballGeo} material={bulbMat} build={buildBalls} update={(mesh) => balls.forEach((b, j) => bulb(b.i, mesh, j))} />
       <Instanced count={bars.length} geometry={barGeo} material={bulbMat} build={buildBars} update={(mesh) => bars.forEach((b, j) => bulb(b.i, mesh, j))} />
       <Instanced count={em.length} geometry={flatGeo} material={poolMat} build={buildPools}
-        update={(mesh) => em.forEach((e, j) => mesh.setColorAt(j, tmp.copy(L.col[j] ?? OFF).multiplyScalar((L.k[j] ?? 0) * (e.ceiling ? 0.45 : 0.75))))} />
+        update={(mesh) => em.forEach((e, j) => mesh.setColorAt(j, tmp.copy(L.col[j] ?? OFF).multiplyScalar((L.k[j] ?? 0) * (e.ceiling ? 0.12 : 0.28))))} />
       <Instanced count={washes.length} geometry={flatGeo} material={washMat} build={buildWashes}
-        update={(mesh) => washes.forEach((w, j) => mesh.setColorAt(j, tmp.copy(L.col[w.i] ?? OFF).multiplyScalar((L.k[w.i] ?? 0) * 0.6)))} />
+        update={(mesh) => washes.forEach((w, j) => mesh.setColorAt(j, tmp.copy(L.col[w.i] ?? OFF).multiplyScalar((L.k[w.i] ?? 0) * 0.42)))} />
       {!low && [0, 1].map((j) => (
         <pointLight key={j} ref={(l) => { lights.current[j] = l; }} intensity={0} distance={5.5} decay={1.6} color="#ffd9a0" />
       ))}

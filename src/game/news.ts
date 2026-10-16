@@ -30,4 +30,10 @@ export const GOV_RANT = {
   grumble: { chance: 0.34, gapMs: 15 * 60_000 },
   /** The treasury is "sleeping" at this much with no palliatives shared in a day; a tax, loan rate or transfer fee is "too high" from these. */
   idleTreasury: 2_000_000, highTax: 15, highLoan: 20, highFee: 5, lowFunding: 25,
+  /**
+   * He gives credit too, more rarely than he drags (src/game/vdm.ts). Palliatives from this much each are generous; a
+   * state with this much, no arrears and its assets at this condition on average is well run; an asset repaired from
+   * below `badCondition` was a real need. A praise and a drag about the same person may go out as one post.
+   */
+  praiseChance: 0.3, mixedChance: 0.5, generousPalliative: 100_000, richState: 1_000_000, goodCondition: 70, badCondition: 40,
 };

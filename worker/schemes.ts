@@ -82,7 +82,7 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
       potStmt(db, s.city, back),
       db.prepare('UPDATE business_products SET stock = 0 WHERE business_id IN (SELECT id FROM businesses WHERE uid = ?)').bind(s.uid),
       feedStmt(db, s.uid, 'politics', '🚨', `EFCC RAID: operatives stormed ${biz.name}, a company owned by ${me}, over ${naira(amount)} of “supplies” paid from ${where(s.city)}. Shelves emptied, ${naira(back)} recovered, ${naira(fine)} fine. 🚨`, s.city),
-      ...vdmGov(db, s.uid, 'contract', { who: me, amount: naira(amount), other: biz.name }, s.city, true),
+      ...(await vdmGov(db, s.uid, 'contract', { who: me, amount: naira(amount), other: biz.name }, s.city, true)),
     ]);
     await gazette(env, ctx, [{ uid: s.uid, office: s.office, kind: 'scandal', icon: '🚨', text: `The EFCC raided ${biz.name}, owned by ${me}: ${naira(back)} back to ${where(s.city)} and the stock seized.` }]);
     return { outcome: 'raided', amount };

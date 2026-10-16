@@ -18,7 +18,7 @@ import { applyEvents, ensureWallet, handleWallet } from './wallet';
 import { advance, loadState, saveStateStmts, unitsOf, verifyKnowledge } from './clock';
 import { forbesAssets, ownedCounts, ownsCar, trimItems } from './progress';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
-import { cleanExtensions, cleanExterior, cleanHouseName, cleanRooms, EXTENSION_BY_ID } from '../src/game/exterior';
+import { cleanHouses } from './houses';
 import { readEstate, syncEstate } from './estate';
 import { handleCivic } from './civic';
 import { referralClaim, referralClick } from './referral';
@@ -112,33 +112,6 @@ interface Corrections {
   ownedCars?: string[];
   selectedCar?: string | null;
   investments?: Save['investments'];
-}
-
-/**
- * The owner-set parts of each house, made safe to store and to show other people: a name through cleanHouseName
- * (length, control characters), only known exterior choices, extensions only on a finished house of a design that
- * takes them, and cleaned room names and uses. True when anything changed, so the client gets the same fix.
- */
-function cleanHouses(save: Save): boolean {
-  let changed = false;
-  save.properties = save.properties?.map((raw) => {
-    const p = raw as Record<string, unknown> & { id?: string; stage?: number; design?: unknown };
-    const out: Record<string, unknown> = { ...p };
-    const name = cleanHouseName(p.name);
-    if (name) out.name = name; else delete out.name;
-    const exterior = cleanExterior(p.exterior);
-    if (exterior) out.exterior = exterior; else delete out.exterior;
-    const finished = (p.stage ?? 0) >= STAGES.length;
-    const extensions = finished ? cleanExtensions(p.extensions).filter((id) => EXTENSION_BY_ID[id].designs.includes(String(p.design))) : [];
-    if (extensions.length) out.extensions = extensions; else delete out.extensions;
-    const ext = p.extending as { id?: unknown; stage?: unknown } | null | undefined;
-    if (ext && !(finished && typeof ext.id === 'string' && EXTENSION_BY_ID[ext.id] && Number.isInteger(ext.stage) && (ext.stage as number) >= 0 && (ext.stage as number) < STAGES.length)) out.extending = null;
-    const rooms = cleanRooms(p.rooms);
-    if (rooms) out.rooms = rooms; else delete out.rooms;
-    if (JSON.stringify(out) !== JSON.stringify(p)) changed = true;
-    return out as typeof raw;
-  });
-  return changed;
 }
 
 /** Shape + sanity checks. Returns an error message, or null if the save is acceptable.

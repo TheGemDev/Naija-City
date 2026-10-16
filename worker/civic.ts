@@ -19,6 +19,7 @@ import { fineItem, recordExhibits } from './exhibits';
 import { gazette, OFFICE_NAME, official, recentNews, type Notice } from './gazette';
 import { syncForum } from './groups';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
+import { GOV_RANT } from '../src/game/news';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -221,11 +222,20 @@ export async function paySalaries(db: D1Database, now: number): Promise<void> {
   const paid: typeof due = [];
   if (fedBill) {
     const ok = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(fedBill).first();
-    if (ok) paid.push(...federal);
-    else {
+    if (ok) {
+      paid.push(...federal);
+      // Paid on time: now and then VDM gives credit, and drags a President on a fat salary in the same breath.
+      const president = round.president_uid as string | null;
+      if (president && rand() < GOV_RANT.praiseChance) {
+        const who = official('president', (await usernames(db, [president])).get(president));
+        const fat = pay.president >= SALARY.fat ? { about: 'fatPayList' as const, matter: { who, amount: naira(pay.president) }, uid: president } : null;
+        const praise = await vdmGov(db, president, 'salaryPaid', { who, amount: naira(fedBill), n: federal.length }, null, true, { but: fat, seed: `salaries:${now}` });
+        if (praise.length) await db.batch(praise).catch(() => {});
+      }
+    } else {
       const president = round.president_uid as string | null;
       const who = president ? official('president', (await usernames(db, [president])).get(president)) : 'Aso Rock';
-      const rant = vdmGov(db, president, 'unpaid', { who, amount: naira(fedBill) });
+      const rant = await vdmGov(db, president, 'unpaid', { who, amount: naira(fedBill) });
       if (rant.length) await db.batch(rant).catch(() => {});
     }
   }
@@ -242,7 +252,7 @@ export async function paySalaries(db: D1Database, now: number): Promise<void> {
     // A governor drawing the full maximum while the state can't pay its bills gets noticed.
     if (state.payShare === 100 && state.arrears > 0) {
       const who = official(head.office, (await usernames(db, [head.uid])).get(head.uid));
-      const rant = vdmGov(db, head.uid, 'ownPay', { who, amount: naira(amount) }, city);
+      const rant = await vdmGov(db, head.uid, 'ownPay', { who, amount: naira(amount) }, city);
       if (rant.length) await db.batch(rant).catch(() => {});
     }
   }
@@ -666,7 +676,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     await db.batch([
       db.prepare('UPDATE players SET road_block_until = ? WHERE uid = ?').bind(until, target.uid),
       feedStmt(db, target.uid, 'politics', '🚧', `${official(office, who)} has flagged off an “urgent road project” on ${handle(target.username)}’s street. Excavators arrived within the hour. Pure coincidence, says ${city === 'abuja' ? 'the FCTA' : city === 'lagos' ? 'Alausa' : 'Government House'}. 🤔`, city),
-      ...vdmGov(db, user.uid, 'roadProject', { who: official(office, who), other: handle(target.username) }, city),
+      ...(await vdmGov(db, user.uid, 'roadProject', { who: official(office, who), other: handle(target.username) }, city)),
     ]);
     await gazette(env, ctx, [{ uid: user.uid, office, kind: 'project', icon: '🚧', text: `${official(office, who)} dug up ${handle(target.username)}’s street: double fares there for ${hours} hours.` }]);
     return json({ snapshot: await snapshot(db, user.uid) });
@@ -731,7 +741,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       ...people.flatMap((x) => applyStmts(db, x.uid, `palliative:${now}`, 'palliative', 'state', given)),
       ...(diverted ? applyStmts(db, user.uid, `divert:${now}`, 'embezzle', sharedAs, diverted) : []),
       feedStmt(db, user.uid, 'politics', '🍚', `${official(sharedAs, who)} shared ${naira(given)} palliatives to ${people.length} people. Some say it was rice, some say it was noodles, everybody says it was small. 😅`, OFFICE_RULES[sharedAs].city),
-      ...vdmGov(db, user.uid, 'palliative', { who: official(sharedAs, who), amount: naira(given) }, OFFICE_RULES[sharedAs].city),
+      ...(await vdmGov(db, user.uid, given >= GOV_RANT.generousPalliative ? 'palliativeBig' : 'palliative', { who: official(sharedAs, who), amount: naira(given), n: people.length }, OFFICE_RULES[sharedAs].city)),
     ]);
     await gazette(env, ctx, [{ uid: user.uid, office: sharedAs, kind: 'palliative', icon: '🍚', text: `${official(sharedAs, who)} shared palliatives: ${naira(given)} each to ${people.length} ${people.length === 1 ? 'person' : 'people'}.` }]);
     // VDM may get the video of the rest in a warehouse: it all goes back, with a fine on top.
@@ -747,7 +757,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       await db.batch([
         potStmt(db, city ?? null, back),
         feedStmt(db, user.uid, 'politics', '📹', `EXPOSED: a video shows ${naira(diverted)} of palliatives from ${official(sharedAs, who)} stacked in a private warehouse. ${naira(back)} recovered and a ${naira(fine)} fine. The rice was “for safekeeping”. 📹`, OFFICE_RULES[sharedAs].city),
-        ...vdmGov(db, user.uid, 'palliative', { who: official(sharedAs, who), amount: naira(given) }, OFFICE_RULES[sharedAs].city, true),
+        ...(await vdmGov(db, user.uid, 'divert', { who: official(sharedAs, who), amount: naira(diverted) }, OFFICE_RULES[sharedAs].city, true)),
       ]);
       await gazette(env, ctx, [{ uid: user.uid, office: sharedAs, kind: 'scandal', icon: '📹', text: `${official(sharedAs, who)} was caught diverting ${naira(diverted)} of palliatives and paid it back.` }]);
     }
@@ -776,7 +786,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       usedStmt(db, user.uid, 'contract', now),
       ...applyStmts(db, target.uid, `contract:${user.uid}:${now}`, 'contract', office, amount),
       feedStmt(db, target.uid, 'politics', '📝', `${official(office, who)} has awarded a ${naira(amount)} contract in ${CITY_NAME[city]} to ${handle(target.username)}. The tender was “very competitive”. One company applied. 😌`, city),
-      ...vdmGov(db, user.uid, 'contract', { who: official(office, who), amount: naira(amount), other: handle(target.username) }, city),
+      ...(await vdmGov(db, user.uid, 'contract', { who: official(office, who), amount: naira(amount), other: handle(target.username) }, city)),
     ]);
     await gazette(env, ctx, [{ uid: user.uid, office, kind: 'project', icon: '📝', text: `${official(office, who)} gave ${handle(target.username)} a ${naira(amount)} contract in ${CITY_NAME[city]}.` }]);
     return json({ snapshot: await snapshot(db, user.uid) });
@@ -799,7 +809,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     await db.batch([
       usedStmt(db, user.uid, 'pardon', now),
       feedStmt(db, target.uid, 'politics', '🕊️', `${official(office, who)} has granted ${handle(target.username)} a pardon. Straight out of the cell and into a waiting convoy. The victims were not consulted. 🕊️`, OFFICE_RULES[office].city),
-      ...vdmGov(db, user.uid, 'pardon', { who: official(office, who), other: handle(target.username) }, OFFICE_RULES[office].city),
+      ...(await vdmGov(db, user.uid, 'pardon', { who: official(office, who), other: handle(target.username) }, OFFICE_RULES[office].city)),
     ]);
     const freeing = notifyPlayer(env, target.uid, { t: 'released', by: who ?? 'someone', amount: 0, pardon: OFFICE_RULES[office].title });
     if (ctx) ctx.waitUntil(freeing);
@@ -838,7 +848,9 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       await db.batch([
         db.prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, updated_at = ? WHERE id = 1 AND ${office}_uid = ?`).bind(now, user.uid),
         feedStmt(db, user.uid, 'politics', '🐍', `SCANDAL: ${OFFICE_RULES[office].title} ${handle(who)} was caught trying to move ${naira(amount)} from the treasury. Removed from office, ${naira(fine)} fine, and EFCC custody. The office is now vacant!`, OFFICE_RULES[office].city),
-        ...vdmGov(db, user.uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city),
+        ...(await vdmGov(db, user.uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city, false, {
+          but: rand() < GOV_RANT.mixedChance ? { about: 'efccCatch', matter: { who: 'the EFCC', amount: naira(amount) } } : null,
+        })),
       ]);
       await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
       await gazette(env, ctx, [{ uid: user.uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} was caught taking ${naira(amount)} from the treasury and is out of office.` }]);
@@ -852,7 +864,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       // With a chair in office the loot is frozen in their case until it closes (worker/loot.ts); without one it is yours now.
       ...(chairUid ? [] : applyStmts(db, user.uid, `embezzle:${now}`, 'embezzle', office, amount)),
       feedStmt(db, null, 'politics', '🐍', `${naira(amount)} has gone missing from the state treasury. Officials say a snake swallowed it. Investigations ongoing. 🐍`),
-      ...vdmGov(db, null, 'snake', { amount: naira(amount) }),
+      ...(await vdmGov(db, null, 'snake', { amount: naira(amount) })),
     ]);
     // Nobody is named: they got away with it.
     await gazette(env, ctx, [{ uid: null, office: null, kind: 'scandal', icon: '🐍', text: `${naira(amount)} is missing from the treasury. A snake swallowed it.` }]);
@@ -957,9 +969,14 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const cost = repairCost(asset, city);
     const paid = await spendState(db, city, cost, { allowArrears: true });
     if (paid === null) return err(402, `${CITY_NAME[city]}’s treasury needs ${naira(cost)} for this repair`);
-    await db.prepare('UPDATE state_assets SET condition = MIN(100, condition + ?) WHERE city = ? AND asset = ?').bind(REPAIR.condition, city, asset).run();
+    const fixed = await db.prepare('UPDATE state_assets SET condition = MIN(100, condition + ?) WHERE city = ? AND asset = ? RETURNING condition').bind(REPAIR.condition, city, asset).first<{ condition: number }>();
     const who = (await usernames(db, [user.uid])).get(user.uid);
     await gazette(env, ctx, [{ uid: user.uid, office: actingAs(policy, user.uid, city), kind: 'project', icon: ASSET_INFO[asset].icon, text: `${official(actingAs(policy, user.uid, city), who)} paid ${naira(cost)} to repair ${CITY_NAME[city]}’s ${ASSET_INFO[asset].label.toLowerCase()}.` }]);
+    // Money spent where it was needed (on something falling apart) may get VDM's credit.
+    if (fixed && fixed.condition - REPAIR.condition < GOV_RANT.badCondition) {
+      const praise = await vdmGov(db, user.uid, asset === 'roads' ? 'roadRepair' : 'assetRepair', { who: official(actingAs(policy, user.uid, city), who), other: CITY_NAME[city], what: ASSET_INFO[asset].label.toLowerCase(), amount: naira(cost) }, city);
+      if (praise.length) await db.batch(praise).catch(() => {});
+    }
     return json({ snapshot: await snapshot(db, user.uid) });
   }
 
@@ -1040,7 +1057,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     await db.batch([
       usedStmt(db, user.uid, 'impeach', now),
       feedStmt(db, head, 'politics', '⚖️', `IMPEACHED! ${me} has suspended ${them} for ${hours} hours and taken over ${CITY_NAME[city]}. Government House locks have been changed. Aso Rock says it is “in the national interest”. 😳`, city),
-      ...vdmGov(db, user.uid, 'impeach', { who: me, other: them, n: hours, what: CITY_NAME[city] }, city, true),
+      ...(await vdmGov(db, user.uid, 'impeach', { who: me, other: them, n: hours, what: CITY_NAME[city] }, city, true)),
     ]);
     const telling = notifyPlayer(env, head, { t: 'impeached', city, until, by: names.get(user.uid) ?? null });
     if (ctx) ctx.waitUntil(telling.catch(() => {}));
@@ -1105,12 +1122,15 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const cut = inOffice.filter((o) => next[o] < was[o]).sort((a, b) => next[a] - next[b])[0];
     const fat = inOffice.filter((o) => next[o] > was[o] && next[o] >= SALARY.fat).sort((a, b) => next[b] - next[a])[0];
     const rant = greedy
-      ? vdmGov(db, user.uid, 'ownPay', { who: me, amount: naira(next.president) }, null, true)
+      ? await vdmGov(db, user.uid, 'ownPay', { who: me, amount: naira(next.president) }, null, true)
       : cut
-        ? vdmGov(db, user.uid, 'payCut', { who: me, other: seat(cut), what: naira(was[cut]), amount: naira(next[cut]) }, null, next[cut] === 0 && next.president > 0)
+        ? await vdmGov(db, user.uid, 'payCut', { who: me, other: seat(cut), what: naira(was[cut]), amount: naira(next[cut]) }, null, next[cut] === 0 && next.president > 0)
         : fat
-          ? vdmGov(db, user.uid, 'fatPay', { who: me, other: seat(fat), amount: naira(next[fat]) })
-          : [];
+          ? await vdmGov(db, user.uid, 'fatPay', { who: me, other: seat(fat), amount: naira(next[fat]) })
+          // A President who cuts their own pay may get credit.
+          : next.president < was.president
+            ? await vdmGov(db, user.uid, 'ownPayCut', { who: me, what: naira(was.president), amount: naira(next.president) })
+            : [];
     await db.batch([
       blogStmt(db, user.uid, '💼', `PAY REVIEW: ${me} has signed a new pay list. ${moves}. ${bill ? `The wage bill is now ${naira(bill)} a day.` : 'Nobody in office is being paid.'} 💼`),
       ...rant,
@@ -1216,15 +1236,23 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       if (next === undefined || was === undefined || was === next) continue;
       notices.push({ uid: user.uid, office: law.office, kind: 'law', icon: law.icon, text: `${official(law.office, who)} ${next > was ? 'raised' : 'cut'} ${law.label}: ${was}${law.unit} → ${next}${law.unit}.` });
       posts.push(blogStmt(db, user.uid, law.icon, lawNews(key, official(law.office, who), law.label, was, next, law.unit), OFFICE_RULES[law.office].city));
-      // A bigger subsidy is a gift, not a levy: VDM has nothing to say about that.
-      if (law.office === 'president' && next > was && key !== 'airSubsidy' && key !== 'railSubsidy') posts.push(...vdmGov(db, user.uid, 'levy', { who: official(law.office, who), what: `${law.label} from ${was}${law.unit} to ${next}${law.unit}` }));
+      // A raise in what people pay gets dragged. A cut in it, or a bigger fare subsidy, may get credit, with a
+      // President on a fat salary dragged for that in the same breath.
+      const change = `${law.label} from ${was}${law.unit} to ${next}${law.unit}`;
+      const gift = key === 'airSubsidy' || key === 'railSubsidy';
+      if (law.office === 'president' && next > was && !gift) posts.push(...(await vdmGov(db, user.uid, 'levy', { who: official(law.office, who), what: change })));
+      else if (law.office === 'president' && (gift ? next > was : next < was && ['taxRate', 'loanRate', 'transferFee'].includes(key))) {
+        const own = Number(policy?.salary_president ?? 0);
+        const fat = own >= SALARY.fat ? { about: 'fatPayList' as const, matter: { who: official('president', who), amount: naira(own) }, uid: user.uid } : null;
+        posts.push(...(await vdmGov(db, user.uid, gift ? 'subsidy' : 'taxCut', { who: official(law.office, who), what: change }, null, false, { but: fat })));
+      }
     }
     for (const { ban, on, as } of bans) {
       notices.push({ uid: user.uid, office: as, kind: 'law', icon: '🏍️', text: on
         ? `${official(as, who)} banned okada in ${CITY_NAME[ban.city]}.`
         : `${official(as, who)} lifted the okada ban in ${CITY_NAME[ban.city]}.` });
       posts.push(blogStmt(db, user.uid, '🏍️', okadaNews(official(as, who), ban.city, !!on), ban.city));
-      if (on) posts.push(...vdmGov(db, user.uid, 'okadaBan', { who: official(as, who), other: CITY_NAME[ban.city] }, ban.city));
+      if (on) posts.push(...(await vdmGov(db, user.uid, 'okadaBan', { who: official(as, who), other: CITY_NAME[ban.city] }, ban.city)));
     }
     if (posts.length) await db.batch(posts).catch(() => {});
     // A lowered maximum takes every state above it down to it.
