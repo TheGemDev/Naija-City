@@ -129,6 +129,24 @@ export interface ItemDef {
   outdoorOnly?: boolean;
   /** Optional .glb to use instead of the built-in primitive model. Drop files in /public/models. */
   glb?: string;
+  /**
+   * Where it goes (game/mount.ts). 'wall': hangs on a wall face, w tiles along the wall, its front facing into the
+   * room (d must be 1). 'ceiling': hangs from the ceiling over its tiles. Unset: stands on the floor grid.
+   * Neither blocks the floor, and each only clashes with others of its own kind.
+   */
+  mount?: 'wall' | 'ceiling';
+  /** Wall items: the model's centre height on the wall (m) and its own height, for overlap checks. Models are built centred on y = 0. */
+  wallY?: number;
+  wallH?: number;
+  /** Wall items that only go over a window (curtains, blinds). */
+  window?: boolean;
+  /** Small enough to stand on a surface (a lamp, a vase): its radius there, in metres. It can still go on the floor. */
+  small?: number;
+  /**
+   * Has a top that small items can stand on: its height above the model's base (or centre, for wall items) and the
+   * usable w × d area in metres, in the model's own space, centred unless x / z are given.
+   */
+  surface?: { y: number; w: number; d: number; x?: number; z?: number };
 }
 
 const list: ItemDef[] = [
@@ -301,11 +319,11 @@ const list: ItemDef[] = [
   },
   // Everyday extras
   {
-    type: 'microwave', name: 'Microwave Oven', icon: '📟', category: 'kitchen', price: 95_000, w: 1, d: 1, layer: 'object',
+    type: 'microwave', name: 'Microwave Oven', icon: '📟', category: 'kitchen', price: 95_000, w: 1, d: 1, layer: 'object', small: 0.34,
     actions: [{ id: 'reheat', label: 'Reheat leftovers', icon: '🍲', minutes: 10, needsPower: true, cost: 1_000, untilFull: 'hunger', perHour: { hunger: 110, fun: 4 } }],
   },
   {
-    type: 'blender', name: 'Blender Station', icon: '🥤', category: 'kitchen', price: 60_000, w: 1, d: 1, layer: 'object',
+    type: 'blender', name: 'Blender Station', icon: '🥤', category: 'kitchen', price: 60_000, w: 1, d: 1, layer: 'object', small: 0.24,
     actions: [{ id: 'zobo', label: 'Blend zobo & tigernut drink', icon: '🥤', minutes: 10, needsPower: true, cost: 1_200, perHour: { hunger: 35, fun: 20, bladder: -25 } }],
   },
   {
@@ -391,9 +409,9 @@ const list: ItemDef[] = [
       { id: 'masa', label: 'Fry masa', icon: '🫓', minutes: 45, cost: 1_500, cookingPerHour: 0.25, perHour: { hunger: 45 } },
     ],
   },
-  { type: 'counter', name: 'Kitchen Counter', icon: '🧺', category: 'kitchen', price: 60_000, w: 2, d: 1, layer: 'object', actions: [] },
+  { type: 'counter', name: 'Kitchen Counter', icon: '🧺', category: 'kitchen', price: 60_000, w: 2, d: 1, layer: 'object', surface: { y: 0.91, w: 0.9, d: 0.6, x: -0.45 }, actions: [] },
   {
-    type: 'dining', name: 'Dining Table', icon: '🍽️', category: 'kitchen', price: 180_000, w: 2, d: 2, layer: 'object',
+    type: 'dining', name: 'Dining Table', icon: '🍽️', category: 'kitchen', price: 180_000, w: 2, d: 2, layer: 'object', surface: { y: 0.77, w: 1.4, d: 1.0 },
     seat: { y: 0.45, z: 0.75 },
     actions: [
       { id: 'meal', label: 'Eat leftover food', icon: '🍲', minutes: 30, cost: 1_000, pose: 'sit', perHour: { hunger: 60, fun: 3 } },
@@ -492,7 +510,7 @@ const list: ItemDef[] = [
     ],
   },
   {
-    type: 'desk', name: 'Desk & Laptop', icon: '💻', category: 'fun', price: 400_000, w: 2, d: 1, layer: 'object',
+    type: 'desk', name: 'Desk & Laptop', icon: '💻', category: 'fun', price: 400_000, w: 2, d: 1, layer: 'object', surface: { y: 0.76, w: 0.6, d: 0.6, x: 0.55 },
     actions: [
       { id: 'course', label: 'Take online course', icon: '🎓', minutes: 120, needsPower: true, knowledgePerHour: 0.6, perHour: { fun: -3, energy: -4 } },
       { id: 'games', label: 'Play games', icon: '🎮', minutes: 60, needsPower: true, untilFull: 'fun', perHour: { fun: 32 } },
@@ -502,7 +520,7 @@ const list: ItemDef[] = [
 
   // Skills
   {
-    type: 'bookshelf', name: 'Bookshelf', icon: '📚', category: 'skills', price: 70_000, w: 1, d: 1, layer: 'object',
+    type: 'bookshelf', name: 'Bookshelf', icon: '📚', category: 'skills', price: 70_000, w: 1, d: 1, layer: 'object', surface: { y: 1.8, w: 0.85, d: 0.4, z: -0.15 },
     actions: [
       { id: 'study', label: 'Study', icon: '📖', minutes: 120, knowledgePerHour: 0.35, perHour: { fun: -4, energy: -4 } },
       { id: 'kaduna_history', label: 'Read Kaduna history', icon: '📜', minutes: 90, knowledgePerHour: 0.5, perHour: { fun: 4, social: 2 } },
@@ -598,7 +616,7 @@ const list: ItemDef[] = [
     type: 'wardrobe', name: 'Wardrobe', icon: '🚪', category: 'sleep', price: 150_000, w: 2, d: 1, layer: 'object',
     actions: [{ id: 'dress_up', label: 'Try on outfits', icon: '👗', minutes: 20, perHour: { fun: 30, social: 4 } }],
   },
-  { type: 'nightstand', name: 'Bedside Table', icon: '🕯️', category: 'sleep', price: 25_000, w: 1, d: 1, layer: 'object', actions: [] },
+  { type: 'nightstand', name: 'Bedside Table', icon: '🕯️', category: 'sleep', price: 25_000, w: 1, d: 1, layer: 'object', surface: { y: 0.62, w: 0.26, d: 0.4, x: -0.12 }, actions: [] },
   {
     type: 'freezer', name: 'Chest Freezer', icon: '🧊', category: 'kitchen', price: 300_000, w: 2, d: 1, layer: 'object',
     actions: [{ id: 'frozen_meal', label: 'Cook frozen chicken', icon: '🍗', minutes: 40, cost: 3_500, needsPower: true, untilFull: 'hunger', cookingPerHour: 0.2, perHour: { hunger: 65 } }],
@@ -672,8 +690,8 @@ const list: ItemDef[] = [
   },
   { type: 'flower_bed', name: 'Flower Bed', icon: '🌷', category: 'outdoor', price: 20_000, w: 2, d: 1, layer: 'object', blocks: false, actions: [] },
   { type: 'floor_lamp', name: 'Floor Lamp', icon: '💡', category: 'decor', price: 35_000, w: 1, d: 1, layer: 'object', actions: [] },
-  { type: 'coffee_table', name: 'Coffee Table', icon: '☕', category: 'decor', price: 55_000, w: 2, d: 1, layer: 'object', actions: [] },
-  { type: 'tv_cabinet', name: 'TV Cabinet', icon: '🗄️', category: 'decor', price: 95_000, w: 2, d: 1, layer: 'object', actions: [] },
+  { type: 'coffee_table', name: 'Coffee Table', icon: '☕', category: 'decor', price: 55_000, w: 2, d: 1, layer: 'object', surface: { y: 0.425, w: 0.5, d: 0.6 }, actions: [] },
+  { type: 'tv_cabinet', name: 'TV Cabinet', icon: '🗄️', category: 'decor', price: 95_000, w: 2, d: 1, layer: 'object', surface: { y: 0.675, w: 1.8, d: 0.46 }, actions: [] },
   { type: 'safe_box', name: 'Steel Safe', icon: '🔐', category: 'security', price: 260_000, w: 1, d: 1, layer: 'object', actions: [] },
 
   // Even more for the house: small kitchen pieces
@@ -926,14 +944,60 @@ const list: ItemDef[] = [
   },
 
   // More to look at
-  { type: 'centre_table', name: 'Glass Centre Table', icon: '🫖', category: 'decor', price: 95_000, w: 2, d: 1, layer: 'object', actions: [] },
+  { type: 'centre_table', name: 'Glass Centre Table', icon: '🫖', category: 'decor', price: 95_000, w: 2, d: 1, layer: 'object', surface: { y: 0.45, w: 1.0, d: 0.6, x: -0.25 }, actions: [] },
   { type: 'wall_art', name: 'Framed Ankara Art', icon: '🖼️', category: 'decor', price: 40_000, w: 1, d: 1, layer: 'object', blocks: false, actions: [] },
   { type: 'calabash_display', name: 'Calabash Display', icon: '🧉', category: 'decor', price: 22_000, w: 1, d: 1, layer: 'object', actions: [] },
   { type: 'shoe_rack', name: 'Shoe Rack', icon: '👟', category: 'decor', price: 20_000, w: 1, d: 1, layer: 'object', actions: [] },
   { type: 'snake_plant', name: 'Snake Plant', icon: '🌿', category: 'decor', price: 14_000, w: 1, d: 1, layer: 'object', actions: [] },
   { type: 'room_divider', name: 'Carved Room Divider', icon: '🪵', category: 'decor', price: 85_000, w: 2, d: 1, layer: 'object', actions: [] },
-  { type: 'console_table', name: 'Console Table & Vase', icon: '🏺', category: 'decor', price: 60_000, w: 2, d: 1, layer: 'object', actions: [] },
+  { type: 'console_table', name: 'Console Table & Vase', icon: '🏺', category: 'decor', price: 60_000, w: 2, d: 1, layer: 'object', surface: { y: 0.825, w: 0.6, d: 0.38, z: -0.15 }, actions: [] },
   { type: 'saddle_stand', name: 'Durbar Saddle Stand', icon: '🐎', category: 'decor', price: 240_000, w: 1, d: 1, layer: 'object', actions: [] },
+
+  // On the walls and ceiling (game/mount.ts): they hang on a wall face or from the ceiling, so they never take floor space.
+  {
+    type: 'wall_tv', name: 'Wall-Mounted Smart TV', icon: '📺', category: 'fun', price: 380_000, w: 2, d: 1, layer: 'object', blocks: false,
+    mount: 'wall', wallY: 1.4, wallH: 0.9,
+    actions: [
+      { id: 'kannywood', label: 'Watch Kannywood', icon: '🎬', minutes: 90, needsPower: true, untilFull: 'fun', perHour: { fun: 28 } },
+      { id: 'football', label: 'Watch football', icon: '⚽', minutes: 120, needsPower: true, perHour: { fun: 30, social: 4 } },
+    ],
+  },
+  {
+    type: 'split_ac', name: 'Wall Split AC (1.5HP)', icon: '❄️', category: 'comfort', price: 720_000, w: 2, d: 1, layer: 'object', blocks: false,
+    mount: 'wall', wallY: 2.2, wallH: 0.34,
+    actions: [{ id: 'chill_ac', label: 'Chill in the AC', icon: '❄️', minutes: 60, needsPower: true, perHour: { energy: 12, fun: 15, hygiene: 1 } }],
+  },
+  { type: 'framed_print', name: 'Framed Lagos Print', icon: '🖼️', category: 'decor', price: 35_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 1.55, wallH: 0.62, actions: [] },
+  { type: 'family_portrait', name: 'Family Portrait', icon: '👨🏾‍👩🏾‍👧🏾', category: 'decor', price: 60_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 1.6, wallH: 0.72, actions: [] },
+  { type: 'wall_mirror', name: 'Wall Mirror', icon: '🪞', category: 'bath', price: 45_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 1.45, wallH: 0.9, actions: [] },
+  {
+    type: 'wall_shelf', name: 'Floating Wall Shelf', icon: '🪵', category: 'decor', price: 28_000, w: 1, d: 1, layer: 'object', blocks: false,
+    mount: 'wall', wallY: 1.3, wallH: 0.1, surface: { y: 0.03, w: 0.8, d: 0.24, z: -0.3 }, actions: [],
+  },
+  { type: 'clock_wall', name: 'Round Wall Clock', icon: '🕒', category: 'decor', price: 18_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 1.95, wallH: 0.4, actions: [] },
+  { type: 'curtains', name: 'Window Curtains', icon: '🪟', category: 'decor', price: 32_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', window: true, wallY: 1.5, wallH: 1.3, actions: [] },
+  {
+    type: 'ceiling_fan', name: 'Ceiling Fan', icon: '🌀', category: 'comfort', price: 65_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'ceiling',
+    actions: [{ id: 'ceiling_breeze', label: 'Cool off under the fan', icon: '🌀', minutes: 15, pose: 'stand', needsPower: true, perHour: { energy: 8, fun: 5 } }],
+  },
+
+  // Tops and the small things that stand on them (game/mount.ts): a side table, a vase, a laptop.
+  { type: 'side_table', name: 'Side Table', icon: '🪑', category: 'decor', price: 22_000, w: 1, d: 1, layer: 'object', surface: { y: 0.58, w: 0.5, d: 0.5 }, actions: [] },
+  { type: 'flower_vase', name: 'Flower Vase', icon: '💐', category: 'decor', price: 9_000, w: 1, d: 1, layer: 'object', small: 0.12, actions: [] },
+  { type: 'desk_plant', name: 'Small Potted Plant', icon: '🌱', category: 'decor', price: 6_000, w: 1, d: 1, layer: 'object', small: 0.13, actions: [] },
+  { type: 'book_stack', name: 'Stack of Books', icon: '📚', category: 'skills', price: 8_000, w: 1, d: 1, layer: 'object', small: 0.16, actions: [] },
+  { type: 'photo_frame', name: 'Photo Frame', icon: '🖼️', category: 'decor', price: 7_000, w: 1, d: 1, layer: 'object', small: 0.1, actions: [] },
+  {
+    type: 'laptop', name: 'Laptop', icon: '💻', category: 'fun', price: 320_000, w: 1, d: 1, layer: 'object', small: 0.2,
+    actions: [
+      { id: 'games', label: 'Play games', icon: '🎮', minutes: 60, needsPower: true, untilFull: 'fun', perHour: { fun: 30 } },
+      { id: 'chat', label: 'Chat with friends online', icon: '💬', minutes: 45, needsPower: true, cost: 300, perHour: { social: 40, fun: 8 } },
+    ],
+  },
+  {
+    type: 'small_tv', name: '32" Table TV', icon: '📺', category: 'fun', price: 140_000, w: 1, d: 1, layer: 'object', small: 0.4,
+    actions: [{ id: 'kannywood', label: 'Watch Kannywood', icon: '🎬', minutes: 90, needsPower: true, untilFull: 'fun', perHour: { fun: 24 } }],
+  },
 ];
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(list.map((i) => [i.type, i]));

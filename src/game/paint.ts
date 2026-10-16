@@ -1,11 +1,15 @@
-// House customising: one shared palette of 8 colours for furniture and walls. Furniture models are
+// House customising: one shared palette for furniture and walls. Furniture models are
 // built from boxes with fixed colours, so a "slot" is just the list of colours in a model that
 // belong to one part (the first is the main shade, the rest are lighter / darker variants of it).
 // Recolouring swaps those colours for the picked one, keeping the same light and dark variation.
+//
+// A colour choice ("colour ref") is either a palette id below or a custom '#rrggbb' from the picker.
+// The first eight ids are the original palette: saves from before the bigger one still resolve.
 
 export interface PaintColour { id: string; name: string; hex: string }
 
 export const PAINT_COLOURS: PaintColour[] = [
+  // The original eight
   { id: 'chalk', name: 'Chalk', hex: '#f4f1ea' },
   { id: 'cream', name: 'Cream', hex: '#e8d5a8' },
   { id: 'sage', name: 'Sage', hex: '#8fb396' },
@@ -14,6 +18,25 @@ export const PAINT_COLOURS: PaintColour[] = [
   { id: 'terracotta', name: 'Terracotta', hex: '#c4623a' },
   { id: 'navy', name: 'Navy', hex: '#2c4670' },
   { id: 'charcoal', name: 'Charcoal', hex: '#3d444d' },
+  // Lights and neutrals
+  { id: 'magnolia', name: 'Magnolia', hex: '#f3e9d6' },
+  { id: 'sand', name: 'Harmattan Sand', hex: '#d6bf96' },
+  { id: 'greige', name: 'Greige', hex: '#b8ad9e' },
+  { id: 'mocha', name: 'Mocha', hex: '#7a5a44' },
+  // Warm
+  { id: 'butter', name: 'Butter', hex: '#f3dc8a' },
+  { id: 'mustard', name: 'Mustard', hex: '#d4a017' },
+  { id: 'peach', name: 'Peach', hex: '#f2b48c' },
+  { id: 'coral', name: 'Coral', hex: '#e8735a' },
+  { id: 'oxblood', name: 'Oxblood', hex: '#6e1f24' },
+  { id: 'plum', name: 'Plum', hex: '#6b3a5e' },
+  // Cool
+  { id: 'lilac', name: 'Lilac', hex: '#b9a6d6' },
+  { id: 'mint', name: 'Mint', hex: '#b5dfc6' },
+  { id: 'eagle', name: 'Super Eagles Green', hex: '#0f7a3d' },
+  { id: 'olive', name: 'Olive', hex: '#6f7442' },
+  { id: 'teal', name: 'Teal', hex: '#1f7a7a' },
+  { id: 'indigo', name: 'Adire Indigo', hex: '#283a7a' },
 ];
 export const PAINT_BY_ID: Record<string, PaintColour> = Object.fromEntries(PAINT_COLOURS.map((c) => [c.id, c]));
 
@@ -128,7 +151,31 @@ export const WALL_PARTS: { key: WallPart; label: string; icon: string }[] = [
 ];
 export const DEFAULT_INNER_WALL = '#eee7da';
 
-export const paintHex = (id: string | null | undefined): string | null => (id ? PAINT_BY_ID[id]?.hex ?? null : null);
+const HEX = /^#[0-9a-f]{6}$/;
+/** A palette id or a custom '#rrggbb' (lower case). Anything else is ignored, which keeps saves and visits safe. */
+export const isColourRef = (ref: unknown): ref is string => typeof ref === 'string' && (!!PAINT_BY_ID[ref] || HEX.test(ref));
+/** The hex for a colour ref: palette ids look up their colour, custom ones are their own. */
+export const paintHex = (id: string | null | undefined): string | null => (!id ? null : PAINT_BY_ID[id]?.hex ?? (HEX.test(id) ? id : null));
+/** What to call a colour ref in the UI. */
+export const colourName = (ref: string | null | undefined) => (!ref ? 'Original' : PAINT_BY_ID[ref]?.name ?? (HEX.test(ref) ? `Custom ${ref.toUpperCase()}` : 'Original'));
+
+/** Hue (0-360), saturation and lightness (0-100) to '#rrggbb', for the custom colour picker. */
+export function hslHex(h: number, s: number, l: number): string {
+  const S = s / 100, L = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = S * Math.min(L, 1 - L);
+  const f = (n: number) => L - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return rgb2hex([f(0), f(8), f(4)]);
+}
+/** '#rrggbb' to [hue, saturation, lightness], the inverse of hslHex. */
+export function hexHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hex2rgb(hex);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, Math.round(l * 100)];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round((h * 60 + 360) % 360), Math.round(s * 100), Math.round(l * 100)];
+}
 
 const hex2rgb = (h: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number];
 const rgb2hex = (c: number[]) => `#${c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('')}`;

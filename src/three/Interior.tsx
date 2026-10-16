@@ -19,6 +19,7 @@ import { Person, type Clip } from './Person';
 import { Slab } from './Slab';
 import { StaticBatch } from './StaticBatch';
 import { Emoji } from '../ui/Icons';
+import { offHover, onHover } from './HoverOutline';
 
 const TALL = 2.6;
 const SHORT = 0.9;
@@ -337,10 +338,9 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
         }}
         onPointerOver={(e) => {
           if (!usable) return;
-          e.stopPropagation();
-          document.body.style.cursor = 'pointer';
+          onHover(e);
         }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOut={offHover}
       >
         <PropModel type={prop.type} text={prop.text} />
       </group>

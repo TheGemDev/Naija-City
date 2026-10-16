@@ -37,6 +37,7 @@ import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { Emoji } from '../ui/Icons';
 import { WeatherChip } from '../ui/WeatherChip';
+import { offHover, onHover } from './HoverOutline';
 
 const ROAD_Y = 0.012;
 
@@ -974,11 +975,8 @@ function PlaceLabel({ place }: { place: Place }) {
           e.stopPropagation();
           useGame.getState().selectPlace(place.id);
         }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = 'pointer';
-        }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOver={(e) => onHover(e, null)}
+        onPointerOut={offHover}
       >
         <planeGeometry args={[Math.max(2.6, place.name.length * 0.18), 1.2]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
@@ -1012,6 +1010,9 @@ function PlaceMesh({ place }: { place: Place }) {
     useGame.getState().selectPlace(place.id);
   };
 
+  // The building itself, for the hover outline (HoverOutline.tsx) when the pointer is on its plot or on it.
+  const model = useRef<Group>(null);
+
   return (
     <group>
       {/* Ground plot footprint hitbox so clicking anywhere on the location's land/ground opens options */}
@@ -1020,24 +1021,19 @@ function PlaceMesh({ place }: { place: Place }) {
         position={[place.x + place.w / 2, 0.015, place.z + place.d / 2]}
         rotation={[-Math.PI / 2, 0, 0]}
         onClick={handleSelect}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = 'pointer';
-        }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOver={(e) => onHover(e, model.current)}
+        onPointerOut={offHover}
       >
         <planeGeometry args={[place.w, place.d]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       <group
+        ref={model}
         position={[place.x + place.w / 2, 0, place.z + place.d / 2]}
         rotation={[0, yaw, 0]}
         onClick={handleSelect}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = 'pointer';
-        }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOver={(e) => onHover(e, model.current)}
+        onPointerOut={offHover}
       >
         <PlaceModel model={place.model} w={side ? place.d : place.w} d={side ? place.w : place.d} />
       </group>

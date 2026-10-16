@@ -15,6 +15,7 @@ import { cityMap } from '../game/city';
 import { useGame } from '../game/store';
 import { useAds } from '../net/ads';
 import { tapAd, useAdTexture, useRotation } from './Billboard';
+import { offHover, onHover } from './HoverOutline';
 
 function Face({ ad, w, h }: { ad: Ad | null; w: number; h: number }) {
   const map = useAdTexture(ad);
@@ -31,8 +32,8 @@ function Tappable({ ad, board, children }: { ad: Ad | null; board: string; child
   return (
     <group
       onClick={(e) => { if (e.delta > 8) return; e.stopPropagation(); tapAd(ad, board); }}
-      onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onPointerOver={onHover}
+      onPointerOut={offHover}
     >
       {children}
     </group>

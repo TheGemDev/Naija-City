@@ -16,6 +16,7 @@ import { useSession } from '../net/session';
 import { useTour } from '../game/tour';
 import { useAuthUi } from '../ui/Auth';
 import { B } from './models';
+import { offHover, onHover } from './HoverOutline';
 
 /** Boards lean back so the face reads from the high camera. */
 const TILT = 0.7;
@@ -184,6 +185,9 @@ function Board({ ad, scale, board, night }: { ad: Ad | null; scale: number; boar
         e.stopPropagation();
         tapAd(ad, board);
       }}
+      // Only a booked board does anything when tapped (it opens the ad's link).
+      onPointerOver={(e) => ad && onHover(e)}
+      onPointerOut={offHover}
     >
       {[-bw * 0.36, bw * 0.36].map((x) => <B key={x} p={[x, legs / 2, 0]} s={[0.14 * scale, legs, 0.14 * scale]} c="#57534e" />)}
       <B p={[0, legs + bh / 2, -0.06 * scale]} s={[bw + 0.2 * scale, bh + 0.2 * scale, 0.1 * scale]} c="#3b2314" />

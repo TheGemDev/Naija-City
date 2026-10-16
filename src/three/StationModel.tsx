@@ -47,7 +47,7 @@ const tracks = (d: number) => ({ near: -d / 2 + 0.45, far: -d / 2 + 1.05 });
  * How far the near track can run on past each end of the plot (in its own x): clear of every other building, house,
  * tree and landmark, on dry land, and stopping short of any road: the line never crosses the tarmac.
  */
-export function clearRuns(w: number, d: number) {
+function clearRuns(w: number, d: number) {
   const m = activeMap();
   const st = m.placeById?.station;
   if (!st) return { minus: 3, plus: 3 };

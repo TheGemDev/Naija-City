@@ -3,6 +3,7 @@
 // Kept dependency-light so the server can use it too (worker/wallet.ts gives the start; worker/progress.ts uses the
 // starter furniture and car).
 
+import { designOfKey } from './exterior';
 import { houseLayoutForDesign, type PlacedItem } from './grid';
 import { DEFAULT_ITEMS } from './defaults';
 
@@ -103,7 +104,8 @@ export const originOf = (v: unknown): OriginDef => ORIGINS[normalizeOrigin(v)];
  * you build are drawn true to size, since each design already has its own interior area.
  */
 export function homeTransform(v: unknown, design?: string | null) {
-  const scale = design ? 1 : originOf(v).homeScale || 1;
+  // `design` may be a layout key (game/exterior.ts): the starter home with cars parked is '+park1', still the starter.
+  const scale = designOfKey(design) ? 1 : originOf(v).homeScale || 1;
   const layout = houseLayoutForDesign(design);
   return { scale, x: (layout.gridW / 2) * (1 - scale), z: (layout.gridH / 2) * (1 - scale) };
 }

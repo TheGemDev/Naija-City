@@ -11,7 +11,8 @@ import { loadPolicy } from './policy';
 import { transferFeeOf } from '../src/game/treasury';
 import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
-import { PAINT_BY_ID } from '../src/game/paint';
+import { cleanExtensions, cleanExterior, layoutKey } from '../src/game/exterior';
+import { isColourRef } from '../src/game/paint';
 import { sectionOf } from '../src/game/estate';
 import { CAR_BY_ID } from '../src/game/cars';
 import { supplyOf, type PowerSave, type Supply } from '../src/game/power';
@@ -513,6 +514,8 @@ type Home = {
     staff: HouseholdStaff[];
     ownedCars?: string[];
     houseStation: string | null;
+    /** The outside the owner chose (game/exterior.ts): the carport over their cars. */
+    exterior?: import('../src/game/exterior').HouseExterior | null;
   };
 };
 
@@ -527,7 +530,7 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
     origin?: unknown;
     minutes?: number;
     items?: unknown;
-    properties?: { id?: string; design?: string | null; staff?: HouseholdStaff[]; items?: unknown; region?: unknown; slot?: unknown; builtAt?: unknown }[];
+    properties?: { id?: string; design?: string | null; staff?: HouseholdStaff[]; items?: unknown; region?: unknown; slot?: unknown; builtAt?: unknown; extensions?: unknown; exterior?: unknown }[];
     homeState?: unknown;
     homePropertyId?: string | null;
     activeHouseId?: string | null;
@@ -559,7 +562,7 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
       Number.isInteger(i.rot) && (i.rot as number) >= 0 && (i.rot as number) <= 3;
   }).map((item) => {
     const { paint, ...rest } = item;
-    const clean = Array.isArray(paint) ? paint.slice(0, 4).map((id) => (typeof id === 'string' && PAINT_BY_ID[id] ? id : null)) : [];
+    const clean = Array.isArray(paint) ? paint.slice(0, 4).map((id) => (isColourRef(id) ? id : null)) : [];
     return clean.some(Boolean) ? { ...rest, paint: clean } : rest;
   });
   const wallSource = save.wallEdits?.[home?.id ?? 'starter'];
@@ -570,7 +573,7 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
   const paint: { outer?: string; inner?: string } = {};
   for (const part of ['outer', 'inner'] as const) {
     const id = paintSource?.[part];
-    if (typeof id === 'string' && PAINT_BY_ID[id]) paint[part] = id;
+    if (isColourRef(id)) paint[part] = id;
   }
   const staff = (home?.staff ?? []).filter((member) =>
     member && member.role in HOUSEHOLD_STAFF && member.paidThrough >= Math.floor((save.minutes ?? 0) / 1440),
@@ -595,7 +598,9 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
       save: {
         origin: normalizeOrigin(save.origin),
         items,
-        design: home?.design && DESIGN_BY_ID[home.design] ? home.design : null,
+        // The layout key (game/exterior.ts): extensions add rooms a visitor walks into. The car bay is added client-side from ownedCars.
+        design: home?.design && DESIGN_BY_ID[home.design] ? layoutKey(home.design, cleanExtensions(home.extensions)) : null,
+        exterior: cleanExterior(home?.exterior) ?? null,
         walls,
         paint,
         staff,

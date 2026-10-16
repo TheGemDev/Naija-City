@@ -2,13 +2,14 @@
 // Cell (x, z) covers world [x, x+1] × [z, z+1]. Walls sit on cell edges.
 
 import { ITEMS } from './catalog';
+import { EXTENSION_BY_ID } from './exterior';
 
 /** Grid of the starter home (bungalow). Each design has its own size: see HouseLayout.gridW/gridH. */
 export const GRID_W = 14;
 export const GRID_H = 13; // rows 0-9 are the house, 10-12 the compound
-/** Largest design's lot grid, for server-side bounds checks. */
-export const MAX_GRID_W = 26;
-export const MAX_GRID_H = 22;
+/** Largest lot grid any house can reach (the mansion with every extension, the duplex with all four), for server-side bounds checks. */
+export const MAX_GRID_W = 40;
+export const MAX_GRID_H = 28;
 
 export interface Cell { x: number; z: number }
 /**
@@ -36,6 +37,14 @@ export interface HouseLayout {
   edges: Edge[];
   edgeSet: Set<string>;
   rooms: HouseRoom[];
+  /** Doorways out of the house (the front door and a side door to the yard), as wall edges with no wall on them. */
+  doors: { dir: 'h' | 'v'; x: number; z: number; front: boolean }[];
+  /** Cars parked in the carport bay: each takes 2×4 cells (top-left corner here), solid to walk and to furniture. */
+  cars: Cell[];
+  /** The carport bay rows (z0..z1), when cars are parked. */
+  bay: { z0: number; z1: number } | null;
+  /** Cells nothing may enter or be put on: the parked cars. */
+  solid: Set<string>;
 }
 
 // House types differ by how much interior land they cover, smallest to largest. Every house is
@@ -172,15 +181,73 @@ const layouts: Record<string, {
   },
 };
 
-function buildLayout(plan: (typeof layouts)[string]): HouseLayout {
-  const gridW = plan.gridW;
-  const gridH = plan.depth + plan.compoundDepth;
+/** Rows the carport bay adds at the foot of the compound: a lane, four rows of car, a lane to the gate. */
+export const BAY_ROWS = 6;
+/** At most this many cars stand in the bay (three.World shows the latest ones). */
+export const BAY_CARS = 3;
+
+/** Cars' spots in the bay, left to right, keeping the gate's column clear. */
+function carSpots(gridW: number, gateX: number, n: number, z: number): Cell[] {
+  const out: Cell[] = [];
+  for (let x = 1; out.length < n && x + 1 < gridW - 0; ) {
+    if (gateX === x || gateX === x + 1) { x = gateX + 1; continue; }
+    out.push({ x, z });
+    x += 3;
+  }
+  return out;
+}
+
+/**
+ * The extra rooms an extension adds, in a strip `cols` wide from x0 (game/exterior.ts EXTENSIONS). Indoors a house is
+ * one floor, so upstairs rooms, the balcony and the roof terrace sit beside the house as their own walled strip, each
+ * named for where it really is; the boys' quarters stands at the back of the compound.
+ */
+function extensionPlan(id: string, x0: number, depth: number): { segments: Segment[]; rooms: HouseRoom[] } {
+  const R = (name: string, a: number, b: number, c: number, d: number, fa: string, fb: string): HouseRoom => ({ name, x0: x0 + a, z0: b, x1: x0 + c, z1: d, a: fa, b: fb });
+  const box = (w: number, d: number, gapAt: number, kind: Kind = 'wall'): Segment[] => [
+    { dir: 'h', at: 0, from: x0, to: x0 + w, kind, tall: kind === 'wall' },
+    { dir: 'v', at: x0, from: 0, to: d, kind, tall: kind === 'wall' },
+    { dir: 'v', at: x0 + w, from: 0, to: d, kind, tall: kind === 'wall' },
+    { dir: 'h', at: d, from: x0, to: x0 + w, gaps: [x0 + gapAt], kind, tall: kind === 'wall' },
+  ];
+  if (id === 'bq') return {
+    segments: [...box(5, 4, 1), { dir: 'v', at: x0 + 3, from: 0, to: 4, gaps: [2], kind: 'wall' }],
+    rooms: [R('Boys’ quarters', 0, 0, 3, 4, '#a18162', '#97795b'), R('BQ shower', 3, 0, 5, 4, '#b8d0d2', '#acc6c8')],
+  };
+  if (id === 'floor2') {
+    const d = Math.max(6, Math.min(depth, 10));
+    return {
+      segments: [...box(7, d, 3), { dir: 'h', at: 3, from: x0, to: x0 + 7, gaps: [x0 + 2, x0 + 5], kind: 'wall' }, { dir: 'v', at: x0 + 4, from: 3, to: d, kind: 'wall' }],
+      rooms: [R('Upstairs lounge', 0, 0, 7, 3, '#d5d6d2', '#cccdca'), R('Upstairs bedroom 1', 0, 3, 4, d, '#987456', '#8e6b4f'), R('Upstairs bedroom 2', 4, 3, 7, d, '#a18162', '#97795b')],
+    };
+  }
+  if (id === 'balcony') return { segments: box(3, 4, 1, 'fence'), rooms: [R('Balcony', 0, 0, 3, 4, '#c9c3b6', '#bfb9ab')] };
+  return { segments: box(5, 5, 2, 'fence'), rooms: [R('Rooftop terrace', 0, 0, 5, 5, '#c7a98a', '#bd9f80')] };
+}
+
+function buildLayout(plan: (typeof layouts)[string], mods: string[] = []): HouseLayout {
+  // Extensions widen the plot eastwards, a strip each; the car bay deepens the compound at the gate.
+  const strips: { id: string; x0: number }[] = [];
+  let gridW = plan.gridW;
+  for (const id of mods) {
+    const def = EXTENSION_BY_ID[id];
+    if (!def || strips.some((s) => s.id === id)) continue;
+    strips.push({ id, x0: gridW });
+    gridW += def.cols;
+  }
+  const parkN = Math.min(BAY_CARS, Number(/^park(\d)$/.exec(mods.find((m) => m.startsWith('park')) ?? '')?.[1] ?? 0));
+  const yardH = plan.depth + plan.compoundDepth;
+  const gridH = yardH + (parkN ? BAY_ROWS : 0);
+  const extra = strips.map((s) => extensionPlan(s.id, s.x0, plan.depth));
+  // A side door in the east wall onto the side yard, so the yard, the cars and the boys' quarters are a short walk.
+  const sideDoor = plan.width < plan.gridW ? plan.depth - 2 : null;
   const segments: Segment[] = [
     { dir: 'h', at: 0, from: 0, to: plan.width, gaps: plan.entry.side === 'north' ? [plan.entry.at] : [], kind: 'wall', tall: true },
     { dir: 'v', at: 0, from: 0, to: plan.depth, gaps: plan.entry.side === 'west' ? [plan.entry.at] : [], kind: 'wall', tall: true },
-    { dir: 'v', at: plan.width, from: 0, to: plan.depth, kind: 'wall', tall: true },
+    { dir: 'v', at: plan.width, from: 0, to: plan.depth, gaps: sideDoor !== null ? [sideDoor] : [], kind: 'wall', tall: true },
     { dir: 'h', at: plan.depth, from: 0, to: plan.width, gaps: plan.entry.side === 'south' ? [plan.entry.at] : [], kind: 'wall', tall: true },
     ...plan.partitions,
+    ...extra.flatMap((e) => e.segments),
     { dir: 'v', at: 0, from: plan.depth, to: gridH, kind: 'fence' },
     { dir: 'v', at: gridW, from: plan.width < gridW ? 0 : plan.depth, to: gridH, kind: 'fence' },
     ...(plan.width < gridW ? [{ dir: 'h' as const, at: 0, from: plan.width, to: gridW, kind: 'fence' as const }] : []),
@@ -197,19 +264,57 @@ function buildLayout(plan: (typeof layouts)[string]): HouseLayout {
       edgeSet.add(`${segment.dir}:${x}:${z}`);
     }
   }
+  // Floors: each extension room over the side yard it stands on, and the bay paved apart from the compound.
+  const extRooms = extra.flatMap((e) => e.rooms);
+  const sideYards = plan.width < gridW
+    ? [{ name: 'Side yard', x0: plan.width, z0: 0, x1: plan.gridW, z1: plan.depth, a: '#c98b5e', b: '#bf8155' },
+      ...strips.map((s) => ({ name: 'Side yard', x0: s.x0, z0: 0, x1: s.x0 + EXTENSION_BY_ID[s.id].cols, z1: plan.depth, a: '#c98b5e', b: '#bf8155' }))]
+    : [];
   const rooms = [
     ...plan.rooms,
-    ...(plan.width < gridW ? [{ name: 'Side yard', x0: plan.width, z0: 0, x1: gridW, z1: plan.depth, a: '#c98b5e', b: '#bf8155' }] : []),
-    { name: 'Compound', x0: 0, z0: plan.depth, x1: gridW, z1: gridH, a: '#bd9368', b: '#b58a60' },
+    ...extRooms,
+    ...sideYards.flatMap((y) => yardMinus(y, extRooms)),
+    { name: 'Compound', x0: 0, z0: plan.depth, x1: gridW, z1: yardH, a: '#bd9368', b: '#b58a60' },
+    ...(parkN ? [{ name: 'Carport', x0: 0, z0: yardH, x1: gridW, z1: gridH, a: '#9a958c', b: '#8f8a81' }] : []),
+  ];
+  const cars = parkN ? carSpots(gridW, plan.gateX, parkN, yardH + 1) : [];
+  const solid = new Set<string>();
+  for (const c of cars) for (let i = 0; i < 2; i++) for (let j = 0; j < 4; j++) solid.add(`${c.x + i},${c.z + j}`);
+  const doors: HouseLayout['doors'] = [
+    plan.entry.side === 'south' ? { dir: 'h', x: plan.entry.at, z: plan.depth, front: true } : plan.entry.side === 'north' ? { dir: 'h', x: plan.entry.at, z: 0, front: true } : { dir: 'v', x: 0, z: plan.entry.at, front: true },
+    ...(sideDoor !== null ? [{ dir: 'v' as const, x: plan.width, z: sideDoor, front: false }] : []),
   ];
   return {
     width: plan.width, depth: plan.depth, gridW, gridH, gate: { x: plan.gateX, z: gridH - 1 },
-    entry: plan.entry, shell: plan.shell, edges, edgeSet, rooms,
+    entry: plan.entry, shell: plan.shell, edges, edgeSet, rooms, doors, cars, bay: parkN ? { z0: yardH, z1: gridH } : null, solid,
   };
 }
 
+/** A side yard's floor with the rooms standing on it cut out, as up to three rectangles round them. */
+function yardMinus(y: HouseRoom, rooms: HouseRoom[]): HouseRoom[] {
+  const on = rooms.filter((r) => r.x0 >= y.x0 && r.x1 <= y.x1 && r.z0 < y.z1);
+  if (!on.length) return [y];
+  const bottom = Math.max(...on.map((r) => Math.min(r.z1, y.z1)));
+  return bottom >= y.z1 ? [] : [{ ...y, z0: bottom }];
+}
+
 export const HOUSE_LAYOUTS: Record<string, HouseLayout> = Object.fromEntries(Object.entries(layouts).map(([id, plan]) => [id, buildLayout(plan)]));
-export const houseLayoutForDesign = (design?: string | null) => HOUSE_LAYOUTS[design ?? ''] ?? HOUSE_LAYOUTS.bungalow;
+const keyedLayouts = new Map<string, HouseLayout>();
+/**
+ * The layout for a design, or for a layout key (game/exterior.ts layoutKey: 'bungalow+bq+park2') with its extensions'
+ * rooms and the car bay. An unknown or missing design is the bungalow, as before.
+ */
+export function houseLayoutForDesign(design?: string | null): HouseLayout {
+  if (!design?.includes('+')) return HOUSE_LAYOUTS[design ?? ''] ?? HOUSE_LAYOUTS.bungalow;
+  let hit = keyedLayouts.get(design);
+  if (!hit) {
+    const [base, ...mods] = design.split('+');
+    hit = buildLayout(layouts[base] ?? layouts.bungalow, mods);
+    if (keyedLayouts.size > 64) keyedLayouts.clear();
+    keyedLayouts.set(design, hit);
+  }
+  return hit;
+}
 const DEFAULT_LAYOUT = HOUSE_LAYOUTS.bungalow;
 
 // ── Wall editing ─────────────────────────────────────────────
@@ -337,7 +442,7 @@ export function bfs(start: Cell, blocked: Set<string>, isGoal: (c: Cell) => bool
     for (const [dx, dz] of DIRS) {
       const n = { x: cur.x + dx, z: cur.z + dz };
       const k = key(n);
-      if (!inGrid(n, layout) || prev.has(k) || blocked.has(k) || wallBetween(cur, n, layout)) continue;
+      if (!inGrid(n, layout) || prev.has(k) || blocked.has(k) || layout.solid.has(k) || wallBetween(cur, n, layout)) continue;
       prev.set(k, cur);
       if (isGoal(n)) {
         const path: Cell[] = [n];
@@ -371,7 +476,7 @@ export function pathToItem(start: Cell, item: PlacedItem, items: PlacedItem[], l
 
 export function pathToCell(start: Cell, goal: Cell, items: PlacedItem[], layout = DEFAULT_LAYOUT): Cell[] | null {
   const blocked = blockedCells(items);
-  if (blocked.has(key(goal))) return null;
+  if (blocked.has(key(goal)) || layout.solid.has(key(goal))) return null;
   return bfs(start, blocked, (c) => c.x === goal.x && c.z === goal.z, layout);
 }
 
@@ -400,6 +505,7 @@ export function placementError(
     if (other.layer === def.layer || it.type === 'gate') for (const c of footprint(it)) taken.add(key(c));
   }
   if (cells.some((c) => taken.has(key(c)))) return 'Space taken';
+  if (cells.some((c) => layout.solid.has(key(c)))) return 'A car is parked there';
   if (def.layer === 'object' && def.blocks !== false) {
     if (cells.some((c) => c.x === avatarCell.x && c.z === avatarCell.z)) return 'You are standing there';
     // Don't let the player wall themselves in.
@@ -430,7 +536,8 @@ export function fitItemsToLayout(items: PlacedItem[], layout: HouseLayout): { it
     const layer = ITEMS[it.type].layer;
     const clash = kept.some((k) => (k.type === 'gate' || ITEMS[k.type].layer === layer) &&
       footprint(k).some((kc) => cells.some((c) => c.x === kc.x && c.z === kc.z)));
-    if (!cells.every((c) => inGrid(c, layout)) || inside.some((v) => v !== inside[0]) || crosses || clash) boxed.push(it);
+    const parked = cells.some((c) => layout.solid.has(key(c)));
+    if (!cells.every((c) => inGrid(c, layout)) || inside.some((v) => v !== inside[0]) || crosses || clash || parked) boxed.push(it);
     else kept.push(it);
   }
   return { items: kept, boxed };

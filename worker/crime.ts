@@ -26,6 +26,7 @@ import { ITEMS, JOBS, stealSeconds } from '../src/game/catalog';
 import { houseRect } from '../src/game/estate';
 import { PLOTS } from '../src/game/property';
 import { MAX_GRID_H, MAX_GRID_W, footprint, houseLayout, itemTransform, type PlacedItem } from '../src/game/grid';
+import { cleanExtensions, layoutKey } from '../src/game/exterior';
 import { cameraSpotting } from '../src/game/security';
 import { camerasPowered, type PowerSave } from '../src/game/power';
 import { gridOn } from '../src/game/live';
@@ -245,7 +246,7 @@ async function cameraCatch(env: Env, ctx: ExecutionContext, thief: string, victi
   const items = ((livedIn(save, propertyId) ? save.items : property?.items) ?? [])
     .filter((i) => i && typeof i.type === 'string' && Number.isInteger(i.x) && Number.isInteger(i.z) && Number.isInteger(i.rot));
   const walls = save.wallEdits?.[propertyId ?? 'starter'];
-  const layout = houseLayout(property?.design, Array.isArray(walls) ? walls.filter((k): k is string => typeof k === 'string') : []);
+  const layout = houseLayout(layoutKey(property?.design, cleanExtensions((property as { extensions?: unknown } | undefined)?.extensions)), Array.isArray(walls) ? walls.filter((k): k is string => typeof k === 'string') : []);
   // Power follows the owner: if they're not at this house, the lights (and cameras) are off.
   const ownerHere = (propertyId ?? 'starter') === (save.activeHouseId ?? 'starter');
   if (!ownerHere) return false;

@@ -37,6 +37,7 @@ import { LIGHTS_ON, sceneHour, setChromeColor } from '../game/theme';
 import { PhotoRig } from './PhotoRig';
 import { pinWeather, sky, stepSky } from '../game/weather';
 import { Clouds, Rain, SkyBodies } from './Weather';
+import { HoverOutline } from './HoverOutline';
 
 /** Game time advances in steps this long (seconds). Every step updates the store and the screens
  *  watching it, so doing it every frame kept React busy 60 times a second. */
@@ -464,6 +465,7 @@ export function Scene() {
       <GameLoop />
       <DayNight />
       <WeatherLayer />
+      <HoverOutline />
       <CameraRig />
       <Suspense fallback={null}>
         <LocalWorld />

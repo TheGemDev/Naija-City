@@ -5,7 +5,7 @@ import { ITEM_MODELS } from '../game/assets';
 import { avatarCell } from '../game/avatar';
 import { footprint, houseLayout, itemSize, itemTransform, placementError, type PlacedItem } from '../game/grid';
 
-import { genHere, houseKeyOf, litHere, useGame } from '../game/store';
+import { genHere, houseKeyOf, litHere, useGame, activeDesignOf } from '../game/store';
 import { useVisit } from '../game/visits';
 import { CAMERA } from '../game/security';
 import { ItemModel, PaintProvider } from './models';
@@ -15,6 +15,7 @@ import { audio } from '../game/audio';
 import { openRepair } from '../game/breakdowns';
 import { Spanner } from './Spanner';
 import { TvAd } from './TvAds';
+import { offHover, onHover } from './HoverOutline';
 
 // Only a piece swapped for a .glb file needs the model loader, so the loader stays out of the first download.
 const GlbModel = lazy(() => import('./GlbModel'));
@@ -81,10 +82,9 @@ function Item({ item, powered, running, selected, readOnly }: { item: PlacedItem
         }}
         onPointerOver={(e) => {
           if (readOnly && !useVisit.getState().current) return;
-          e.stopPropagation();
-          document.body.style.cursor = 'pointer';
+          onHover(e);
         }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOut={offHover}
       >
         <Model type={item.type} powered={powered && !item.broken} running={running} paint={item.paint} />
         {item.broken && <Spanner />}
@@ -129,7 +129,7 @@ export function PlacementGhost() {
   const placing = useGame((s) => s.placing);
   const hover = useGame((s) => s.hover);
   const items = useGame((s) => s.items);
-  const design = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design);
+  const design = useGame(activeDesignOf);
   const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
   if (visiting || !placing || !hover) return null;
   const cand = { id: '__ghost', type: placing.type, x: hover.x, z: hover.z, rot: placing.rot };

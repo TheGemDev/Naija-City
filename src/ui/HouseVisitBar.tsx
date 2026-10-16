@@ -1,3 +1,4 @@
+import { withPark } from '../game/exterior';
 import { useEffect, useRef, useState } from 'react';
 import { startCaughtScene, useCaught } from '../game/caughtScenes';
 import { useVisit } from '../game/visits';
@@ -22,7 +23,7 @@ function useCameraWatch(on: boolean) {
     const id = setInterval(() => {
       const visit = useVisit.getState().current;
       if (!visit?.burglary || asking || useCaught.getState().active) return;
-      const layout = houseLayout(visit.save.design, visit.save.walls);
+      const layout = houseLayout(withPark(visit.save.design, visit.save.ownedCars?.length ?? 0), visit.save.walls);
       if (!cameraSpotting(visit.save.items, layout, avatar.x, avatar.z)) return;
       sfx.play('beep');
       asking = true;
@@ -45,7 +46,7 @@ function walkNextTo(item: PlacedItem): Promise<boolean> {
   if (!visit) return Promise.resolve(false);
   const { cx, cz } = itemTransform(item);
   if (Math.hypot(avatar.x - cx, avatar.z - cz) <= REACH) return Promise.resolve(true);
-  const layout = houseLayout(visit.save.design, visit.save.walls);
+  const layout = houseLayout(withPark(visit.save.design, visit.save.ownedCars?.length ?? 0), visit.save.walls);
   const path = bfs(
     { x: Math.floor(avatar.x), z: Math.floor(avatar.z) },
     blockedCells(visit.save.items),

@@ -12,6 +12,7 @@ import { useVisit } from "../game/visits";
 import { homeTransform } from "../game/origins";
 import { TARGET_HEIGHT, type Clip } from "./Avatar";
 import { Person, seatDrop } from "./Person";
+import { offHover, onHover } from './HoverOutline';
 
 const MAX_SEEN = 10;
 let cache = { t: 0, ids: new Set<string>() };
@@ -119,6 +120,8 @@ function Remote({ info }: { info: RemoteInfo }) {
           visible={false}
           position={[0, TARGET_HEIGHT / 2, 0]}
           onClick={(event) => { event.stopPropagation(); openInteractions(); }}
+          onPointerOver={(e) => onHover(e, body.current)}
+          onPointerOut={offHover}
         >
           <capsuleGeometry args={[0.55, Math.max(0.2, TARGET_HEIGHT - 0.7), 4, 8]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />

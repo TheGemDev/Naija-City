@@ -218,8 +218,21 @@ function applyCorrections(c: Corrections) {
     // Only furniture is corrected. Replacing whole properties would roll back construction progress
     // made since the push, so the finished-stage notices would fire again.
     const fixed = new Map(c.properties.map((p) => [p.id, p.items]));
+    // And the owner-set parts the server cleans (worker/index.ts cleanHouses): name, outside, extensions, rooms.
+    const owned = new Map(c.properties.map((p) => [p.id, p]));
+    const HOUSE_FIELDS = ['name', 'exterior', 'extensions', 'rooms'] as const;
     useGame.setState((s) => ({
-      properties: s.properties.map((p) => (fixed.has(p.id) && fixed.get(p.id) ? { ...p, items: fixed.get(p.id) } : p)),
+      properties: s.properties.map((p) => {
+        const next = fixed.has(p.id) && fixed.get(p.id) ? { ...p, items: fixed.get(p.id) } : p;
+        const from = owned.get(p.id) as Partial<typeof p> | undefined;
+        if (!from) return next;
+        const out = { ...next };
+        for (const k of HOUSE_FIELDS) {
+          if (from[k] === undefined) delete out[k];
+          else (out as Record<string, unknown>)[k] = from[k];
+        }
+        return out;
+      }),
     }));
   }
   if (c.ownedCars) useGame.setState({ ownedCars: c.ownedCars, selectedCar: c.selectedCar ?? null });

@@ -18,7 +18,7 @@ export interface HouseVisit {
   supply?: Supply;
   /** Their meter is bypassed: you can see the wire and report it. */
   meterBypassed?: boolean;
-  save: Pick<SaveData, 'origin' | 'items'> & { design?: string | null; walls?: string[]; paint?: HousePaint; staff?: HouseholdStaff[]; ownedCars?: string[]; houseStation?: string | null };
+  save: Pick<SaveData, 'origin' | 'items'> & { design?: string | null; walls?: string[]; paint?: HousePaint; staff?: HouseholdStaff[]; ownedCars?: string[]; houseStation?: string | null; exterior?: import('./exterior').HouseExterior | null };
   selectedItemId?: string | null;
   burglary?: boolean;
 }

@@ -18,6 +18,7 @@ import { applyEvents, ensureWallet, handleWallet } from './wallet';
 import { advance, loadState, saveStateStmts, unitsOf, verifyKnowledge } from './clock';
 import { forbesAssets, ownedCounts, ownsCar, trimItems } from './progress';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
+import { cleanExtensions, cleanExterior, cleanHouseName, cleanRooms, EXTENSION_BY_ID } from '../src/game/exterior';
 import { readEstate, syncEstate } from './estate';
 import { handleCivic } from './civic';
 import { referralClaim, referralClick } from './referral';
@@ -32,6 +33,7 @@ import { handleBank } from './bank';
 import { handleFun } from './fun';
 import { handleGames } from './games';
 import { handleOwambe } from './owambe';
+import { handleCribs, refreshCribs, type SaveJson } from './cribs';
 import { handlePushApi, pushPublicKey } from './push';
 import { handleCommunity } from './community';
 import { handleGroups } from './groups';
@@ -108,6 +110,33 @@ interface Corrections {
   ownedCars?: string[];
   selectedCar?: string | null;
   investments?: Save['investments'];
+}
+
+/**
+ * The owner-set parts of each house, made safe to store and to show other people: a name through cleanHouseName
+ * (length, control characters), only known exterior choices, extensions only on a finished house of a design that
+ * takes them, and cleaned room names and uses. True when anything changed, so the client gets the same fix.
+ */
+function cleanHouses(save: Save): boolean {
+  let changed = false;
+  save.properties = save.properties?.map((raw) => {
+    const p = raw as Record<string, unknown> & { id?: string; stage?: number; design?: unknown };
+    const out: Record<string, unknown> = { ...p };
+    const name = cleanHouseName(p.name);
+    if (name) out.name = name; else delete out.name;
+    const exterior = cleanExterior(p.exterior);
+    if (exterior) out.exterior = exterior; else delete out.exterior;
+    const finished = (p.stage ?? 0) >= STAGES.length;
+    const extensions = finished ? cleanExtensions(p.extensions).filter((id) => EXTENSION_BY_ID[id].designs.includes(String(p.design))) : [];
+    if (extensions.length) out.extensions = extensions; else delete out.extensions;
+    const ext = p.extending as { id?: unknown; stage?: unknown } | null | undefined;
+    if (ext && !(finished && typeof ext.id === 'string' && EXTENSION_BY_ID[ext.id] && Number.isInteger(ext.stage) && (ext.stage as number) >= 0 && (ext.stage as number) < STAGES.length)) out.extending = null;
+    const rooms = cleanRooms(p.rooms);
+    if (rooms) out.rooms = rooms; else delete out.rooms;
+    if (JSON.stringify(out) !== JSON.stringify(p)) changed = true;
+    return out as typeof raw;
+  });
+  return changed;
 }
 
 /** Shape + sanity checks. Returns an error message, or null if the save is acceptable.
@@ -249,7 +278,7 @@ const handler = {
     if (!user) return err(401, 'Sign in required');
     // Per-player limits (a cheater with a script can't hammer D1). Money and purchases get a much tighter one.
     // Posting a snap is an upload, so it is one of them; liking and commenting on one is ordinary traffic.
-    const sensitive = /^\/api\/((shop|pay|loans|bank|blackmarket|username|media)(\/|$)|snaps$)/.test(path) && req.method !== 'GET';
+    const sensitive = /^\/api\/((shop|pay|loans|bank|blackmarket|username|media)(\/|$)|snaps$|design\/hire$)/.test(path) && req.method !== 'GET';
     const limiter = sensitive ? env.RL_SENSITIVE : env.RL_API;
     if (limiter && !(await limiter.limit({ key: user.uid })).success) {
       track(env, 'rate_limited', { blobs: [sensitive ? 'sensitive' : 'api'] });
@@ -387,6 +416,8 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
         save.furnitureInventory = corrected.furnitureInventory = [...(save.furnitureInventory ?? []), ...(confiscated.items ?? [])];
       }
     }
+    // House names, outsides, extensions and rooms (game/exterior.ts): only clean, known values are kept.
+    if (cleanHouses(save)) corrected.properties = save.properties;
     const knowledge = verifyKnowledge(state, save.knowledge);
     if (knowledge < save.knowledge) corrected.knowledge = save.knowledge = knowledge;
     const properties = save.properties ?? [];
@@ -442,6 +473,8 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       // First upload ever (e.g. a guest signing in): seed the wallet from it, capped.
       ensureWallet(env.DB, user.uid),
     ]));
+    // Crib scores (worker/cribs.ts) are worked out from the house just stored, off the request path.
+    ctx.waitUntil(refreshCribs(env.DB, user.uid, save as SaveJson).catch((e) => console.error('Crib score refresh failed', e)));
     return json({ ok: true, savedAt, corrected: Object.keys(corrected).length ? corrected : undefined });
   }
 
@@ -478,6 +511,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const owambe = await handleOwambe(req, env, ctx, user, path);
   if (owambe) return owambe;
+
+  const cribs = await handleCribs(req, env, ctx, user, path, url);
+  if (cribs) return cribs;
 
   const fun = await handleFun(req, env, ctx, user, path, url);
   if (fun) return fun;

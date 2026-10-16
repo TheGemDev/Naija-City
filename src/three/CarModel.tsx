@@ -9,6 +9,7 @@ import { BoxGeometry, BufferGeometry, CircleGeometry, CylinderGeometry, Euler, F
 import { CAR_BY_ID, type CarDef } from '../game/cars';
 import { audio } from '../game/audio';
 import { useGame } from '../game/store';
+import { offHover, onHover } from './HoverOutline';
 
 /** A point on the side view: how far forward, how high. */
 type Pt = [number, number];
@@ -613,7 +614,7 @@ export function CarModel({ carId, position = [3.2, 0, 11.2], rotation = [0, Math
   };
 
   return (
-    <group position={position} rotation={rotation} onClick={handleClick}>
+    <group position={position} rotation={rotation} onClick={handleClick} onPointerOver={onHover} onPointerOut={offHover}>
       {/* Subtle contact shadow */}
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[look.width - 0.1, look.len - 0.1]} />

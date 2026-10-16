@@ -13,10 +13,10 @@ import { legacyOf, type LegacyBreakdown, type LegacyRecord, type StatKey, type S
 import { driveHooks, driveState } from './driveState';
 import { avatar, avatarCell, resetAvatar } from './avatar';
 import { useVisit } from './visits';
-import { ITEM_PAINT, PAINT_BY_ID, type HousePaint, type WallPart } from './paint';
+import { ITEM_PAINT, isColourRef, type HousePaint, type WallPart } from './paint';
 import { WALL_BUILD_COST, WALL_KNOCK_COST, arrivalCell, edgeKey, fitItemsToLayout, houseLayout, inGrid, isEditableEdge, wallBuildError, type WallEdge, itemTransform, pathToCell, pathToItem, placementError, type Cell, type HouseLayout, type PlacedItem } from './grid';
 import { DEFAULT_ITEMS } from './defaults';
-import { activeMap, cityMap, cityPathToPlace, cityStraightPath, HOME_PLACE, hoursLabel, isOpen, mapGroundY, PLACE_BY_ID, placeAction, placeHere, setActiveMap, turnedAwayForSmell } from './city';
+import { activeMap, cityMap, cityPathToCell, cityPathToPlace, cityStraightPath, HOME_PLACE, hoursLabel, isOpen, mapGroundY, PLACE_BY_ID, placeAction, placeHere, setActiveMap, turnedAwayForSmell } from './city';
 import { exitCell, frontCell, interiorPathToCell, interiorPathToProp, INTERIORS, propDef, propTransform } from './interiors';
 import { CHECKOUT_WARNING, HOTEL_ID, isHotelRoom, MAX_NIGHTS, NIGHT, nightlyIn, nightsFree, ROOM_BY_ID, roomNumber, roomPlaceId, stayActive, stayCountdown, stayIn, type HotelStay, type HotelStays, type RoomTypeId } from './hotel';
 import { isPrivateRoom, isVillaSuite, roomParent, SUITE_ID, VILLA_ID } from './villa';
@@ -34,8 +34,10 @@ import { billShare, inspect, meterOn, METER, NO_METER, REASON_TEXT, rollInspecti
 import { blockerOf, conditionOf, damage, newCondition, PART_IDS, PARTS, repairCost, resaleOf, valueOf, wear, type CarCondition, type CarPart } from './carCare';
 import {
   CONTRACTOR_BY_ID, DESIGN_BY_ID, costOf, LAND_RECLAIM_MINUTES, landAuthority, landPrice, MATERIAL_BY_ID, materialPrice, missingMaterials, PLOTS, propRef, estateCity, REGION_BY_ID, remainingStageMaterials, rentDue, saleValue, STAGES,
-  stageLabour, stageMinutes, type PlotSize, type Property,
+  stageLabour, stageMinutes, houseTitle, extensionDesign, type PlotSize, type Property,
 } from './property';
+import { estateExit } from './estateRoads';
+import { cleanExtensions, cleanHouseName, cleanRooms, ROOM_TYPE, EXTENSION_BY_ID, extensionBlock, exteriorChangeCost, exteriorOf, layoutKey, withPark, type HouseExterior, type ExtensionId, type RoomSetting } from './exterior';
 import { audio } from './audio';
 import { CLUB_SHOUTS, clearSprayLog, shoutoutHooks, sprayKickChance, useMoneyRain } from './shoutout';
 import { entrance, estatePath, houseRect, PLOT, rowsFor, sectionOf, slotOrigin, type EstateLot } from './estate';
@@ -119,6 +121,8 @@ export interface Task {
   official?: ExecutiveOffice;
   /** You started this yourself to fill this bar (game/selfCare.ts): it ends when the bar is full, and any tap stops it. */
   auto?: Need;
+  /** A ride to an estate (game/estateRoads.ts): ends at its road out of town, then in at the gate, and to `home`'s door if set. */
+  estate?: { region: string; no: number; home?: string };
 }
 
 /**
@@ -442,6 +446,14 @@ export interface GameState {
   /** `slot`: the empty plot the player tapped in an estate; without it they get the lowest free one. */
   buyLand(region: string, plot: PlotSize, slot?: number): void;
   setHomeProperty(propertyId: string): void;
+  /** Give a house your own name (cleaned: game/exterior.ts cleanHouseName); empty clears it. */
+  renameProperty(propertyId: string, name: string): void;
+  /** Change the outside of a finished house, paying for what changes (game/exterior.ts exteriorChangeCost). */
+  changeExterior(propertyId: string, patch: HouseExterior): void;
+  /** Start building an extension: every stage paid up front, like startConstruction. */
+  startExtension(propertyId: string, ext: ExtensionId, contractorId: string): void;
+  /** Name a room and set what it is used for (game/exterior.ts ROOM_TYPES). */
+  setRoom(propertyId: string, room: string, setting: RoomSetting): void;
   hireHouseholdStaff(propertyId: string, role: StaffRole): void;
   dismissHouseholdStaff(propertyId: string, role: StaffRole): void;
   hirePersonalStaff(role: StaffRole, propertyId: string): void;
@@ -704,9 +716,43 @@ const fresh = () => ({
 });
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
-/** Design of the house the player is in; null for the starter home. */
-export const activeDesignOf = (s: Pick<GameState, 'properties' | 'activeHouseId' | 'homePropertyId'>) =>
-  s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design ?? null;
+/**
+ * Layout key of the house the player is in (game/exterior.ts layoutKey): its design, the extensions built on it and
+ * the car bay when cars are parked there. Null for the starter home without cars. Pass it wherever a layout is needed.
+ */
+export const activeDesignOf = (s: Pick<GameState, 'properties' | 'activeHouseId' | 'homePropertyId'> & Partial<Pick<GameState, 'ownedCars'>>) => {
+  const p = s.properties.find((x) => x.id === (s.activeHouseId ?? s.homePropertyId));
+  return layoutKey(p?.design ?? null, p?.extensions, s.ownedCars?.length ?? 0);
+};
+/** Layout key of a property, with the car bay when you own cars (they park at whichever house you are in). */
+export const propertyLayoutKey = (p: Pick<Property, 'design' | 'extensions'> | undefined, cars: number) => layoutKey(p?.design ?? null, p?.extensions, cars);
+
+/**
+ * One step of an extension's build (game/exterior.ts EXTENSIONS) once its stage is done: the next paid stage starts,
+ * or the last one finishes and the extension joins the house. The house itself stays finished and lived in throughout.
+ */
+function extensionStep(p: Property, minutes: number, notices: string[]): Property {
+  const ext = p.extending!;
+  const def = EXTENSION_BY_ID[ext.id];
+  const design = extensionDesign(p.design, ext.id);
+  let stage = ext.stage;
+  let building: Property['building'] = p.building;
+  const plan = p.constructionPlan ?? null;
+  while (building && building.doneAt <= minutes) {
+    stage++;
+    if (stage >= STAGES.length || !plan || !design) {
+      building = null;
+      break;
+    }
+    const contractor = CONTRACTOR_BY_ID[plan.contractor] ?? CONTRACTOR_BY_ID.standard;
+    building = { contractor: contractor.id, startedAt: building.doneAt, doneAt: building.doneAt + stageMinutes(design, STAGES[stage], contractor) };
+  }
+  if (stage >= STAGES.length) {
+    notices.push(`${def?.icon ?? '🏗️'} Your ${def?.name.toLowerCase() ?? 'extension'} at ${houseTitle(p)} is finished`);
+    return { ...p, building: null, constructionPlan: null, extending: null, extensions: cleanExtensions([...(p.extensions ?? []), ext.id]) };
+  }
+  return { ...p, building, constructionPlan: building ? plan : null, extending: { ...ext, stage } };
+}
 
 /** Which house the player is standing in, for per-house data like wall edits. */
 export const houseKeyOf = (s: Pick<GameState, 'activeHouseId' | 'homePropertyId'>) => s.activeHouseId ?? s.homePropertyId ?? 'starter';
@@ -808,9 +854,16 @@ export const houseStaffOnly = (staff: HouseholdStaff[] | undefined) =>
   staff?.filter((m) => HOUSE_STAFF_ROLES.includes(m.role as HouseStaffRole));
 
 export const useGame = create<GameState>((set, get) => {
-  function houseLayoutForState(s: Pick<GameState, 'properties' | 'homePropertyId' | 'activeHouseId' | 'wallEdits'>): HouseLayout {
-    const active = s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId));
-    return houseLayout(active?.design, s.wallEdits[houseKeyOf(s)]);
+  /** The use the owner gave the room you are standing in, if any. */
+  const roomTypeAt = (s: GameState, house: Property | undefined) => {
+    if (!house?.rooms) return null;
+    const c = avatarCell();
+    const room = houseLayoutForState(s).rooms.find((r) => c.x >= r.x0 && c.x < r.x1 && c.z >= r.z0 && c.z < r.z1);
+    const type = room ? house.rooms[room.name]?.type : undefined;
+    return type ? ROOM_TYPE[type] : null;
+  };
+  function houseLayoutForState(s: Pick<GameState, 'properties' | 'homePropertyId' | 'activeHouseId' | 'wallEdits' | 'ownedCars'>): HouseLayout {
+    return houseLayout(activeDesignOf(s), s.wallEdits[houseKeyOf(s)]);
   }
 
   const toast = (text: string) => get().toast(text);
@@ -1040,7 +1093,7 @@ export const useGame = create<GameState>((set, get) => {
       : s.properties;
     const nextHouse = properties.find((property) => property.id === nextHouseId);
     // Each house type has its own plot size: refit furniture that came from a different layout.
-    const layout = houseLayout(nextHouse?.design, s.wallEdits[nextHouseId ?? 'starter']);
+    const layout = houseLayout(propertyLayoutKey(nextHouse, s.ownedCars.length), s.wallEdits[nextHouseId ?? 'starter']);
     const fitted = fitItemsToLayout(nextHouse?.items ?? (nextHouse ? [] : s.items), layout);
     if (fitted.boxed.length) toast(`📦 ${fitted.boxed.length} item${fitted.boxed.length > 1 ? 's' : ''} didn't fit this house. Place them again from Buy mode.`);
     resetAvatar(arrivalCell(layout));
@@ -1065,13 +1118,59 @@ export const useGame = create<GameState>((set, get) => {
   const estateRows = (_region: string) => rowsFor();
   /** Plots of the estate you're standing in, for pathing round the houses. */
   const estateLots = (region: string) => (estateHooks.lots?.(region) ?? []).filter((l) => sectionOf(l.slot) === get().estateNo);
-  const enterEstate = (region: string, no: number, slot?: number) => {
-    // Arrive on the road in front of the plot named, or your first plot there, or at the estate gate.
-    const mine = get().properties.find((p) => p.region === region && sectionOf(p.slot ?? 0) === no);
+  const enterEstate = (region: string, no: number, slot?: number, atGate = false) => {
+    // Arrive on the road in front of the plot named, or your first plot there, or at the estate gate (always, off a ride).
+    const mine = atGate ? undefined : get().properties.find((p) => p.region === region && sectionOf(p.slot ?? 0) === no);
     const o = slot !== undefined ? slotOrigin(slot) : mine ? slotOrigin(mine.slot ?? 0) : null;
     resetAvatar(o ? { x: o.x + PLOT / 2, z: o.z + PLOT + 1 } : entrance(estateRows(region)));
     avatar.yaw = Math.PI / 2;
     set((s) => ({ view: 'estate', destinationId: estateCity(region), estateId: region, estateNo: no, insideId: null, panel: null, placeId: null, selectedId: null, mode: 'live', placeHubOpen: false, teleportId: s.teleportId + 1 }));
+  };
+  /** Where the map lets you out when you leave an estate (or a house in one): that estate's road into town. */
+  const estateExitCell = (region: string | null | undefined) => (region ? estateExit(get().destinationId, region)?.cell : undefined);
+  /**
+   * The ride to an estate: across the city map by the mode picked (car, keke, okada, cab, helicopter) to where the
+   * estate's road leaves town (game/estateRoads.ts), then in at the estate gate and, when `home` names a house, on
+   * foot to its door (arrive → enterOwnHouse). Fares, fuel and the state fleet are charged as before, at the start.
+   */
+  const rideToEstate = (region: string, no: number, mode: TravelMode, carId: string | undefined, home?: string) => {
+    const s = get();
+    const estate = REGION_BY_ID[region];
+    if (!estate) return;
+    // Already in that estate: no ride, just the walk to the door.
+    if (s.view === 'estate' && s.estateId === region && s.estateNo === no) {
+      if (home) get().enterOwnHouse(home);
+      return;
+    }
+    if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
+    const km = estateKm(no);
+    const fare = fareOf(mode, km);
+    const onState = stateFareForKm(mode, km);
+    if (s.money < fare) return toast(`You need ${naira(fare)} to get to ${estate.name}`);
+    if (mode === 'car' && (!carId || !s.ownedCars.includes(carId))) return toast('You need to own that car before driving it');
+    if (s.view !== 'city') get().openMap();
+    if (get().view !== 'city') return; // openMap said why (exhausted, in a cell)
+    const exit = estateExit(get().destinationId, region);
+    if (!exit) return toast("Can't find the road to that estate");
+    const path = mode === 'helicopter' ? cityStraightPath(avatarCell(), exit.cell) : cityPathToCell(avatarCell(), exit.cell);
+    if (!path) return toast("Can't find a way there");
+    if (mode === 'car' && carId && !driveOff(carId, km)) return;
+    if (driveState.vehicle) driveHooks.stop?.();
+    if (get().task) finish(true);
+    avatar.snap = null;
+    avatar.pose = 'stand';
+    avatar.recoverAt = 0;
+    const where = `${estate.name} Estate`;
+    if (fare) pay(-fare, `${mode === 'keke' ? 'Keke' : mode === 'okada' ? 'Okada' : mode === 'cab' ? 'Cab' : 'Helicopter'} to ${where}`);
+    else if (onState) chargeTreasury(onState.amount, onState.vehicle);
+    avatar.path = path;
+    avatar.onArrive = () => arrive();
+    avatar.storyAt = mode !== 'helicopter' && path.length >= STORY_ROUTE_MIN_CELLS && Math.random() < STORY_ROUTE_CHANCE ? Math.floor(path.length * (0.3 + Math.random() * 0.4)) : null;
+    const car = mode === 'car' && carId ? CAR_BY_ID[carId] : null;
+    const label = mode === 'walk' ? `Walking to ${where}` : mode === 'keke' ? `Taking keke to ${where}` : mode === 'okada' ? `Taking okada to ${where}` : mode === 'cab' ? `Taking a cab to ${where}` : mode === 'helicopter' ? `Flying by helicopter to ${where}` : `Driving to ${where}`;
+    const icon = mode === 'walk' ? '🚶🏾' : mode === 'keke' ? '🛺' : mode === 'okada' ? '🏍️' : mode === 'cab' ? '🚕' : mode === 'helicopter' ? '🚁' : '🚗';
+    set({ task: { itemId: null, actionId: 'enter', estate: { region, no, home }, label: onState ? `${STATE_FLEET[onState.office][onState.vehicle]} to ${where}` : label, icon, travelMode: mode, carId: car?.id, official: onState?.office, phase: 'walking', remaining: 0, total: 0 }, placeId: null });
+    if (!path.length) arrive();
   };
   const enterPlace = (id: string) => {
     const inside = INTERIORS[id];
@@ -1124,6 +1223,16 @@ export const useGame = create<GameState>((set, get) => {
     const t = s.task;
     if (!t) return;
     if (t.actionId === 'walk') return set({ task: null });
+    if (t.estate) {
+      // Off the ride at the estate's road: in at the gate, then the walk to your door.
+      const { region, no, home } = t.estate;
+      set({ task: null });
+      estateHooks.onVisit?.(region, no);
+      enterEstate(region, no, undefined, true);
+      toast(`${t.icon} ${t.travelMode === 'car' ? 'You drove' : t.travelMode === 'helicopter' ? 'You flew' : 'Dropped'} in at the ${REGION_BY_ID[region]?.name ?? ''} Estate gate`);
+      if (home) get().enterOwnHouse(home);
+      return;
+    }
     const def = findAction(t.itemId, t.actionId, taskItems(s), t.placeId);
     if (!def) return set({ task: null });
 
@@ -1649,6 +1758,9 @@ export const useGame = create<GameState>((set, get) => {
       // At work you eat and use the toilet there, so those drain slowly.
       if (job) Object.assign(rates, { hunger: WORK_HUNGER, bladder: -2 }, job.perHour);
       if (def?.cookingPerHour && rates.hunger > 0) rates.hunger *= 1 + s.cooking * 0.05;
+      // A room the owner has given a use (game/exterior.ts ROOM_TYPES) helps what is done in it: sleep in a bedroom, study in a study.
+      const roomUse = doing && s.view === 'home' && !useVisit.getState().current ? roomTypeAt(s, activeHouse) : null;
+      if (roomUse?.needs) for (const [n, k] of Object.entries(roomUse.needs)) if (rates[n as Need] > 0) rates[n as Need] *= 1 + k;
       // Behind the wheel: a cruise is fun, a keke shift is work.
       if (driveState.vehicle === 'car' || driveState.vehicle === 'horse') Object.assign(rates, { fun: 6, energy: -2 });
       else if (driveState.vehicle) Object.assign(rates, { fun: -1, energy: -4, social: 2 });
@@ -1657,8 +1769,8 @@ export const useGame = create<GameState>((set, get) => {
       const needs = { ...s.needs, bladder: 100 };
       for (const n of NEEDS) needs[n.key] = clamp(needs[n.key] + rates[n.key] * (rates[n.key] < 0 ? DRAIN_SCALE : 1) * taskHours);
 
-      const knowledge = Math.min(10, s.knowledge + (def?.knowledgePerHour ?? 0) * taskHours);
-      const cooking = Math.min(10, s.cooking + (def?.cookingPerHour ?? 0) * taskHours);
+      const knowledge = Math.min(10, s.knowledge + (def?.knowledgePerHour ?? 0) * (1 + (roomUse?.knowledge ?? 0)) * taskHours);
+      const cooking = Math.min(10, s.cooking + (def?.cookingPerHour ?? 0) * (1 + (roomUse?.cooking ?? 0)) * taskHours);
 
       // Power: NEPA comes and goes. Generator burns fuel when it's carrying the house.
       // The grid is shared: everyone in the city loses (and gets back) light at the same moment.
@@ -1800,6 +1912,7 @@ export const useGame = create<GameState>((set, get) => {
       if (s.properties.some((p) => p.building && p.building.doneAt <= minutes)) {
         properties = properties.map((p) => {
           if (!p.building || p.building.doneAt > minutes) return p;
+          if (p.extending) return extensionStep(p, minutes, buildNotices);
           const region = REGION_BY_ID[p.region]?.name ?? '';
           let stageIndex = p.stage;
           let building: Property['building'] = p.building;
@@ -2066,7 +2179,7 @@ export const useGame = create<GameState>((set, get) => {
       } else {
         const visit = useVisit.getState().current;
         const theirs = visitItemOf(itemId);
-        if (visit && theirs) path = pathToItem(avatarCell(), theirs, visit.save.items, houseLayout(visit.save.design, visit.save.walls));
+        if (visit && theirs) path = pathToItem(avatarCell(), theirs, visit.save.items, houseLayout(withPark(visit.save.design, visit.save.ownedCars?.length ?? 0), visit.save.walls));
         else path = pathToItem(avatarCell(), s.items.find((i) => i.id === itemId)!, s.items, houseLayoutForState(s));
       }
       if (!path) return toast("Can't reach that. Something dey block the way");
@@ -2187,7 +2300,10 @@ export const useGame = create<GameState>((set, get) => {
       if (s.view === 'city' || jailed()) return;
       if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
       if (s.task) get().cancelTask();
-      enterCity(s.view === 'place' ? doorOf(s.insideId) : undefined);
+      // Out of an estate (or a house in one) you come out where its road meets the town.
+      const house = s.view === 'home' ? s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId)) : undefined;
+      const fromEstate = s.view === 'estate' ? estateExitCell(s.estateId) : house ? estateExitCell(house.region) : undefined;
+      enterCity(s.view === 'place' ? doorOf(s.insideId) : fromEstate);
       if (s.view === 'estate') set({ estateId: null });
     },
 
@@ -2201,17 +2317,8 @@ export const useGame = create<GameState>((set, get) => {
       const house = picked ?? (homeId ? undefined : ownHouseOf(s));
       // Home is in the city its estate is in (the government house: the state you were born in). From another city you fly first.
       if (awayFrom(house ? estateCity(house.region) : homeId !== 'gov' && s.lease ? estateCity(s.lease.region) : s.homeState, 'Your house')) return;
-      if (house) {
-        const fare = fareOf(travelMode, estateKm(sectionOf(house.slot ?? 0)));
-        const onState = stateFareForKm(travelMode, estateKm(sectionOf(house.slot ?? 0)));
-        if (s.money < fare) return toast(`You need ${naira(fare)} for that ride home`);
-        if (travelMode === 'car' && (!carId || !s.ownedCars.includes(carId))) return toast('You need to own that car before driving it');
-        if (s.task) get().cancelTask();
-        if (fare) pay(-fare, 'Ride home');
-        else if (onState) chargeTreasury(onState.amount, onState.vehicle);
-        enterEstate(house.region, sectionOf(house.slot ?? 0));
-        return get().enterOwnHouse(house.id);
-      }
+      // Your own house: the ride across town to its estate's road, in at the gate, and the walk to the door.
+      if (house) return rideToEstate(house.region, sectionOf(house.slot ?? 0), travelMode, carId, house.id);
       if (homeId !== 'gov' && s.lease && rentalHooks.enter) return rentalHooks.enter();
       if (s.origin === 'almajiri') return toast('No home yet. Build a house or choose one to live in from House.');
       if (!s.govRentOwed) get().moveIntoGovHouse();
@@ -2388,12 +2495,12 @@ export const useGame = create<GameState>((set, get) => {
       const s = get();
       const it = s.items.find((i) => i.id === id);
       const slots = it && ITEM_PAINT[it.type];
-      if (!it || !slots || !slots[slot] || (colour && !PAINT_BY_ID[colour])) return;
+      if (!it || !slots || !slots[slot] || (colour && !isColourRef(colour))) return;
       const paint = slots.map((_, i) => (i === slot ? colour : it.paint?.[i] ?? null));
       set({ items: s.items.map((i) => (i.id === id ? { ...i, paint: paint.some(Boolean) ? paint : undefined } : i)) });
     },
     paintWalls(part, colour) {
-      if (colour && !PAINT_BY_ID[colour]) return;
+      if (colour && !isColourRef(colour)) return;
       const house = houseKeyOf(get());
       set((s) => {
         const next = { ...s.housePaint[house], [part]: colour ?? undefined };
@@ -2771,6 +2878,71 @@ export const useGame = create<GameState>((set, get) => {
       toast(`${c.icon} ${c.name} don start your full build. All ${STAGES.length - p.stage} stages are paid for and will finish automatically`);
     },
 
+    renameProperty(propertyId, name) {
+      const clean = cleanHouseName(name);
+      if (!get().properties.some((p) => p.id === propertyId)) return;
+      set((s) => ({
+        properties: s.properties.map((p) => {
+          if (p.id !== propertyId) return p;
+          const { name: _old, ...rest } = p;
+          return clean ? { ...rest, name: clean } : rest;
+        }),
+      }));
+      toast(clean ? `🏷️ Named it “${clean}”` : '🏷️ Name cleared');
+    },
+
+    changeExterior(propertyId, patch) {
+      const s = get();
+      const p = s.properties.find((x) => x.id === propertyId);
+      if (!p || p.stage < STAGES.length) return toast('Finish building the house first.');
+      const now = exteriorOf(p.design, p.exterior);
+      if (patch.items?.includes('pool') && p.plot === 'half' && !now.items.includes('pool')) return toast('A pool needs a full or double plot.');
+      const cost = exteriorChangeCost(p.design, now, patch);
+      if (s.money < cost) return toast(`You need ${naira(cost)} for that`);
+      // Charged like furniture and paint indoors: everyday spending, not money sunk into the property's value.
+      if (cost) pay(-cost, `Outside work: ${houseTitle(p)}`, 'spend', 'exterior');
+      set((st) => ({ properties: st.properties.map((x) => (x.id === propertyId ? { ...x, exterior: { ...x.exterior, ...patch } } : x)) }));
+      toast(cost ? `🧰 Done for ${naira(cost)}` : '🧰 Done');
+    },
+
+    startExtension(propertyId, extId, contractorId) {
+      const s = get();
+      const p = s.properties.find((x) => x.id === propertyId);
+      const c = CONTRACTOR_BY_ID[contractorId];
+      const def = EXTENSION_BY_ID[extId];
+      const design = p ? extensionDesign(p.design, extId) : null;
+      if (!p || !c || !def || !design || p.stage < STAGES.length) return;
+      if (p.building || p.extending) return toast('The builders are already on site.');
+      const block = extensionBlock(def, p.design, p.extensions ?? [], exteriorOf(p.design, p.exterior).roof);
+      if (block) return toast(block);
+      const materials = remainingStageMaterials(design, 0);
+      const materialCost = costOf(materials, p.region, p.design);
+      const labour = STAGES.map((stage) => ({ stage, fee: stageLabour(design, stage, c, p.region) }));
+      const total = materialCost + labour.reduce((a, l) => a + l.fee, 0);
+      if (s.money < total) return toast(`You need ${naira(total)} for the ${def.name.toLowerCase()}`);
+      // Property refs: the server books it into what the house cost, so it counts when the house is sold.
+      pay(-materialCost, `Materials: ${def.name}`, 'spend', propRef(p.id, 'mat'));
+      for (const { stage, fee } of labour) pay(-fee, `${c.name}: ${def.name} ${stage.name.toLowerCase()}`, 'spend', propRef(p.id, 'labour'));
+      const startedAt = s.minutes;
+      set((st) => ({
+        properties: st.properties.map((x) => x.id === propertyId ? {
+          ...x,
+          spent: x.spent + total,
+          extending: { id: extId, stage: 0 },
+          constructionPlan: { contractor: c.id },
+          building: { contractor: c.id, startedAt, doneAt: startedAt + stageMinutes(design, STAGES[0], c) },
+        } : x),
+      }));
+      toast(`${c.icon} ${c.name} don start your ${def.name.toLowerCase()}. You can stay in the house meanwhile`);
+    },
+
+    setRoom(propertyId, room, setting) {
+      const p = get().properties.find((x) => x.id === propertyId);
+      if (!p || room.length > 40) return;
+      const next = cleanRooms({ ...p.rooms, [room]: setting });
+      set((s) => ({ properties: s.properties.map((x) => (x.id === propertyId ? { ...x, rooms: next } : x)) }));
+    },
+
     setHomeProperty(propertyId) {
       const s = get();
       const p = s.properties.find((x) => x.id === propertyId);
@@ -2905,24 +3077,12 @@ export const useGame = create<GameState>((set, get) => {
       const s = get();
       const region = REGION_BY_ID[regionId];
       if (!region || jailed() || awayFrom(region.city, region.name)) return;
-      if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
+      if (avatar.exhausted) return toast('You are too exhausted to travel. Rest a little longer 😵');
       // No mode given (older callers): your selected car if you have one, otherwise a keke.
       const mode: TravelMode = travelMode ?? (s.selectedCar && CAR_BY_ID[s.selectedCar] ? 'car' : 'keke');
       const carToUse = mode === 'car' ? carId ?? s.selectedCar ?? undefined : undefined;
-      if (mode === 'car' && (!carToUse || !s.ownedCars.includes(carToUse))) return toast('You need to own that car before driving it');
-      const km = estateKm(no ?? 0);
-      const fare = fareOf(mode, km);
-      const onState = stateFareForKm(mode, km);
-      if (s.money < fare) return toast(`You need ${naira(fare)} to get to ${region.name}`);
-      if (mode === 'car' && carToUse && !burnFuel(carToUse, km)) return;
-      if (s.task) get().cancelTask();
-      if (fare) pay(-fare, `${mode === 'keke' ? 'Keke' : mode === 'okada' ? 'Okada' : mode === 'cab' ? 'Cab' : 'Helicopter'} to ${region.name}`);
-      else if (onState) chargeTreasury(onState.amount, onState.vehicle);
       const mine = s.properties.find((p) => p.region === regionId);
-      const section = no ?? (mine ? sectionOf(mine.slot ?? 0) : 0);
-      estateHooks.onVisit?.(regionId, section);
-      enterEstate(regionId, section);
-      toast(onState ? `${onState.vehicle === 'cab' ? '🚨' : '🚁'} The ${STATE_FLEET[onState.office][onState.vehicle].toLowerCase()} took you to ${region.name}` : mode === 'car' ? `🚗 You drove to ${region.name}` : mode === 'okada' ? `🏍️ Okada dropped you at ${region.name}` : mode === 'cab' ? `🚕 Cab dropped you at ${region.name}` : mode === 'helicopter' ? `🚁 You flew to ${region.name}` : `🛺 Keke dropped you for ${region.name}`);
+      rideToEstate(regionId, no ?? (mine ? sectionOf(mine.slot ?? 0) : 0), mode, carToUse);
     },
 
     gotoEstate(no) {

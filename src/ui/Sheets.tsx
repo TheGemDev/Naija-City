@@ -2,7 +2,7 @@ import { brokenAsset } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { ItemThumb } from '../three/thumbnails';
 import { CATEGORIES, ITEMS, ITEM_LIST, JOBS, type ActionDef, type Category } from '../game/catalog';
-import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, ticketOf, useGame, type TravelMode } from '../game/store';
+import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, ticketOf, useGame, type TravelMode, activeDesignOf } from '../game/store';
 import { cityMap, hoursLabel, isOpen, PLACE_BY_ID } from '../game/city';
 import { cityNameHere, regionPlaces } from '../game/regions';
 import { employment } from '../game/jobs';
@@ -234,7 +234,7 @@ function WallTools() {
   const money = useGame((s) => s.money);
   const items = useGame((s) => s.items);
   const toggleWall = useGame((s) => s.toggleWall);
-  const layout = useGame((s) => houseLayout(s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design, s.wallEdits[houseKeyOf(s)]));
+  const layout = useGame((s) => houseLayout(activeDesignOf(s), s.wallEdits[houseKeyOf(s)]));
   const exists = !!sel && layout.edgeSet.has(edgeKey(sel));
   const error = sel && !exists ? wallBuildError(layout, sel, items, avatarCell()) : null;
   const cost = exists ? WALL_KNOCK_COST : WALL_BUILD_COST;
@@ -286,7 +286,7 @@ export function PlaceBar() {
   const placeAt = useGame((s) => s.placeAt);
   const hover = useGame((s) => s.hover);
   const items = useGame((s) => s.items);
-  const design = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design);
+  const design = useGame(activeDesignOf);
   const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
   if (!placing) return null;
   const layout = houseLayout(design, walls);

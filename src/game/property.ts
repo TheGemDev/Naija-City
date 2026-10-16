@@ -3,6 +3,8 @@
 // town map; they live in the House phone app. Kept dependency-light so the server (worker/wallet.ts)
 // can check rent and sale payouts against the same numbers.
 
+import { EXTENSION_BY_ID } from './exterior';
+
 export const DAY_MINUTES = 24 * 60;
 export const LAND_RECLAIM_MINUTES = 30 * DAY_MINUTES;
 
@@ -138,6 +140,16 @@ export const DESIGNS: DesignDef[] = [
 ];
 export const DESIGN_BY_ID: Record<string, DesignDef> = Object.fromEntries(DESIGNS.map((d) => [d.id, d]));
 
+/**
+ * An extension (game/exterior.ts) priced and timed like a small house of the same finish: the extension's size times
+ * the house's, never below a self-con's worth of a room. Null when either is unknown.
+ */
+export function extensionDesign(design: string | null | undefined, ext: string): DesignDef | null {
+  const d = DESIGN_BY_ID[design ?? ''];
+  const e = EXTENSION_BY_ID[ext];
+  return d && e ? { ...d, id: `${d.id}+${e.id}`, name: e.name, size: Math.max(0.15, +(e.size * d.size).toFixed(3)) } : null;
+}
+
 export interface ContractorDef {
   id: string;
   name: string;
@@ -190,7 +202,20 @@ export interface Property {
   staff?: import('./staff').HouseholdStaff[];
   /** Furnishings belonging only to this house; newly built properties start empty. */
   items?: import('./grid').PlacedItem[];
+  /** The owner's own name for it ("Mama's house"), cleaned by cleanHouseName (game/exterior.ts). Unset: it goes by its design. */
+  name?: string;
+  /** The outside the owner has chosen (game/exterior.ts); unset parts are the design's defaults. */
+  exterior?: import('./exterior').HouseExterior;
+  /** Extensions finished on it, in EXTENSIONS order. */
+  extensions?: import('./exterior').ExtensionId[];
+  /** An extension under construction: the same stages as the house, run through `building` / `constructionPlan`. */
+  extending?: { id: import('./exterior').ExtensionId; stage: number } | null;
+  /** Names and uses the owner gave rooms, by the room's design name. */
+  rooms?: Record<string, import('./exterior').RoomSetting>;
 }
+
+/** What a house is called in lists: its own name, else its design ("5-Bedroom Mansion"), else bare land. */
+export const houseTitle = (p: Pick<Property, 'name' | 'design'>) => p.name || (p.design ? DESIGN_BY_ID[p.design]?.name : null) || 'Bare land';
 
 /** Materials a design needs for a stage. */
 export function stageMaterials(design: DesignDef, stage: StageDef): Record<string, number> {
