@@ -8,7 +8,7 @@
 import { useMemo } from 'react';
 import { ITEMS } from '../game/catalog';
 import { footprint } from '../game/grid';
-import { WALL_FACE, centreOf, degOf, mountOf, quarterSize, type Mount, type Placed } from '../game/mount';
+import { WALL_FACE, centreOf, degOf, mountOf, type Mount, type Placed } from '../game/mount';
 import { paintHex } from '../game/paint';
 import type { HouseLayout } from '../game/grid';
 
@@ -56,7 +56,8 @@ export function FloorPlan({ layout, items, inner, selected, fresh, ghost, onCell
     const { cx, cz } = centreOf(it);
     const deg = degOf(it);
     // The outline in the piece's own space (front = +z), centred on (0, 0), turned and moved into place.
-    let rw = def.w, rd = def.d, oz = 0, icon = Math.min(0.78, Math.min(def.w, def.d) * 0.72);
+    const rw = def.w;
+    let rd = def.d, oz = 0, icon = Math.min(0.78, Math.min(def.w, def.d) * 0.72);
     let shape: 'rect' | 'dot' = 'rect';
     if (mount === 'wall') {
       // Its tiles sit in front of the wall: the strip hugs the wall at the back of them.
@@ -70,14 +71,14 @@ export function FloorPlan({ layout, items, inner, selected, fresh, ghost, onCell
       icon = Math.min(0.6, Math.min(def.w, def.d) * 0.55);
     }
     const r = Math.max(0.16, Math.min(0.32, def.small ?? 0.22));
-    // The icon stays upright; it sits on the strip's middle for wall pieces.
+    // The icon stays upright, on the outline's middle ((0, oz) turned by deg, as SVG's rotate does).
     const a = (deg * Math.PI) / 180;
-    const ix = cx - Math.sin(a) * oz * -1 * 0 + -Math.sin(a) * oz;
+    const ix = cx - Math.sin(a) * oz;
     const iz = cz + Math.cos(a) * oz;
     return (
       <g
         key={ghostly ? 'ghost' : key}
-        className={`fp-item ${mount}${layerOf(it) === 0 ? ' floor' : ''}${on ? ' on' : ''}${fresh?.has(key) ? ' fresh' : ''}${ghostly ? ' ghost' : ''}`}
+        className={`fp-item m-${mount}${layerOf(it) === 0 ? ' floor' : ''}${on ? ' on' : ''}${fresh?.has(key) ? ' fresh' : ''}${ghostly ? ' ghost' : ''}`}
         onClick={onItem && it.id && !ghostly ? (e) => { e.stopPropagation(); onItem(it.id!); } : undefined}
       >
         {shape === 'dot'
@@ -116,5 +117,3 @@ export function FloorPlan({ layout, items, inner, selected, fresh, ghost, onCell
 
 /** Cells a piece covers, for hit tests outside the plan. */
 export const planCells = (it: PlanItem) => footprint(it);
-/** Tile size of a piece at a quarter turn. */
-export const planSize = (it: PlanItem) => quarterSize(it.type, it.rot);

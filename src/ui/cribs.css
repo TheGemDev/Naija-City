@@ -69,6 +69,11 @@
 .fp-item.ghost { opacity: 0.55; pointer-events: none; }
 .fp-item.ghost rect { fill: #bfdbfe; stroke: #2563eb; }
 .fp-item { cursor: pointer; }
+.fp-item.m-wall rect { fill: #f3e7d3; stroke: rgba(60, 40, 20, 0.6); }
+.fp-item.m-surface circle { fill: #fffdf8; stroke: rgba(60, 40, 20, 0.5); stroke-width: 0.04; }
+.fp-item.m-ceiling rect { fill: rgba(255, 236, 170, 0.35); stroke: rgba(150, 110, 20, 0.7); stroke-dasharray: 0.12 0.08; }
+.fp-item.on circle { stroke: #2563eb; stroke-width: 0.1; }
+.fp-item.fresh circle { stroke: #16a34a; stroke-width: 0.08; }
 
 /* ---------- Layouts and packs ---------- */
 .cb-save { flex-direction: row; align-items: center; }

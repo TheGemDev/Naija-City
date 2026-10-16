@@ -15,7 +15,8 @@ export function ParkedCarSheet() {
   const car = carId ? CAR_BY_ID[carId] : null;
   const owned = useGame((s) => !!carId && s.ownedCars.includes(carId));
   const selected = useGame((s) => s.selectedCar === carId);
-  const condition = useGame((s) => (carId ? conditionOf(s.carCondition, carId) : null));
+  const conditions = useGame((s) => s.carCondition);
+  const condition = carId ? conditionOf(conditions, carId) : null;
   const fuel = useGame((s) => (carId ? fuelLeft(s.carFuel, carId) : 0));
   const money = useGame((s) => s.money);
   const atHome = useGame((s) => s.view === 'home');

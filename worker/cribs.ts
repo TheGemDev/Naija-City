@@ -15,6 +15,7 @@ import { followHost, roomOf } from './shards';
 import { houseOf } from './social';
 import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W, arrivalCell, placementError, type PlacedItem } from '../src/game/grid';
+import { carry, childrenOf, normalizePlaced, tidy } from '../src/game/mount';
 import { isColourRef, type HousePaint } from '../src/game/paint';
 import type { HouseFinish } from '../src/game/finishes';
 import { REGION_BY_ID, STAGES } from '../src/game/property';
@@ -650,16 +651,23 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     // Checked as if someone stood just inside the gate: nothing may block the way in or sit on that spot.
     const far = arrivalCell(layout);
     const at = (x: unknown, z: unknown, rot: unknown) => (Number.isInteger(x) && Number.isInteger(z) && Number.isInteger(rot) && (rot as number) >= 0 && (rot as number) <= 3 ? { x: x as number, z: z as number, rot: rot as number } : null);
+    // The designer works on the grid: a piece it puts down stands square on its tiles (no free angle, not on a
+    // table), keeping only a wall piece's height. game/mount.ts has the fields this clears.
+    const plain = (it: PlacedItem): PlacedItem => tidy(normalizePlaced({ ...it, rotDeg: undefined, mount: undefined, on: undefined, px: undefined, pz: undefined }));
     let spend = 0;
     let detail = '';
     let ledger: D1PreparedStatement[] = [];
     if (b.op === 'move') {
-      const it = draft.items.find((i) => i.id === b.itemId);
+      const idx = draft.items.findIndex((i) => i.id === b.itemId);
+      const it = draft.items[idx];
       const pos = at(b.x, b.z, b.rot);
       if (!it || !pos || ITEMS[it.type]?.fixed) return err(400, 'Pick a piece and a spot');
       const why = placementError({ type: it.type, ...pos }, draft.items, far, it.id, layout);
       if (why) return err(409, why);
-      Object.assign(it, pos);
+      const moved = plain({ ...it, ...pos });
+      draft.items[idx] = moved;
+      // Whatever stands on it rides along.
+      for (const child of childrenOf(draft.items, it.id)) draft.items[draft.items.indexOf(child)] = carry(child, it, moved);
       detail = `Moved ${ITEMS[it.type].name}`;
     } else if (b.op === 'place') {
       const idx = draft.storage.findIndex((i) => i.id === b.itemId);
@@ -669,13 +677,16 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
       const why = placementError({ type: it.type, ...pos }, draft.items, far, undefined, layout);
       if (why) return err(409, why);
       draft.storage.splice(idx, 1);
-      draft.items.push({ ...it, ...pos });
+      draft.items.push(plain({ ...it, ...pos }));
       detail = `Placed ${ITEMS[it.type].name} from storage`;
     } else if (b.op === 'store') {
       const idx = draft.items.findIndex((i) => i.id === b.itemId);
       if (idx < 0 || ITEMS[draft.items[idx].type]?.fixed) return err(400, 'Pick a piece to store');
       const [it] = draft.items.splice(idx, 1);
-      draft.storage.push(it);
+      // What stood on it goes to storage with it.
+      const kids = childrenOf(draft.items, it.id);
+      draft.items = draft.items.filter((i) => !kids.includes(i));
+      draft.storage.push(plain(it), ...kids.map(plain));
       detail = `Stored ${ITEMS[it.type].name}`;
     } else if (b.op === 'buy') {
       const def = ITEMS[b.type ?? ''];
