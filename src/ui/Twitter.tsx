@@ -662,7 +662,6 @@ function Home({ tab, setTab, city, setCity, scroller, hidden }: { tab: Tab; setT
   const feedEnd = useLive((s) => s.feedEnd);
   const friendsEnd = useLive((s) => s.friendsEnd);
   const feedCity = useLive((s) => s.feedCity);
-  const me = useSession((s) => s.user);
   const all = useAllItems();
   const trends = useMemo(() => trendsOf(all), [all]);
   const [headHidden, setHeadHidden] = useState(false);
@@ -718,11 +717,6 @@ function Home({ tab, setTab, city, setCity, scroller, hidden }: { tab: Tab; setT
       onTouchMove={(e) => { if (touch.current !== null) setPull(Math.max(0, Math.min(90, (e.touches[0].clientY - touch.current) * 0.5))); }}
       onTouchEnd={() => { if (pull > 55 && !refreshing) void refresh(); touch.current = null; setPull(0); }}>
       <header className={`tw-top ${headHidden ? 'up' : ''}`}>
-        <div className="tw-bar">
-          <button type="button" className="tw-me" aria-label="Your profile" onClick={() => me?.username && nav.open({ t: 'profile', who: { kind: 'player', username: me.username, uid: me.uid } })}>
-            <Face uid={me?.uid} username={me?.username} size="fill" />
-          </button>
-        </div>
         <nav className="tw-tabs" role="tablist">
           {([['following', 'Friends'], ['global', 'Global'], ['vdm', 'VDM']] as [string, string][]).map(([id, label]) => {
             const on = id === 'global' ? tab === 'foryou' || tab === 'city' : tab === id;

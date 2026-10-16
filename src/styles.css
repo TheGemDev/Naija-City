@@ -3164,15 +3164,18 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .sheet.catalogue.on-finishes { max-height: 42vh; }
 
 /* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, then along the bottom right: chat, Map, Phone (Phone in the corner). Icons alone, in the chat button's own look. */
-.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 170px); pointer-events: none; }
+.corner-left { position: absolute; left: 12px; bottom: calc(20px + 54px + 10px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 10px; max-width: calc(100% - 24px); pointer-events: none; }
 .corner-left > * { pointer-events: auto; }
-.corner-ctx { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Left of the row: square buttons with their names. */
-.corner-ctx button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 52px; height: 52px; padding: 0 8px; border-radius: 16px; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
-.corner-ctx button span { font-size: 22px; line-height: 1; display: grid; }
-.corner-ctx button.on, .corner-right button.on { background: var(--inverse); color: #fff; }
-.corner-ctx button.leave { background: #dc2626; border-color: #dc2626; color: #fff; }
-.corner-ctx button:disabled, .corner-right button:disabled { opacity: 0.35; }
+/* Home sits right above you and what is here (Decor, Activities, Estates) beside it: round icons in the same look as the chat, Map and Phone buttons. */
+.corner-ctx { display: flex; align-items: center; gap: 10px; }
+.corner-side { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(21px + var(--safe-b)); z-index: 20; display: flex; align-items: center; gap: 10px; }
+:is(.corner-ctx, .corner-side) button { font-size: 0; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 0; border-radius: 50%; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); color: var(--fg-0f172a); }
+:is(.corner-ctx, .corner-side) button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
+:is(.corner-ctx, .corner-side) button.on, .corner-right button.on { border-color: #16a34a; box-shadow: 0 0 0 2px #16a34a, var(--shadow); }
+/* Leaving and clocking out say what they do. */
+:is(.corner-ctx, .corner-side) button.leave { width: auto; padding: 0 18px; gap: 8px; border-radius: 999px; background: #dc2626; border-color: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
+:is(.corner-ctx, .corner-side) button.leave span { font-size: 18px; line-height: 1; }
+:is(.corner-ctx, .corner-side) button:disabled, .corner-right button:disabled { opacity: 0.35; }
 /* Right: Map and Phone are round icons alone, centred the way the chat icon is, in its own look. */
 .corner-right button { font-size: 0; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); }
 .corner-right button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
@@ -3185,3 +3188,6 @@ body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
 /* Chat sits on top of the Map and Phone row, on the right. */
 body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 68px + 10px); }
 body.corner-hud .chat-fab .chat-form { margin-right: 0; }
+/* The low-need bubbles sit past the button beside you, so the space above you is free for Home. */
+body.corner-hud .need-alerts { position: absolute; left: calc(100% + 8px + 62px); bottom: 0; flex-direction: row; align-items: center; }
+body.corner-hud .need-alerts .thought-dot { display: none; }

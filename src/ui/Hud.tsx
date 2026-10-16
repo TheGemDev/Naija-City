@@ -788,10 +788,12 @@ function NavShell({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="corner-left">
-        {/* Situational buttons (Leave, Clock out, Activities, Home...) sit under the current task, beside you. */}
-        <div className="corner-ctx">{all.filter((c) => !key(c))}</div>
+        {/* The first situational button (Home, Go outside, Leave...) sits right above you, under the current task. */}
+        <div className="corner-ctx">{all.filter((c) => !key(c)).slice(0, 1)}</div>
         {mode === 'live' && <TaskChip />}
       </div>
+      {/* What else is here (Decor, Activities, Estates) is beside you. */}
+      <div className="corner-side">{all.filter((c) => !key(c)).slice(1)}</div>
       <nav className="corner-right">
         {all.filter((c) => key(c) === 'map')}
         {all.filter((c) => key(c) === 'phone')}
