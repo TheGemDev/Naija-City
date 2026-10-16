@@ -21,6 +21,7 @@ import { BufferGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry }
 import './cityModels';
 import { Glow, Kit, prep, scale, type Built, type RGB, type V3 } from './placeKit';
 import { exteriorHex, type Exterior } from '../game/exterior';
+import { plantTree } from './trees';
 
 /* ---------- Colours ---------- */
 
@@ -40,8 +41,6 @@ const LAWN = '#6fa346';
 const LAWN_DARK = '#5e8f3a';
 const HEDGE = '#2f6b2a';
 const LEAF = ['#3f7d2a', '#4d8a34', '#2f6b24'];
-const PALM = '#3d7a2c';
-const TRUNK = '#6b4a2e';
 const SOIL = '#7a5236';
 const LATERITE = '#b9764a';
 const GRAVEL = '#b8aa94';
@@ -750,22 +749,17 @@ function drawSecurity(k: HousePen, hw: number, hd: number, low: boolean) {
   }
 }
 
+/** Where a tree stands on the estate, so two houses' yards never grow the same tree on the same local spot. */
+const yardSeed = (k: HousePen) => k.ox * 7.13 + k.oz * 3.71;
+
+/** A coconut palm from the tree kit (trees.ts), about 0.9×`s` tall. */
 function drawPalm(k: HousePen, x: number, z: number, s: number, low: boolean) {
-  const h = 0.9 * s;
-  k.post(TRUNK, [x, 0, z], 0.035 * s, h, 5, 0.75);
-  const n = low ? 5 : 8;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const ex = x + Math.cos(a) * 0.32 * s, ez = z + Math.sin(a) * 0.32 * s;
-    k.bar(i % 2 ? PALM : LEAF[0], [x, h, z], [ex, h - 0.1 * s, ez], 0.05 * s);
-  }
-  k.shape(LEAF[2], LUMP(), [x, h, z], [0.06 * s, 0.05 * s, 0.06 * s]);
+  plantTree(k, 'coconut', x, z, 0.62 * s, { low, seed: yardSeed(k) });
 }
 
+/** A mango tree from the tree kit (trees.ts), its crown about 0.43×`s` in radius. */
 function drawMango(k: HousePen, x: number, z: number, s: number, low: boolean) {
-  k.post(TRUNK, [x, 0, z], 0.05 * s, 0.5 * s, 5, 0.7);
-  k.shape(LEAF[1], LUMP(), [x, 0.72 * s, z], [0.4 * s, 0.3 * s, 0.4 * s], [0, x * 3, 0]);
-  if (!low) k.shape(LEAF[0], LUMP(), [x + 0.16 * s, 0.6 * s, z + 0.1 * s], [0.26 * s, 0.22 * s, 0.26 * s], [0.4, z, 0]);
+  plantTree(k, 'mango', x, z, 0.7 * s, { low, seed: yardSeed(k) });
 }
 
 function drawPool(k: HousePen, x0: number, z0: number, x1: number, z1: number, low: boolean) {

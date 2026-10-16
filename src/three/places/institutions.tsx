@@ -54,7 +54,7 @@ let globe: BufferGeometry | undefined;
 /** A half sphere of radius 1 standing on y=0. */
 const HEMI = (low: boolean) =>
   low ? (hemiLo ??= prep(new SphereGeometry(1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2))) : (hemi ??= prep(new SphereGeometry(1, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2)));
-/** A rough ball of radius 1 (20 faces): tree crowns, bundles. */
+/** A rough ball of radius 1 (20 faces): flower beds, finials, bundles. */
 const BALL = () => (ball ??= prep(new IcosahedronGeometry(1, 0)));
 /** A round ball of radius 1: gas spheres. */
 const GLOBE = () => (globe ??= prep(new SphereGeometry(1, 12, 8)));

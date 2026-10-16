@@ -67,7 +67,7 @@ const cached = (key: string, make: () => BufferGeometry) => {
 };
 /** A dome of radius 1 on y=0. */
 const DOME = (lon: number, lat: number) => cached(`dome${lon}|${lat}`, () => new SphereGeometry(1, lon, lat, 0, Math.PI * 2, 0, Math.PI / 2));
-/** A lump of radius 1: rocks, tree crowns, clay heads. */
+/** A lump of radius 1: rocks, rubble, clay heads. */
 const LUMP = (detail: number) => cached(`ico${detail}`, () => new IcosahedronGeometry(1, detail));
 
 /* ---------- A pen: the kit, a glow and an optional frame to draw in ---------- */

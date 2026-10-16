@@ -17,7 +17,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useLowPerf } from '../game/quality';
-import { lampMat, windowMat } from './cityModels';
+import { lampMat, windowMat } from './nightMats';
 import { seedAt } from './StaticBatch';
 
 export type V3 = [number, number, number];

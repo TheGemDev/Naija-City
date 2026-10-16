@@ -3326,3 +3326,7 @@ body.corner-hud .decor-top > button { flex: 1; justify-content: center; }
 
 /* On a phone with a notch the profile steps down below it, like the clock does. */
 body.corner-hud .needs { margin-top: env(safe-area-inset-top, 0px); }
+/* The avatar lines up with the row it sits in (the money and the clock), not above it, at every card height. */
+body.corner-hud .needs { top: 14px !important; }
+body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--me) + 8px); }
+body.corner-hud .need-alerts { top: calc(14px + var(--hud-h) + 12px); }

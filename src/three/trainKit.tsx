@@ -14,7 +14,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Float32BufferAttribute, Color, Matrix4, MeshStandardMaterial, Vector3, type Group, type Material } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Glow, Kit, NightGlow, unitCyl, type RGB, type V3 } from './placeKit';
-import { lampMat, windowMat } from './cityModels';
+import { lampMat, windowMat } from './nightMats';
 
 export const RAIL_WHITE = '#f4f6f8';
 export const RAIL_GREEN = '#0f7a3a';
