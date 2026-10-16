@@ -302,7 +302,7 @@ const inwardFaces = (layout: HouseLayout, e: Edge) => edgeFaces(layout, e).filte
 
 /**
  * Parts of one outer side that stretch with it: the wall round each window (whole when the side is cut down, with
- * the opening when it stands), finish skins on its inside faces, and the front door with the wall over it.
+ * the opening when it stands), finish skins on its inside faces, and the wall over its doorways.
  * Lives inside WallSide's scaled group, so everything is built one unit tall and the group stretches it.
  */
 export function SideScaled({ edges, layout, finish, wall, innerColour, height }: {
@@ -355,12 +355,9 @@ export function SideScaled({ edges, layout, finish, wall, innerColour, height }:
     );
   };
 
-  // The front door, if it is on this side: wall over it, a frame, and the door standing open.
-  const entry = layout.entry;
-  const doorEdge = entry.side === 'south' ? { dir: 'h' as const, x: entry.at, z: layout.depth }
-    : entry.side === 'north' ? { dir: 'h' as const, x: entry.at, z: 0 } : { dir: 'v' as const, x: 0, z: entry.at };
-  const mine = edges.length > 0 && edges[0].dir === doorEdge.dir && (doorEdge.dir === 'h' ? edges[0].z === doorEdge.z : edges[0].x === doorEdge.x);
-  const inward = entry.side === 'south' ? -1 : 1;
+  // The wall over each doorway out of the house on this side. The doors and their frames are three/homeYard.tsx
+  // HouseDoors (this used to draw a second front door too, overlapping that one).
+  const lintels = layout.doors.filter((d) => edges.length > 0 && edges[0].dir === d.dir && (d.dir === 'h' ? edges[0].z === d.z : edges[0].x === d.x));
 
   const key = sig(layout, finish, `${wall}|${innerColour}|${windows.length}`);
   return (
@@ -379,30 +376,10 @@ export function SideScaled({ edges, layout, finish, wall, innerColour, height }:
         <QuadMeshes quads={short} />
         <StaticBatch key={`s${key}`}>{windows.map((e, i) => piece(e, 0, 1, 0, TALL, `${i}`))}</StaticBatch>
       </group>
-      {mine && (
-        <group>
-          <StaticBatch key={`d${key}`}>
-            {piece({ ...doorEdge, kind: 'wall', tall: true }, 0, 1, DOOR_H, TALL, 'lintel')}
-            {[0.035, 0.965].map((a) => (
-              <mesh key={a} position={doorEdge.dir === 'h' ? [doorEdge.x + a, (DOOR_H / 2) * k, doorEdge.z] : [doorEdge.x, (DOOR_H / 2) * k, doorEdge.z + a]} castShadow>
-                <boxGeometry args={doorEdge.dir === 'h' ? [0.07, DOOR_H * k, T + 0.05] : [T + 0.05, DOOR_H * k, 0.07]} />
-                <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
-              </mesh>
-            ))}
-            <mesh position={doorEdge.dir === 'h' ? [doorEdge.x + 0.5, (DOOR_H - 0.03) * k, doorEdge.z] : [doorEdge.x, (DOOR_H - 0.03) * k, doorEdge.z + 0.5]}>
-              <boxGeometry args={doorEdge.dir === 'h' ? [1, 0.06 * k, T + 0.05] : [T + 0.05, 0.06 * k, 1]} />
-              <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
-            </mesh>
-          </StaticBatch>
-          {/* A heavy panelled front door, open into the house */}
-          <group
-            position={doorEdge.dir === 'h' ? [doorEdge.x + 0.07, 0, doorEdge.z + inward * (T / 2 + 0.02)] : [doorEdge.x + T / 2 + 0.02, 0, doorEdge.z + 0.07]}
-            rotation={[0, doorEdge.dir === 'h' ? (inward < 0 ? Math.PI * 0.55 : -Math.PI * 0.55) : Math.PI * 0.05, 0]}
-            scale={[1, k, 1]}
-          >
-            <DoorLeaf w={0.86} h={DOOR_H - 0.04} c="#5a3418" />
-          </group>
-        </group>
+      {lintels.length > 0 && (
+        <StaticBatch key={`d${key}`}>
+          {lintels.map((d) => piece({ ...d, kind: 'wall', tall: true }, 0, 1, DOOR_H, TALL, `lintel${d.x},${d.z}`))}
+        </StaticBatch>
       )}
     </group>
   );

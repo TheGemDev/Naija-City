@@ -4,7 +4,7 @@
 
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFrame, type ThreeElements } from '@react-three/fiber';
-import { BufferGeometry, CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, Euler, Float32BufferAttribute, LatheGeometry, Matrix4, MeshStandardMaterial, Quaternion, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TorusGeometry, TubeGeometry, Vector2, Vector3, type Group, type Mesh } from 'three';
+import { BufferGeometry, CanvasTexture, CapsuleGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, Euler, Float32BufferAttribute, LatheGeometry, Matrix4, MeshStandardMaterial, Quaternion, RepeatWrapping, SRGBColorSpace, SphereGeometry, SplineCurve, TubeGeometry, Vector2, Vector3, type Group, type Mesh } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { decodeLook, GARMENT_BY_ID, HAIR_COLORS, isFullOutfit, SKINS, type Appearance, type Body, type Garment, type Pattern } from '../game/wardrobe';
 import type { ActivityAnimation } from '../game/catalog';
@@ -1127,16 +1127,16 @@ function headRows(f: boolean): HeadRow[] {
     const k = Math.sin(t);
     rows.push([HEAD_TOP * Math.cos(t), 0.129 * k, 0.134 * k, -0.139 * k, 2]);
   }
-  const jaw = f ? 0.9 : 1;
+  const jaw = f ? 0.94 : 1;
   rows.push(
-    [0.028, 0.127, f ? 0.13 : 0.133, -0.136, 2.2],
-    [0.008, 0.125, 0.12, -0.136, 2.4],
+    [0.028, 0.127, f ? 0.128 : 0.1295, -0.136, 2.2],
+    [0.008, 0.125, 0.1245, -0.136, 2.4],
     [-0.022, 0.126, 0.123, -0.13, 2.6],
     [-0.052, 0.113 * (f ? 0.96 : 1), 0.12, -0.113, 2.7],
     [-0.082, 0.1 * jaw, 0.114, -0.084, f ? 2.5 : 3.2],
-    [-0.108, 0.08 * jaw, 0.109, -0.052, f ? 2.4 : 3.2],
-    [-0.13, f ? 0.042 : 0.054, f ? 0.103 : 0.107, -0.014, f ? 2.4 : 3],
-    [-0.145, f ? 0.02 : 0.028, f ? 0.09 : 0.095, 0.028, 2.2],
+    [-0.108, (f ? 0.082 : 0.086) * jaw, 0.109, -0.052, f ? 2.4 : 3.2],
+    [-0.13, f ? 0.054 : 0.06, f ? 0.103 : 0.107, -0.014, f ? 2.4 : 3],
+    [-0.145, f ? 0.03 : 0.032, f ? 0.09 : 0.095, 0.028, 2.2],
     [-0.15, 0, 0.068, 0.068, 2],
   );
   return rows;
@@ -1230,7 +1230,7 @@ const headGeo = (f: boolean) =>
     const parts = [
       noseGeo(f),
       // Ears: flat ovals standing off the side of the head, tipped back a little at the top.
-      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.032, 12, 10), [sd * 0.127, -0.006, -0.01], [-0.15, sd * -0.35, 0], [0.4, 1, 0.66])),
+      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.032, 12, 10), [sd * 0.127, -0.006, -0.01], [-0.15, sd * -0.35, 0], [0.4, 1.2, 0.66])),
     ];
     return mergeGeometries([skull, ...parts])!;
   });
@@ -1247,7 +1247,7 @@ const smoothstep = (a: number, b: number, x: number) => {
  */
 function noseGeo(f: boolean) {
   const k = f ? 0.88 : 1;
-  const top = 0.014, bot = -0.037;
+  const top = 0.016, bot = -0.046;
   /** Where the tip sticks out furthest, as a share of the way down. */
   const TIP = 0.8;
   const rows = 16, cols = 14;
@@ -1258,7 +1258,7 @@ function noseGeo(f: boolean) {
     // Out from the face: nothing at the bridge's top, the most at the tip, back to nothing underneath.
     const out = 0.021 * k * (t <= TIP ? Math.sin((t / TIP) * (Math.PI / 2)) ** 1.25 : Math.cos(((t - TIP) / (1 - TIP)) * (Math.PI / 2)) ** 0.6);
     // Half its width: a narrow bridge, then the wings flaring at the base.
-    const half = (0.0082 + 0.0138 * smoothstep(0.3, 0.92, t)) * k;
+    const half = (0.0078 + 0.0182 * smoothstep(0.32, 0.9, t)) * k;
     // The wings are fuller at the base, so the sides stand out there rather than sloping away.
     const p = 1.7 - 0.9 * smoothstep(0.55, 1, t);
     for (let j = 0; j <= cols; j++) {
@@ -1280,59 +1280,214 @@ function noseGeo(f: boolean) {
   return g;
 }
 
-/** The mouth: a short arc turned up at the corners, so faces at rest look friendly rather than glum. */
-const SMILE = 1.5;
-const smile = geo('smile', () => new TorusGeometry(0.03, 0.0026, 5, 14, SMILE));
+const EYE_X = 0.047;
+const EYE_Y = 0.01;
+/** The eye whites' half width, half height and depth. */
+const EYE_R: [number, number, number] = [0.0215, 0.0145, 0.0095];
+const IRIS = 0.0108;
+/**
+ * Where the lips meet, mid-mouth: about a third of the way from the base of the nose (-0.046) down to the chin
+ * (-0.14), leaving a philtrum above and a chin below rather than a mouth tucked under the nose.
+ */
+const MOUTH_Y = -0.074;
+
+/** A unit sphere squashed to an ellipsoid at `c`, for parts merged into one face mesh. */
+const blob = (c: Vector3, r: [number, number, number], w = 16, h = 12) => {
+  const g = new SphereGeometry(1, w, h);
+  g.deleteAttribute('uv');
+  return g.applyMatrix4(new Matrix4().compose(c, new Quaternion(), new Vector3(...r)));
+};
+
+/**
+ * A soft stroke laid along the face (a brow, the line of the upper lid, where the lips meet): round in section,
+ * flattened against the face by `flat`, `r(t)` thick along its length and pinched shut at both ends, so it needs no caps.
+ */
+function strand(pts: Vector3[], r: (t: number) => number, flat = 1, n = 14, m = 6) {
+  const curve = new CatmullRomCurve3(pts);
+  const pos: number[] = [];
+  const p = new Vector3(), tan = new Vector3(), out = new Vector3(), up = new Vector3();
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    curve.getPointAt(t, p);
+    curve.getTangentAt(t, tan);
+    // "Out" is off the face: forward, turning outwards towards the sides of the head.
+    out.set(p.x * 5, 0, 1);
+    out.addScaledVector(tan, -tan.dot(out)).normalize();
+    up.crossVectors(tan, out);
+    const k = r(t);
+    for (let j = 0; j < m; j++) {
+      const a = (j / m) * Math.PI * 2;
+      pos.push(p.x + (out.x * Math.cos(a) * flat + up.x * Math.sin(a)) * k, p.y + (out.y * Math.cos(a) * flat + up.y * Math.sin(a)) * k, p.z + (out.z * Math.cos(a) * flat + up.z * Math.sin(a)) * k);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < m; j++) {
+      const a = i * m + j, b = a + m, c = i * m + ((j + 1) % m), d = c + m;
+      index.push(a, c, b, b, c, d);
+    }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Where each eye sits: proud enough of the socket that most of the white shows, not a slit. */
+const eyeCentre = (f: boolean, s: number) => new Vector3(s * EYE_X, EYE_Y, faceZ(f, EYE_X, EYE_Y) - 0.0064);
+
+/** The edge of the eye where it meets the face, `t` from the inner corner (0) over the top to the outer corner (1). */
+function eyeRim(f: boolean, s: number, t: number) {
+  const c = eyeCentre(f, s);
+  const th = s > 0 ? Math.PI * (1 - t) : Math.PI * t;
+  for (let k = 1; k > 0; k -= 0.01) {
+    const x = c.x + EYE_R[0] * k * Math.cos(th), y = c.y + EYE_R[1] * k * Math.sin(th);
+    const z = faceZ(f, x, y);
+    if (c.z + EYE_R[2] * Math.sqrt(1 - k * k) >= z) return new Vector3(x, y, z);
+  }
+  return c.clone();
+}
+
+const SIDES = [-1, 1] as const;
+
+/** Both eye whites, with a catch-light on each iris (it is the same white). */
+const eyeWhitesGeo = (f: boolean) =>
+  geo(`whites:${f}`, () =>
+    mergeGeometries(
+      SIDES.flatMap((s) => {
+        const c = eyeCentre(f, s);
+        const iz = irisZ(c);
+        // The light catches both eyes on the same side, up and to the right.
+        const hx = 0.0034, hy = 0.0042;
+        const hz = iz + IRIS * 0.35 * Math.sqrt(Math.max(0, 1 - (hx * hx + hy * hy) / (IRIS * IRIS)));
+        return [blob(c, EYE_R), blob(new Vector3(c.x + hx, c.y + hy, hz), [0.0022, 0.0022, 0.0009], 10, 8)];
+      }),
+    )!,
+  );
+/** The iris's middle sits just under the white's surface, so it reads as a disc on the eye rather than a bead stuck on. */
+const irisZ = (c: Vector3) => c.z + EYE_R[2] * Math.sqrt(1 - (IRIS / EYE_R[0]) ** 2) - 0.0006;
+const irisGeo = (f: boolean) =>
+  geo(`irises:${f}`, () =>
+    mergeGeometries(SIDES.map((s) => { const c = eyeCentre(f, s); return blob(new Vector3(c.x, c.y + 0.0004, irisZ(c)), [IRIS, IRIS, IRIS * 0.35]); }))!,
+  );
+
+/** Brows following the ridge over each eye, thickest at the inner end. Men's are heavier and straighter; women's finer, with more arch. */
+const browGeo = (f: boolean) =>
+  geo(`brows:${f}`, () =>
+    mergeGeometries(
+      SIDES.map((s) => {
+        const pts = Array.from({ length: 7 }, (_, i) => {
+          const t = i / 6;
+          const x = s * (EYE_X - 0.02 + 0.045 * t);
+          const y = EYE_Y + 0.027 + (f ? 0.0065 : 0.004) * Math.sin(Math.PI * t ** 0.8) - 0.004 * t;
+          return new Vector3(x, y, faceZ(f, x, y) + 0.001);
+        });
+        return strand(pts, (t) => (f ? 0.0029 : 0.0044) * Math.sin(Math.PI * t) ** 0.45 * (1.12 - 0.5 * t), f ? 0.55 : 0.5);
+      }),
+    )!,
+  );
+
+/** A fine line along each upper lid, so the eyes read from afar. On women it is eyeliner with a small flick at the outer corner. */
+const linerGeo = (f: boolean) =>
+  geo(`liner:${f}`, () =>
+    mergeGeometries(
+      SIDES.map((s) => {
+        const pts = Array.from({ length: 8 }, (_, i) => eyeRim(f, s, 0.1 + (0.9 * i) / 7).add(new Vector3(0, 0.0005, 0.0005)));
+        if (f) pts.push(pts[pts.length - 1].clone().add(new Vector3(s * 0.0042, 0.0022, -0.0012)));
+        return strand(pts, (t) => (f ? 0.0017 * (0.55 + 0.6 * t) : 0.001) * Math.sin(Math.PI * t) ** 0.35, 0.6, 18);
+      }),
+    )!,
+  );
+
+/** The mouth's shape: its half width, how far the corners lift into a smile, the upper and lower lips' heights and how far each stands out. */
+const MOUTH = {
+  m: { half: 0.031, lift: 0.0034, up: 0.0118, low: 0.0138, upOut: 0.0085, lowOut: 0.0095 },
+  f: { half: 0.0295, lift: 0.0036, up: 0.013, low: 0.0158, upOut: 0.0095, lowOut: 0.011 },
+};
+/** The line where the lips meet, `u` from one corner (-1) to the other (1): lowest in the middle, the corners lifted. */
+const mouthLine = (f: boolean, u: number) => MOUTH_Y + (f ? MOUTH.f : MOUTH.m).lift * u * u;
+
+/**
+ * Both lips in one piece, lofted over the face like the nose so their edges melt into the skin: a slimmer upper lip with a
+ * soft cupid's bow, a fuller, rounder lower one, and a crease between them where the mouth line sits.
+ */
+const lipsGeo = (f: boolean) =>
+  geo(`lips:${f}`, () => {
+    const M = f ? MOUTH.f : MOUTH.m;
+    const cols = 18, rows = 7;
+    const lip = (upper: boolean) => {
+      const pos: number[] = [];
+      for (let i = 0; i <= rows; i++) {
+        const v = i / rows;
+        for (let j = 0; j <= cols; j++) {
+          const u = -1 + (2 * j) / cols;
+          const w = 1 - u * u;
+          const edge = upper ? M.up * w ** 0.7 * (1 - 0.16 * Math.exp(-((u / 0.15) ** 2))) : M.low * w ** 0.5;
+          const x = u * M.half;
+          const y = mouthLine(f, u) + (upper ? 1 : -1) * edge * v;
+          // Fullest a little towards the mouth line on the upper lip, mid-way down on the lower.
+          const out = (upper ? M.upOut : M.lowOut) * w ** 0.6 * Math.sin(Math.PI * v ** (upper ? 0.8 : 0.95));
+          pos.push(x, y, faceZ(f, x, y) - 0.0015 + out);
+        }
+      }
+      const index: number[] = [];
+      for (let i = 0; i < rows; i++)
+        for (let j = 0; j < cols; j++) {
+          const a = i * (cols + 1) + j, b = a + cols + 1;
+          if (upper) index.push(a, a + 1, b, b, a + 1, b + 1);
+          else index.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+      const g = new BufferGeometry();
+      g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      g.setIndex(index);
+      g.computeVertexNormals();
+      return g;
+    };
+    return mergeGeometries([lip(true), lip(false)])!;
+  });
+/** The mouth line, sitting in the crease between the lips and turning up at the corners: a small, relaxed smile. */
+const mouthLineGeo = (f: boolean) =>
+  geo(`mouthline:${f}`, () => {
+    const half = (f ? MOUTH.f : MOUTH.m).half * 1.04;
+    const pts = Array.from({ length: 9 }, (_, i) => {
+      const u = -1 + i / 4;
+      const x = u * half, y = mouthLine(f, u) + 0.0003;
+      return new Vector3(x, y, faceZ(f, x, y) - 0.0004);
+    });
+    return strand(pts, (t) => 0.001 * Math.sin(Math.PI * t) ** 0.3, 0.8, 20);
+  });
+
+/** Women's earrings, both in one mesh, hanging from the lobes. */
+const earringGeo = geo('earrings', () => mergeGeometries(SIDES.map((s) => blob(new Vector3(s * 0.127, -0.05, -0.008), [0.012, 0.012, 0.012])))!);
+
+/** Lip colours: men's a deeper, warmer shade of their own skin; women's a muted berry-brown worked from theirs, so it suits every tone. */
+const lipColor = (skin: string, f: boolean) =>
+  '#' + (f ? new Color(skin).multiplyScalar(0.5).lerp(new Color('#6a2a37'), 0.5) : new Color(skin).multiply(new Color(0.56, 0.4, 0.38))).getHexString();
 
 function Head({ a, skin }: { a: Appearance; skin: string }) {
   const f = a.body === 'f';
   const hairColor = HAIR_COLORS[a.hairColor];
   const head = a.outfit.head ? GARMENT_BY_ID[a.outfit.head] : undefined;
   const coversHair = head && (head.shape === 'hijab' || head.shape === 'turban' || head.shape === 'gele' || head.shape === 'durag' || head.shape === 'headtie');
-  const { eyeZ, browZ, lipZ } = faceSpots(f);
+  const lips = lipColor(skin, f);
   return (
     <group>
       {/* Skull, face, nose and ears in one smooth piece */}
       <M color={skin} geometry={headGeo(f)} />
-      {/* Eyes, set into the sockets under the brow */}
-      {([-1, 1] as const).map((s) => (
-        <group key={s} position={[s * EYE_X, EYE_Y, eyeZ - 0.003]}>
-          <M color="#f8fafc" geometry={sphere(0.02)} scale={[1.05, 0.74, 0.46]} rough={0.3} />
-          {/* The iris, dark brown, a little smaller than the white so the white shows round it */}
-          <M color="#24140d" geometry={sphere(0.0098)} position={[0, -0.0005, 0.0078]} scale={[1, 1, 0.45]} rough={0.2} />
-          {/* Brow, a soft stroke following the ridge above */}
-          <M color={hairColor} geometry={capsule(f ? 0.0035 : 0.0052, 0.034)} position={[0, 0.03, browZ - eyeZ + 0.003]} rotation={[-0.25, 0, Math.PI / 2 + s * 0.08]} scale={[1, 1, 0.7]} />
-          {f && (
-            <M color="#111827" position={[s * 0.004, 0.015, 0.009]} rotation={[0, 0, s * 0.12]}>
-              <boxGeometry args={[0.046, 0.0035, 0.006]} />
-            </M>
-          )}
-        </group>
-      ))}
-      {/* Lips: a slimmer upper lip and a fuller lower one, a soft dark line between, the corners just turned up.
-          Men's are a deeper shade of their own skin; women's a muted berry-brown, not bright red. */}
-      <group position={[0, -0.05, lipZ + 0.002]}>
-        <M color={f ? '#7a2f3a' : shade(skin, 0.74)} geometry={sphere(0.02)} position={[0, 0.0062, 0]} scale={[1.5, 0.4, 0.52]} rough={0.55} />
-        <M color={f ? '#8c3a45' : shade(skin, 0.8)} geometry={sphere(0.02)} position={[0, -0.0062, 0.0012]} scale={[1.38, 0.52, 0.58]} rough={0.4} />
-        {/* Where the lips meet: the arc's lowest point sits right between them, its corners lifting ~8 mm into a smile. */}
-        <M color={shade(skin, 0.36)} geometry={smile} position={[0, 0.0302, 0.0098]} rotation={[0, 0, -Math.PI / 2 - SMILE / 2]} scale={[1, 1, 0.4]} />
-      </group>
-      {f && !coversHair && ([-1, 1] as const).map((s) => <M key={s} color="#d4af37" geometry={sphere(0.012)} position={[s * 0.126, -0.044, -0.004]} metal={0.8} rough={0.3} />)}
+      {/* Eyes: whites (with their catch-lights), dark brown irises, the lid line and the brows, each pair one mesh */}
+      <M color="#f4f1ea" geometry={eyeWhitesGeo(f)} rough={0.3} />
+      <M color="#2a170e" geometry={irisGeo(f)} rough={0.2} />
+      <M color={f ? '#1a1210' : shade(skin, 0.42)} geometry={linerGeo(f)} />
+      <M color={hairColor} geometry={browGeo(f)} rough={0.9} />
+      {/* Lips, with a soft sheen on women's, and the mouth line between them */}
+      <M color={lips} geometry={lipsGeo(f)} rough={f ? 0.38 : 0.62} />
+      <M color={shade(lips, 0.42)} geometry={mouthLineGeo(f)} />
+      {f && !coversHair && <M color="#d4af37" geometry={earringGeo} metal={0.8} rough={0.3} />}
       {!coversHair && <Hair style={a.hair} color={hairColor} skin={skin} capped={!!head} />}
       {head && <HeadWear g={head} />}
       {a.outfit.eyes && <Eyes g={GARMENT_BY_ID[a.outfit.eyes]} />}
     </group>
   );
-}
-
-const EYE_X = 0.047;
-const EYE_Y = 0.01;
-/** Where the eyes, brows and lips sit on each face (worked out once, from the face's own surface). */
-const spots = new Map<boolean, { eyeZ: number; browZ: number; lipZ: number }>();
-function faceSpots(f: boolean) {
-  let s = spots.get(f);
-  if (!s) spots.set(f, (s = { eyeZ: faceZ(f, EYE_X, EYE_Y) - 0.005, browZ: faceZ(f, EYE_X, EYE_Y + 0.032) - 0.001, lipZ: faceZ(f, 0.016, -0.062) - 0.001 }));
-  return s;
 }
 
 /** Upper half of a sphere, for scalps and caps. */
