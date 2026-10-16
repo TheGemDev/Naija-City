@@ -17,7 +17,7 @@ import {
   FEED_WINDOW, deletePost, loadFeed, loadFriendsFeed, loadLive, loadReplies, loadVdmFeed, placeBet, postGist, setFeedCity, useLive,
   type FeedPost,
 } from '../net/live';
-import { loadProfile, openThread, toggleLike, toggleRepost, useTw } from '../net/twitter';
+import { loadProfile, openThread, toggleLike, useTw } from '../net/twitter';
 import { commentSnap, deleteSnapComment, likeSnap, loadSnapComments, loadSnaps, useSnaps, type Snap } from '../net/snaps';
 import { useCivic } from '../net/civic';
 import { useSession } from '../net/session';
@@ -275,7 +275,7 @@ function Count({ n }: { n?: number }) {
   return <span className="tw-count">{n ? short(n) : ''}</span>;
 }
 
-/** Reply, repost, like, views and share under a post. Replies (no reposts or views on the server) get less. */
+/** Reply, like, views and share under a post. Replies (no reposts or views on the server) get less. */
 function Actions({ p, reply, big }: { p: FeedPost; reply?: { parent: FeedPost }; big?: boolean }) {
   const nav = useNav();
   const [pop, setPop] = useState(false);
@@ -288,11 +288,6 @@ function Actions({ p, reply, big }: { p: FeedPost; reply?: { parent: FeedPost };
         onClick={() => (reply ? nav.compose({ id: reply.parent.id, to: reply.parent.username ?? 'someone', prefill: p.username ? `@${p.username} ` : '' }) : nav.compose({ id: p.id, to: authorOf(p, {}).handle }))}>
         {I.reply(size)}{!big && !reply && <Count n={p.replies} />}
       </button>
-      {!reply && (
-        <button type="button" className={`tw-act repost ${p.reposted ? 'on' : ''}`} aria-pressed={!!p.reposted} aria-label={`Repost${p.reposts ? `, ${p.reposts}` : ''}`} onClick={() => void toggleRepost(p)}>
-          {I.repost(size)}{!big && <Count n={p.reposts} />}
-        </button>
-      )}
       <button type="button" className={`tw-act like ${liked ? 'on' : ''} ${pop ? 'pop' : ''}`} aria-pressed={liked} aria-label={`Like${p.likes ? `, ${p.likes}` : ''}`}
         onClick={() => { if (!liked) setPop(true); void toggleLike(p); }} onAnimationEnd={() => setPop(false)}>
         {liked ? I.heartFill(size) : I.heart(size)}{!big && <Count n={p.likes} />}
@@ -727,16 +722,25 @@ function Home({ tab, setTab, city, setCity, scroller, hidden }: { tab: Tab; setT
           <button type="button" className="tw-me" aria-label="Your profile" onClick={() => me?.username && nav.open({ t: 'profile', who: { kind: 'player', username: me.username, uid: me.uid } })}>
             <Face uid={me?.uid} username={me?.username} size="fill" />
           </button>
-          <span className="tw-logo" aria-label="Naija Twitter"><Emoji char="🐦" size={24} /></span>
-          <button type="button" className="tw-icon-btn" aria-label="Explore and search" onClick={() => nav.open({ t: 'explore' })}>{I.search(21)}</button>
         </div>
         <nav className="tw-tabs" role="tablist">
-          {([['foryou', 'For you'], ['following', 'Following'], ['city', CITY_NAME[city]], ['vdm', 'VDM']] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => (tab === id ? scroller()?.scrollTo({ top: 0, behavior: 'smooth' }) : setTab(id))}>
-              <span>{id === 'vdm' && <Emoji char="🎤" size={13} />} {label}</span>
-            </button>
-          ))}
+          {([['following', 'Friends'], ['global', 'Global'], ['vdm', 'VDM']] as [string, string][]).map(([id, label]) => {
+            const on = id === 'global' ? tab === 'foryou' || tab === 'city' : tab === id;
+            return (
+              <button key={id} type="button" role="tab" aria-selected={on} className={on ? 'on' : ''} onClick={() => (on ? scroller()?.scrollTo({ top: 0, behavior: 'smooth' }) : setTab(id === 'global' ? 'foryou' : (id as Tab)))}>
+                <span>{id === 'vdm' && <Emoji char="🎤" size={13} />} {label}</span>
+              </button>
+            );
+          })}
         </nav>
+        {(tab === 'foryou' || tab === 'city') && (
+          <nav className="tw-chips tw-subtabs" role="tablist" aria-label="Global">
+            <button type="button" role="tab" aria-selected={tab === 'foryou'} className={tab === 'foryou' ? 'on' : ''} onClick={() => setTab('foryou')}>For you</button>
+            {CIVIC_CITIES.map((c) => (
+              <button key={c} type="button" role="tab" aria-selected={tab === 'city' && city === c} className={tab === 'city' && city === c ? 'on' : ''} onClick={() => { setCity(c); setTab('city'); }}>{CITY_NAME[c]}</button>
+            ))}
+          </nav>
+        )}
       </header>
       <div className="tw-pull" style={{ height: refreshing ? 44 : pull }} aria-hidden={!refreshing}>
         <span className={`tw-spinner ${refreshing || pull > 55 ? 'spin' : ''}`} style={{ transform: refreshing ? undefined : `rotate(${pull * 4}deg)` }} />
@@ -756,11 +760,6 @@ function Home({ tab, setTab, city, setCity, scroller, hidden }: { tab: Tab; setT
       )}
       {tab === 'city' && (
         <>
-          <div className="tw-chips" role="group" aria-label="State">
-            {CIVIC_CITIES.map((c) => (
-              <button key={c} type="button" className={city === c ? 'on' : ''} onClick={() => setCity(c)}>{CITY_NAME[c]}</button>
-            ))}
-          </div>
           <FeedList items={cityReady ? items : []} loading={loading || !cityReady} scroller={scroller} more={feedEnd ? undefined : () => void loadFeed(true)}
             empty={<><b>Quiet in {CITY_NAME[city]}</b><span>No news from {CITY_NAME[city]} yet today. The blogs are watching the government.</span></>} />
           {feedEnd && feed.length >= FEED_WINDOW && <p className="tw-end">That’s the latest {FEED_WINDOW} stories from {CITY_NAME[city]}.</p>}
