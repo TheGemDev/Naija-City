@@ -5,7 +5,7 @@ import { naira, useGame } from '../game/store';
 import { api } from './session';
 import { setServerBalance } from './wallet';
 
-export interface Person { uid: string; username: string; at: number }
+export interface Person { uid: string; username: string; at: number; lastSeen?: number | null }
 export interface Friends { friends: Person[] }
 
 

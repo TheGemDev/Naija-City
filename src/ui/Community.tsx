@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { naira, useGame } from '../game/store';
-import { searchPlayers, useSocial, type PlayerRef } from '../net/social';
+import { lastOnline, searchPlayers, useSocial, type PlayerRef } from '../net/social';
 import { useSession } from '../net/session';
 import { useNet } from '../net/multiplayer';
 import {
@@ -50,7 +50,7 @@ function openChat(p: { uid: string; username: string }) {
 /** Everyone connected to the game server right now (the room is city-wide, keyed by uid). */
 const useOnline = () => useNet((s) => s.players);
 
-function FriendRow({ uid, username }: { uid: string; username: string }) {
+function FriendRow({ uid, username, lastSeen }: { uid: string; username: string; lastSeen?: number | null }) {
   const isOnline = !!useOnline()[uid];
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -64,7 +64,7 @@ function FriendRow({ uid, username }: { uid: string; username: string }) {
       <span className="tile-icon round online-avatar"><Face uid={uid} username={username} size="fill" />{isOnline && <i className="online-dot" />}</span>
       <span className="tile-info">
         <b><PlayerName uid={uid} username={username} /></b>
-        {confirming ? <small>Unfriend @{username}?</small> : isOnline && <small className="online-label">Online</small>}
+        {confirming ? <small>Unfriend @{username}?</small> : isOnline ? <small className="online-label">Online</small> : !!lastOnline(lastSeen) && <small className="last-online">{lastOnline(lastSeen)}</small>}
       </span>
       {confirming ? (
         <span className="row-btns">

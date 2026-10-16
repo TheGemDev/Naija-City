@@ -203,14 +203,14 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
              SELECT from_uid AS other, id, (read_at IS NULL) AS unread FROM messages WHERE to_uid = ?1
            ) GROUP BY other
          )
-         SELECT c.other AS uid, c.unread, p.username, p.name, (SELECT json_extract(s.data, '$.look') FROM saves s WHERE s.uid = c.other) AS look, m.*
+         SELECT c.other AS uid, c.unread, p.username, p.name, p.last_seen, (SELECT json_extract(s.data, '$.look') FROM saves s WHERE s.uid = c.other) AS look, m.*
          FROM c JOIN messages m ON m.id = c.last_id LEFT JOIN players p ON p.uid = c.other
          ORDER BY c.last_id DESC LIMIT 50`,
       )
       .bind(me)
-      .all<MessageRow & { uid: string; unread: number; username: string | null; name: string | null; look: string | null }>();
+      .all<MessageRow & { uid: string; unread: number; username: string | null; name: string | null; last_seen: number | null; look: string | null }>();
     return json({
-      conversations: results.map((r) => ({ uid: r.uid, username: r.username, name: r.name, look: r.look, unread: r.unread, last: toMessage(r) })),
+      conversations: results.map((r) => ({ uid: r.uid, username: r.username, name: r.name, look: r.look, lastSeen: r.last_seen || null, unread: r.unread, last: toMessage(r) })),
     });
   }
 
@@ -228,9 +228,9 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
         .all<MessageRow>(),
       db.prepare('UPDATE messages SET read_at = ?3 WHERE to_uid = ?1 AND from_uid = ?2 AND read_at IS NULL').bind(me, other, now).run(),
       db
-        .prepare(`SELECT uid, username, name, (SELECT json_extract(s.data, '$.look') FROM saves s WHERE s.uid = players.uid) AS look FROM players WHERE uid = ?`)
+        .prepare(`SELECT uid, username, name, last_seen, (SELECT json_extract(s.data, '$.look') FROM saves s WHERE s.uid = players.uid) AS look FROM players WHERE uid = ?`)
         .bind(other)
-        .first<{ uid: string; username: string | null; name: string | null; look: string | null }>(),
+        .first<{ uid: string; username: string | null; name: string | null; last_seen: number | null; look: string | null }>(),
     ]);
     if (!player) return err(404, 'No such player');
     // Tell them their messages were seen.
@@ -238,7 +238,8 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
       const upTo = results.filter((m) => m.from_uid === other).reduce((a, m) => Math.max(a, m.id), 0);
       notify(env, ctx, other, { t: 'msg-read', by: me, upTo });
     }
-    return json({ player, messages: results.reverse().map(toMessage) });
+    const { last_seen, ...ref } = player;
+    return json({ player: { ...ref, lastSeen: last_seen || null }, messages: results.reverse().map(toMessage) });
   }
 
   if (path === '/api/messages' && req.method === 'POST') {

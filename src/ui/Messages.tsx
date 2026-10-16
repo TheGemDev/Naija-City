@@ -20,6 +20,7 @@ import {
   useSocial,
   type Message,
   type PlayerRef,
+  lastOnline,
 } from '../net/social';
 import { askOut, loadLove, loveAction, useHangouts } from '../net/hangout';
 import { loadGroups, useGroups } from '../net/groups';
@@ -203,6 +204,7 @@ function Inbox({ me, onOpen }: { me: string; onOpen: (uid: string) => void }) {
               <Face uid={c.uid} username={c.username} look={c.look} />
               <span className="convo-body">
                 <b><PlayerLabel uid={c.uid} username={c.username} />{online[c.uid] && <span className="online-label"> · Online</span>}</b>
+                {!online[c.uid] && !!lastOnline(c.lastSeen) && <small className="last-online">{lastOnline(c.lastSeen)}</small>}
                 <small>{preview(c.last, c.last.from === myUid)}</small>
               </span>
               <span className="convo-meta">
@@ -427,7 +429,7 @@ function Thread({ uid, onBack }: { uid: string; onBack: () => void }) {
           ‹
         </button>
         <Face uid={uid} username={player?.username} look={player?.look} />
-        <b>{player ? <PlayerName uid={uid} username={player.username} name={player.name} /> : '@…'}{online[uid] && <span className="online-label"> · Online</span>}</b>
+        <b>{player ? <PlayerName uid={uid} username={player.username} name={player.name} /> : '@…'}{online[uid] && <span className="online-label"> · Online</span>}{!online[uid] && !!lastOnline(player?.lastSeen) && <small className="last-online"> · {lastOnline(player?.lastSeen)}</small>}</b>
       </div>
       <div className="thread-actions" aria-label="Chat actions">
         <button className="thread-action-pill send" onClick={() => setMoney('pay')}><i><b>₦</b></i> Money</button>

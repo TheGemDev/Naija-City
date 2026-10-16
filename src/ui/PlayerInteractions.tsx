@@ -7,7 +7,7 @@ import { arrestPlayer, payBail, steal, usePolice } from '../net/crime';
 import { loadGuns, robAtGunpoint, shootPlayer, useGuns } from '../net/guns';
 import { GUNS } from '../game/guns';
 import { bailFor, POLICE } from '../game/crime';
-import { requestMoney, sendMoney, sendHomeInvite, useSocial, type PlayerRef } from '../net/social';
+import { requestMoney, sendMoney, sendHomeInvite, useSocial, lastOnline, type PlayerRef } from '../net/social';
 import { shareLink, userLink } from '../net/deeplink';
 import { PersonPreview } from './Closet';
 import { useSession } from '../net/session';
@@ -506,7 +506,7 @@ function PlayerProfile({ player, canChat, onChat }: { player: PlayerRef; canChat
         <b>{alias || name || `@${username ?? 'player'}`}</b>
         <span>@{username ?? 'player'}</span>
         {name && name !== username && alias && <span>{name}</span>}
-        <span className={live ? 'online-label' : 'muted'}>{live ? 'Online' : 'Offline'}</span>
+        <span className={live ? 'online-label' : 'muted'}>{live ? 'Online' : lastOnline(player.lastSeen) || 'Offline'}</span>
         {plots !== null && <span>🏠 {plots} {plots === 1 ? 'plot' : 'plots'}</span>}
         {children.length > 0 && <span>👶🏾 {children.map((c) => c.name).join(', ')}</span>}
         {crib !== null && <span>{tierOf(crib).icon} {tierOf(crib).name} crib · {crib}/100</span>}

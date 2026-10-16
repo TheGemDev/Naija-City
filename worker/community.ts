@@ -174,8 +174,15 @@ export async function handleCommunity(req: Request, env: Env, _ctx: ExecutionCon
       .all<{ a: string; b: string; accepted_at: number | null; created_at: number }>();
     const other = (r: { a: string; b: string }) => (r.a === me ? r.b : r.a);
     const names = await usernames(db, results.map(other));
+    // When each friend was last in the game, for the "Last online" line under their name.
+    const ids = results.map(other);
+    const seen = new Map<string, number>();
+    if (ids.length) {
+      const rows = await db.prepare(`SELECT uid, last_seen FROM players WHERE uid IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<{ uid: string; last_seen: number | null }>();
+      for (const r of rows.results) seen.set(r.uid, r.last_seen ?? 0);
+    }
     return json({
-      friends: results.map((r) => ({ uid: other(r), username: names.get(other(r)) ?? 'someone', at: r.accepted_at ?? r.created_at })),
+      friends: results.map((r) => ({ uid: other(r), username: names.get(other(r)) ?? 'someone', at: r.accepted_at ?? r.created_at, lastSeen: seen.get(other(r)) || null })),
     });
   }
 

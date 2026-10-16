@@ -30,6 +30,22 @@ export interface PlayerRef {
   name?: string | null;
   /** Their appearance, for drawing their face. */
   look?: string | null;
+  /** When they were last in the game (ms), for "Last online" when they are not here now. */
+  lastSeen?: number | null;
+}
+
+/** "Last online 5 min ago", "today at 3:20 PM", "yesterday at 9:05 AM" or "12 Oct". Empty when it is not known. */
+export function lastOnline(at?: number | null, now = Date.now()): string {
+  if (!at) return '';
+  const mins = Math.floor((now - at) / 60_000);
+  if (mins < 2) return 'Last online just now';
+  if (mins < 60) return `Last online ${mins} min ago`;
+  const d = new Date(at), today = new Date(now);
+  const clock = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86_400_000);
+  if (days <= 0) return `Last online today at ${clock}`;
+  if (days === 1) return `Last online yesterday at ${clock}`;
+  return `Last online ${d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', ...(d.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }) })}`;
 }
 
 export interface Conversation extends PlayerRef {

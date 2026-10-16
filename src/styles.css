@@ -3207,3 +3207,7 @@ body.corner-hud .chat-fab { bottom: calc(20px + var(--safe-b) + 70px + 10px); }
 body.corner-hud { --me: 74px; }
 body.corner-hud .needs .avatar-badge { width: var(--me); height: var(--me); }
 body.corner-hud .corner-side { bottom: calc(20px + (var(--me) - 58px) / 2 + var(--safe-b)); }
+
+/* "Last online ..." under or beside a name when they are not in the game now. */
+.last-online { color: var(--muted); font-size: 11px; font-weight: 600; }
+.convo-body small.last-online { font-size: 11px; }

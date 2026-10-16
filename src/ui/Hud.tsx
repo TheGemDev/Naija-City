@@ -797,7 +797,6 @@ const withArc = (c: ReactElement<{ children?: ReactNode; className?: string }>):
 };
 
 function NavShell({ children }: { children: ReactNode }) {
-  const mode = useGame((s) => s.mode);
   useEffect(() => {
     if (!CORNER_HUD) return;
     document.body.classList.add('corner-hud');
@@ -809,9 +808,8 @@ function NavShell({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="corner-left">
-        {/* The first situational button (Home, Go outside, Leave...) sits right above you, under the current task. */}
+        {/* The first situational button (Home, Go outside, Leave...) sits right above you. */}
         <div className="corner-ctx">{all.filter((c) => !key(c)).slice(0, 1)}</div>
-        {mode === 'live' && <TaskChip />}
       </div>
       {/* What else is here (Decor, Activities, Estates) is beside you. */}
       <div className="corner-side">{all.filter((c) => !key(c)).slice(1)}</div>
@@ -1110,7 +1108,7 @@ export function Hud() {
         <StayChip />
         <WorkChip />
         <KidChip />
-        {mode === 'live' && !CORNER_HUD && <TaskChip />}
+        {mode === 'live' && <TaskChip />}
         <Toasts />
         <div className="stack-tools">
           {leftStackCount > 0 && (
