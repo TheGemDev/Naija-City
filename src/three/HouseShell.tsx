@@ -200,39 +200,27 @@ function DoorLeaf({ w, h, c = DOOR_WOOD }: { w: number; h: number; c?: string })
   );
 }
 
-/** An open inside door in a gap: frame both sides, the leaf swung back to the wall. It keeps its full height when the walls round it are cut down. */
-function InnerDoor({ e, colour }: { e: { dir: 'h' | 'v'; x: number; z: number }; colour: string }) {
+/** An open inside door in a gap, cut down with the walls round it: frame both sides, the leaf swung back to the wall. */
+function InnerDoor({ e }: { e: { dir: 'h' | 'v'; x: number; z: number } }) {
   const horiz = e.dir === 'h';
-  const jamb: V3 = horiz ? [0.07, DOOR_H, T + 0.05] : [T + 0.05, DOOR_H, 0.07];
-  const p = (a: number): V3 => (horiz ? [e.x + a, DOOR_H / 2, e.z] : [e.x, DOOR_H / 2, e.z + a]);
+  // A little longer than the doorway's edge and thicker than the wall: no face of the frame lies in the same plane as the wall's end or sides, which flickers.
+  const jamb: V3 = horiz ? [0.09, SHORT, T + 0.05] : [T + 0.05, SHORT, 0.09];
+  const p = (a: number): V3 => (horiz ? [e.x + a, SHORT / 2, e.z] : [e.x, SHORT / 2, e.z + a]);
   // Hinged on the low end, standing open a little past square into the high side (+z or +x).
   const yaw = horiz ? -Math.PI * 0.6 : Math.PI * 0.1;
-  const hinge: V3 = horiz ? [e.x + 0.06, 0, e.z + T / 2 + 0.02] : [e.x + T / 2 + 0.02, 0, e.z + 0.06];
-  // The doorway stands in full-height wall: a short post of wall each side and a header over the door, so the door is built
-  // into the wall and not a panel floating over the cut-down partition.
-  const box = (a0: number, a1: number, y0: number, y1: number, thick: number): { pos: V3; size: V3 } => {
-    const mid = (a0 + a1) / 2, len = a1 - a0, y = (y0 + y1) / 2;
-    return horiz ? { pos: [e.x + mid, y, e.z], size: [len, y1 - y0, thick] } : { pos: [e.x, y, e.z + mid], size: [thick, y1 - y0, len] };
-  };
-  const wallPieces = [box(-0.1, 0, 0, TALL, T + 0.02), box(1, 1.1, 0, TALL, T + 0.02), box(0, 1, DOOR_H, TALL, T + 0.02)];
+  const hinge: V3 = horiz ? [e.x + 0.06, 0, e.z + T / 2 + 0.026] : [e.x + T / 2 + 0.026, 0, e.z + 0.06];
   return (
     <group>
-      {wallPieces.map((b, i) => (
-        <mesh key={i} position={b.pos} castShadow receiveShadow>
-          <boxGeometry args={b.size} />
-          <meshStandardMaterial color={colour} flatShading />
-        </mesh>
-      ))}
-      <mesh position={p(0.035)} castShadow>
+      <mesh position={p(0.03)} castShadow>
         <boxGeometry args={jamb} />
         <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
       </mesh>
-      <mesh position={p(1 - 0.035)} castShadow>
+      <mesh position={p(1 - 0.03)} castShadow>
         <boxGeometry args={jamb} />
         <meshStandardMaterial color={FRAME_WOOD} roughness={0.6} />
       </mesh>
       <group position={hinge} rotation={[0, yaw, 0]}>
-        <DoorLeaf w={0.84} h={DOOR_H - 0.04} />
+        <DoorLeaf w={0.84} h={SHORT - 0.04} />
       </group>
     </group>
   );
@@ -302,7 +290,7 @@ export function HouseInterior({ layout, finish, innerColour }: { layout: HouseLa
           <FaceBox key={i} f={f} a0={-T / 2} a1={1 + T / 2} y0={0} y1={0.09} d0={T / 2} d1={T / 2 + 0.014} c={c} />
         ))}
         {trims.sockets.map(({ f, a }, i) => <Socket key={`s${i}`} f={f} a={a} y={0.32} />)}
-        {doors.map((e) => <InnerDoor key={`${e.dir}${e.x}:${e.z}`} e={e} colour={innerColour} />)}
+        {doors.map((e) => <InnerDoor key={`${e.dir}${e.x}:${e.z}`} e={e} />)}
       </StaticBatch>
     </group>
   );

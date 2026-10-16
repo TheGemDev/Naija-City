@@ -3164,7 +3164,7 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .sheet.catalogue.on-finishes { max-height: 42vh; }
 
 /* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, then along the bottom right: chat, Map, Phone (Phone in the corner). Icons alone, in the chat button's own look. */
-.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 250px); pointer-events: none; }
+.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 170px); pointer-events: none; }
 .corner-left > * { pointer-events: auto; }
 .corner-ctx { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Left of the row: square buttons with their names. */
@@ -3178,9 +3178,10 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .corner-right button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
 .corner-right button span > * { display: block; }
 .corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: row; align-items: center; gap: 10px; }
-.corner-right button[data-k="phone"] { width: 60px; height: 60px; }
-.corner-right button[data-k="map"] { width: 52px; height: 52px; }
+.corner-right button[data-k="phone"] { width: 68px; height: 68px; }
+.corner-right button[data-k="map"] { width: 60px; height: 60px; }
+.corner-right button svg, .corner-right button img { width: 36px !important; height: 36px !important; }
 body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
-/* The chat button is third in the row: left of Map, which is left of Phone. Its box still opens to the screen edge. */
-body.corner-hud .chat-fab { right: calc(12px + 60px + 10px + 52px + 10px); bottom: calc(24px + var(--safe-b)); }
-body.corner-hud .chat-fab .chat-form { margin-right: calc(-1 * (60px + 10px + 52px + 10px)); }
+/* Chat sits on top of the Map and Phone row, on the right. */
+body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 68px + 10px); }
+body.corner-hud .chat-fab .chat-form { margin-right: 0; }
