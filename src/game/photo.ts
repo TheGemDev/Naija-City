@@ -8,7 +8,7 @@ import type { Clip } from '../three/Person';
 
 export type Shot = 'selfie' | 'portrait' | 'room' | 'house' | 'plan';
 export type PhotoLight = 'now' | 'day' | 'sunset' | 'night';
-export type PhotoFormat = 'story' | 'post' | 'square' | 'wide';
+export type PhotoFormat = 'story' | 'post' | 'square' | 'wide' | 'screen';
 
 /** Every picture comes out at one of these exact sizes, whatever screen it was taken on: the shapes the social apps want, plus a desktop-style 16:9. */
 export const FORMATS: { id: PhotoFormat; label: string; w: number; h: number }[] = [
@@ -17,7 +17,16 @@ export const FORMATS: { id: PhotoFormat; label: string; w: number; h: number }[]
   { id: 'square', label: 'Square 1:1', w: 1080, h: 1080 },
   { id: 'wide', label: 'Wide 16:9', w: 1920, h: 1080 },
 ];
-export const FORMAT_BY_ID = Object.fromEntries(FORMATS.map((f) => [f.id, f])) as Record<PhotoFormat, (typeof FORMATS)[number]>;
+/** The Snap camera fills the whole screen, so its picture has the screen's own shape (set when the camera opens). */
+const SCREEN_FORMAT: (typeof FORMATS)[number] = { id: 'screen', label: 'Full screen', w: 1080, h: 1920 };
+export function fitScreenFormat() {
+  const landscape = window.innerWidth > window.innerHeight;
+  const long = landscape ? 1920 : 1920;
+  const ratio = Math.min(2.4, Math.max(0.4, window.innerWidth / Math.max(1, window.innerHeight)));
+  SCREEN_FORMAT.w = landscape ? long : Math.round(long * ratio);
+  SCREEN_FORMAT.h = landscape ? Math.round(long / ratio) : long;
+}
+export const FORMAT_BY_ID = { ...Object.fromEntries(FORMATS.map((f) => [f.id, f])), screen: SCREEN_FORMAT } as Record<PhotoFormat, (typeof FORMATS)[number]>;
 
 export interface ShotDef {
   id: Shot;
@@ -117,7 +126,7 @@ export const usePhoto = create<PhotoState>((set, get) => ({
   sendTo: [],
   // Opens on 4:5, the shape that shows biggest in a social feed; a wide desktop screen starts on 16:9.
   // A snap opens on 9:16, the shape Snap shows full screen.
-  open: (forSnap = false, sendTo = []) => set({ forSnap, sendTo, lens: 'none', active: true, shot: 'selfie', pose: 'idle', light: 'now', format: forSnap ? 'story' : window.innerWidth > window.innerHeight ? 'wide' : 'post', hideMe: false, result: null }),
+  open: (forSnap = false, sendTo = []) => (forSnap && fitScreenFormat(), set({ forSnap, sendTo, lens: 'none', active: true, shot: 'selfie', pose: 'idle', light: 'now', format: forSnap ? 'screen' : window.innerWidth > window.innerHeight ? 'wide' : 'post', hideMe: false, result: null })),
   close: () => {
     get().discard();
     set({ active: false });

@@ -1,13 +1,14 @@
-// Desktop: click something in a house or a place and its activities fan out in a circle round where you clicked,
-// the way The Sims does it, instead of the activities sheet (Sheets.tsx ActionSheet, which phones keep). Same
-// actions, same detail line (as a tooltip and a small caption), same start.
+// Click or tap something in a house or a place and its activities fan out in a circle round where you pressed,
+// the way The Sims does it, instead of the activities sheet (Sheets.tsx ActionSheet). On a mouse and on a
+// touch screen alike. Same actions, same detail line (as a tooltip and a small caption), same start.
 
 import { useEffect, useState } from 'react';
 import { useGame } from '../game/store';
 import { useSelectedActions } from './Sheets';
 
-/** A real mouse or trackpad: phones and tablets keep the sheet, which suits a thumb better. */
-export const PIE_MENU = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+/** On everywhere now, phones and tablets included (they used to keep the sheet). Flip to the old check to go back:
+ *  typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches */
+export const PIE_MENU = typeof window !== 'undefined';
 
 /** Where the pointer last went down, so the menu opens round the thing that was clicked. */
 const last = { x: 0, y: 0 };
@@ -38,8 +39,11 @@ export function PieMenu() {
   if (!PIE_MENU || !sel) return null;
   const n = sel.rows.length;
   // The ring grows with the number of activities so the labels never overlap.
-  const r = Math.min(170, Math.max(84, n * 22));
-  const cx = Math.min(window.innerWidth - r - EDGE, Math.max(r + EDGE, at.x));
+  // On a phone the ring is smaller and sits closer to the edge, so it stays round what you touched.
+  const narrow = window.innerWidth < 600;
+  const edge = narrow ? 64 : EDGE;
+  const r = Math.min(narrow ? 110 : 170, Math.max(narrow ? 70 : 84, n * (narrow ? 18 : 22)));
+  const cx = Math.min(window.innerWidth - r - edge, Math.max(r + edge, at.x));
   const cy = Math.min(window.innerHeight - r - 40, Math.max(r + 40, at.y));
 
   return (

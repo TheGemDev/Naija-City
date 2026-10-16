@@ -282,3 +282,5 @@ span.tw-act { cursor: default; }
   .tw-top, .tw-compose, .tw-compose-scrim, .tw-menu, .tw-act.like.pop svg { animation: none; transition: none; }
 }
 .tw-post.is-reply .tw-actions { justify-content: flex-start; gap: 36px; }
+/* Room under a feed so the + button never covers the last post's actions. */
+.tw:has(.tw-fab) .tw-sentinel { height: 76px; }

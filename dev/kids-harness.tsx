@@ -18,6 +18,7 @@ import { Phone } from '../src/ui/Phone';
 import { ProfileSheet } from '../src/ui/ProfileSheet';
 import { loadKids, startCare, useKids } from '../src/net/kids';
 import { avatar } from '../src/game/avatar';
+import { useNet } from '../src/net/multiplayer';
 import { homeTransform } from '../src/game/origins';
 import { pinWeather } from '../src/game/weather';
 pinWeather('clear');
@@ -31,6 +32,8 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   return realFetch(input, init);
 }) as typeof fetch;
 
+// The game clock only runs while connected (three/Scene.tsx GameLoop).
+setInterval(() => { if (!useNet.getState().connected) useNet.setState({ connected: true, moving: false } as never); }, 500);
 useSession.setState({ status: 'ready', user: { uid: 'u1', email: 'mama@example.com', name: 'Mama Amina', username: 'mama' } });
 const look = encodeLook({ body: 'f', skin: 3, hair: 'braids', hairColor: 0, outfit: { top: 'ankara_dress', shoes: 'slippers_palm', head: 'gele_gold' } });
 let n = 0;

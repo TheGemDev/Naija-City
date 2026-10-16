@@ -145,7 +145,7 @@ export function PhotoMode() {
       ) : (
         <>
           {/* What will be in the picture: everything outside this box is left out. */}
-          <div className="photo-guide" aria-hidden>
+          <div className={`photo-guide ${format === 'screen' ? 'full' : ''}`} aria-hidden>
             <i style={{ ['--shape' as string]: FORMAT_BY_ID[format].w / FORMAT_BY_ID[format].h, background: lensVeil(LENS_BY_ID[lens] ?? LENSES[0]) }} />
           </div>
           <div className="photo-top">

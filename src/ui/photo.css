@@ -85,3 +85,6 @@ body.photo-mode .scene-wrap canvas ~ div { display: none !important; }
   .photo-shutter { width: 60px; height: 60px; }
   .photo-shutter i { width: 46px; height: 46px; }
 }
+
+/* The Snap camera fills the screen edge to edge: no dimmed bars, no frame line. */
+.photo-guide.full i { box-shadow: none; outline: none; }

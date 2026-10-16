@@ -3322,3 +3322,7 @@ body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + env(safe-
 /* The undo / redo / select bar runs the full width of the top, under you and the clock. */
 body.corner-hud .decor-top { left: 12px; right: 12px; width: auto; justify-content: space-between; }
 body.corner-hud .decor-top > button { flex: 1; justify-content: center; }
+@media (max-width: 600px) { .pie-item { max-width: 150px; padding: 6px 11px 6px 7px; } .pie-text small { display: none; } }
+
+/* On a phone with a notch the profile steps down below it, like the clock does. */
+body.corner-hud .needs { margin-top: env(safe-area-inset-top, 0px); }
