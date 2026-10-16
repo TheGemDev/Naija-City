@@ -8,6 +8,8 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { useLowPerf } from '../game/quality';
 import { lampShape } from './lampModels';
 import { nurseryModel } from './nurseryModels';
+import { TreeModel } from './TreeModel';
+import { shadeKind } from './trees';
 
 type V3 = [number, number, number];
 
@@ -870,17 +872,7 @@ function itemShape({ type, powered, running }: ModelProps): ReactNode {
         </group>
       );
     case 'mango_tree':
-      return (
-        <group>
-          <Cyl p={[0, 0.8, 0]} r={0.14} rt={0.1} h={1.6} c="#6b4423" seg={6} />
-          <Ball p={[0, 2.1, 0]} r={0.95} c="#2f7d32" />
-          <Ball p={[0.5, 1.75, 0.3]} r={0.6} c="#388e3c" />
-          <Ball p={[-0.5, 1.8, -0.2]} r={0.6} c="#2e7d32" />
-          {[[0.4, 1.4, 0.6], [-0.6, 1.5, 0.4], [0.7, 1.9, -0.3], [-0.2, 1.35, -0.7]].map((p, i) => (
-            <Ball key={i} p={p as V3} r={0.09} c={i % 2 ? '#f59e0b' : '#84cc16'} />
-          ))}
-        </group>
-      );
+      return <TreeModel kind="mango" size={3.2} />;
     case 'suya_grill':
       return (
         <group>
@@ -1672,17 +1664,7 @@ function itemShape({ type, powered, running }: ModelProps): ReactNode {
         </group>
       );
     case 'palm_tree':
-      return (
-        <group>
-          <Cyl p={[0, 1.2, 0]} r={0.12} rt={0.08} h={2.4} c="#92602b" />
-          {Array.from({ length: 6 }, (_, i) => {
-            const a = (i / 6) * Math.PI * 2;
-            return <B key={i} p={[Math.cos(a) * 0.35, 2.4, Math.sin(a) * 0.35]} s={[0.8, 0.05, 0.18]} c="#15803d" />;
-          })}
-          <Ball p={[0.1, 2.3, 0.1]} r={0.09} c="#78350f" />
-          <Ball p={[-0.1, 2.3, 0.05]} r={0.09} c="#78350f" />
-        </group>
-      );
+      return <TreeModel kind="coconut" size={1.85} />;
     case 'flower_bed':
       return (
         <group>
@@ -2795,12 +2777,7 @@ function BikeRider() {
   );
 }
 
+/** A shade tree for a yard or an estate street, from the shared tree kit (trees.ts): a neem or a mango, by its size. */
 export function Tree({ s = 1 }: { s?: number }) {
-  return (
-    <group scale={s}>
-      <Cyl p={[0, 1, 0]} r={0.16} rt={0.11} h={2} c="#5b3a1e" seg={6} />
-      <Ball p={[0, 2.5, 0]} r={1.1} c="#3f7d2a" />
-      <Ball p={[0.6, 2.1, 0.3]} r={0.7} c="#4d8f31" />
-    </group>
-  );
+  return <TreeModel s={s} kind={shadeKind(s * 17, s * 31) === 'mango' ? 'mango' : 'neem'} seed={Math.round(s * 1000)} />;
 }

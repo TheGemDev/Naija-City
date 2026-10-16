@@ -3,6 +3,7 @@ import { useMarquee } from './ui/useMarquee';
 import { Scene } from './three/Scene';
 import { Hud } from './ui/Hud';
 import { ActionSheet, BuyPanel, OwnedSheet, PlaceBar, PlaceSheet, StreetStorySheet } from './ui/Sheets';
+import { DecorBar } from './ui/DecorTools';
 import { PieMenu } from './ui/PieMenu';
 import { Welcome } from './ui/Welcome';
 import { Guide } from './ui/Guide';
@@ -173,6 +174,7 @@ export default function App() {
             <OwnedSheet />
             <RepairSheet />
             <PlaceBar />
+            <DecorBar />
             <EstateBar />
             <PlaceSheet />
             <TravelPicker />

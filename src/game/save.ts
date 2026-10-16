@@ -3,6 +3,8 @@
 import { avatar, resetAvatar } from './avatar';
 import { loadMeter } from './meterBypass';
 import { RENAMED_ITEMS } from './catalog';
+import { normalizePlaced } from './mount';
+import type { PlacedItem } from './grid';
 import { cleanFinishes } from './finishes';
 import { dayOf, GOV_WEEKLY_RENT, houseStaffOnly, useGame, type GameState } from './store';
 import { STARTER_WARDROBE } from './wardrobe';
@@ -46,9 +48,9 @@ export function serialize(): SaveData {
   };
 }
 
-/** A merged item type becomes its replacement when a save loads. */
-const renameItems = <T extends { type: string }>(list: T[] | undefined): T[] =>
-  (list ?? []).map((i) => (RENAMED_ITEMS[i.type] ? { ...i, type: RENAMED_ITEMS[i.type] } : i));
+/** A merged item type becomes its replacement when a save loads, and the placing fields (game/mount.ts) are made consistent. */
+const renameItems = <T extends PlacedItem>(list: T[] | undefined): T[] =>
+  (list ?? []).map((i) => normalizePlaced(RENAMED_ITEMS[i.type] ? { ...i, type: RENAMED_ITEMS[i.type] } : i));
 
 export function hydrate(data: SaveData) {
   if (!data || data.version !== SAVE_VERSION) return false;

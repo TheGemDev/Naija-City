@@ -43,6 +43,7 @@ import { useCabin } from '../game/cabin';
 import { useShift } from '../game/shiftGame';
 import { GazetteBanner } from './Gazette';
 import { WorkChip } from './WorkChip';
+import { KidChip } from './KidChip';
 import { isPrivateRoom } from '../game/villa';
 import { useShallow } from 'zustand/react/shallow';
 import { readRoute } from '../game/travelProgress';
@@ -607,6 +608,8 @@ function TaskChip() {
   // Only what the card shows: not the whole task, which the clock replaces ten times a second.
   const task = useGame(useShallow((s) => (s.task ? { label: s.task.label, icon: s.task.icon, phase: s.task.phase, actionId: s.task.actionId } : null)));
   const boarding = useGame((s) => s.boarding);
+  // A street story (game/stories.ts) holds you up where you stand until you have dealt with it.
+  const stopped = useGame((s) => !!s.streetStory);
   const cancel = useGame((s) => s.cancelTask);
   const { pct, secs } = useTaskReading();
   const trip = useTripLine();
@@ -634,7 +637,7 @@ function TaskChip() {
         <div className="bar" role="progressbar" aria-label={task.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
           <i style={{ width: `${pct}%` }} />
         </div>
-        <small>{secs !== null ? timeLeft(secs) : task.phase === 'walking' ? 'On the way…' : 'Almost done'}</small>
+        <small>{stopped && task.phase === 'walking' ? 'Stopped on the way' : secs !== null ? timeLeft(secs) : task.phase === 'walking' ? 'On the way…' : 'Almost done'}</small>
         {trip && <small className="task-trip">{trip.text}</small>}
       </div>
       <button className="x" onClick={cancel} aria-label="Cancel">
@@ -1044,6 +1047,7 @@ export function Hud() {
         <ChowChip />
         <StayChip />
         <WorkChip />
+        <KidChip />
         {mode === 'live' && <TaskChip />}
         <Toasts />
         <div className="stack-tools">

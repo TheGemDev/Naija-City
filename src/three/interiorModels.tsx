@@ -138,7 +138,7 @@ function PropShape({ type, text }: { type: string; text?: string }) {
         </group>
       );
     case 'neem':
-      return <CityTree p={[0, 0, 0]} s={0.75} />;
+      return <CityTree kind="neem" s={0.75} />;
     case 'fabric_stall':
       return <Stall goods="fabric" />;
     case 'food_stall':

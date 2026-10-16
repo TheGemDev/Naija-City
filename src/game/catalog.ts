@@ -1062,19 +1062,19 @@ export interface Job {
 }
 
 export const JOBS: Job[] = [
-  { id: 'keke', title: 'Keke Driver', place: 'Kawo – Central Market route', icon: '🛺', start: 6, end: 18, pay: 30_000, minKnowledge: 0, perHour: { energy: -5, social: 2, fun: -2, hygiene: -4 } },
-  { id: 'airport', title: 'Airport Ground Assistant', place: 'Kaduna International Airport', icon: '🧳', start: 6, end: 18, pay: 36_000, minKnowledge: 1, perHour: { energy: -4, social: 2, fun: -1, hygiene: -3 } },
-  { id: 'trader', title: 'Market Trader', place: 'Kaduna Central Market', icon: '🧺', start: 7, end: 19, pay: 27_000, minKnowledge: 0, perHour: { energy: -4, social: 3, fun: -1, hygiene: -3 } },
-  { id: 'textile', title: 'Mill Hand', place: 'KTL Textile Mill, Kakuri', icon: '🧶', start: 7, end: 18, pay: 30_000, minKnowledge: 0, perHour: { energy: -5, social: 2, fun: -2, hygiene: -3 } },
-  { id: 'hotel', title: 'Hotel Receptionist', place: 'Hamdala Hotel', icon: '🛎️', start: 7, end: 19, pay: 36_000, minKnowledge: 1, perHour: { energy: -3, social: 4, fun: -1 } },
-  { id: 'banker', title: 'Bank Teller', place: 'Kaduna Community Bank', icon: '🏦', start: 8, end: 18, pay: 45_000, minKnowledge: 2, perHour: { energy: -3, social: 3, fun: -1 } },
-  { id: 'police', title: 'Police Officer', place: 'Kaduna Police HQ', icon: '👮🏾', start: 7, end: 19, pay: 39_000, minKnowledge: 1, perHour: { energy: -4, social: 2, fun: -1, hygiene: -3 } },
-  { id: 'fitness', title: 'Fitness Coach', place: 'Ahmadu Bello Stadium', icon: '🏋🏾', start: 8, end: 20, pay: 33_000, minKnowledge: 1, perHour: { energy: -6, social: 3, fun: 2, hygiene: -5 } },
-  { id: 'teacher', title: 'Primary School Teacher', place: 'LEA School, Barnawa', icon: '🧑🏾‍🏫', start: 7, end: 16, pay: 27_000, minKnowledge: 2, perHour: { energy: -4, social: 2, fun: -2 } },
-  { id: 'civil', title: 'Civil Servant', place: 'State Secretariat', icon: '🏛️', start: 7, end: 19, pay: 42_000, minKnowledge: 3, perHour: { energy: -3, social: 1, fun: -3 } },
-  { id: 'refinery', title: 'Refinery Technician', place: 'Kaduna Refinery (KRPC)', icon: '🛢️', start: 6, end: 18, pay: 90_000, minKnowledge: 5, perHour: { energy: -5, fun: -3, hygiene: -4 } },
-  { id: 'dev', title: 'Software Developer', place: 'Tech hub, Ungwan Rimi', icon: '💻', start: 9, end: 21, pay: 120_000, minKnowledge: 7, perHour: { energy: -3, fun: -1, social: 0 } },
-  { id: 'dj', title: 'Resident Club DJ', place: 'The Castle Lounge & Nightclub', icon: '🎧', start: 19, end: 5, pay: 60_000, minKnowledge: 2, perHour: { energy: -5, social: 4, fun: 5, hygiene: -3 } },
+  { id: 'keke', title: 'Keke Driver', place: 'Kawo – Central Market route', icon: '🛺', start: 6, end: 18, pay: 48_000, minKnowledge: 0, perHour: { energy: -5, social: 2, fun: -2, hygiene: -4 } },
+  { id: 'airport', title: 'Airport Ground Assistant', place: 'Kaduna International Airport', icon: '🧳', start: 6, end: 18, pay: 60_000, minKnowledge: 1, perHour: { energy: -4, social: 2, fun: -1, hygiene: -3 } },
+  { id: 'trader', title: 'Market Trader', place: 'Kaduna Central Market', icon: '🧺', start: 7, end: 19, pay: 45_000, minKnowledge: 0, perHour: { energy: -4, social: 3, fun: -1, hygiene: -3 } },
+  { id: 'textile', title: 'Mill Hand', place: 'KTL Textile Mill, Kakuri', icon: '🧶', start: 7, end: 18, pay: 50_000, minKnowledge: 0, perHour: { energy: -5, social: 2, fun: -2, hygiene: -3 } },
+  { id: 'hotel', title: 'Hotel Receptionist', place: 'Hamdala Hotel', icon: '🛎️', start: 7, end: 19, pay: 60_000, minKnowledge: 1, perHour: { energy: -3, social: 4, fun: -1 } },
+  { id: 'banker', title: 'Bank Teller', place: 'Kaduna Community Bank', icon: '🏦', start: 8, end: 18, pay: 100_000, minKnowledge: 2, perHour: { energy: -3, social: 3, fun: -1 } },
+  { id: 'police', title: 'Police Officer', place: 'Kaduna Police HQ', icon: '👮🏾', start: 7, end: 19, pay: 70_000, minKnowledge: 1, perHour: { energy: -4, social: 2, fun: -1, hygiene: -3 } },
+  { id: 'fitness', title: 'Fitness Coach', place: 'Ahmadu Bello Stadium', icon: '🏋🏾', start: 8, end: 20, pay: 55_000, minKnowledge: 1, perHour: { energy: -6, social: 3, fun: 2, hygiene: -5 } },
+  { id: 'teacher', title: 'Primary School Teacher', place: 'LEA School, Barnawa', icon: '🧑🏾‍🏫', start: 7, end: 16, pay: 60_000, minKnowledge: 2, perHour: { energy: -4, social: 2, fun: -2 } },
+  { id: 'civil', title: 'Civil Servant', place: 'State Secretariat', icon: '🏛️', start: 7, end: 19, pay: 95_000, minKnowledge: 3, perHour: { energy: -3, social: 1, fun: -3 } },
+  { id: 'refinery', title: 'Refinery Technician', place: 'Kaduna Refinery (KRPC)', icon: '🛢️', start: 6, end: 18, pay: 220_000, minKnowledge: 5, perHour: { energy: -5, fun: -3, hygiene: -4 } },
+  { id: 'dev', title: 'Software Developer', place: 'Tech hub, Ungwan Rimi', icon: '💻', start: 9, end: 21, pay: 300_000, minKnowledge: 7, perHour: { energy: -3, fun: -1, social: 0 } },
+  { id: 'dj', title: 'Resident Club DJ', place: 'The Castle Lounge & Nightclub', icon: '🎧', start: 19, end: 5, pay: 130_000, minKnowledge: 2, perHour: { energy: -5, social: 4, fun: 5, hygiene: -3 } },
 ];
 
 /** Seconds a burglar spends carrying an item out: big, heavy pieces take longer than small ones. */

@@ -16,6 +16,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { IcosahedronGeometry, Matrix4, SphereGeometry, Vector3, type BufferGeometry, type Group } from 'three';
 import { clamp, frame, Glow, Kit, KitModel, prep, rng, scale, unitCyl, type Built, type RGB, type V3 } from '../placeKit';
+import { plantTree, shadeKind } from '../trees';
 import { seedAt } from '../StaticBatch';
 
 /* ---------- Colours shared across the group ---------- */
@@ -36,9 +37,6 @@ const GOLD = '#eab308';
 const LAWN = '#8fb86a';
 const LATERITE = '#c98b5e';
 const SAND = '#dcc39a';
-const TRUNK = '#6b4a2b';
-const LEAF = ['#3f7d2a', '#4d8a32', '#356b24'];
-const FROND = '#4f8a2b';
 const SKIN = ['#5b3a24', '#6b4226', '#4a2e1c'];
 const CLOTHES = ['#dc2626', '#2563eb', '#facc15', '#16a34a', '#f97316', '#f8fafc', '#7c3aed', '#0f172a', '#db2777', '#0d9488'];
 const WATER_TANK = '#111827';
@@ -237,20 +235,14 @@ function crowd(k: Kit, rand: () => number, n: number, x0: number, z0: number, x1
     person(k, x, z, palette[Math.floor(rand() * palette.length)], rand() < 0.5 ? DARK : '#374151', SKIN[Math.floor(rand() * 3)]);
   }
 }
-/** A shade tree (mango, neem): a short trunk and a lumpy crown. */
+/** A shade tree from the tree kit (trees.ts): `i` picks neem, mango, or either now and then a flame tree. */
 function tree(k: Kit, x: number, z: number, s: number, low: boolean, i = 0) {
-  k.post(TRUNK, [x, 0, z], 0.045 * s, 0.42 * s, 4);
-  k.shape(LEAF[i % 3], BALL(), [x, 0.62 * s, z], [0.42 * s, 0.3 * s, 0.42 * s], [0, i, 0]);
-  if (!low) k.shape(LEAF[(i + 1) % 3], BALL(), [x + 0.13 * s, 0.76 * s, z - 0.06 * s], [0.26 * s, 0.2 * s, 0.26 * s], [0, i * 2, 0]);
+  plantTree(k, i % 3 === 0 ? 'neem' : i % 3 === 1 ? 'mango' : shadeKind(x, z), x, z, 0.95 * s, { low });
 }
-/** A palm: a slim trunk and a ring of drooping fronds. */
+/** A palm from the tree kit, its trunk `h` tall: a coconut, or for odd `i` a shorter, fuller oil palm. */
 function palm(k: Kit, x: number, z: number, h: number, low: boolean, i = 0) {
-  k.post('#8a6a45', [x, 0, z], 0.035, h, 5, 0.7);
-  const n = low ? 4 : 6;
-  for (let j = 0; j < n; j++) {
-    const f = frame([x, h, z], [0, (j / n) * Math.PI * 2 + i, 0]);
-    k.box(FROND, [0.19, -0.05, 0], [0.4, 0.02, 0.1], [0, 0, -0.42], f);
-  }
+  if (i % 2) plantTree(k, 'oilpalm', x, z, h / 1.1, { low });
+  else plantTree(k, 'coconut', x, z, h / 1.3, { low });
 }
 /** A flagpole on a plinth, its flag in `bands` (Nigeria's green-white-green unless told otherwise). */
 function flag(k: Kit, x: number, z: number, h: number, bands = [GREEN, WHITE, GREEN]) {

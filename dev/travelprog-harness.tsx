@@ -7,7 +7,7 @@ import '../src/ui/phone-ui.css';
 import '../src/ui/safe-area.css';
 import { useGame, type TravelMode } from '../src/game/store';
 import { resetAvatar } from '../src/game/avatar';
-import { regionPlace } from '../src/game/regions';
+import { regionPlace, regionPlaces } from '../src/game/regions';
 import { Avatar } from '../src/three/Avatar';
 import { Hud } from '../src/ui/Hud';
 import { useTrip } from '../src/game/trip';
@@ -35,10 +35,11 @@ setTimeout(() => {
     // In the air: the task the airport's gate sets, ticked by hand (the game loop waits on a signed-in session).
     const s = useGame.getState();
     useGame.setState({ view: 'place', insideId: 'airport', task: { itemId: null, placeId: 'airport', actionId: 'fly_lagos', label: 'Fly to Lagos', icon: '🛫', phase: 'doing', remaining: 30, total: 30, flight: 'ticket' } } as never);
-    useTrip.setState({ going: { city: 'lagos', place: regionPlace('lagos', 'airport')!, mode: 'keke', via: 'air', at: Date.now() } });
+    useTrip.setState({ going: { city: 'lagos', place: regionPlaces('lagos').find((p) => p.id === 'mall') ?? regionPlaces('lagos')[3], mode: 'keke', via: 'air', at: Date.now() } });
     void s;
+    if (q.get('gap') === '1') return useGame.setState({ task: null, boarding: true } as never);
     setInterval(() => useGame.getState().tick(0.1), 100);
   } else {
     useGame.getState().startPlace(to, mode, mode === 'car' ? q.get('car') ?? undefined : undefined);
   }
-}, 500);
+}, Number(q.get('delay') ?? 500));

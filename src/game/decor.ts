@@ -474,6 +474,34 @@ export function turnItems(ids: string[], delta: number) {
   useGame.setState({ items: s.items.map((i) => after.get(i.id) ?? i) });
 }
 
+// ── Height on the wall ──────────────────────────────────────
+
+function clampY(type: string, y: number) {
+  const h = ITEMS[type]?.wallH ?? 0.5;
+  return round3(clamp(y, h / 2 + 0.1, WALL_TALL - 0.05 - h / 2));
+}
+
+/** Hangs the wall piece being placed higher or lower. */
+export function nudgeHeight(dy: number) {
+  const p = useGame.getState().placing;
+  const def = p && ITEMS[p.type];
+  if (!p || def?.mount !== 'wall') return;
+  useGame.setState({ placing: { ...p, y: clampY(p.type, (p.y ?? def.wallY ?? 1.5) + dy) } });
+}
+
+/** Moves a hung piece up or down its wall (with whatever stands on it, for a shelf). */
+export function nudgeItem(id: string, dy: number) {
+  const s = useGame.getState();
+  const it = s.items.find((i) => i.id === id);
+  if (!it || mountOf(it) !== 'wall') return;
+  const y = clampY(it.type, wallYOf(it) + dy);
+  if (y === wallYOf(it)) return toast(dy > 0 ? 'As high as it goes' : 'As low as it goes');
+  const next = tidy({ ...it, y });
+  const err = placementError(next, s.items, avatarCell(), id, homeLayout(s));
+  if (err) return toast(err);
+  useGame.setState({ items: s.items.map((i) => (i.id === id ? next : i.on === id && mountOf(i) === 'surface' ? carry(i, it, next) : i)) });
+}
+
 // ── Groups ──────────────────────────────────────────────────
 
 export function setSelectMode(on: boolean) {

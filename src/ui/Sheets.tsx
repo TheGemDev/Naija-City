@@ -7,7 +7,7 @@ import { cityMap, hoursLabel, isOpen, PLACE_BY_ID } from '../game/city';
 import { cityNameHere, regionPlaces } from '../game/regions';
 import { employment } from '../game/jobs';
 import { INTERIORS } from '../game/interiors';
-import { WALL_BUILD_COST, WALL_KNOCK_COST, edgeKey, houseLayout, placementError, wallBuildError } from '../game/grid';
+import { WALL_BUILD_COST, WALL_KNOCK_COST, edgeKey, houseLayout, wallBuildError } from '../game/grid';
 import { avatarCell } from '../game/avatar';
 import { kmBetween } from '../game/fares';
 import { useTravel } from './TravelPicker';
@@ -22,6 +22,7 @@ import { placeLink, shareLink } from '../net/deeplink';
 import { Emoji, Icon } from './Icons';
 import { useApps } from '../game/apps';
 import { PIE_MENU } from './PieMenu';
+import { DecorPlaceBar, OwnedDecorTools } from './DecorTools';
 
 /** One row of the activities sheet. Shared with the visit bar so visiting a house looks the same as being home. */
 export function ActionRow({ action: a, sub, dim, onClick }: { action: ActionDef; sub: string; dim?: boolean; onClick: () => void }) {
@@ -140,7 +141,9 @@ export function BuyPanel() {
   const list = ITEM_LIST.filter((i) => i.category === cat && !i.fixed);
   const tabs: { key: HouseTab; icon: string; label: string; sub: string; count?: number }[] = [
     { key: 'furniture', icon: '🛋️', label: 'Furniture', sub: 'Buy & place' },
-    ...(stolen ? [{ key: 'stolen' as const, icon: '🥷', label: 'Stolen', sub: 'Place loot free', count: stolen }] : []),
+    ...(stolen ? (furnitureInventory.every((i) => i.stolen)
+      ? [{ key: 'stolen' as const, icon: '🥷', label: 'Stolen', sub: 'Place loot free', count: stolen }]
+      : [{ key: 'stolen' as const, icon: '📦', label: 'Storage', sub: 'Put things back', count: stolen }]) : []),
     { key: 'walls', icon: '🧱', label: 'Walls', sub: 'Build & knock' },
     { key: 'paint', icon: '🎨', label: 'Paint', sub: 'Pick colours' },
   ];
@@ -199,7 +202,7 @@ export function BuyPanel() {
             {list.map((i) => (
               <button key={i.type} className={`card ${money < i.price ? 'dim' : ''} ${i.luxury ? 'lux' : ''}`} onClick={() => startPlacing(i.type)}>
                 <span className="dims">
-                  {i.w}×{i.d}
+                  {i.mount === 'wall' ? `Wall ${i.w}` : i.mount === 'ceiling' ? 'Ceiling' : `${i.w}×${i.d}`}{i.small ? ' · on tops' : ''}
                 </span>
                 {i.luxury && <span className="lux-badge">💎 Luxury</span>}
                 <ItemThumb type={i.type} icon={i.icon} />
@@ -213,13 +216,13 @@ export function BuyPanel() {
       )}
       {!hidden && tab === 'stolen' && (
         <>
-          <p className="muted house-note">Loot from break-ins. Placing it is free.</p>
+          <p className="muted house-note">{furnitureInventory.some((i) => i.stolen) ? 'Things you stored, and loot from break-ins. Placing them is free.' : 'Things you stored. Placing them back is free.'}</p>
           <div className="cards">
             {furnitureInventory.map((item) => {
               const def = ITEMS[item.type];
               return (
                 <button key={item.id} className="card stolen" onClick={() => startPlacing(item.type, item.id)}>
-                  <span className="lux-badge stolen-badge">🥷 Stolen</span>
+                  {item.stolen && <span className="lux-badge stolen-badge">🥷 Stolen</span>}
                   <ItemThumb type={item.type} icon={def.icon} />
                   <b>{def.name}</b>
                   <span className="price">Place in your house</span>
@@ -288,39 +291,9 @@ function PaintTools() {
   );
 }
 
-/** Shown while dragging a new or moved item around. */
+/** Shown while dragging a new or moved item around (ui/DecorTools.tsx: turns, wall height, place). */
 export function PlaceBar() {
-  const placing = useGame((s) => s.placing);
-  const rotate = useGame((s) => s.rotatePlacing);
-  const cancel = useGame((s) => s.cancelPlacing);
-  const placeAt = useGame((s) => s.placeAt);
-  const hover = useGame((s) => s.hover);
-  const items = useGame((s) => s.items);
-  const design = useGame(activeDesignOf);
-  const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
-  if (!placing) return null;
-  const layout = houseLayout(design, walls);
-  const def = ITEMS[placing.type];
-  // On touch screens a tap only moves the preview; this button puts it down.
-  const touch = !!window.matchMedia?.('(pointer: coarse)').matches;
-  const err = hover ? placementError({ type: placing.type, x: hover.x, z: hover.z, rot: placing.rot }, items, avatarCell(), placing.moveId, layout) : 'Tap a spot first';
-  return (
-    <div className="placebar">
-      <span>
-        {def.icon} Tap a spot to {touch ? 'preview' : placing.moveId ? 'move' : 'place'} <b>{def.name}</b>
-        {!placing.moveId && <> · {naira(def.price)}</>}
-      </span>
-      <div>
-        <button onClick={rotate}>⟳ Rotate</button>
-        {touch && (
-          <button className="go" disabled={!!err} title={err ?? undefined} onClick={() => hover && placeAt(hover)}>
-            ✓ {placing.moveId ? 'Move here' : 'Place'}
-          </button>
-        )}
-        <button onClick={cancel}>Done</button>
-      </div>
-    </div>
-  );
+  return <DecorPlaceBar />;
 }
 
 /** One row of the 8 palette colours plus a "original" swatch. */
@@ -378,6 +351,7 @@ export function OwnedSheet() {
               ))}
             </div>
           )}
+          <OwnedDecorTools id={item.id} />
           <div className="owned-actions">
             <button className="action tile" onClick={() => move(item.id)}>
               <span className="ai">✋</span>

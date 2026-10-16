@@ -43,6 +43,13 @@ export const PAINT_BY_ID: Record<string, PaintColour> = Object.fromEntries(PAINT
 export interface PaintSlot { label: string; /** Model colours that make up this part; first is the main one. */ bases: string[] }
 
 export const ITEM_PAINT: Record<string, PaintSlot[]> = {
+  // Wall and table-top pieces (game/mount.ts).
+  curtains: [{ label: 'Fabric', bases: ['#c2410c', '#9a3412'] }, { label: 'Tie-back', bases: ['#fbbf24'] }],
+  wall_shelf: [{ label: 'Wood', bases: ['#8b5a2b'] }],
+  side_table: [{ label: 'Top', bases: ['#8b5a2b'] }, { label: 'Stand', bases: ['#5a371e'] }],
+  flower_vase: [{ label: 'Vase', bases: ['#0e7490'] }],
+  wall_mirror: [{ label: 'Frame', bases: ['#a16207'] }],
+  framed_print: [{ label: 'Frame', bases: ['#2b2118'] }],
   bed_foam: [
     { label: 'Blanket', bases: ['#2f6f4f'] },
     { label: 'Frame', bases: ['#6b4426', '#5a371e'] },

@@ -498,17 +498,7 @@ export const OUTDOOR_PROPS: Record<string, Model> = {
       <B p={[0, 0.14, 0]} s={[0.4, 0.06, 0.3]} c="#f97316" e="#c2410c" />
     </group>
   ),
-  palm: () => (
-    <group>
-      <Cyl p={[0.08, 1.4, 0]} r={0.13} rt={0.09} h={2.8} c="#8b5a2b" seg={7} rot={[0, 0, -0.06]} />
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <group key={i} position={[0.16, 2.8, 0]} rotation={[0, (i * Math.PI) / 3, 0.5]}>
-          <B p={[0.75, 0, 0]} s={[1.5, 0.05, 0.36]} c={i % 2 ? '#15803d' : '#16a34a'} />
-        </group>
-      ))}
-      {[[0.05, 0.1], [0.28, -0.08]].map(([x, z], i) => <Ball key={i} p={[x, 2.62, z]} r={0.12} c="#5a3418" />)}
-    </group>
-  ),
+  palm: () => <CityTree kind="coconut" size={2.15} />,
   rock_pile: () => (
     <group>
       {[[0, 0.16, 0, 0.3], [0.28, 0.1, 0.18, 0.18], [-0.26, 0.1, 0.12, 0.2], [0.05, 0.08, -0.3, 0.16], [-0.2, 0.06, -0.2, 0.12]].map(([x, y, z, r], i) => (
@@ -516,7 +506,7 @@ export const OUTDOOR_PROPS: Record<string, Model> = {
       ))}
     </group>
   ),
-  shade_tree: () => <CityTree p={[0, 0, 0]} s={1.0} />,
+  shade_tree: () => <CityTree kind="mango" s={1.0} />,
   // A sign on two legs at the edge of a field.
   field_sign: ({ text = '' }) => (
     <group>

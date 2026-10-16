@@ -15,9 +15,9 @@ import {
 } from 'three';
 import { cityMap, type CityMap } from '../game/city';
 import { aftermathOf, DISASTER_RULES, DISASTERS, intensityOf, phaseOf, seeded, type Disaster } from '../game/disasters';
-import { regionOf } from '../game/regions';
 import { useGame } from '../game/store';
 import { useLowPerf } from '../game/quality';
+import { mapTreeSize, mapTrees, TREE_SIZE, treeTint } from './trees';
 import { disasterNow, startDisasters, useCityDisasters } from '../net/disasters';
 
 /* ---------- Shared pieces ---------- */
@@ -553,7 +553,6 @@ function Fire({ d, map, bush = false }: { d: Disaster; map: CityMap; bush?: bool
 /** Roofing sheets torn off and spinning round the squall, dust whipped up off the ground, and the trees bending. */
 function Windstorm({ d, map }: { d: Disaster; map: CityMap }) {
   const low = useLowPerf();
-  const accent = regionOf(map.id).accent;
   const sheets = useMemo(() => {
     const rand = seeded(d.id * 17 + 9);
     return Array.from({ length: low ? 12 : 26 }, () => ({ a: rand() * Math.PI * 2, rr: 0.2 + rand() * 0.8, h: rand(), sp: 0.6 + rand() * 0.9, rust: rand() < 0.4 }));
@@ -563,8 +562,8 @@ function Windstorm({ d, map }: { d: Disaster; map: CityMap }) {
     const rand = seeded(d.id * 23 + 4);
     return Array.from({ length: dustCount }, () => ({ a: rand() * Math.PI * 2, rr: Math.sqrt(rand()), h: rand(), sp: 0.5 + rand() }));
   }, [d.id, dustCount]);
-  const trees = useMemo(() => map.trees
-    .map((t, i) => ({ ...t, i }))
+  const trees = useMemo(() => mapTrees(map)
+    .map((t, i) => ({ ...t, i, size: mapTreeSize(t.kind, t.s), crown: TREE_SIZE[t.kind].crown, r: TREE_SIZE[t.kind].r }))
     .filter((t) => Math.hypot(t.x + 0.5 - d.x, t.z + 0.5 - d.z) < d.r)
     .slice(0, low ? 16 : 40), [map, d, low]);
   const roofs = useMemo(() => {
@@ -599,7 +598,7 @@ function Windstorm({ d, map }: { d: Disaster; map: CityMap }) {
     const rust = new Color('#8f5531');
     sheets.forEach((s, i) => flying.current.setColorAt(i, s.rust ? rust : zinc));
     if (flying.current.instanceColor) flying.current.instanceColor.needsUpdate = true;
-    trees.forEach((t, i) => canopies.current.setColorAt(i, new Color(t.i % 3 ? accent : '#b88b49')));
+    trees.forEach((t, i) => canopies.current.setColorAt(i, new Color(treeTint(t.kind))));
     if (canopies.current.instanceColor) canopies.current.instanceColor.needsUpdate = true;
     roofs.forEach(({ h, yaw, ox, oz }, i) => {
       dummy.position.set(h.x + h.w / 2 + ox, (h.storeys === 2 ? 2.2 : 1.2) + 0.55, h.z + h.d / 2 + oz);
@@ -619,7 +618,7 @@ function Windstorm({ d, map }: { d: Disaster; map: CityMap }) {
     });
     ground.current.instanceMatrix.needsUpdate = true;
     if (ground.current.instanceColor) ground.current.instanceColor.needsUpdate = true;
-  }, [sheets, trees, roofs, litter, accent]);
+  }, [sheets, trees, roofs, litter]);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
@@ -660,9 +659,11 @@ function Windstorm({ d, map }: { d: Disaster; map: CityMap }) {
     if (on) {
       trees.forEach((tr, i) => {
         const gust = level * (0.55 + 0.45 * Math.sin(t * 2.6 + tr.i * 0.7)) * (0.8 + 0.2 * Math.sin(t * 7.3 + tr.i));
-        dummy.position.set(tr.x + 0.5 + gust * 0.42 * tr.s, 2.45 * tr.s - gust * 0.1 * tr.s, tr.z + 0.5 + gust * 0.12 * tr.s);
+        // Over the tree's own crown, its size and colour (trees.ts), leaning away from the wind.
+        const k = tr.size * tr.r * 0.9;
+        dummy.position.set(tr.x + 0.5 + gust * 0.7 * k, tr.size * tr.crown - gust * 0.15 * k, tr.z + 0.5 + gust * 0.2 * k);
         dummy.rotation.set(0, 0, -gust * 0.5);
-        dummy.scale.set(1.02 * tr.s * (1 + gust * 0.12), 0.98 * tr.s * (1 - gust * 0.1), 1.02 * tr.s);
+        dummy.scale.set(k * (1 + gust * 0.12), k * 0.7 * (1 - gust * 0.1), k);
         dummy.updateMatrix();
         canopies.current.setMatrixAt(i, dummy.matrix);
       });

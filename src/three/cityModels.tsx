@@ -4,8 +4,7 @@
 import { TrainStation } from './StationModel';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial } from 'three';
 import { B } from './models';
-import { useLowPerf } from '../game/quality';
-import { bushKind, mapTreeSize, treeDust, treeGeometry, treePick, type TreeKind } from './trees';
+import { TreeModel } from './TreeModel';
 import { Stadium } from './Stadium';
 import { Airport, Campus, Church, CompVillage, Flyover, Hospital, Jetty, Mill, MotorPark, Mosque, Nda, Poly, Port, Refinery, School, TechHub } from './places/institutions';
 import * as Commerce from './places/commerce';
@@ -163,23 +162,6 @@ function Parapet({ w, d, y, c, h = 0.2, cap = '#ece6da' }: { w: number; d: numbe
       <B p={[w / 2 - t / 2, y + h + 0.02, 0]} s={[t + 0.04, 0.04, d]} c={cap} />
       <B p={[-w / 2 + t / 2, y + h + 0.02, 0]} s={[t + 0.04, 0.04, d]} c={cap} />
     </>
-  );
-}
-
-/**
- * A tree on the map or in a scene of its own: one mesh from the shared tree kit (trees.ts), which StaticBatch folds into
- * the town's buckets. `s` is about a third of its height; `kind` the species (a shade tree or oil palm by default).
- */
-function Tree({ p, s = 0.6, kind, seed = 0 }: { p: V3; s?: number; kind?: TreeKind; seed?: number }) {
-  const low = useLowPerf();
-  const k = kind ?? bushKind(p[0], p[2]);
-  const pick = treePick(k, p[0], p[2], seed);
-  const size = mapTreeSize(k, s) * pick.scale;
-  return (
-    // noShade: the ground shade is for buildings, and a tree's bounds would read as one.
-    <mesh geometry={treeGeometry(k, pick.variant, pick.palette, low, treeDust())} position={p} rotation={[pick.lx, pick.yaw, pick.lz]} scale={size} castShadow receiveShadow dispose={null} userData={{ noShade: true }}>
-      <meshStandardMaterial vertexColors flatShading emissiveIntensity={0} />
-    </mesh>
   );
 }
 
@@ -672,4 +654,4 @@ function Clinic({ w, d }: { w: number; d: number }) {
   );
 }
 
-export { Tree as CityTree, Bus, Horse };
+export { TreeModel as CityTree, Bus, Horse };

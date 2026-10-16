@@ -13,6 +13,7 @@ import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
 import { cleanExtensions, cleanExterior, layoutKey } from '../src/game/exterior';
 import { isColourRef } from '../src/game/paint';
+import { normalizePlaced } from '../src/game/mount';
 import { LIGHTS, cleanFinish, cleanLamp } from '../src/game/finishes';
 import { sectionOf } from '../src/game/estate';
 import { CAR_BY_ID } from '../src/game/cars';
@@ -568,7 +569,8 @@ export async function houseOf(db: D1Database, ownerUid: string, propertyId?: str
     const { paint, light, ...rest } = item;
     const clean = Array.isArray(paint) ? paint.slice(0, 4).map((id) => (isColourRef(id) ? id : null)) : [];
     const lamp = LIGHTS[rest.type] ? cleanLamp(light) : undefined;
-    return { ...rest, ...(clean.some(Boolean) ? { paint: clean } : {}), ...(lamp ? { light: lamp } : {}) };
+    // Wall, table-top and free-angle fields pass through, made consistent (src/game/mount.ts).
+    return normalizePlaced({ ...rest, ...(clean.some(Boolean) ? { paint: clean } : {}), ...(lamp ? { light: lamp } : {}) });
   });
   const wallSource = save.wallEdits?.[home?.id ?? 'starter'];
   const walls = Array.isArray(wallSource)

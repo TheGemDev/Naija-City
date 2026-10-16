@@ -38,6 +38,7 @@ import { handlePushApi, pushPublicKey } from './push';
 import { handleCommunity } from './community';
 import { handleGroups } from './groups';
 import { handleCareer } from './career';
+import { handleHustles } from './hustles';
 import { handleHangout } from './hangout';
 import { handleKids } from './kids';
 import { handleRentals } from './rentals';
@@ -536,6 +537,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const career = await handleCareer(req, env, ctx, user, path);
   if (career) return career;
+
+  const hustles = await handleHustles(req, env, user, path);
+  if (hustles) return hustles;
 
   const hangout = await handleHangout(req, env, ctx, user, path);
   if (hangout) return hangout;

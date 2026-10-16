@@ -7,7 +7,7 @@ import { STORY_ROUTE_CHANCE, STORY_ROUTE_MIN_CELLS } from './streetScenes';
 import { pickStreetStory, RECENT_STORIES, rollChoice, type StoryFlag, type StreetStory } from './stories';
 import { activeEvent, activeRoadEvent, blackMarketPrice, FUEL, fuelPrice, gridOn } from './live';
 import { isHighNow, SEIZED_SLOTS, viceHooks } from './vice';
-import { GIGS, type GigId } from './gigs';
+import { GIGS, gigRoom, noteGig, oddJobPay, type GigId } from './gigs';
 import { SHIFT, shiftBonus, takeShiftScore } from './shiftGame';
 import { legacyOf, type LegacyBreakdown, type LegacyRecord, type StatKey, type Stats } from './legacy';
 import { driveHooks, driveState } from './driveState';
@@ -1057,8 +1057,9 @@ export const useGame = create<GameState>((set, get) => {
     // A care for an adopted child is done: the server applies it and charges for it (src/net/kids.ts).
     if (!cancelled && action?.effect === 'kidCare') kidHooks.done?.(t.actionId, t.itemId ? taskItems(s).find((i) => i.id === t.itemId)?.type ?? null : null);
     if (!cancelled && action?.payout && action.payout > 0) {
-      pay(action.payout, action.label);
-      toast(`💰 You earned ${naira(action.payout)} from ${action.label}!`);
+      // An earning, so the server checks it as one (worker/wallet.ts): sent as spending it was refused and taken back.
+      const got = get().earn('odd_job', oddJobPay(action.payout), action.label);
+      toast(got > 0 ? `💰 You earned ${naira(got)} from ${action.label}!` : `${action.label}: done`);
     }
     if (t.actionId === 'work' && t.phase === 'doing') {
       const job = jobById(s.jobId);
@@ -3263,8 +3264,14 @@ export const useGame = create<GameState>((set, get) => {
     },
 
     earn(gig, amount, label) {
-      const paid = Math.max(0, Math.min(GIGS[gig].max, Math.round(amount)));
-      if (paid > 0) pay(paid, label, 'gig', gig);
+      const want = Math.max(0, Math.min(GIGS[gig].max, Math.round(amount)));
+      // The server takes back anything past the gig's hourly limit (game/gigs.ts), so it is never paid here either.
+      const paid = Math.min(want, gigRoom(gig));
+      if (want > 0 && paid < want) toast(`⏳ ${GIGS[gig].label}: that’s the most it pays in an hour. Try another hustle for now`);
+      if (paid > 0) {
+        noteGig(gig, paid);
+        pay(paid, label, 'gig', gig);
+      }
       return paid;
     },
 
