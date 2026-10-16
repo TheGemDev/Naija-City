@@ -1,16 +1,14 @@
-// Snap, made to feel like Snapchat. The app opens on its camera (photo mode over the scene, ui/PhotoMode.tsx); on the
-// phone it has Chat (snaps friends sent me, streaks), Stories (friends' snaps as rings, played full screen), Spotlight
-// (the whole city's snaps, most liked first) and Me (my own snaps and who saw them). Everything is gone after a day.
+// Snap: one feed, Spotlight (the whole city's snaps, most liked or newest first). The + camera button takes a snap
+// (photo mode over the scene, ui/PhotoMode.tsx) and posts it to Spotlight. Everything is gone after a day.
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  SNAP_COMMENT_MAX, commentSnap, deleteSnap, deleteSnapComment, likeSnap, loadSnapChats, loadSnapComments, loadSnaps, snapViewers, useSnaps, viewSnap,
-  type ReceivedSnap, type Snap, type SnapTab,
+  SNAP_COMMENT_MAX, commentSnap, deleteSnap, deleteSnapComment, likeSnap, loadSnapComments, loadSnaps, snapViewers, useSnaps, viewSnap,
+  type Snap,
 } from '../net/snaps';
 import { useSession } from '../net/session';
-import { loadFriends, useCommunity } from '../net/community';
-import { openPlayerProfile, sendText, usePlayerLabel, useSocial } from '../net/social';
+import { openPlayerProfile, sendText, usePlayerLabel } from '../net/social';
 import { shareLink, snapLink } from '../net/deeplink';
 import { useGame } from '../game/store';
 import { Face } from './Face';
@@ -23,17 +21,12 @@ const ago = (at: number, now: number) => {
   const m = Math.max(0, Math.floor((now - at) / 60_000));
   return m < 1 ? 'now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
 };
-const left = (until: number, now: number) => {
-  const m = Math.max(1, Math.ceil((until - now) / 60_000));
-  return m < 60 ? `${m}m left` : `${Math.floor(m / 60)}h left`;
-};
 const count = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}K` : String(n));
 /** How long one story snap shows before the next. */
 const STORY_MS = 5000;
 const REACTIONS = ['❤️', '😂', '🔥', '😮', '👏🏾', '🙌🏾'];
 
-/** A snap a friend sent me, shaped like any other so the same player can show it. */
-const asSnap = (r: ReceivedSnap): Snap => ({ id: r.id, uid: r.uid, username: r.username, url: r.url ?? '', caption: r.caption, at: r.at, until: r.at + 86_400_000, likes: 0, liked: false, comments: 0, views: 0, seen: !!r.opened, audience: 2 });
+const TileName = ({ uid, username }: { uid: string; username: string | null }) => <>{usePlayerLabel(uid, username).replace(/^@/, '')}</>;
 
 const svg = (d: ReactNode, size = 22, sw = 2.2) => (
   <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>
@@ -64,42 +57,20 @@ interface Playing {
 
 export function SnapApp() {
   const me = useSession((s) => s.user);
-  const tab = useSnaps((s) => s.tab);
   const shared = useSnaps((s) => s.shared);
-  const [now, setNow] = useState(Date.now());
   const [playing, setPlaying] = useState<Playing | null>(null);
   const [host, setHost] = useState<Element | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
-  const newSnaps = useSnaps((s) => s.chats?.received.filter((r) => !r.opened).length ?? 0);
-  const unseenStories = useSnaps((s) => s.friends.some((x) => !x.seen && x.uid !== me?.uid && x.until > Date.now()));
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  // The chats and friends' stories feed the nav's badges, so they load whichever screen is open.
-  useEffect(() => {
-    void loadSnapChats();
-    void loadSnaps('friends');
-    void loadFriends();
-    const id = setInterval(() => {
-      void loadSnapChats();
-      void loadSnaps('friends');
-    }, 30_000);
-    return () => clearInterval(id);
-  }, []);
   // A snap opened from a share link plays at once.
   useEffect(() => {
     if (shared && shared.until > Date.now()) setPlaying({ groups: [[shared]], g: 0, i: 0, mode: 'spotlight' });
   }, [shared?.id]);
 
-  const setTab = (t: SnapTab) => useSnaps.setState({ tab: t });
   const close = () => {
     setPlaying(null);
     if (useSnaps.getState().shared) useSnaps.setState({ shared: null });
   };
-  const title: Record<SnapTab, string> = { chat: 'Chat', stories: 'Stories', spotlight: 'Spotlight', me: 'My Snaps' };
-  const back = () => root.current?.closest('.app')?.querySelector<HTMLButtonElement>('.app-back')?.click();
 
   return (
     <div
@@ -109,198 +80,17 @@ export function SnapApp() {
         setHost(el?.closest('.screen') ?? null);
       }}
     >
-      <header className="snap-top">
-        <button type="button" className="snap-icon-btn" aria-label="Back" onClick={back}>{svg(ICON.back, 22, 2.6)}</button>
-        <button type="button" className="snap-me" aria-label="My snaps" onClick={() => setTab('me')}>
-          <Face uid={me?.uid} username={me?.username} size="fill" />
-        </button>
-        <h2>{title[tab]}</h2>
-        <button type="button" className="snap-icon-btn" aria-label="Camera" onClick={() => openSnapCamera()}>{svg(ICON.camera)}</button>
-      </header>
-      <div className="snap-scroll" key={tab}>
+      <div className="snap-scroll">
         {!me ? (
-          <div className="snap-empty big"><Emoji char="👻" size={44} /><b>Sign in to use Snap</b><span>Snaps from friends and the whole city show here.</span></div>
-        ) : tab === 'chat' ? (
-          <ChatTab now={now} play={setPlaying} />
-        ) : tab === 'stories' ? (
-          <StoriesTab now={now} myUid={me.uid} play={setPlaying} />
-        ) : tab === 'spotlight' ? (
-          <SpotlightTab play={setPlaying} />
+          <div className="snap-empty big"><Emoji char="👻" size={44} /><b>Sign in to use Snap</b><span>Snaps from the whole city show here.</span></div>
         ) : (
-          <MeTab now={now} myUid={me.uid} play={setPlaying} />
+          <SpotlightTab play={setPlaying} />
         )}
       </div>
-      <nav className="snap-nav" aria-label="Snap">
-        <NavBtn on={tab === 'chat'} label="Chat" badge={newSnaps} onClick={() => setTab('chat')}>{svg(ICON.chat)}</NavBtn>
-        <NavBtn on={tab === 'stories'} label="Stories" dot={unseenStories} onClick={() => setTab('stories')}>{svg(ICON.stories)}</NavBtn>
-        <button type="button" className="snap-nav-cam" aria-label="Camera" onClick={() => openSnapCamera()}><i /></button>
-        <NavBtn on={tab === 'spotlight'} label="Spotlight" onClick={() => setTab('spotlight')}>{svg(ICON.spotlight)}</NavBtn>
-        <NavBtn on={tab === 'me'} label="Me" onClick={() => setTab('me')}>{svg(ICON.me)}</NavBtn>
-      </nav>
-      {playing && (host ? createPortal(<Player start={playing} myUid={me?.uid} onClose={close} />, host) : <Player start={playing} myUid={me?.uid} onClose={close} />)}
-    </div>
-  );
-}
-
-function NavBtn({ on, label, badge, dot, onClick, children }: { on: boolean; label: string; badge?: number; dot?: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" className={`snap-nav-btn ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} onClick={onClick}>
-      {children}
-      <small>{label}</small>
-      {!!badge && <em>{badge}</em>}
-      {!badge && dot && <em className="dot" />}
-    </button>
-  );
-}
-
-/* ---------- Chat ---------- */
-
-type ChatState = { kind: 'new' | 'received' | 'delivered' | 'opened' | 'none'; at: number; unread: ReceivedSnap[] };
-
-function ChatTab({ now, play }: { now: number; play: (p: Playing) => void }) {
-  const friends = useCommunity((s) => s.friends?.friends);
-  const chats = useSnaps((s) => s.chats);
-  const rows = useMemo(() => {
-    const state = (uid: string): ChatState => {
-      const got = chats?.received.filter((r) => r.uid === uid) ?? [];
-      const unread = got.filter((r) => !r.opened && r.url).reverse();
-      const sent = chats?.sent.find((s) => s.uid === uid);
-      if (unread.length) return { kind: 'new', at: unread[unread.length - 1].at, unread };
-      const last = got[0];
-      if (sent && (!last || sent.at > last.at)) return { kind: sent.opened ? 'opened' : 'delivered', at: sent.at, unread };
-      if (last) return { kind: 'received', at: last.at, unread };
-      return { kind: 'none', at: 0, unread };
-    };
-    return (friends ?? []).map((f) => ({ ...f, st: state(f.uid) })).sort((a, b) => Number(b.st.kind === 'new') - Number(a.st.kind === 'new') || b.st.at - a.st.at);
-  }, [friends, chats]);
-  if (friends === undefined || !chats) return <p className="snap-empty">Loading chats…</p>;
-  if (!friends.length) {
-    return (
-      <div className="snap-empty big">
-        <Emoji char="🤝🏾" size={40} />
-        <b>No friends yet</b>
-        <span>Text someone in Messages. When they reply, you are friends and can send each other snaps.</span>
-      </div>
-    );
-  }
-  return (
-    <ul className="snap-chats">
-      {rows.map((f) => (
-        <ChatRow key={f.uid} uid={f.uid} username={f.username} st={f.st} now={now} onOpen={() => {
-          if (f.st.kind === 'new') play({ groups: [f.st.unread.map(asSnap)], g: 0, i: 0, mode: 'direct' });
-          else useSocial.setState({ openWith: f.uid });
-        }} />
-      ))}
-    </ul>
-  );
-}
-
-const CHAT_STATUS: Record<ChatState['kind'], string> = { new: 'New Snap', received: 'Received', delivered: 'Delivered', opened: 'Opened', none: 'Tap to chat' };
-
-/** Snapchat's status marks: a square for a snap I got (filled while new), an arrow for one I sent (filled until opened). */
-function StatusMark({ kind }: { kind: ChatState['kind'] }) {
-  const fill = kind === 'new' || kind === 'delivered';
-  const color = kind === 'none' ? 'var(--sn-blue)' : 'var(--sn-red)';
-  const shape = kind === 'delivered' || kind === 'opened' ? <path d="M3 3l18 9-18 9 4-9z" /> : kind === 'none' ? <path d="M4 5h16v11H9l-5 4z" /> : <rect x="4" y="4" width="16" height="16" rx="3" />;
-  return <svg className="snap-status" viewBox="0 0 24 24" width="12" height="12" fill={fill ? color : 'none'} stroke={color} strokeWidth="3" strokeLinejoin="round" aria-hidden>{shape}</svg>;
-}
-
-function ChatRow({ uid, username, st, now, onOpen }: { uid: string; username: string; st: ChatState; now: number; onOpen: () => void }) {
-  const label = usePlayerLabel(uid, username);
-  return (
-    <li className={`snap-chat ${st.kind}`}>
-      <button type="button" className="snap-chat-main" onClick={onOpen}>
-        <Face uid={uid} username={username} />
-        <span className="snap-chat-text">
-          <b>{label}</b>
-          <small>
-            <StatusMark kind={st.kind} />
-            {CHAT_STATUS[st.kind]}
-            {st.kind === 'new' && st.unread.length > 1 && ` (${st.unread.length})`}
-            {st.at > 0 && ` · ${ago(st.at, now)}`}
-          </small>
-        </span>
-        <Streak uid={uid} />
-      </button>
-      <button type="button" className="snap-icon-btn" aria-label={`Send ${label} a snap`} onClick={() => openSnapCamera([uid])}>{svg(ICON.camera, 20)}</button>
-    </li>
-  );
-}
-
-/* ---------- Stories ---------- */
-
-/** Friends' snaps grouped into one story each (oldest first, as they play), unseen ones first, then the newest. */
-function useStories(myUid: string, now: number) {
-  const snaps = useSnaps((s) => s.friends);
-  return useMemo(() => {
-    const by = new Map<string, Snap[]>();
-    for (const s of snaps) if (s.until > now) by.set(s.uid, [...(by.get(s.uid) ?? []), s]);
-    const groups = [...by.values()].map((g) => g.sort((a, b) => a.at - b.at));
-    const mine = groups.find((g) => g[0].uid === myUid) ?? [];
-    const theirs = groups
-      .filter((g) => g[0].uid !== myUid)
-      .sort((a, b) => Number(b.some((s) => !s.seen)) - Number(a.some((s) => !s.seen)) || b[b.length - 1].at - a[a.length - 1].at);
-    return { mine, theirs };
-  }, [snaps, myUid, now]);
-}
-
-function StoriesTab({ now, myUid, play }: { now: number; myUid: string; play: (p: Playing) => void }) {
-  const loading = useSnaps((s) => s.loading);
-  const me = useSession((s) => s.user);
-  const { mine, theirs } = useStories(myUid, now);
-  // A story opens on its first snap I have not seen yet.
-  const open = (g: number) => play({ groups: theirs, g, i: Math.max(0, theirs[g].findIndex((s) => !s.seen)), mode: 'story' });
-  return (
-    <>
-      <div className="snap-rings" role="list">
-        <div className="snap-ring-item" role="listitem">
-          <button type="button" className={`snap-ring ${mine.length ? 'mine' : 'add'}`} aria-label={mine.length ? 'Watch my story' : 'Add to my story'} onClick={() => (mine.length ? play({ groups: [mine], g: 0, i: 0, mode: 'story' }) : openSnapCamera())}>
-            <Face uid={myUid} username={me?.username} size="fill" />
-            <em aria-hidden>+</em>
-          </button>
-          <small>My Story</small>
-        </div>
-        {theirs.map((g, k) => <Ring key={g[0].uid} snaps={g} onOpen={() => open(k)} />)}
-      </div>
-      <h3 className="snap-h">Friends</h3>
-      {!theirs.length && (
-        <div className="snap-empty big">
-          <Emoji char="👀" size={40} />
-          <b>{loading ? 'Loading stories…' : 'No stories from friends today'}</b>
-          <span>Be the first: snap something and add it to your story.</span>
-        </div>
+      {me && (
+        <button type="button" className="snap-fab" aria-label="Take a snap" onClick={() => openSnapCamera()}>{svg(ICON.camera, 24, 2.2)}</button>
       )}
-      <div className="snap-tiles">
-        {theirs.map((g, k) => {
-          const last = g[g.length - 1];
-          const unseen = g.some((s) => !s.seen);
-          return (
-            <button key={last.uid} type="button" className={`snap-tile is-story ${unseen ? 'unseen' : ''}`} onClick={() => open(k)}>
-              <img src={last.url} alt="" loading="lazy" draggable={false} />
-              <span className="snap-tile-who">
-                <Face uid={last.uid} username={last.username} size="sm" />
-                <b><TileName uid={last.uid} username={last.username} /></b>
-                <small>{ago(last.at, now)}</small>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-const TileName = ({ uid, username }: { uid: string; username: string | null }) => <>{usePlayerLabel(uid, username).replace(/^@/, '')}</>;
-
-function Ring({ snaps, onOpen }: { snaps: Snap[]; onOpen: () => void }) {
-  const s = snaps[snaps.length - 1];
-  const unseen = snaps.some((x) => !x.seen);
-  return (
-    <div className="snap-ring-item" role="listitem">
-      <button type="button" className={`snap-ring ${unseen ? 'unseen' : 'seen'}`} aria-label={`Watch ${s.username ?? 'their'} story`} onClick={onOpen}>
-        <Face uid={s.uid} username={s.username} size="fill" />
-      </button>
-      <small><TileName uid={s.uid} username={s.username} /></small>
+      {playing && (host ? createPortal(<Player start={playing} myUid={me?.uid} onClose={close} />, host) : <Player start={playing} myUid={me?.uid} onClose={close} />)}
     </div>
   );
 }
@@ -345,51 +135,6 @@ function SpotlightTab({ play }: { play: (p: Playing) => void }) {
     </>
   );
 }
-
-/* ---------- Me ---------- */
-
-function MeTab({ now, myUid, play }: { now: number; myUid: string; play: (p: Playing) => void }) {
-  const me = useSession((s) => s.user);
-  const { mine } = useStories(myUid, now);
-  const views = mine.reduce((a, s) => a + s.views, 0);
-  const likes = mine.reduce((a, s) => a + s.likes, 0);
-  return (
-    <>
-      <div className="snap-profile">
-        <span className="snap-profile-face"><Face uid={myUid} username={me?.username} size="fill" /></span>
-        <b>@{me?.username ?? 'you'}</b>
-        <div className="snap-profile-stats">
-          <span><b>{mine.length}</b><small>Snaps up</small></span>
-          <span><b>{count(views)}</b><small>Views</small></span>
-          <span><b>{count(likes)}</b><small>Likes</small></span>
-        </div>
-      </div>
-      <h3 className="snap-h">My Story</h3>
-      {!mine.length && (
-        <button type="button" className="snap-add-story" onClick={() => openSnapCamera()}>
-          <i aria-hidden>+</i>
-          <span><b>Add to My Story</b><small>Snaps disappear after 24 hours</small></span>
-        </button>
-      )}
-      <ul className="snap-mine">
-        {[...mine].reverse().map((s) => (
-          <li key={s.id}>
-            <button type="button" className="snap-mine-pic" aria-label="Watch" onClick={() => play({ groups: [mine], g: 0, i: mine.indexOf(s), mode: 'story' })}>
-              <img src={s.url} alt="" loading="lazy" draggable={false} />
-            </button>
-            <span className="snap-mine-text">
-              <b>{s.caption || (s.audience === 0 ? 'Story + Spotlight' : s.audience === 1 ? 'Story' : 'Sent to friends')}</b>
-              <small>{svg(ICON.eye, 13)} {s.views} · {svg(ICON.heart, 13)} {s.likes} · {left(s.until, now)}</small>
-            </span>
-            <button type="button" className="snap-icon-btn" aria-label="Delete this snap" onClick={() => window.confirm('Delete this snap?') && void deleteSnap(s.id).catch(() => {})}>{svg(ICON.trash, 20)}</button>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
-/* ---------- The full-screen player ---------- */
 
 function Player({ start, myUid, onClose }: { start: Playing; myUid?: string; onClose: () => void }) {
   const [at, setAt] = useState({ g: start.g, i: start.i });

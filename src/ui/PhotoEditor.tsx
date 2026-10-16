@@ -8,7 +8,6 @@ import { sceneHour } from '../game/theme';
 import { sceneWeather, temperatureAt, WEATHER } from '../game/weather';
 import { cityNameHere, regionHere } from '../game/regions';
 import { saveImage } from './saveImage';
-import { SnapSendSheet } from './SnapSend';
 import './snap.css';
 import { CAPTION_STYLES, EMOJI_STICKERS, INFO_TONES, LENSES, LENS_BY_ID, MARK_STYLES, TAG_STICKERS, TAG_TONES, applyLens, drawPhoto, hit, lensFilter, lensVeil, type Box, type Layer, type MarkStyle } from './photoCompose';
 
@@ -53,6 +52,8 @@ type Tray = 'stickers' | 'naija' | 'words' | 'mark' | 'lens';
 
 /** Snaps go up at phone-screen size: the longest side this many pixels, which keeps the upload small. They last a day, so they need no more. */
 const SNAP_SIDE = 960;
+/** Every snap goes to Spotlight. */
+const TO_SPOTLIGHT: SnapSend = { story: false, spotlight: true, to: [] };
 const encode = (canvas: HTMLCanvasElement, type: string, quality: number) => new Promise<Blob | null>((done) => canvas.toBlob(done, type, quality));
 
 /** The side toggles, top to bottom. Each opens its tray above the buttons; a second press puts it away. */
@@ -86,7 +87,6 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
   /** The message that goes out with the picture when it is sent to Snap. */
   const [snapNote, setSnapNote] = useState('');
   /** Picking who a snap goes to (ui/SnapSend.tsx). */
-  const [sending, setSending] = useState(false);
   const lens = usePhoto((s) => s.lens);
   /** Where a one-finger drag on the bare picture began: a swipe across it changes the filter, as on Snapchat. */
   const swipe = useRef<{ x: number; id: number } | null>(null);
@@ -256,7 +256,7 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
     void navigator.share({ files: [fileOf(blob)], title: 'Naija City', text: `${line}\nPlay here 👉 ${username ? inviteLink(username) : 'https://naija.city'}` }).catch(() => { /* closed the share sheet */ });
   };
 
-  /** Posts the dressed-up picture to Snap where the send screen says, then opens the app where it went. */
+  /** Posts the dressed-up picture to Snap's Spotlight, then opens the app on it. */
   const snap = async (send: SnapSend) => {
     setBusy(true);
     try {
@@ -276,10 +276,8 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
       await postSnap(blob, snapNote, send);
       usePhoto.getState().close();
       const g = useGame.getState();
-      const story = send.story || send.spotlight;
-      const friends = send.to.length ? `${send.to.length} friend${send.to.length === 1 ? '' : 's'}` : '';
-      g.toast(`👻 Sent to ${[send.spotlight ? 'Spotlight' : send.story ? 'your story' : '', friends].filter(Boolean).join(' and ')}. It disappears in 24 hours.`);
-      useSnaps.setState({ tab: story ? 'stories' : 'chat' });
+      g.toast('👻 Posted to Spotlight. It disappears in 24 hours.');
+      useSnaps.setState({ tab: 'spotlight' });
       useGame.setState({ openApp: 'flex' });
       g.setPanel('phone');
     } catch (e) {
@@ -411,13 +409,12 @@ export function PhotoEditor({ result }: { result: PhotoResult }) {
         {CAN_SHARE && <button type="button" className={forSnap ? 'photo-ghost' : 'photo-primary'} onClick={() => void share()}>Share</button>}
         {/* Only a picture taken from the Snap app can be sent there. */}
         {forSnap && (
-          <button type="button" className="photo-primary snap-send-to" disabled={busy || !username} onClick={() => setSending(true)}>
-            {busy ? 'Sending…' : 'Send To'}
+          <button type="button" className="photo-primary snap-send-to" disabled={busy || !username} onClick={() => void snap(TO_SPOTLIGHT)}>
+            {busy ? 'Posting…' : 'Post to Spotlight'}
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M3 20.5 21 12 3 3.5v6.6l11 1.9-11 1.9z" /></svg>
           </button>
         )}
       </div>
-      {sending && <SnapSendSheet busy={busy} onBack={() => setSending(false)} onSend={(send) => void snap(send)} />}
     </div>
   );
 }

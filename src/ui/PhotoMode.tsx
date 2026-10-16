@@ -8,7 +8,7 @@ import { sfx } from '../game/sfx';
 import { Emoji } from './Icons';
 import { PhotoEditor, snapInfo } from './PhotoEditor';
 import { LENSES, LENS_BY_ID, lensFilter, lensVeil } from './photoCompose';
-import { loadSnapChats, useSnaps, type SnapTab } from '../net/snaps';
+import { useSnaps } from '../net/snaps';
 import './photo.css';
 import './snap.css';
 
@@ -49,10 +49,10 @@ export function openSnapFirst() {
   return true;
 }
 
-/** From the Snap camera to one of the app's other screens on the phone. */
-function goSnap(tab: SnapTab) {
+/** From the Snap camera to the Spotlight feed on the phone. */
+function goSnap() {
   usePhoto.getState().close();
-  useSnaps.setState({ tab });
+  useSnaps.setState({ tab: 'spotlight' });
   useGame.setState({ openApp: 'flex' });
   useGame.getState().setPanel('phone');
 }
@@ -83,12 +83,6 @@ const TOOL_ICONS: Record<Exclude<Tab, 'lens'>, ReactNode> = {
   light: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   format: <><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M11 18h2" /></>,
 };
-/** Snap's screens, as the camera's bottom bar reaches them. */
-const SNAP_NAV: { id: SnapTab; label: string; icon: ReactNode }[] = [
-  { id: 'chat', label: 'Chat', icon: <path d="M4 5h16v11H9l-5 4z" /> },
-  { id: 'stories', label: 'Stories', icon: <><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.6M18 14.5a5 5 0 0 1 2.5 4.5" /></> },
-  { id: 'spotlight', label: 'Spotlight', icon: <path d="M8 4l12 8-12 8z" /> },
-];
 
 export function PhotoMode() {
   const active = usePhoto((s) => s.active);
@@ -111,7 +105,6 @@ export function PhotoMode() {
   const [tab, setTab] = useState<Tab>('shot');
   /** The Snap camera's open tool, if any: its choices show above the lenses. */
   const [tool, setTool] = useState<Tab | null>(null);
-  const newSnaps = useSnaps((s) => s.chats?.received.filter((r) => !r.opened).length ?? 0);
 
   // Anything that stops me posing, or opens a screen over the scene, closes the camera. A picture already
   // taken is safe, though: the plane landing while I am still dressing it up must not throw it away.
@@ -125,7 +118,6 @@ export function PhotoMode() {
   useEffect(() => {
     if (active) setTab('shot');
     if (active) setTool(null);
-    if (active && forSnap) void loadSnapChats();
   }, [active, forSnap]);
   // The lens shows live on the scene itself while framing; the editor bakes it into the picture.
   useEffect(() => {
@@ -225,13 +217,10 @@ export function PhotoMode() {
             </button>
             {forSnap && (
               <nav className="snap-cam-nav" aria-label="Snap">
-                {SNAP_NAV.map((n) => (
-                  <button key={n.id} type="button" onClick={() => goSnap(n.id)}>
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{n.icon}</svg>
-                    <small>{n.label}</small>
-                    {n.id === 'chat' && newSnaps > 0 && <em>{newSnaps}</em>}
-                  </button>
-                ))}
+                <button type="button" onClick={goSnap}>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 4l12 8-12 8z" /></svg>
+                  <small>Spotlight</small>
+                </button>
               </nav>
             )}
           </div>
