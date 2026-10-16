@@ -3,7 +3,7 @@ import { GlBoundary } from './NoWebGL';
 import { originOf } from '../game/origins';
 import { toastApp, toastHome, toastPlace } from '../game/toastTarget';
 import { tipOfToast, useHelp } from '../game/tips';
-import { memo, useEffect, useRef, useState } from 'react';
+import { Children, memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useNet } from '../net/multiplayer';
 import { api, useSession } from '../net/session';
@@ -769,6 +769,37 @@ export const ProfilePortrait = memo(function ProfilePortrait({ look }: { look: s
   );
 });
 
+/**
+ * Where the game's buttons sit. Corner layout: you (with what you are doing) bottom left, Phone alone bottom right, Map just above it.
+ * Switch it off to get the old bottom bar back.
+ */
+const CORNER_HUD = true;
+
+function NavShell({ children }: { children: ReactNode }) {
+  const mode = useGame((s) => s.mode);
+  useEffect(() => {
+    if (!CORNER_HUD) return;
+    document.body.classList.add('corner-hud');
+    return () => document.body.classList.remove('corner-hud');
+  }, []);
+  if (!CORNER_HUD) return <nav className="nav">{children}</nav>;
+  const all = Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[];
+  const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
+  return (
+    <>
+      <div className="corner-left">
+        {/* Situational buttons (Leave, Clock out, Activities, Home...) sit under the current task, beside you. */}
+        <div className="corner-ctx">{all.filter((c) => !key(c))}</div>
+        {mode === 'live' && <TaskChip />}
+      </div>
+      <nav className="corner-right">
+        {all.filter((c) => key(c) === 'map')}
+        {all.filter((c) => key(c) === 'phone')}
+      </nav>
+    </>
+  );
+}
+
 function Nav() {
   const mode = useGame((s) => s.mode);
   const panel = useGame((s) => s.panel);
@@ -797,30 +828,30 @@ function Nav() {
   if (kidnapped) {
     // In the kidnappers' camp the only thing you can do is call for help on the phone.
     return (
-      <nav className="nav">
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
+      <NavShell>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (jailed) {
     // Locked up there is no home or map to go to: just the cell's activities, and the phone.
     return (
-      <nav className="nav">
+      <NavShell>
         <button className={placeHubOpen ? 'on' : ''} onClick={() => { setPanel(null); setPlaceHubOpen(!placeHubOpen); }}>
           <span><Emoji char="🎯" size={24} /></span>Activities
         </button>
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (working) {
     // On shift you can't use the place or go anywhere: leave your post (ui/ShiftGame.tsx asks if you are sure), or use the phone.
     return (
-      <nav className="nav">
+      <NavShell>
         {shiftOver ? (
           <button onClick={() => { setPanel(null); useGame.getState().clockOut(); }}>
             <span><Emoji char="✅" size={24} /></span>Clock out
@@ -830,70 +861,70 @@ function Nav() {
             <span><Emoji char="🚪" size={24} /></span>Leave early
           </button>
         )}
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (flight) {
     // In the air there is nowhere to go: home, the map and the airport's activities wait until you land. Call the crew, take a picture, or use the phone.
     const setCabin = useCabin.getState().setOpen;
     return (
-      <nav className="nav">
+      <NavShell>
         <button className={cabinOpen && !panel ? 'on' : ''} onClick={() => { setPanel(null); setCabin(!cabinOpen); }}>
           <span><Emoji char={flight === 'jet' ? '🥂' : '🛒'} size={24} /></span>{flight === 'jet' ? 'Service' : 'Trolley'}
         </button>
         <button onClick={() => { setCabin(false); openCamera(); }}>
           <span><Emoji char="📸" size={24} /></span>Camera
         </button>
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => { setCabin(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => { setCabin(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (visiting) {
     // In someone else's house there's no home/buy/map: just leave, or use the phone.
     return (
-      <nav className="nav">
+      <NavShell>
         <button className="leave" onClick={() => { setPanel(null); leaveHouseVisit(); }}>
           <span><Emoji char="🚪" size={24} /></span>Leave
         </button>
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (inRoom) {
     // In a hotel room or the President's suite there is no map and no activities list: go back out to the lobby or the office, or use the phone.
     return (
-      <nav className="nav">
+      <NavShell>
         <button className="leave" onClick={() => { setPanel(null); useGame.getState().leaveRoom(); }}>
           <span><Emoji char="🚪" size={24} /></span>Leave
         </button>
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   if (mode === 'buy' && view === 'home' && (!panel || panel === 'phone')) {
     // Furnishing the house: just finish (back to live mode), or use the phone.
     return (
-      <nav className="nav">
+      <NavShell>
         <button className="leave" onClick={() => { setPanel(null); setMode('live'); }}>
           <span><Emoji char="✅" size={24} /></span>Exit
         </button>
-        <button className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
+        <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => setPanel(panel === 'phone' ? null : 'phone')}>
           <span><Emoji char="📱" size={24} /></span>Phone
         </button>
-      </nav>
+      </NavShell>
     );
   }
   return (
-    <nav className="nav">
+    <NavShell>
       {inEstateHouse ? (
         <button className="leave" onClick={() => { setPanel(null); setPlaceHubOpen(false); useGame.getState().leaveHome(); }}>
           <span><Emoji char="🚪" size={24} /></span>Go outside
@@ -931,6 +962,7 @@ function Nav() {
         </button>
       )}
       <button
+        data-k="map"
         className={tab === 'map' ? 'on' : ''}
         onClick={() => {
           setPanel(null);
@@ -940,10 +972,10 @@ function Nav() {
       >
         <span><Emoji char="🗺️" size={24} /></span>Map
       </button>
-      <button className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
+      <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
         <span><Emoji char="📱" size={24} /></span>Phone
       </button>
-    </nav>
+    </NavShell>
   );
 }
 
@@ -1055,7 +1087,7 @@ export function Hud() {
         <StayChip />
         <WorkChip />
         <KidChip />
-        {mode === 'live' && <TaskChip />}
+        {mode === 'live' && !CORNER_HUD && <TaskChip />}
         <Toasts />
         <div className="stack-tools">
           {leftStackCount > 0 && (

@@ -44,7 +44,9 @@ function status(p: Property, minutes: number) {
   if (p.building) {
     const left = Math.max(0, p.building.doneAt - minutes);
     const pct = 100 * (1 - left / (p.building.doneAt - p.building.startedAt));
-    return { text: `${STAGES[p.stage].name} under way · ${Math.ceil(left)} sec left`, pct };
+    // An extension on a finished house builds its own stages while p.stage is already past the last one.
+    const stage = STAGES[p.extending?.stage ?? p.stage];
+    return { text: `${stage?.name ?? 'Work'} under way · ${Math.ceil(left)} sec left`, pct };
   }
   if (!p.design) {
     const remaining = Math.max(0, (p.boughtAt ?? minutes) + LAND_RECLAIM_MINUTES - minutes);

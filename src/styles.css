@@ -3158,3 +3158,22 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .lamp-level input { width: 100%; }
 /* Keep the house in view above the Finishes tab, so a finish can be tried on live. */
 .sheet.catalogue.on-finishes { max-height: 42vh; }
+
+/* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task beside and above, Phone alone bottom right, Map above it. */
+.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 170px); pointer-events: none; }
+.corner-left > * { pointer-events: auto; }
+.corner-ctx { display: flex; flex-wrap: wrap; gap: 6px; }
+.corner-ctx button { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); font-size: 12px; font-weight: 600; color: var(--fg-0f172a); }
+.corner-ctx button span { font-size: 16px; display: grid; }
+.corner-ctx button.on { background: var(--inverse); color: #fff; }
+.corner-ctx button.leave { background: #dc2626; color: #fff; }
+.corner-ctx button:disabled { opacity: 0.35; }
+.corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: center; gap: 14px; }
+.corner-right button { display: grid; place-items: center; gap: 0; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
+.corner-right button span { font-size: 22px; display: grid; }
+.corner-right button[data-k="phone"] { width: 64px; height: 64px; }
+.corner-right button[data-k="map"] { width: 46px; height: 46px; }
+.corner-right button.on { background: var(--inverse); color: #fff; }
+.corner-right button:disabled { opacity: 0.35; }
+body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
+body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 64px + 14px + 46px + 14px); }
