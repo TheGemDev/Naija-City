@@ -40,6 +40,7 @@ import { houseGlow } from './HouseLights';
 import { pinWeather, sky, stepSky } from '../game/weather';
 import { Clouds, Rain, SkyBodies } from './Weather';
 import { HoverOutline, lastPointed } from './HoverOutline';
+import { usePieAnchor } from '../game/pieAnchor';
 
 /** Game time advances in steps this long (seconds). Every step updates the store and the screens
  *  watching it, so doing it every frame kept React busy 60 times a second. */
@@ -342,7 +343,8 @@ function CameraRig() {
   const focus = useRef<{ x: number; z: number } | null>(null);
   // The thing you selected (its activities fanned round it): the camera centres on it, so turning the view orbits it.
   const selectedId = useGame((s) => s.selectedId);
-  const picked = useRef<{ x: number; z: number } | null>(null);
+  const picked = useRef<{ x: number; y: number; z: number } | null>(null);
+  const gl = useThree((s) => s.gl);
   // Photo mode runs the camera itself (PhotoRig); the room's usual framing comes back when it closes.
   const photo = usePhoto((s) => s.active);
 
@@ -362,9 +364,15 @@ function CameraRig() {
 
   useEffect(() => {
     const obj = lastPointed.obj;
-    if (!selectedId || !obj?.parent) return void (picked.current = null);
+    if (!selectedId || !obj?.parent) {
+      picked.current = null;
+      usePieAnchor.setState({ id: null, x: null, y: null });
+      return;
+    }
     const c = new Box3().setFromObject(obj).getCenter(new Vector3());
-    picked.current = Number.isFinite(c.x) ? { x: c.x, z: c.z } : null;
+    picked.current = Number.isFinite(c.x) ? { x: c.x, y: c.y, z: c.z } : null;
+    // The menu waits for the camera to arrive (below), then opens on the thing itself.
+    usePieAnchor.setState({ id: picked.current ? selectedId : null, x: null, y: null });
   }, [selectedId]);
 
   useFrame((_, dt) => {
@@ -394,6 +402,15 @@ function CameraRig() {
       t.z += dz;
       camera.position.x += dx;
       camera.position.z += dz;
+      // Arrived (near enough that the rest of the glide can't be seen): open the menu on the thing.
+      const anchor = usePieAnchor.getState();
+      const id = useGame.getState().selectedId;
+      if (anchor.id === id && anchor.x === null && Math.hypot(picked.current.x - t.x, picked.current.z - t.z) < 0.12) {
+        camera.updateMatrixWorld();
+        const v = new Vector3(picked.current.x, picked.current.y, picked.current.z).project(camera);
+        const r = gl.domElement.getBoundingClientRect();
+        usePieAnchor.setState({ x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height });
+      }
       return;
     }
     if (!followsAvatar(useGame.getState())) return;

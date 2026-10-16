@@ -3376,3 +3376,37 @@ body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + 42px + en
 .placebar .decor-row.even > button:not(.go) { background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); }
 .placebar .decor-row.even > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .placebar .decor-arrow { width: 20px; height: 20px; flex: none; }
+/* Your picture is exactly as tall as the money pill plus the needs row under it (6px gap + 30px icons): its top
+   lines up with the pill's top, and the needs fill the space beside its lower half. */
+body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 36px); padding-left: calc(var(--av) + 10px); }
+body.corner-hud .topbar .money-card-top .needs.in-pill { left: 0; top: 0 !important; transform: none; }
+body.corner-hud .topbar .money-card-top .needs.in-pill .avatar-badge { width: var(--av); height: var(--av); }
+body.corner-hud .topbar .money-card-top .needs-row { top: calc(100% + 6px); left: calc(var(--av) + 14px); }
+@media (max-width: 400px) { body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 33px); } }
+
+/* The pill starts under the middle of your picture, so no corner of it peeks out round the circle. */
+body.corner-hud .topbar .money-card-top { margin-left: calc(var(--av) / 2); padding-left: calc(var(--av) / 2 + 10px); }
+body.corner-hud .topbar .money-card-top .needs.in-pill { left: calc(var(--av) / -2); }
+body.corner-hud .topbar .money-card-top .needs-row { left: calc(var(--av) / 2 + 12px); }
+/* The low-need bubbles sit in the row under the pill (not floating at the side), same look as before. */
+body.corner-hud .topbar .needs-row.need-alerts { position: absolute; right: auto; flex-direction: row; gap: 8px; align-items: center; }
+body.corner-hud .topbar .needs-row .need-alert { width: 30px; height: 30px; animation: none; }
+body.corner-hud .topbar .needs-row .need-alert.critical { animation: need-pulse 1s ease-in-out infinite; }
+
+/* Desktop: each bottom button wears its keyboard shortcut as a little key cap (Hud.tsx NAV_KEYS). Touch screens don't. */
+.key-cap { position: absolute; top: -6px; right: -6px; display: none; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid rgba(15, 23, 42, 0.25); border-bottom-width: 2px; border-radius: 5px; background: #fff; color: #0f172a; font: 800 10px/15px system-ui, sans-serif; text-align: center; box-sizing: border-box; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); pointer-events: none; }
+@media (hover: hover) and (pointer: fine) { .key-cap { display: block; } }
+:is(.corner-pill, .corner-fan, .nav) button, .chat-fab-btn { position: relative; }
+
+/* Music / radio under the clock, right-aligned with it (Hud.tsx TopBar). */
+body.corner-hud .time-card .time-radio { position: absolute; top: calc(100% + 8px); right: 0; display: flex; justify-content: flex-end; }
+body.corner-hud .time-card .time-radio > * { white-space: nowrap; }
+/* A smaller you: need bubbles 24px with a 4px gap, so the picture (pill + gap + bubbles) is the HUD height + 28px. */
+body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 28px); }
+body.corner-hud .topbar .money-card-top .needs-row { top: calc(100% + 4px); gap: 6px; }
+body.corner-hud .topbar .needs-row .need-alert { width: 24px; height: 24px; }
+body.corner-hud .topbar .needs-row .need-alert .need-alert-num { min-width: 16px; height: 16px; font-size: 9px; line-height: 12px; right: -7px; bottom: -6px; }
+body.corner-hud .topbar .money-card-top .needs.in-pill .mood-pip { width: 22px; height: 22px; right: -6px; bottom: -5px; }
+@media (max-width: 400px) { body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 28px); } }
+body.corner-hud .topbar .time-card { overflow: visible; }
+body.corner-hud .topbar .money-card-top .needs-row { left: calc(var(--av) / 2 + 18px); }

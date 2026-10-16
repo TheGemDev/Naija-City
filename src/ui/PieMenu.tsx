@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useGame } from '../game/store';
 import { useSelectedActions } from './Sheets';
+import { usePieAnchor } from '../game/pieAnchor';
 
 /** On everywhere now, phones and tablets included (they used to keep the sheet). Flip to the old check to go back:
  *  typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches */
@@ -23,11 +24,30 @@ export function PieMenu() {
   const select = useGame((s) => s.select);
   const id = sel?.selectedId ?? null;
   const [at, setAt] = useState({ x: 0, y: 0 });
+  // The camera swings round to what you picked first (Scene.tsx CameraRig), then the ring opens on it.
+  const anchor = usePieAnchor();
+  const [waited, setWaited] = useState<string | null>(null);
+  const waiting = !!id && anchor.id === id && anchor.x === null && waited !== id;
 
-  // A new selection opens where it was clicked.
   useEffect(() => {
-    if (id) setAt({ x: last.x, y: last.y });
+    if (!id) return;
+    if (anchor.id === id && anchor.x !== null && anchor.y !== null) setAt({ x: anchor.x, y: anchor.y });
+    else if (anchor.id !== id) setAt({ x: last.x, y: last.y });
+  }, [id, anchor.id, anchor.x, anchor.y]);
+
+  useEffect(() => {
+    if (!id) setWaited(null);
   }, [id]);
+
+  // The camera may not come (you're walking, or it's held): never keep the menu waiting for long.
+  useEffect(() => {
+    if (!waiting || !id) return;
+    const t = setTimeout(() => {
+      setAt({ x: last.x, y: last.y });
+      setWaited(id);
+    }, 900);
+    return () => clearTimeout(t);
+  }, [waiting, id]);
 
   useEffect(() => {
     if (!id) return;
@@ -36,7 +56,7 @@ export function PieMenu() {
     return () => window.removeEventListener('keydown', onKey);
   }, [id, select]);
 
-  if (!PIE_MENU || !sel) return null;
+  if (!PIE_MENU || !sel || waiting) return null;
   const n = sel.rows.length;
   // The ring grows with the number of activities so the labels never overlap.
   // On a phone the ring is smaller and sits closer to the edge, so it stays round what you touched.

@@ -3,7 +3,7 @@ import { GlBoundary } from './NoWebGL';
 import { originOf } from '../game/origins';
 import { toastApp, toastHome, toastPlace } from '../game/toastTarget';
 import { tipOfToast, useHelp } from '../game/tips';
-import { Children, memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useNet } from '../net/multiplayer';
 import { api, useSession } from '../net/session';
@@ -115,6 +115,8 @@ function TopBar() {
             Day {dayOf(minutes)}
           </small>
         </div>
+        {/* The music switch (or the radio playing) hangs under the clock, on the right. */}
+        {CORNER_HUD && <div className="time-radio"><RadioPill /></div>}
       </div>
       {/* Buying money is switched off for now: the balance is display only. */}
       <div className="hud-card money-card-top">
@@ -520,8 +522,9 @@ function ChatButton() {
           <button className="btn sm">Send</button>
         </form>
       )}
-      <button type="button" className={`chat-fab-btn ${open ? 'on' : ''}`} aria-label={open ? 'Close chat' : 'Open chat'} aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" data-key="T" className={`chat-fab-btn ${open ? 'on' : ''}`} aria-label={open ? 'Close chat' : 'Open chat'} aria-expanded={open} onClick={() => setOpen(!open)}>
         <Emoji char={open ? '✖️' : '💬'} size={24} />
+        <kbd className="key-cap" aria-hidden="true">T</kbd>
       </button>
     </div>
   );
@@ -748,26 +751,28 @@ function Needs({ show = 'all' }: { show?: 'all' | 'badge' | 'alerts' }) {
   );
 }
 
-/** Every need as a small icon in a ring that empties as it runs down, in a row under the money pill. A need running
- *  out pulses, so there is no separate alert to look for. Tap any of them for your stats. */
+/** The needs running out, as the familiar bubbles (emoji in a ring of its colour, with the number), in a row under the
+ *  money pill: worst first, three at most, nothing when you are fine. Tap one for your stats. */
 function NeedsRow() {
   const needs = useNeeds();
+  const low = NEEDS.filter((n) => needs[n.key] < 30).sort((a, b) => needs[a.key] - needs[b.key]).slice(0, 3);
+  if (!low.length) return null;
   return (
-    <div className="needs-row" role="group" aria-label="Your needs">
-      {NEEDS.map((n) => {
-        const v = Math.max(0, Math.min(100, needs[n.key]));
-        const low = v < 30;
+    <div className="needs-row need-alerts" role="status" aria-label="Needs running low">
+      {low.map((n) => {
+        const v = needs[n.key];
+        const critical = v < 15;
         return (
           <button
             key={n.key}
             type="button"
-            className={`need-dot ${low ? 'low' : ''} ${v < 15 ? 'critical' : ''}`}
-            style={{ ['--v' as string]: `${v}%`, ['--c' as string]: needColor(v) }}
+            className={`need-alert ${critical ? 'critical' : ''}`}
             onClick={() => useGame.getState().openProfile('stats')}
-            aria-label={`${n.label}: ${Math.round(v)}${low ? `. ${NEED_HINT[n.key]}` : ''}`}
-            title={`${n.label} ${Math.round(v)}`}
+            style={{ borderColor: needColor(v) }}
+            aria-label={`${n.label} is ${critical ? 'critical' : 'low'}: ${Math.round(v)}. ${NEED_HINT[n.key]}`}
           >
-            <Emoji char={n.icon} size={15} />
+            <Emoji char={n.icon} size={16} />
+            <b className="need-alert-num" style={{ background: needColor(v) }}>{Math.round(v)}</b>
           </button>
         );
       })}
@@ -807,14 +812,60 @@ export const ProfilePortrait = memo(function ProfilePortrait({ look }: { look: s
  */
 const CORNER_HUD = true;
 
+/**
+ * Desktop keyboard shortcuts for the bottom buttons, by their label, shown as a key cap on each button (keys.css hides
+ * them on touch screens). W A S D, E, Q, R, space and the digits are left alone: driving, dancing, decorating and the
+ * shift games use them.
+ */
+const NAV_KEYS: Record<string, string> = {
+  Phone: 'P', Map: 'M', Home: 'H', Street: 'H', Decor: 'B', Activities: 'F', Camera: 'C', Estates: 'G',
+  Leave: 'L', 'Leave early': 'L', 'Go outside': 'L', Exit: 'L', 'Clock out': 'K', Trolley: 'V', Service: 'V',
+};
+
+/** The words on a nav button: the text after its icon. */
+function labelOf(el: ReactElement<{ children?: ReactNode }>) {
+  const kids = Children.toArray(el.props?.children);
+  const last = kids[kids.length - 1];
+  return typeof last === 'string' ? last.trim() : '';
+}
+
+/** Gives a nav button its shortcut: a data-key the key handler looks for, and the key cap. */
+function withKey(el: ReactElement<{ children?: ReactNode; 'data-key'?: string }>) {
+  const k = NAV_KEYS[labelOf(el)];
+  if (!k || !isValidElement(el)) return el;
+  return cloneElement(el, { 'data-key': k }, <>{el.props.children}<kbd className="key-cap" aria-hidden="true">{k}</kbd></>);
+}
+
+/** Pressing a shortcut presses the visible button that has it. */
+function useNavKeys() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable) return;
+      if (document.body.classList.contains('driving')) return;
+      const k = e.key.length === 1 ? e.key.toUpperCase() : '';
+      if (!k) return;
+      const btn = [...document.querySelectorAll<HTMLButtonElement>(`[data-key="${k}"]`)].find((b) => b.offsetParent !== null && !b.disabled);
+      if (!btn) return;
+      e.preventDefault();
+      btn.click();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
 function NavShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!CORNER_HUD) return;
     document.body.classList.add('corner-hud');
     return () => document.body.classList.remove('corner-hud');
   }, []);
-  if (!CORNER_HUD) return <nav className="nav">{children}</nav>;
-  const all = Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[];
+  useNavKeys();
+  const keyed = Children.map(children, (c) => (isValidElement(c) ? withKey(c as ReactElement<{ children?: ReactNode }>) : c));
+  if (!CORNER_HUD) return <nav className="nav">{keyed}</nav>;
+  const all = Children.toArray(keyed) as ReactElement<{ 'data-k'?: string }>[];
   const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
   return (
     <>
@@ -1102,10 +1153,12 @@ export function Hud() {
     <>
       <TopBar />
       <div ref={leftStack} className={`left-stack ${leftStackCollapsed ? 'collapsed' : ''} ${mode === 'buy' ? 'decorating' : ''}`}>
-        {/* Radio sits right under the clock; a .stack-tools row so collapsing the notices never hides it */}
-        <div className="stack-tools">
-          <RadioPill />
-        </div>
+        {/* Radio sits right under the clock (inside the time card on the corner layout); a .stack-tools row so collapsing the notices never hides it */}
+        {!CORNER_HUD && (
+          <div className="stack-tools">
+            <RadioPill />
+          </div>
+        )}
         <NotificationBanner />
         <LiveBanner />
         <DisasterBanner />
