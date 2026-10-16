@@ -163,7 +163,7 @@
 /* ---------- Visit rating and profile badge ---------- */
 .cb-rate { display: flex; flex-direction: column; gap: 10px; }
 .cb-rate-score { display: flex; align-items: center; gap: 10px; }
-.cb-rate-score span { display: flex; flex-direction: column; gap: 3px; }
+.cb-rate-score > span { display: flex; flex-direction: column; gap: 3px; }
 .cb-rate-score small { color: var(--muted); font-size: 12px; }
 .cb-stars { display: flex; justify-content: center; gap: 6px; }
 .cb-stars button { font-size: 34px; line-height: 1; color: rgba(var(--ink-rgb), 0.2); transition: transform 0.1s; }

@@ -694,7 +694,7 @@ const list: ItemDef[] = [
   { type: 'table_lamp', name: 'Table Lamp', icon: '🛋️', category: 'decor', price: 15_000, w: 1, d: 1, layer: 'object', small: 0.14, actions: [] },
   { type: 'pendant_light', name: 'Pendant Light', icon: '💡', category: 'decor', price: 28_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'ceiling', actions: [] },
   { type: 'wall_sconce', name: 'Wall Sconce', icon: '🕯️', category: 'decor', price: 18_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 1.7, wallH: 0.32, actions: [] },
-  { type: 'led_strip', name: 'RGB LED Strip (2m)', icon: '🌈', category: 'decor', price: 22_000, w: 2, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 0.06, wallH: 0.06, actions: [] },
+  { type: 'led_strip', name: 'RGB LED Strip (2m)', icon: '🌈', category: 'decor', price: 22_000, w: 2, d: 1, layer: 'object', blocks: false, mount: 'wall', wallY: 0.1, wallH: 0.06, actions: [] },
   { type: 'chandelier', name: 'Crystal Chandelier', icon: '✨', category: 'luxury', price: 650_000, w: 1, d: 1, layer: 'object', blocks: false, mount: 'ceiling', luxury: true, actions: [] },
   { type: 'coffee_table', name: 'Coffee Table', icon: '☕', category: 'decor', price: 55_000, w: 2, d: 1, layer: 'object', surface: { y: 0.425, w: 0.5, d: 0.6 }, actions: [] },
   { type: 'tv_cabinet', name: 'TV Cabinet', icon: '🗄️', category: 'decor', price: 95_000, w: 2, d: 1, layer: 'object', surface: { y: 0.675, w: 1.8, d: 0.46 }, actions: [] },

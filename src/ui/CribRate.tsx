@@ -1,6 +1,7 @@
 // On a house visit: the house's crib score, and stars to rate it (once a day; the server checks the visit happened).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { HouseVisit } from '../game/visits';
 import { useGame } from '../game/store';
 import { CRIB_TIER_BY_ID, RATING, tierOf } from '../game/cribs';
@@ -12,11 +13,15 @@ import { TierChip } from './CribsApp';
 export function CribRate({ visit }: { visit: HouseVisit }) {
   const signedIn = useSession((s) => !!s.user);
   const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   if (!signedIn || visit.burglary) return null;
+  // The visit bar is transformed (so it would squeeze the sheet to its own width) and styles its buttons: the sheet
+  // goes next to the bar instead, where the game's other sheets sit.
+  const host = btn.current?.closest('.house-visit-bar')?.parentElement ?? document.body;
   return (
     <>
-      <button className="use" onClick={() => setOpen(true)}>⭐ Rate crib</button>
-      {open && <RateSheet visit={visit} onClose={() => setOpen(false)} />}
+      <button ref={btn} className="use" onClick={() => setOpen(true)}>⭐ Rate crib</button>
+      {open && createPortal(<RateSheet visit={visit} onClose={() => setOpen(false)} />, host)}
     </>
   );
 }
@@ -39,6 +44,9 @@ function RateSheet({ visit, onClose }: { visit: HouseVisit; onClose(): void }) {
     try {
       const r = await rateHouse(visit.ownerUid, pid, stars, comment);
       setRated(stars);
+      // Their own review goes to the top of the list (one per rater: a re-rating replaces the old one).
+      const me = useSession.getState().user?.username ?? null;
+      setReviews((rs) => [{ stars, comment: comment.trim(), username: me }, ...rs.filter((x) => !me || x.username !== me)]);
       useGame.getState().toast(`⭐ Thanks! @${visit.ownerUsername}’s crib is now ${r.score ?? '…'}/100.`);
       if (house && r.score !== null) setHouse({ ...house, score: r.score, tier: r.tier ?? house.tier });
     } catch (e) {

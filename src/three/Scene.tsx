@@ -393,7 +393,8 @@ function CameraRig() {
 
 function Area() {
   const view = useGame((s) => s.view);
-  const design = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.design);
+  // The layout key (game/exterior.ts): extensions' rooms and the car bay come with the design.
+  const design = useGame(activeDesignOf);
   const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
   const paint = useGame((s) => s.housePaint[houseKeyOf(s)]);
   const staff = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.staff);
