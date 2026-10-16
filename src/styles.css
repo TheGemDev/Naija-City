@@ -3319,3 +3319,6 @@ body.corner-hud .ui .needs { display: flex !important; }
 /* Decorating: no notices, tips, music or toasts in the way, and the undo / redo / select bar sits under you at the top left. */
 .left-stack.decorating { display: none; }
 body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + env(safe-area-inset-top, 0px)); left: 12px; transform: none; }
+/* The undo / redo / select bar runs the full width of the top, under you and the clock. */
+body.corner-hud .decor-top { left: 12px; right: 12px; width: auto; justify-content: space-between; }
+body.corner-hud .decor-top > button { flex: 1; justify-content: center; }
