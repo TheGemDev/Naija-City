@@ -12,6 +12,7 @@ import {
 } from '../net/hangout';
 import type { CheatRecord } from '../game/hangout';
 import { Face } from './Face';
+import { KidsTab } from './FamilyKids';
 import { Emoji } from './Icons';
 import './family.css';
 
@@ -221,15 +222,17 @@ function CheatersTab() {
 }
 
 export function FamilyApp() {
-  const [tab, setTab] = useState<'love' | 'cheaters'>('love');
+  const [tab, setTab] = useState<'love' | 'kids' | 'cheaters'>('love');
   const ok = !!useSession((s) => s.user?.username);
   const tabs = (
     <div className="tabs">
       <button className={tab === 'love' ? 'on' : ''} onClick={() => setTab('love')}><Emoji char="💞" size={16} /> Love</button>
+      <button className={tab === 'kids' ? 'on' : ''} onClick={() => setTab('kids')}><Emoji char="👶🏾" size={16} /> Children</button>
       <button className={tab === 'cheaters' ? 'on' : ''} onClick={() => setTab('cheaters')}><Emoji char="🕵🏾" size={16} /> Cheaters</button>
     </div>
   );
   if (ok && tab === 'cheaters') return <>{tabs}<CheatersTab /></>;
+  if (ok && tab === 'kids') return <>{tabs}<KidsTab /></>;
   return <>{ok && tabs}<LoveTab /></>;
 }
 

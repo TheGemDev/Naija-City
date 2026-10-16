@@ -7,7 +7,7 @@ import { activeDesignOf, houseKeyOf, naira, useGame } from '../game/store';
 import { houseLayout, type PlacedItem } from '../game/grid';
 import {
   CEILINGS, FLOORS, LIGHT_TONES, MOODS, PAINT_RATE, WALLS, finishCost, interiorRooms, lampLevel, lampTone, moodOf,
-  roomAt, roomFaces, toneHex, faceValue, parseFace, type FinishDef,
+  toneHex, faceValue, parseFace, type FinishDef,
 } from '../game/finishes';
 import { PAINT_COLOURS, colourName, hexHsl, hslHex, isColourRef, paintHex } from '../game/paint';
 import { setFinishUi, useFinishUi, type FinishPart } from '../game/finishUi';
@@ -295,7 +295,3 @@ export function LampControls({ item }: { item: PlacedItem }) {
     </div>
   );
 }
-
-/** The room a cell is in, for the hint under the house (unused cells give null). */
-export const roomName = (layout: ReturnType<typeof houseLayout>, x: number, z: number) => roomAt(layout, { x, z })?.name ?? null;
-export const facesIn = roomFaces;

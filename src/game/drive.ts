@@ -90,7 +90,8 @@ const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 /* ---------- UI state ---------- */
 
-export type Gig = 'keke' | 'okada';
+/** `dispatch`: food and parcels on a rented dispatch bike (an okada with a cool box), Chowdeck style. */
+export type Gig = 'keke' | 'okada' | 'dispatch';
 
 export interface Passenger {
   name: string;
@@ -102,6 +103,8 @@ export interface Passenger {
   boarded: boolean;
   /** Real time (ms) to get them there for the full fare. */
   deadline: number | null;
+  /** A dispatch order: what it is and the place it is collected from (its door is `pickup`). */
+  order?: { item: string; from: string; fromName: string };
 }
 
 export interface CheckpointStop {
@@ -284,13 +287,52 @@ function spawnPassenger(gig: Gig) {
   if (!options.length) return;
   const to = pick(options);
   const dist = Math.hypot(to.door.x - pickup.x, to.door.z - pickup.z);
-  const base = gig === 'keke' ? 300 : 250;
-  const per = gig === 'keke' ? 40 : 34;
+  const base = gig === 'keke' ? 500 : 400;
+  const per = gig === 'keke' ? 65 : 55;
   const surge = (activeEvent() === 'fuel' ? 1.5 : 1) * roadMods().fare * fareTax();
   const who = pick(PASSENGERS);
   useDrive.setState({
-    passenger: { ...who, pickup, to: to.id, toName: to.name, fare: Math.min(3_500, Math.round((base + dist * per) * surge / 50) * 50), boarded: false, deadline: null },
+    passenger: { ...who, pickup, to: to.id, toName: to.name, fare: Math.min(gig === 'keke' ? 6_000 : 5_000, Math.round((base + dist * per) * surge / 50) * 50), boarded: false, deadline: null },
   });
+}
+
+/* ---------- Dispatch ---------- */
+
+const ORDERS = [
+  { name: 'Amaka (Wuse flat 4B)', item: '🍲 Jollof and chicken', line: 'Abeg bring am hot, I never chop since morning.' },
+  { name: 'Mr Okafor', item: '📦 Phone charger', line: 'Call me when you reach the gate.' },
+  { name: 'Hajiya Laraba', item: '🥩 Two wraps of suya', line: 'Tell them extra yaji!' },
+  { name: 'Tolu the developer', item: '🍕 Pizza', line: 'Leave it with the security man.' },
+  { name: 'Aunty Funke', item: '💊 Pharmacy order', line: 'Quick quick please, na for my mama.' },
+  { name: 'Ibrahim', item: '🥤 Zobo and chapman', line: 'Make e still dey cold o.' },
+  { name: 'Pastor Ade', item: '📄 Printed programmes', line: 'Service starts by 4. Don’t be late.' },
+  { name: 'Ngozi', item: '🍰 Birthday cake', line: 'If the cake scatter, you go pay.' },
+];
+
+/** Places that sell food or goods: a place where some action fills you up, or a market or mall. */
+const sellsFood = (p: Place) => /market|mall|buka|suya|canteen|restaurant|eatery|kitchen|food|chop/i.test(`${p.id} ${p.name}`) || p.actions.some((a) => (a.perHour?.hunger ?? 0) > 20);
+
+function spawnOrder() {
+  const g = useGame.getState();
+  const hour = hourOf(g.minutes);
+  const open = regionPlaces(g.destinationId).filter((p: Place) => p.id !== 'home' && p.id !== 'prison' && p.id !== 'camp' && isOpen(p, hour));
+  const shops = open.filter(sellsFood);
+  const from = pick(shops.length ? shops : open);
+  if (!from) return;
+  const options = open.filter((p) => p.id !== from.id && Math.hypot(p.door.x - from.door.x, p.door.z - from.door.z) > 10);
+  if (!options.length) return;
+  const to = pick(options);
+  const dist = Math.hypot(to.door.x - from.door.x, to.door.z - from.door.z) + Math.hypot(from.door.x - avatar.x, from.door.z - avatar.z) * 0.4;
+  const surge = (activeEvent() === 'fuel' ? 1.3 : 1) * roadMods().fare;
+  const o = pick(ORDERS);
+  useDrive.setState({
+    passenger: {
+      name: o.name, line: o.line, pickup: { x: from.door.x, z: from.door.z }, to: to.id, toName: to.name,
+      fare: Math.min(8_000, Math.round((900 + dist * 80) * surge / 50) * 50), boarded: false, deadline: null,
+      order: { item: o.item, from: from.id, fromName: from.name },
+    },
+  });
+  g.toast(`📦 New order: ${o.item} from ${from.name} to ${to.name}`);
 }
 
 /* ---------- Checkpoints ---------- */
@@ -505,12 +547,12 @@ export function stepDrive(dt: number) {
     // Passengers
     if (ui.gig) {
       const p = ui.passenger;
-      if (!p && now > spawnAt) spawnPassenger(ui.gig);
+      if (!p && now > spawnAt) (ui.gig === 'dispatch' ? spawnOrder() : spawnPassenger(ui.gig));
       else if (p && !p.boarded && Math.hypot(p.pickup.x + 0.5 - avatar.x, p.pickup.z + 0.5 - avatar.z) < 1.4 && Math.abs(driveState.speed) < 3) {
         const to = placeHere(p.to)!;
         const dist = Math.hypot(to.door.x - avatar.x, to.door.z - avatar.z);
         useDrive.setState({ passenger: { ...p, boarded: true, deadline: now + (dist / (SPEC[v].max * 0.45) + 15) * 1000 } });
-        g.toast(`🙋🏾 ${p.name}: “${p.line}” → ${p.toName}, ${naira(p.fare)}`);
+        g.toast(p.order ? `📦 Picked up ${p.order.item} at ${p.order.fromName} → ${p.toName}, ${naira(p.fare)}` : `🙋🏾 ${p.name}: “${p.line}” → ${p.toName}, ${naira(p.fare)}`);
       } else if (p?.boarded) {
         const to = placeHere(p.to)!;
         if (Math.hypot(to.door.x + 0.5 - avatar.x, to.door.z + 0.5 - avatar.z) < 1.8 && Math.abs(driveState.speed) < 3) dropOff(p, now);
@@ -530,7 +572,7 @@ export function stepDrive(dt: number) {
       if (next && Math.hypot(next.x - avatar.x, next.z - avatar.z) < 1.3) {
         const gate = ui.durbar.gate + 1;
         if (gate >= gates.length) {
-          const prize = g.earn('durbar_prize', Math.round(20_000 - elapsed * 150), 'Durbar parade prize');
+          const prize = g.earn('durbar_prize', Math.round(35_000 - elapsed * 250), 'Durbar parade prize');
           g.bump('durbarRides');
           useGame.setState((s) => ({ goodDeeds: s.goodDeeds + 1, needs: { ...s.needs, fun: 100, social: Math.min(100, s.needs.social + 30) } }));
           g.toast(`🏆 What a ride! The Emir saluted you. ${naira(prize)} prize and the crowd is chanting your name.`);
@@ -597,22 +639,26 @@ function dropOff(p: Passenger, now: number) {
   const gig = ui.gig!;
   spawnAt = now + 2500;
   useDrive.setState({ passenger: null });
-  if (Math.random() < 0.06) {
+  if (!p.order && Math.random() < 0.06) {
     g.toast(`🏃🏾 ${p.name} jumped out and ran without paying! Welcome to ${cityNameHere()}.`);
     return;
   }
   const late = p.deadline !== null && now > p.deadline;
-  const tip = !late && Math.random() < 0.25 ? 200 : 0;
+  // Delivery customers tip more, and only when the food arrives on time.
+  const tip = !late && Math.random() < (p.order ? 0.4 : 0.25) ? (p.order ? 500 : 400) : 0;
   const fare = (late ? Math.round(p.fare / 2 / 50) * 50 : p.fare) + tip;
-  const paid = g.earn(gig === 'keke' ? 'keke_fare' : 'okada_fare', fare, `${gig === 'keke' ? 'Keke' : 'Okada'} fare: ${p.toName}`);
-  // The motor park's boss takes dues from every fare (worker/fun.ts pays them out).
-  const levy = Math.round(paid * PARK_LEVY);
+  const paid = p.order
+    ? g.earn('dispatch_fare', fare, `Dispatch: ${p.order.item} to ${p.toName}`)
+    : g.earn(gig === 'keke' ? 'keke_fare' : 'okada_fare', fare, `${gig === 'keke' ? 'Keke' : 'Okada'} fare: ${p.toName}`);
+  // The motor park's boss takes dues from every fare (worker/fun.ts pays them out). The dispatch company is not a park.
+  const levy = p.order ? 0 : Math.round(paid * PARK_LEVY);
   if (levy > 0) g.charge(levy, 'Motor park dues', `levy:${parkIn(activeMap().id).id}`);
   g.bump('trips');
   g.bump('fares', paid);
   const tax = Math.floor((paid * g.taxRate) / 100);
   useDrive.setState({ trips: ui.trips + 1, earned: ui.earned + paid - levy - tax });
-  g.toast(late ? `😒 ${p.name} paid half: “You too slow!” +${naira(paid)}` : `💰 ${p.name} paid ${naira(paid)}${tip ? ' (with a tip!)' : ''}. Park dues ${naira(levy)}.`);
+  if (p.order) g.toast(late ? `😒 ${p.name}: “This food don cold!” Half pay, +${naira(paid)}` : `📦 Delivered! ${p.name} paid ${naira(paid)}${tip ? ' (with a tip!)' : ''} ⭐⭐⭐⭐⭐`);
+  else g.toast(late ? `😒 ${p.name} paid half: “You too slow!” +${naira(paid)}` : `💰 ${p.name} paid ${naira(paid)}${tip ? ' (with a tip!)' : ''}. Park dues ${naira(levy)}.`);
 }
 
 /** Get out at the place you're parked beside and go in. */
