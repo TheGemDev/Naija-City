@@ -126,7 +126,7 @@ export const GRANT_SIZES = [10_000_000, 50_000_000, 100_000_000, 250_000_000] as
  * tax on people who live in the state. The fees are a percent of the standard fee (src/game/career.ts BIZ): the standard
  * is 100, and what the player pays moves with it.
  */
-export type StateLawKey = 'incomeTax' | 'bizFee' | 'moveFee' | 'deliveryFee' | 'bizTax' | 'salesTax' | 'hospitalFee' | 'exportLevy';
+export type StateLawKey = 'incomeTax' | 'bizFee' | 'moveFee' | 'deliveryFee' | 'bizTax' | 'salesTax' | 'hospitalFee' | 'exportLevy' | 'govRent';
 export type StateLaws = Record<StateLawKey, number>;
 const FEE_CAPS = [0, 50, 100, 150, 200];
 export interface StateLawDef {
@@ -152,12 +152,22 @@ export const STATE_LAWS: Record<StateLawKey, StateLawDef> = {
   salesTax: { column: 'sales_tax', capColumn: 'cap_sales_tax', capField: 'capSalesTax', title: 'Sales tax', unit: '%', max: 10, capOptions: [0, 2, 5, 10], hint: 'Taken from the seller on every marketplace sale by a shop here.' },
   exportLevy: { column: 'export_levy', capColumn: 'cap_export_levy', capField: 'capExportLevy', title: 'Export levy', unit: '%', max: 40, capOptions: [0, 10, 20, 30, 40], hint: 'Of the wholesale price, paid by shops in other states that restock goods made here.' },
   hospitalFee: { column: 'hospital_fee', capColumn: 'cap_hospital_fee', capField: 'capHospitalFee', title: 'Hospital fee', unit: '%', max: 200, capOptions: FEE_CAPS, hint: 'Of the standard hospital bill, for people who live here.' },
+  // Naira, not a percent: what a government house in this state costs a week (game/store.ts collects it, and it goes
+  // into this state's treasury). Tenants who find it too dear can move to another state's government house.
+  govRent: { column: 'gov_rent', capColumn: 'cap_gov_rent', capField: 'capGovRent', title: 'Government house rent', unit: '₦', max: 400_000, capOptions: [20_000, 40_000, 100_000, 200_000, 400_000], hint: 'A week, for living in one of the state’s government houses. It goes into the state treasury.' },
 };
 export const STATE_LAW_KEYS = Object.keys(STATE_LAWS) as StateLawKey[];
-export const DEFAULT_STATE_LAWS: StateLaws = { incomeTax: 0, bizFee: 100, moveFee: 100, deliveryFee: 100, bizTax: 0, salesTax: 0, hospitalFee: 100, exportLevy: 20 };
+export const DEFAULT_STATE_LAWS: StateLaws = { incomeTax: 0, bizFee: 100, moveFee: 100, deliveryFee: 100, bizTax: 0, salesTax: 0, hospitalFee: 100, exportLevy: 20, govRent: 10_000 };
 /** The president's maximum for each tax and fee. */
 export type StateCaps = Record<StateLawKey, number>;
-export const DEFAULT_STATE_CAPS = Object.fromEntries(STATE_LAW_KEYS.map((k) => [k, STATE_LAWS[k].max])) as StateCaps;
+// Every maximum starts at its highest except government rent, which starts at ₦40k (migrations/0113_gov_rent.sql).
+export const DEFAULT_STATE_CAPS = { ...Object.fromEntries(STATE_LAW_KEYS.map((k) => [k, STATE_LAWS[k].max])), govRent: 40_000 } as StateCaps;
+/** A state law's value as people read it: "5%", or for government rent a short naira amount ("₦40k", "Free"). */
+export function lawText(key: StateLawKey, value: number) {
+  if (STATE_LAWS[key].unit !== '₦') return `${value}${STATE_LAWS[key].unit}`;
+  if (!value) return 'Free';
+  return value % 1000 === 0 ? `₦${value / 1000}k` : `₦${value.toLocaleString('en-NG')}`;
+}
 /** A governor picks a share of the maximum, in these steps (percent). */
 export const GOV_STEPS = [0, 25, 50, 75, 100] as const;
 /** What a share of the maximum comes to. With a maximum of 200 and 50 percent that is 100, the standard fee. */

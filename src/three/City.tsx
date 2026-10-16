@@ -38,6 +38,7 @@ import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { Emoji } from '../ui/Icons';
 import { WeatherChip } from '../ui/WeatherChip';
+import { copyLink, stateLink } from '../net/deeplink';
 import { offHover, onHover } from './HoverOutline';
 import { EstateSignLabels, EstateSigns } from './EstateSigns';
 
@@ -1139,10 +1140,12 @@ function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
 /**
  * The state's card over the map: its name, who runs it, what it makes and what it has in the bank. In the game it
  * carries two ways into the Civic app: the election board, where anyone can file to run, and this state's laws.
- * On the title screen, where there is no phone yet, it is only a sign. The weather there sits just under it.
+ * On the title screen, where there is no phone yet, it is only a sign. The weather sits just under it, and in the game
+ * a pill beside it copies this state's invite link: whoever signs up from it is born here.
  */
 function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
   const started = useGame((s) => s.started);
+  const username = useSession((s) => s.user?.username);
   const [nickname, state] = region.tagline.split(' · ');
   const open = (want: Partial<{ wantLaws: PoliticalOffice }>) => {
     useCivic.setState({ wantOpen: true, ...want });
@@ -1166,7 +1169,20 @@ function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
           </div>
         )}
       </div>
-      <WeatherChip city={region.id} />
+      <div className="region-pills">
+        <WeatherChip city={region.id} />
+        {started && (
+          <button
+            type="button"
+            className="region-invite"
+            title={`Copy a link that has whoever joins with it born in ${region.name}`}
+            {...keep}
+            onClick={() => void copyLink(stateLink(region.id, username), `Be born in ${region.name} on Naija City`, `🔗 Copied. Whoever joins with it is born in ${region.name}`)}
+          >
+            <Emoji char="🔗" size={12} /> Invite to {region.name}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

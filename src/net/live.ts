@@ -347,7 +347,7 @@ export function collectDues(park: string) {
 
 export type FunEvent =
   | { t: 'fun'; kind: 'jailed'; until: number; reason: string }
-  | { t: 'fun'; kind: 'efccCase'; caseId: string }
+  | { t: 'fun'; kind: 'efccCase'; caseId: string; election?: boolean }
   | { t: 'fun'; kind: 'bet'; payout: number; stake: number; score: string; result: FinalPick }
   | { t: 'fun'; kind: 'ousted'; by: string; park: string }
   | { t: 'fun'; kind: 'phoneSearch'; search: PhoneSearchResult }
@@ -363,7 +363,10 @@ export function onFunEvent(e: FunEvent) {
     void loadPolice();
     void refreshBalance();
   } else if (e.kind === 'efccCase') {
-    g.toast('🕵🏾 Someone has opened an EFCC investigation on you. Open the EFCC app within 90 seconds to respond, or pay to see who did it.');
+    // A fake-votes report is answered in INEC; a money case in the EFCC app.
+    g.toast(e.election
+      ? '🗳️ Someone reported your campaign to INEC for fake votes. Open the INEC app within 90 seconds to respond, or pay to see who did it.'
+      : '🕵🏾 Someone has opened an EFCC investigation on you. Open the EFCC app within 90 seconds to respond, or pay to see who did it.');
     void loadEfcc();
   } else if (e.kind === 'bet') {
     const line = `${FINAL_TEAMS.home} ${e.score} ${FINAL_TEAMS.away}`;

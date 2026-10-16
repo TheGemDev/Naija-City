@@ -7,7 +7,7 @@
 // The client shows `balance + its not-yet-acknowledged events`, which converges on the server's number.
 
 import { cityNow, homeLaws, stateRevenueSql } from './state';
-import type { CivicCity } from '../src/game/civic';
+import { CIVIC_CITIES, type CivicCity } from '../src/game/civic';
 import { ITEMS, JOBS } from '../src/game/catalog';
 import { CAR_BY_ID, CAR_RESALE_FACTOR, JET_BY_ID, jetResale } from '../src/game/cars';
 import { PHONE_BY_ID, PHONE_RESALE_FACTOR } from '../src/game/phones';
@@ -390,6 +390,8 @@ export function treasuryStmts(db: D1Database, uid: string, clientId: string, kin
 function stateCut(kind: string, ref: unknown, paid: number) {
   if (paid <= 0) return 0;
   if (typeof ref === 'string' && ref.startsWith('p:')) return Math.floor(paid * STATE_CUT.land);
+  // Government house rent is the state's own: all of it goes to the state whose house it is.
+  if (rentCity(ref)) return paid;
   if (kind !== 'spend' && kind !== 'buy') return 0;
   const vat = Math.floor(paid * STATE_CUT.vat);
   // Something bought can be sold straight back: the state never gets more than the player loses doing that, or buying
@@ -397,6 +399,12 @@ function stateCut(kind: string, ref: unknown, paid: number) {
   const resale = kind === 'buy' && typeof ref === 'string' ? resaleOf(ref) : null;
   return resale === null ? vat : Math.min(vat, Math.max(0, paid - resale));
 }
+
+/** The state a government house rent payment is for ("govrent:<city>", src/game/store.ts), if that is what it is. */
+const rentCity = (ref: unknown): CivicCity | undefined => {
+  const city = typeof ref === 'string' && ref.startsWith('govrent:') ? ref.slice(8) : '';
+  return (CIVIC_CITIES as readonly string[]).includes(city) ? (city as CivicCity) : undefined;
+};
 
 /** applyStmts, with `cut` of the money credited to the treasury while the ledger row is still fresh (so a retry never pays twice). */
 function spendStmts(db: D1Database, uid: string, clientId: string, kind: string, ref: string | null, amount: number, cut: number, gate: string, city?: CivicCity) {
@@ -483,7 +491,7 @@ export async function applyEvents(db: D1Database, uid: string, list: unknown, he
         )
         .bind(uid, gate, Date.now(), state.rev, balance),
       // Task events go in the ledger too (amount 0) so retries are recognised.
-      ...accepted.flatMap((e) => spendStmts(db, uid, `ev:${e.id}`, e.kind, typeof e.ref === 'string' ? e.ref.slice(0, 40) : (e.action ?? null), e.amount ?? 0, stateCut(e.kind, e.ref, paid.get(String(e.id)) ?? 0), gate, here)),
+      ...accepted.flatMap((e) => spendStmts(db, uid, `ev:${e.id}`, e.kind, typeof e.ref === 'string' ? e.ref.slice(0, 40) : (e.action ?? null), e.amount ?? 0, stateCut(e.kind, e.ref, paid.get(String(e.id)) ?? 0), gate, rentCity(e.ref) ?? here)),
       ...taxes,
       ...extra.map((make) => make(gate)),
       ...saveStateStmts(db, uid, state, gate),
@@ -574,9 +582,12 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
       db.prepare('UPDATE wallets SET origin = ?2, origin_at = ?3, starter_left = ?4, starter_day = ?5 WHERE uid = ?1 AND origin IS NULL')
         .bind(uid, origin, Date.now(), ORIGINS[origin].money - first, starterDay(Date.now())),
     ]);
-    // The state is drawn at birth, every state as likely as the next. Only the request that won the draw sets it.
+    // The state is drawn at birth, every state as likely as the next, unless the player signed up from a state's
+    // invite link (stateLink in src/net/deeplink.ts): a first life is born there. Only the request that won the draw sets it.
+    const asked = ((await req.json().catch(() => null)) as { state?: unknown } | null)?.state;
+    const invited = !life?.reset_at && typeof asked === 'string' && (REGION_IDS as string[]).includes(asked) ? asked : null;
     const [pick] = crypto.getRandomValues(new Uint32Array(1));
-    await db.prepare('UPDATE wallets SET state = ?2 WHERE uid = ?1 AND state IS NULL').bind(uid, REGION_IDS[pick % REGION_IDS.length]).run().catch(() => {});
+    await db.prepare('UPDATE wallets SET state = ?2 WHERE uid = ?1 AND state IS NULL').bind(uid, invited ?? REGION_IDS[pick % REGION_IDS.length]).run().catch(() => {});
     const after = await getWallet(db, uid);
     return json({ origin: after.origin, balance: after.balance, debt: after.debt, already: false, state: await birthState(db, uid) });
   }

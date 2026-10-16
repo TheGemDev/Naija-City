@@ -11,6 +11,7 @@ import { cachedToken } from './firebase';
 import { api, serial, useSession } from './session';
 import { normalizeOrigin, type OriginId } from '../game/origins';
 import { clearLoans, loadLoans } from './loans';
+import { invitedState, spendInvitedState } from './referral';
 
 /** Money changes plus task start/end, which drive the server's game clock (worker/clock.ts). */
 interface GameEvent {
@@ -149,11 +150,13 @@ export async function initWallet() {
 export async function drawOriginOnServer(): Promise<OriginId | null> {
   if (serverBalance === null) return null;
   return serial(async () => {
-    const res = await api('/api/origin', { method: 'POST', body: '{}' });
+    // An invite link's state (net/referral.ts): the server honours it for a first life.
+    const res = await api('/api/origin', { method: 'POST', body: JSON.stringify({ state: invitedState() }) });
     if (!res.ok) throw new Error(`${res.status}`);
     const { origin, balance, debt, state } = (await res.json()) as { origin: string; balance: number; debt?: number; state?: string | null };
     serverOrigin = normalizeOrigin(origin);
     serverState = state ?? null;
+    spendInvitedState();
     setServerBalance(balance, debt);
     return serverOrigin;
   });

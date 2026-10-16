@@ -257,8 +257,12 @@ export interface LootCase {
 export const ARREST_BAN_MS = 12 * 60 * 60_000;
 /** A new account waits this long before it may vote, so a candidate can't sign up a crowd of fresh accounts to vote for them. */
 export const VOTER_MIN_AGE_MS = 12 * HOUR_MS;
-/** Caught buying votes: out of that race, and barred from filing for any office for this long. Nobody is barred for life. */
-export const VOTE_BUYING_BAN_MS = 3 * DAY_MS;
+/**
+ * Why a candidate was thrown out of a race (worker/civic.ts, worker/efcc.ts): caught buying votes in an EFCC sting, or
+ * convicted on an INEC fake-votes report. Out of that election only: they may run again in the next one.
+ */
+export type DisqualifyReason = 'vote_buying' | 'fake_votes';
+export const DISQUALIFY_REASON: Record<DisqualifyReason, string> = { vote_buying: 'vote buying', fake_votes: 'fake votes' };
 /** How much of a ban is left, in words: "3 days", "5 hours". */
 export function banLeft(ms: number): string {
   const hours = Math.max(1, Math.ceil(ms / HOUR_MS));

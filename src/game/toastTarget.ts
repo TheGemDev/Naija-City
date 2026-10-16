@@ -18,6 +18,8 @@ const RULES: Array<[RegExp, ToastApp]> = [
   [/NEPA/, { id: 'light', label: 'NEPA' }],
   // The hunger warnings (game/store.ts): the Mall opens on its food when you are hungry.
   [/about to faint|belle dey shout/i, { id: 'mall', label: 'Jumia to order food' }],
+  // A fake-votes case (net/live.ts) says INEC, and comes before the EFCC's own toasts.
+  [/INEC/, { id: 'inec', label: 'INEC' }],
   [/EFCC|\bsting\b|🐍/i, { id: 'efcc', label: 'EFCC' }],
   [/Landlord Agent/i, { id: 'gida', label: 'House' }],
   [/police|🚔|🚨|bail|filed a report|🔓|CCTV|📹|broke into|🏚️|😱|burgl|accused|🕵🏾/i, { id: 'police', label: 'Police' }],

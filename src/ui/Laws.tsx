@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { BIZ } from '../game/career';
 import { ALLOCATION, OFFICES, type Allocation, type PoliticalOffice } from '../game/civic';
 import { naira, OFFICE_RULES } from '../game/store';
-import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, STATE_ASSETS, STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS, type StateCaps, type StateLawKey } from '../game/treasury';
+import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawText, STATE_ASSETS, STATE_CUT, STATE_LAWS, STATE_LAW_KEYS, TRANSFER_FEE_LIMITS, type StateCaps, type StateLawKey } from '../game/treasury';
 import { FARE_SUBSIDY } from '../game/transport';
 import { isSuspended, useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
 import { Emoji } from './Icons';
@@ -44,6 +44,7 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
       title: `Max ${STATE_LAWS[k].title.toLowerCase()}`,
       unit: STATE_LAWS[k].unit,
       options: STATE_LAWS[k].capOptions,
+      labels: STATE_LAWS[k].unit === '₦' ? Object.fromEntries(STATE_LAWS[k].capOptions.map((v) => [v, lawText(k, v)])) : undefined,
       hint: `The most any state may set. Lowering it cuts every state above it down. ${STATE_LAWS[k].hint}`,
     })),
     { key: 'federalCut', title: 'Federal cut', unit: '%', options: [0, 5, 10, 15, 20, 25, 30], hint: 'The share of every state’s revenue sent up to the federal treasury each hour. The states keep the rest.', treasury: true },
@@ -92,7 +93,7 @@ const FIXED: [string, string][] = [
 
 /** A state's own rate as the gazette prints it: fees are a share of the standard fee, the rest plain percents. */
 function stateRate(key: StateLawKey, value: number) {
-  if (STATE_LAWS[key].max !== 200) return `${value}%`;
+  if (STATE_LAWS[key].max !== 200) return lawText(key, value);
   return value === 100 ? 'Standard' : `${value}% of standard`;
 }
 

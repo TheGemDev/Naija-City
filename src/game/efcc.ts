@@ -161,6 +161,37 @@ export interface EfccCase {
   seizedProperty: { id: string; name: string; price: number; boughtBack: boolean; property?: import('./property').Property } | null;
 }
 
+/**
+ * An election case as INEC shows it to everyone (worker/efcc.ts inecCases): who is accused, the race, and how many of
+ * their votes were fake. Who filed it is never part of it. A case the candidate bribed their way out of shows as
+ * 'dropped', with no vote counts.
+ */
+export interface InecCase {
+  id: string;
+  targetUid: string;
+  target: string;
+  office: string | null;
+  status: 'investigating' | 'convicted' | 'cleared' | 'dropped';
+  filedAt: number;
+  resolvesAt: number;
+  resolvedAt: number | null;
+  /** Every vote they had in the race when it was filed. */
+  votes: number;
+  /** Fake votes, struck off when the case closes... */
+  fake: number;
+  /** ...and the ones traced to the candidate (voteTied), which convict them. */
+  traced: number;
+  fine: number | null;
+  /**
+   * The accounts behind the fake votes, the candidate's own first (INEC_ACCUSED_SHOWN of them; `fake` is how many in all):
+   * the username and why the vote was flagged, never the device or network data behind it. Struck once the case is decided.
+   */
+  accused: { uid: string; username: string; flags: VoteFlag[]; struck: boolean }[];
+}
+
+/** How many accused voter accounts INEC lists under one case. */
+export const INEC_ACCUSED_SHOWN = 20;
+
 export const efccSource = (kind: string) =>
   ({
     work: 'Job wages',

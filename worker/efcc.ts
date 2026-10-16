@@ -1,5 +1,5 @@
-import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, efccConvicts, efccSource, electionConvicts, voteIllicit, voteTied, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type VoteFlag } from '../src/game/efcc';
-import { banLeft, CHAOS, OFFICE_RULES, VOTE_BUYING_BAN_MS, type PoliticalOffice } from '../src/game/civic';
+import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, INEC_ACCUSED_SHOWN, efccConvicts, efccSource, electionConvicts, voteIllicit, voteTied, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type InecCase, type VoteFlag } from '../src/game/efcc';
+import { CHAOS, OFFICE_RULES, type PoliticalOffice } from '../src/game/civic';
 import { linkedSql, sharedIpSql, twinSql } from './links';
 import { syncForum } from './groups';
 import { transfer, usernames } from './crime';
@@ -186,9 +186,9 @@ async function settle(db: D1Database, row: CaseRow, now: number) {
 
 /**
  * A rigged election. Every fake vote is struck off, whatever the verdict. The candidate is convicted only on votes traced
- * to them (src/game/efcc.ts voteTied): disqualified if the race is still on, barred from running, fined and jailed, as if
- * caught in a vote-buying sting (worker/civic.ts). A race already over is recounted, and the seat goes to whoever won it
- * without the struck votes.
+ * to them (src/game/efcc.ts voteTied): disqualified if the race is still on (out of that election only), fined and jailed,
+ * as if caught in a vote-buying sting (worker/civic.ts). A race already over is recounted, and the seat goes to whoever
+ * won it without the struck votes.
  */
 async function settleElection(db: D1Database, row: CaseRow, now: number) {
   const votes = JSON.parse(row.audit_json) as StoredVote[];
@@ -205,12 +205,17 @@ async function settleElection(db: D1Database, row: CaseRow, now: number) {
   await db.batch([
     db.prepare('DELETE FROM civic_votes WHERE election_id = ?1 AND candidate_uid = ?2 AND voter_uid IN (SELECT value FROM json_each(?3))')
       .bind(row.election_id, row.target_uid, JSON.stringify(struck)),
-    // Disqualified while the race is still on (their remaining votes go with them).
+    // Disqualified while the race is still on (their remaining votes go with them): their name stays on the board, struck
+    // through, and they can't file into this race again.
     ...(convicted
       ? [
+          db.prepare(
+            `INSERT OR IGNORE INTO civic_disqualified (election_id, uid, reason, at)
+             SELECT ?1, ?2, 'fake_votes', ?3 WHERE EXISTS (SELECT 1 FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id
+               WHERE c.election_id = ?1 AND c.uid = ?2 AND e.status = 'open')`,
+          ).bind(row.election_id, row.target_uid, now),
           db.prepare(`DELETE FROM civic_candidates WHERE election_id = ? AND uid = ? AND EXISTS (SELECT 1 FROM civic_elections WHERE id = ? AND status = 'open')`)
             .bind(row.election_id, row.target_uid, row.election_id),
-          db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, row.target_uid),
         ]
       : []),
   ]);
@@ -252,7 +257,7 @@ async function settleElection(db: D1Database, row: CaseRow, now: number) {
   await jail(db, row.target_uid, (await loadLaws(db)).jailMinutes, `Election fraud · ${tied} fake vote${tied === 1 ? '' : 's'} in the ${title} race`);
   await postFeed(
     db, row.target_uid, 'election', '🗳️',
-    `EFCC: ${tied} of ${title} candidate ${handle(who)}’s ${votes.length} votes came from their own phone, fake accounts on their network, or voters they paid. ${race?.status === 'open' ? 'Disqualified, ' : unseated ? 'Removed from office, ' : ''}barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a cell. 🚓`,
+    `EFCC: ${tied} of ${title} candidate ${handle(who)}’s ${votes.length} votes came from their own phone, fake accounts on their network, or voters they paid. ${race?.status === 'open' ? 'Disqualified from this race, ' : unseated ? 'Removed from office, ' : ''}${naira(fine)} fine, and a cell. 🚓`,
     city,
   );
 }
@@ -384,7 +389,87 @@ export async function settleDueCases(db: D1Database, limit = 25) {
   for (const row of results) await settle(db, row, now);
 }
 
+/** How many decided election cases INEC sends at a time. */
+const INEC_PAGE = 20;
+
+type InecRow = Pick<CaseRow, 'id' | 'target_uid' | 'status' | 'filed_at' | 'resolves_at' | 'audit_json' | 'fine'> & {
+  resolved_at: number | null; target: string | null; office: string | null;
+};
+
+/**
+ * An election case for everyone to read: the vote counts, and the accounts behind the fake votes by username with what
+ * was wrong with each vote. Never the device or network data that flagged them, and never who filed it.
+ */
+function inecCase(row: InecRow, names: Map<string, string>): InecCase {
+  const votes = JSON.parse(row.audit_json) as StoredVote[];
+  // A bribed case just closes: the public doesn't learn why, or what the audit found.
+  const dropped = row.status === 'bribed';
+  // Every fake vote is struck when the case is decided, whatever the verdict (settleElection).
+  const struck = row.status === 'convicted' || row.status === 'cleared';
+  return {
+    id: row.id,
+    targetUid: row.target_uid,
+    target: row.target ?? 'player',
+    office: row.office,
+    status: dropped ? 'dropped' : row.status as Exclude<EfccStatus, 'bribed'>,
+    filedAt: row.filed_at,
+    resolvesAt: row.resolves_at,
+    resolvedAt: row.resolved_at,
+    votes: votes.length,
+    fake: dropped ? 0 : votes.filter((v) => v.illicit).length,
+    traced: dropped ? 0 : votes.filter((v) => voteTied(v.flags)).length,
+    fine: row.status === 'convicted' ? row.fine : null,
+    accused: dropped ? [] : accusedOf(votes).map((v) => ({ uid: v.voter, username: names.get(v.voter) ?? 'player', flags: v.flags, struck })),
+  };
+}
+
+/** The fake votes INEC lists under a case: the ones traced to the candidate first, then the rest, newest first in each. */
+const accusedOf = (votes: StoredVote[]) =>
+  votes.filter((v) => v.illicit).sort((a, b) => Number(voteTied(b.flags)) - Number(voteTied(a.flags))).slice(0, INEC_ACCUSED_SHOWN);
+
+/**
+ * INEC: every open election case on anyone, and the decided ones newest first, a page at a time. `before` is the last
+ * page's cursor ("resolvedAt:id"). The history reads the efcc_election_history index (migrations/0114_inec_cases.sql).
+ */
+async function inecCases(db: D1Database, before: string | null) {
+  const now = Date.now();
+  // Cases whose time is up are closed here too, so nobody reads a verdict that is already due.
+  const { results: due } = await db.prepare("SELECT * FROM efcc_cases WHERE kind = 'election' AND status = 'investigating' AND resolves_at <= ? LIMIT 5")
+    .bind(now).all<CaseRow>();
+  for (const row of due) await settle(db, row, now);
+  const cols = `c.id, c.target_uid, c.status, c.filed_at, c.resolves_at, c.resolved_at, c.audit_json, c.fine, p.username AS target, e.office
+     FROM efcc_cases c LEFT JOIN players p ON p.uid = c.target_uid LEFT JOIN civic_elections e ON e.id = c.election_id`;
+  const [at, id] = (before ?? '').split(':');
+  const cursor = Number(at) > 0;
+  const [open, decided] = await db.batch<InecRow>([
+    db.prepare(`SELECT ${cols} WHERE c.kind = 'election' AND c.status = 'investigating' ORDER BY c.filed_at DESC LIMIT 50`),
+    db.prepare(
+      `SELECT ${cols} WHERE c.kind = 'election' AND c.status != 'investigating'
+         AND (?1 = 0 OR c.resolved_at < ?2 OR (c.resolved_at = ?2 AND c.id < ?3))
+       ORDER BY c.resolved_at DESC, c.id DESC LIMIT ?4`,
+    ).bind(cursor ? 1 : 0, cursor ? Number(at) : 0, id ?? '', INEC_PAGE + 1),
+  ]);
+  const page = decided.results.slice(0, INEC_PAGE);
+  const last = page[page.length - 1];
+  // Every listed voter's username in one read (json_each: there can be more of them than D1 takes bound parameters).
+  const voters = [...new Set([...open.results, ...page].filter((r) => r.status !== 'bribed')
+    .flatMap((r) => accusedOf(JSON.parse(r.audit_json) as StoredVote[]).map((v) => v.voter)))];
+  const { results: named } = voters.length
+    ? await db.prepare('SELECT uid, username FROM players WHERE uid IN (SELECT value FROM json_each(?))').bind(JSON.stringify(voters))
+      .all<{ uid: string; username: string | null }>()
+    : { results: [] };
+  const names = new Map(named.filter((r) => r.username).map((r) => [r.uid, r.username!]));
+  return {
+    open: open.results.map((r) => inecCase(r, names)),
+    decided: page.map((r) => inecCase(r, names)),
+    next: decided.results.length > INEC_PAGE && last ? `${last.resolved_at}:${last.id}` : null,
+  };
+}
+
 export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, uid: string, path: string): Promise<Response | null> {
+  // INEC lists election cases to every player; the cases themselves are still the EFCC's (filed and settled below).
+  if (path === '/api/inec/cases' && req.method === 'GET') return json(await inecCases(env.DB, new URL(req.url).searchParams.get('before')));
+
   if (path === '/api/efcc' && req.method === 'GET') {
     const now = Date.now();
     const pending = await env.DB.prepare(
@@ -493,14 +578,15 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
         ? err(409, 'This player already has an open investigation')
         : err(402, `Filing an investigation costs ${EFCC.filingFee.toLocaleString()} naira`);
     }
-    notify(env, ctx, target.uid, { t: 'fun', kind: 'efccCase', caseId: id });
+    // An election case is answered in the INEC app; a money case in the EFCC app.
+    notify(env, ctx, target.uid, { t: 'fun', kind: 'efccCase', caseId: id, election: kind === 'election' });
     sendPush(env, ctx, target.uid, {
-      title: kind === 'election' ? 'EFCC: your votes are being audited' : 'New EFCC investigation',
+      title: kind === 'election' ? 'INEC: your votes are being audited' : 'New EFCC investigation',
       body: kind === 'election'
-        ? 'Someone reported your campaign for fake votes. Open the EFCC app to respond, or pay to see who filed it.'
+        ? 'Someone reported your campaign for fake votes. Open the INEC app to respond, or pay to see who filed it.'
         : 'Someone has opened an investigation on you. Open the EFCC app to respond, or pay to see who filed it.',
       tag: `efcc-case-${id}`,
-      category: 'crime', app: 'efcc',
+      category: 'crime', app: kind === 'election' ? 'inec' : 'efcc',
     });
     return json({ balance: await balance(env.DB, uid), id }, 201);
   }

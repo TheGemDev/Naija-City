@@ -19,7 +19,7 @@ const APP_LINKS: Record<string, string> = {
   goals: '🎯 Goals', settings: '⚙️ Settings', mall: '🛍️ Jumia', jobs: '💼 Jobs', hustle: '🛺 Hustle', career: '🎓 Career',
   business: '🏪 Business', invest: '📈 Invest', bank: '🏦 Bank', gida: '🏠 House', light: '💡 NEPA', hire: '🤝 Hire',
   ride: '🚕 Bolt', cars: '🚗 Autos', messages: '💬 Messages', family: '💞 Family', games: '🎲 Games', civic: '🏛️ Civic',
-  police: '🚔 Police', efcc: '🕵🏾 EFCC', store: '🛍️ App Store', closet: '👗 Closet', radio: '📻 Radio', camera: '📷 Camera',
+  police: '🚔 Police', efcc: '🕵🏾 EFCC', inec: '🗳️ INEC', store: '🛍️ App Store', closet: '👗 Closet', radio: '📻 Radio', camera: '📷 Camera',
 };
 
 const TOPICS: Topic[] = [
@@ -125,12 +125,13 @@ const TOPICS: Topic[] = [
     id: 'politics',
     title: 'Politics',
     hint: 'Elections, taxes, corruption',
-    apps: ['civic'],
+    apps: ['civic', 'inec'],
     body: [
       'Civic: players vote for president, Governor of Kaduna, FCT Minister (Abuja), Governor of Lagos, Governor of Kano, IGP and EFCC chair. File to run for any post in the Civic app on your phone, or at a secretariat. There is an election every day: voting is open for 1 hour, from 8 pm to 9 pm Nigerian time, and the winner holds office for 24 hours.',
       'The president sets the tax, shares the treasury between Kaduna State, FCT Abuja, Lagos State, Kano State, police, EFCC and federal palliatives, and signs the pay list: what every office is paid a game day, the president’s own included (Civic → Treasury → Pay). Everybody can read it, and VDM calls out a greedy one. The governor (Kaduna), the FCT Minister (Abuja), the Governor of Lagos and the Governor of Kano each spend their own city’s share on contracts, road projects and palliatives, can ban okada in their city, grant pardons and fix their city’s potholes. The IGP sets patrols and jail terms. The EFCC chair sets fines.',
       'The president, the three governors and the FCT Minister travel on the state: the helicopter, the convoy (in place of a cab) and the jet at the airport cost them nothing. The treasury pays the usual fare, the president out of the whole treasury and a city’s government out of its own budget.',
-      'Campaign with rallies, billboards and crowds; each event costs millions. Until the polls open you can withdraw from a race for a fee (a quarter of the filing fee, which is not refunded). You can buy votes, but if the EFCC catches you, you are disqualified, fined, jailed and barred from running for 3 days.',
+      'Campaign with rallies, billboards and crowds; each event costs millions. Until the polls open you can withdraw from a race for a fee (a quarter of the filing fee, which is not refunded). You can buy votes, but if the EFCC catches you, you are disqualified from that race, fined and jailed. You can run again in the next election.',
+      'Seen a candidate winning on fake votes? Report them in the INEC app. Every election case is public there: the candidate, the race, and the accounts accused of voting as their clones. Who reported it is not shown.',
       'Office holders can let "a snake swallow" some treasury money. It pays well and they may get caught. With an EFCC chair in office the loot is frozen for a few hours while the chair decides, and the looter can offer them a share.',
       'Other ways into the treasury, each with its own risk: a front company (EFCC raid), Mallam’s BDC (he may vanish with it), Ghana Must Go bags on the state jet (customs search), ghost workers on a state payroll (the audit odds rise every hour), and diverting palliatives (VDM may get the video).',
       'Everyone in office shares the Government Forum, a group chat in Messages. You are added when you win an office and removed when you leave it.',

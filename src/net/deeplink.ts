@@ -27,6 +27,9 @@ const SITE = 'https://naija.city';
 export const userLink = (username: string) => `${SITE}/u/${username}`;
 /** A player's invite link: their username is the referral code (net/referral.ts). */
 export const inviteLink = (username: string) => `${SITE}/?ref=${username}`;
+/** An invite to a state: whoever signs up from it is born there (net/referral.ts takeBirthState). With the inviter's
+ *  username it counts as their referral too. */
+export const stateLink = (state: string, username?: string | null) => `${SITE}/?state=${state}${username ? `&ref=${username}` : ''}`;
 export const plotLink = (region: string, slot: number) => `${SITE}/b/${region}/${slot}`;
 /** Kaduna's links carry no city: they were shared before there was a second one. */
 export const placeLink = (placeId: string, city = 'kaduna') => `${SITE}/p/${city === 'kaduna' ? '' : `${city}/`}${placeId}`;

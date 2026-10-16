@@ -94,6 +94,8 @@ export async function pruneOldData(db: D1Database, now: number) {
     ).bind(now - EFCC_RECORD_MS),
     db.prepare(`DELETE FROM civic_votes WHERE election_id IN ${oldElection}`).bind(record),
     db.prepare(`DELETE FROM civic_candidates WHERE election_id IN ${oldElection}`).bind(record),
+    // A disqualification only matters while its race is open.
+    db.prepare('DELETE FROM civic_disqualified WHERE at < ?').bind(record),
     db.prepare(`DELETE FROM civic_posters WHERE election_id IN ${oldElection}`).bind(record),
     db.prepare(`DELETE FROM civic_elections WHERE status = 'closed' AND ends_at < ?`).bind(record),
     db.prepare('DELETE FROM quest_claims WHERE claimed_at < ?').bind(record),

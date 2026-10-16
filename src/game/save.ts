@@ -63,8 +63,11 @@ export function hydrate(data: SaveData) {
     origin: normalizeOrigin(rest.origin),
     items: renameItems(rest.items),
     loanOwed: rest.loanOwed ?? 0,
-    // Saves from before government rent: anyone without a home of their own lives in the government house.
-    govRentOwed: rest.govRentOwed ?? (rest.homePropertyId ? 0 : GOV_WEEKLY_RENT[normalizeOrigin(rest.origin)] ?? 0),
+    // Saves from before government rent: anyone without a home of their own lives in the government house. Lives that
+    // still owe the old, bigger rents (₦80k Nepo and up) pay today's flat rate.
+    govRentOwed: rest.govRentOwed === undefined
+      ? (rest.homePropertyId ? 0 : GOV_WEEKLY_RENT[normalizeOrigin(rest.origin)] ?? 0)
+      : rest.govRentOwed > 0 ? GOV_WEEKLY_RENT[normalizeOrigin(rest.origin)] ?? rest.govRentOwed : 0,
     govRentPaidThrough: rest.govRentPaidThrough ?? dayOf(rest.minutes),
     personalStaff: (rest.personalStaff ?? []).map((m) => ({ ...m, propertyId: m.propertyId ?? 'starter' })),
     debtOwed: rest.debtOwed ?? Math.max(0, -rest.money),

@@ -47,6 +47,7 @@ import { entrance, estatePath, houseRect, PLOT, rowsFor, sectionOf, slotOrigin, 
 import { firstInstallment, ORIGINS, originOf, type OriginId } from './origins';
 import { CAMPAIGN_EVENTS, OFFICE_RULES, STATE_FLEET, type CampaignEvent, type ExecutiveOffice, type PoliticalOffice } from './civic';
 import { decodeLook, encodeLook, fits, GARMENT_BY_ID, isFullOutfit, STARTER_WARDROBE, type ShopId, type Slot } from './wardrobe';
+import { govRentIn } from './cityLaws';
 import { getRegion, regionalAction, regionOf, regionPlace, regionPlaces, regionAirportDoor, regionStartDoor } from './regions';
 import { fareRef, subsidise, type FareSubsidy } from './transport';
 import { HOUSEHOLD_STAFF, HOUSE_STAFF_ROLES, STARTER_HOUSE, rollStaffTheft, type StaffRole, type HouseholdStaff, type HouseStaffRole } from './staff';
@@ -60,16 +61,16 @@ export const DAY = 24 * 60;
 export const ALIAS_MAX = 24;
 
 /**
- * Weekly government rent for the starter house, keyed by origin: the bigger the house you start in,
- * the more it costs. Sapa / Gbese has no starter house; they owe nothing.
- * Dangote Pikin starts in a Malali GRA mansion with eye-watering rent.
+ * Who may live in a government house, and the mark `govRentOwed` carries while they do. What they pay a week is the
+ * state's own law (game/cityLaws.ts govRentIn), the same for everyone in that state. Sapa / Gbese has no starter house.
  */
+export const GOV_RENT = 10_000;
 export const GOV_WEEKLY_RENT: Partial<Record<OriginId, number>> = {
-  starter: 10_000,
-  lapo:    10_000,
-  nepo:    80_000,
-  richkid: 200_000,
-  dangote: 450_000,
+  starter: GOV_RENT,
+  lapo: GOV_RENT,
+  nepo: GOV_RENT,
+  richkid: GOV_RENT,
+  dangote: GOV_RENT,
 };
 
 /** Hooks the network layer fills in (src/net/rentals.ts): tenants go "home" to the house they rent. */
@@ -498,7 +499,8 @@ export interface GameState {
   /** Stop paying government rent: they moved into their own house or a player's rental. */
   clearGovRent(message?: string): void;
   /** Move (back) into the government starter house and start paying its rent again. */
-  moveIntoGovHouse(): void;
+  /** Live in the government house of `city` (your state's when left out): moving in, or moving across from another state's. */
+  moveIntoGovHouse(city?: string): void;
   chooseDesign(propertyId: string, design: string): void;
   buyMaterials(propertyId: string, materialId?: string): void;
   startConstruction(propertyId: string, contractor: string): void;
@@ -1986,11 +1988,12 @@ export const useGame = create<GameState>((set, get) => {
         );
       }
 
-      // Government house rent — deducted weekly for non-Almajiri players who still owe it.
+      // Government house rent, weekly, at the rate the state's governor set (game/cityLaws.ts), into that state's
+      // treasury. `govRentOwed` only says you live in one; the price is the state's law.
       if (s.govRentOwed > 0 && dayOf(minutes) > dayOf(prevMinutes) && (dayOf(minutes) - s.govRentPaidThrough) >= 7) {
-        const weekly = s.govRentOwed;
+        const weekly = govRentIn(s.homeState);
         const paid = Math.min(weekly, Math.max(0, Math.floor(get().money)));
-        if (paid > 0) pay(-paid, 'Government house rent');
+        if (paid > 0) pay(-paid, `Government house rent, ${regionOf(s.homeState).name}`, 'spend', `govrent:${s.homeState}`);
         // Whatever they couldn't pay goes on their debt.
         set((st) => ({ govRentPaidThrough: dayOf(minutes), debtOwed: st.debtOwed + (weekly - paid) }));
         toast(
@@ -3218,13 +3221,22 @@ export const useGame = create<GameState>((set, get) => {
       toast(message);
     },
 
-    moveIntoGovHouse() {
+    moveIntoGovHouse(city) {
       const s = get();
-      const weekly = GOV_WEEKLY_RENT[s.origin] ?? 0;
-      if (!weekly || s.govRentOwed > 0) return;
+      if (!GOV_WEEKLY_RENT[s.origin]) return;
+      const to = getRegion(city ?? s.homeState)?.id ?? s.homeState;
+      const moving = s.govRentOwed > 0;
+      if (moving && to === s.homeState) return;
       if (s.lease) return toast('End your lease first.');
-      set({ govRentOwed: weekly, govRentPaidThrough: dayOf(s.minutes) });
-      toast(`🏚️ You moved back into the government house. Rent is ${naira(weekly)} a week.`);
+      if (s.task) get().cancelTask();
+      // Standing in the government house you are leaving: out to the street first.
+      if (moving && s.view === 'home' && houseKeyOf(s) === STARTER_HOUSE) get().openMap();
+      // Moving across keeps the rent week running, so a move is never a way round paying.
+      set({ homeState: to, govRentOwed: GOV_WEEKLY_RENT[s.origin]!, govRentPaidThrough: moving ? s.govRentPaidThrough : dayOf(s.minutes) });
+      const weekly = naira(govRentIn(to));
+      toast(moving
+        ? `🚚 Moved to a government house in ${regionOf(to).name}. Your things went ahead of you. Rent there is ${weekly} a week.`
+        : `🏚️ You moved into a government house in ${regionOf(to).name}. Rent is ${weekly} a week.`);
     },
 
     setRented(propertyId, rented) {

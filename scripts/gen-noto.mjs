@@ -39,8 +39,12 @@ const mall = `🛍️ ℹ️ 🍢 🥩 🥛 🌯 🍗`.split(/\s+/);
 const reactions = `😭 👍🏾`.split(/\s+/);
 // The notifications pill in the HUD (ui/Hud.tsx NotificationBanner).
 const hud = `🔕 📲`.split(/\s+/);
+// Adopt (ui/Adopt.tsx, game/kids.ts): the app's logo, its chrome, the care buttons, moods and milestones.
+const adopt = `👶🏾 🧸 ❌ 📝 😴 🎒 🤒 🥹 🍼 👩🏾‍🍼 🧷 🛁 😢 😊 🗣️ 👣 🎂 ⭐`.split(/\s+/);
+// INEC (ui/Inec.tsx): its logo (🗳️, above) and chrome: the case history and a dropped case.
+const inec = `🗂️ 📁`.split(/\s+/);
 const chars = JSON.parse(readFileSync('node_modules/@iconify-json/noto/chars.json', 'utf8'));
-for (const e of [...feed, ...places, ...wizard, ...mall, ...reactions, ...hud]) {
+for (const e of [...feed, ...places, ...wizard, ...mall, ...reactions, ...hud, ...adopt, ...inec]) {
   const n = chars[[...e].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f').join('-')];
   if (n) map[e] ??= n; else console.error('no noto icon for', e);
 }

@@ -1,7 +1,8 @@
 // House: the property app. Buy land around Kaduna, build on it stage by stage, then rent it out or sell.
 // Each region also has an estate area (three/Estate.tsx) where your houses stand next to other players'.
 
-import { regionOf } from '../game/regions';
+import { REGION_IDS, regionOf } from '../game/regions';
+import { govRentIn, useCityLaws } from '../game/cityLaws';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { naira, netWorthOf, useGame } from '../game/store';
@@ -574,8 +575,12 @@ function RentTab() {
     return own ? `${houseTitle(own)} · ${REGION_BY_ID[l.region]?.name ?? 'Kaduna'}` : `${DESIGN_BY_ID[l.design]?.name ?? 'House'} · ${REGION_BY_ID[l.region]?.name ?? 'Kaduna'}`;
   };
   useEffect(() => { void loadRentals(); }, []);
-  const govWeekly = GOV_WEEKLY_RENT[origin] ?? 0;
+  const govOk = (GOV_WEEKLY_RENT[origin] ?? 0) > 0;
   const hasOwnHome = !!homePropertyId;
+  const homeState = useGame((st) => st.homeState);
+  // Every state's government houses, at the rent its governor set: yours first, then the cheapest.
+  const rents = useCityLaws((st) => st.govRent);
+  const govStates = [...REGION_IDS].sort((a, b) => (a === homeState ? -1 : b === homeState ? 1 : (rents[a] ?? govRentIn(a)) - (rents[b] ?? govRentIn(b))));
 
   return (
     <>
@@ -592,18 +597,27 @@ function RentTab() {
           <button className="btn sm" disabled={busy} onClick={() => leaveRental()}>Stop renting</button>
         </div>
       )}
-      {govWeekly > 0 && (
-        <div className="tile" style={govRentOwed > 0 ? { background: '#fef9c3', border: '1px solid #fde047', borderRadius: 12 } : undefined}>
-          <span className="tile-icon" style={{ fontSize: 28 }}>🏚️</span>
-          <span className="tile-info">
-            <b>Government starter house{govRentOwed > 0 ? ' · Current home' : ''}</b>
-            <small>Your starter place from Kaduna State.</small>
-            <small style={{ color: '#059669', fontWeight: 600 }}>{naira(govWeekly)}/week</small>
-          </span>
-          {govRentOwed > 0
-            ? <button className="btn sm" onClick={() => clearGovRent()}>{hasOwnHome ? 'Stop renting' : 'Move out'}</button>
-            : <button className="btn sm go" disabled={!!lease} onClick={() => moveIntoGovHouse()}>{lease ? 'Leave rental first' : 'Rent'}</button>}
-        </div>
+      {govOk && (
+        <>
+          <h4 style={{ padding: '0 16px' }}>Government houses</h4>
+          <p className="muted" style={{ padding: '0 16px', margin: 0, fontSize: 12 }}>Each state’s governor sets its rent, up to the president’s maximum. It goes into that state’s treasury. Too dear? Move to another state’s.</p>
+          {govStates.map((city) => {
+            const here = govRentOwed > 0 && city === homeState;
+            return (
+              <div className="tile" key={city} style={here ? { background: '#fef9c3', border: '1px solid #fde047', borderRadius: 12 } : undefined}>
+                <span className="tile-icon" style={{ fontSize: 28 }}>🏚️</span>
+                <span className="tile-info">
+                  <b>{regionOf(city).name}{here ? ' · Current home' : ''}</b>
+                  <small>{regionOf(city).tagline.split(' · ')[1] ?? `${regionOf(city).name} State`} government house</small>
+                  <small style={{ color: '#059669', fontWeight: 600 }}>{naira(rents[city] ?? govRentIn(city))}/week</small>
+                </span>
+                {here
+                  ? <button className="btn sm" onClick={() => clearGovRent()}>{hasOwnHome ? 'Stop renting' : 'Move out'}</button>
+                  : <button className="btn sm go" disabled={!!lease} onClick={() => moveIntoGovHouse(city)}>{lease ? 'Leave rental first' : govRentOwed > 0 ? 'Move here' : 'Rent'}</button>}
+              </div>
+            );
+          })}
+        </>
       )}
       {mine.length > 0 && (
         <>
@@ -646,6 +660,8 @@ export function House() {
   const minutes         = useGame((s) => Math.floor(s.minutes));
   const collectRent     = useGame((s) => s.collectRent);
   const govRentOwed     = useGame((s) => s.govRentOwed);
+  const homeState       = useGame((s) => s.homeState);
+  const govRent         = useCityLaws((s) => s.govRent[homeState] ?? govRentIn(homeState));
   const navWant         = useHouseNav((s) => s.want);
   const lastNavWant     = useRef(navWant);
   const [tab, setTab]   = useState<'mine' | 'land' | 'rent'>(properties.length ? 'mine' : 'land');
@@ -691,10 +707,10 @@ export function House() {
           margin: '12px 12px 0', padding: '12px 14px', borderRadius: 12,
           background: '#fef3c7', border: '1px solid #fcd34d',
         }}>
-          <b style={{ fontSize: 13 }}>🏚️ Government house: {naira(govRentOwed)}/week</b>
+          <b style={{ fontSize: 13 }}>🏚️ Government house, {regionOf(homeState).name}: {naira(govRent)} a week</b>
           <p style={{ fontSize: 12, margin: '4px 0 0', color: '#78350f' }}>
-            You're living in a government starter house. Build or rent your own property and
-            select it as your home to stop paying weekly rent.
+            Taken every game week (about 7 hours of play), at the rate {regionOf(homeState).name}’s governor sets. Build or
+            rent your own place to stop paying, or move to a cheaper state’s government house under For rent.
           </p>
         </div>
       )}

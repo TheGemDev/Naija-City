@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, SCHEMES, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, VOTE_BUYING_BAN_MS, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, SCHEMES, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, DISQUALIFY_REASON, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type DisqualifyReason, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -9,7 +9,7 @@ import { jail } from './fun';
 import { searchPhone } from './phoneSearch';
 import { feedStmt, handle, naira, postFeed } from './feed';
 import { refreshPolicy } from './policy';
-import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
+import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, lawText, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
 import { FARE_SUBSIDY } from '../src/game/transport';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
@@ -123,9 +123,6 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
 }
 
 type PolicyRow = Record<string, string | number | null>;
-
-/** When a ban for buying votes runs out, from when they were caught (players.civic_banned_at). 0 if never caught. */
-const bannedUntil = (caughtAt: number | null | undefined) => (caughtAt ? caughtAt + VOTE_BUYING_BAN_MS : 0);
 
 /** The laws an office holder can change, as the gazette words them: who sets each, and its column in civic_policies. */
 const GAZETTE_LAWS = {
@@ -309,7 +306,7 @@ async function snapshot(db: D1Database, uid: string) {
        WHERE c.election_id = ?1 ${where}
        GROUP BY c.uid
        ORDER BY votes DESC, c.support DESC, COALESCE(p.username, p.name, c.uid)`;
-    const [leaders, myVote, totals] = await Promise.all([
+    const [leaders, myVote, totals, out] = await Promise.all([
       db.prepare(`${tally('')} LIMIT ${BALLOT_SIZE}`).bind(race.id).all<CandidateRow>(),
       db
         .prepare('SELECT candidate_uid FROM civic_votes WHERE election_id = ? AND voter_uid = ?')
@@ -323,6 +320,15 @@ async function snapshot(db: D1Database, uid: string) {
         )
         .bind(race.id)
         .first<{ running: number; votes: number }>(),
+      // Disqualified candidates stay on the board, struck through (migrations/0115_civic_disqualified.sql).
+      db
+        .prepare(
+          `SELECT d.uid, p.username, p.name, d.reason FROM civic_disqualified d JOIN players p ON p.uid = d.uid
+           WHERE d.election_id = ? AND NOT EXISTS (SELECT 1 FROM civic_candidates c WHERE c.election_id = d.election_id AND c.uid = d.uid)
+           ORDER BY d.at`,
+        )
+        .bind(race.id)
+        .all<{ uid: string; username: string | null; name: string | null; reason: DisqualifyReason }>(),
     ]);
     const candidates = leaders.results;
     // A crowded race is cut to its leaders, but you still need your own row and the one you voted for.
@@ -331,7 +337,7 @@ async function snapshot(db: D1Database, uid: string) {
       const own = await db.prepare(tally('AND c.uid IN (?2, ?3)')).bind(race.id, missing[0], missing[1] ?? missing[0]).all<CandidateRow>();
       candidates.push(...own.results);
     }
-    result[race.office] = { id: race.id, endsAt: race.ends_at, candidates, myVote: myVote?.candidate_uid ?? null, running: totals?.running ?? candidates.length, totalVotes: totals?.votes ?? 0 };
+    result[race.office] = { id: race.id, endsAt: race.ends_at, candidates, myVote: myVote?.candidate_uid ?? null, running: totals?.running ?? candidates.length, totalVotes: totals?.votes ?? 0, disqualified: out.results };
   }
 
   const posters = await db
@@ -340,7 +346,7 @@ async function snapshot(db: D1Database, uid: string) {
        JOIN players p ON p.uid = c.uid ORDER BY c.created_at DESC LIMIT 12`,
     )
     .all<{ username: string | null; office: PoliticalOffice }>();
-  const me = await db.prepare('SELECT road_block_until, embezzled_at, civic_banned_at, created_at FROM players WHERE uid = ?').bind(uid).first<{ road_block_until: number | null; embezzled_at: number | null; civic_banned_at: number | null; created_at: number | null }>();
+  const me = await db.prepare('SELECT road_block_until, embezzled_at, created_at FROM players WHERE uid = ?').bind(uid).first<{ road_block_until: number | null; embezzled_at: number | null; created_at: number | null }>();
   const running = await db
     .prepare("SELECT e.office FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id AND e.status = 'open' WHERE c.uid = ? LIMIT 1")
     .bind(uid)
@@ -368,10 +374,8 @@ async function snapshot(db: D1Database, uid: string) {
     ghosts: await myGhosts(db, uid),
     /** When I last awarded a contract or granted a pardon. */
     cooldowns: Object.fromEntries(used.results.map((r) => [r.action, r.at])),
-    /** The one post I'm running for right now, and until when I'm barred from running for buying votes. */
+    /** The one post I'm running for right now. */
     runningFor: running?.office ?? null,
-    banned: bannedUntil(me?.civic_banned_at) > Date.now(),
-    bannedUntil: bannedUntil(me?.civic_banned_at) || null,
     /** A new account may vote from then on. */
     voteFrom: (me?.created_at ?? 0) + VOTER_MIN_AGE_MS,
     news: await recentNews(db),
@@ -478,8 +482,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const office = body.office as PoliticalOffice;
     // Filed from the Civic app or a secretariat's election desk: where you stand does not matter.
     const fee = OFFICE_RULES[office].filingFee;
-    const record = await db.prepare('SELECT jailed_until, last_arrest_at, civic_banned_at FROM players WHERE uid = ?').bind(user.uid).first<{ jailed_until: number | null; last_arrest_at: number | null; civic_banned_at: number | null }>();
-    if (bannedUntil(record?.civic_banned_at) > now) return err(403, `You were caught buying votes. INEC bars you from running for another ${banLeft(bannedUntil(record?.civic_banned_at) - now)}`);
+    const record = await db.prepare('SELECT jailed_until, last_arrest_at FROM players WHERE uid = ?').bind(user.uid).first<{ jailed_until: number | null; last_arrest_at: number | null }>();
     if ((record?.jailed_until ?? 0) > now) return err(403, 'You can’t file for office from a police cell');
     if (record?.last_arrest_at && now - record.last_arrest_at < ARREST_BAN_MS) {
       const hours = Math.ceil((ARREST_BAN_MS - (now - record.last_arrest_at)) / 3_600_000);
@@ -495,6 +498,12 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
         .bind(race.id, user.uid)
         .first();
       if (alreadyRunning) return json({ snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+      // Disqualified from this race: out of this election only, free to run in the next one.
+      const out = await db
+        .prepare('SELECT reason FROM civic_disqualified WHERE election_id = ? AND uid = ?')
+        .bind(race.id, user.uid)
+        .first<{ reason: DisqualifyReason }>();
+      if (out) return err(403, `You were disqualified from this race for ${DISQUALIFY_REASON[out.reason]}. INEC bars you from running in this election`);
       // The ballot is fixed once the polls open: nobody joins a race while it is being voted on.
       if (pollsOpen(race.ends_at, now)) return err(409, `Voting for ${OFFICE_RULES[office].title} has started, so its ballot is closed. File after the result to run in tomorrow’s election`);
     }
@@ -601,18 +610,18 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       const budget = allocationOf(await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>());
       // A well-funded EFCC (the president's allocation) catches more vote buyers.
       if (rand() < Math.max(0.05, CHAOS.stingChance + laws.finePct / 1000 + ALLOCATION.efccEdge(budget.efcc))) {
-        // EFCC sting: disqualified (their votes go with them), fined, jailed and barred from running for a while.
+        // EFCC sting: disqualified from this race (their votes go with them, their name stays struck through), fined and jailed.
         outcome = 'stung';
         await db.batch([
           ...charge,
+          db.prepare(`INSERT OR IGNORE INTO civic_disqualified (election_id, uid, reason, at) VALUES (?, ?, 'vote_buying', ?)`).bind(race.id, user.uid, now),
           db.prepare('DELETE FROM civic_candidates WHERE election_id = ? AND uid = ?').bind(race.id, user.uid),
-          db.prepare('UPDATE players SET civic_banned_at = ? WHERE uid = ?').bind(now, user.uid),
         ]);
         const fine = await transfer(db, user.uid, null, CHAOS.stingFine, 'efcc_fine', '', `sting:${race.id}:${user.uid}`);
         await recordExhibits(db, user.uid, `sting:${race.id}:${now}`, `EFCC sting · buying votes in the ${title} race`, [fineItem(fine)], now);
         await jail(db, user.uid, laws.jailMinutes, `Vote buying · caught in an EFCC sting in the ${title} race`);
         const { until } = await searchPhone(env, user.uid, 'efcc', laws.jailMinutes);
-        await postFeed(db, user.uid, 'election', '🧧', `EFCC STING! ${title} candidate ${handle(who)} was caught sharing ₦ notes and bags of rice to voters. Disqualified, barred from running for ${banLeft(VOTE_BUYING_BAN_MS)}, ${naira(fine)} fine, and a free ride in a Black Maria. 🚓`, OFFICE_RULES[office].city);
+        await postFeed(db, user.uid, 'election', '🧧', `EFCC STING! ${title} candidate ${handle(who)} was caught sharing ₦ notes and bags of rice to voters. Disqualified from this race, ${naira(fine)} fine, and a free ride in a Black Maria. 🚓`, OFFICE_RULES[office].city);
         return json({ outcome, until, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
       }
       await db.batch([...charge, boost(support)]);
@@ -958,7 +967,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     await db.prepare(`UPDATE state_treasuries SET ${law.column} = ? WHERE city = ?`).bind(next, city).run();
     const as = actingAs(policy, user.uid, city);
     const who = (await usernames(db, [user.uid])).get(user.uid);
-    await gazette(env, ctx, [{ uid: user.uid, office: as, kind: 'law', icon: '🏛️', text: `${official(as, who)} ${next > was ? 'raised' : 'cut'} ${law.title.toLowerCase()} in ${CITY_NAME[city]}: ${was}${law.unit} → ${next}${law.unit}.` }]);
+    await gazette(env, ctx, [{ uid: user.uid, office: as, kind: 'law', icon: '🏛️', text: `${official(as, who)} ${next > was ? 'raised' : 'cut'} ${law.title.toLowerCase()} in ${CITY_NAME[city]}: ${lawText(key, was)} → ${lawText(key, next)}.` }]);
     return json({ snapshot: await snapshot(db, user.uid) });
   }
 
@@ -1263,7 +1272,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     for (const { key, cap } of lowered) {
       const law = STATE_LAWS[key];
       const cut = await db.prepare(`UPDATE state_treasuries SET ${law.column} = MIN(${law.column}, ?1) WHERE ${law.column} > ?1 RETURNING city`).bind(cap).all<{ city: string }>();
-      notices.push({ uid: user.uid, office: 'president', kind: 'law', icon: '🏛️', text: `${official('president', who)} capped ${law.title.toLowerCase()} at ${cap}${law.unit}.${cut.results.length ? ` ${cut.results.map((r) => CITY_NAME[r.city as CivicCity] ?? r.city).join(', ')} cut down to it.` : ''}` });
+      notices.push({ uid: user.uid, office: 'president', kind: 'law', icon: '🏛️', text: `${official('president', who)} capped ${law.title.toLowerCase()} at ${lawText(key, cap)}.${cut.results.length ? ` ${cut.results.map((r) => CITY_NAME[r.city as CivicCity] ?? r.city).join(', ')} cut down to it.` : ''}` });
     }
     await gazette(env, ctx, notices);
     return json({ snapshot: await snapshot(db, user.uid) });

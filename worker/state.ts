@@ -57,12 +57,12 @@ export async function spendState(db: D1Database, city: CivicCity, amount: number
   return row ? row.balance : null;
 }
 
-export interface StateRow { city: CivicCity; balance: number; incoming: number; arrears: number; askAmount: number | null; askAt: number | null; incomeTax: number; bizFee: number; moveFee: number; deliveryFee: number; bizTax: number; salesTax: number; hospitalFee: number; exportLevy: number; payShare: number }
+export interface StateRow { city: CivicCity; balance: number; incoming: number; arrears: number; askAmount: number | null; askAt: number | null; incomeTax: number; bizFee: number; moveFee: number; deliveryFee: number; bizTax: number; salesTax: number; hospitalFee: number; exportLevy: number; govRent: number; payShare: number }
 export interface AssetRow { city: CivicCity; asset: StateAsset; condition: number; level: number }
 
 export async function loadStates(db: D1Database): Promise<{ states: StateRow[]; assets: AssetRow[] }> {
   const [states, assets] = await db.batch([
-    db.prepare('SELECT city, balance, incoming, arrears, ask_amount AS askAmount, ask_at AS askAt, income_tax AS incomeTax, biz_fee AS bizFee, move_fee AS moveFee, delivery_fee AS deliveryFee, biz_tax AS bizTax, sales_tax AS salesTax, hospital_fee AS hospitalFee, export_levy AS exportLevy, pay_share AS payShare FROM state_treasuries'),
+    db.prepare('SELECT city, balance, incoming, arrears, ask_amount AS askAmount, ask_at AS askAt, income_tax AS incomeTax, biz_fee AS bizFee, move_fee AS moveFee, delivery_fee AS deliveryFee, biz_tax AS bizTax, sales_tax AS salesTax, hospital_fee AS hospitalFee, export_levy AS exportLevy, gov_rent AS govRent, pay_share AS payShare FROM state_treasuries'),
     db.prepare('SELECT city, asset, condition, level FROM state_assets'),
   ]);
   return { states: states.results as unknown as StateRow[], assets: assets.results as unknown as AssetRow[] };

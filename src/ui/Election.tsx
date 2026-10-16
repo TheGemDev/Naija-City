@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
+import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { isSuspended, useCivic, type CivicCandidate } from '../net/civic';
@@ -96,8 +96,8 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
   const race = data?.races[office];
   const holder = data?.policies[office] ?? null;
   const me = race?.candidates.find((c) => c.uid === uid);
-  const bannedFor = (data?.bannedUntil ?? 0) - Date.now();
-  const banned = bannedFor > 0;
+  // Thrown out of this race (vote buying, fake votes): out of this election only.
+  const out = race?.disqualified?.some((d) => d.uid === uid);
   // A new account can't vote until it is 12 hours old.
   const tooNewFor = (data?.voteFrom ?? 0) - Date.now();
   const elsewhere = data?.runningFor && data.runningFor !== office ? data.runningFor : null;
@@ -122,7 +122,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
     : office === 'efcc' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.efcc) }
     : null;
   const status = voting ? `Vote · ${left(race.endsAt - Date.now())} left` : race ? `Polls ${POLLS_OPEN_AT}` : 'No race';
-  const blocked = banned ? `Barred for ${banLeft(bannedFor)}` : elsewhere ? `Running for ${OFFICE_SHORT[elsewhere]}` : !me && voting ? 'Ballot closed' : null;
+  const blocked = out ? 'Disqualified from this race' : elsewhere ? `Running for ${OFFICE_SHORT[elsewhere]}` : !me && voting ? 'Ballot closed' : null;
   return (
     <section className="ev-card" title={rules.powers}>
       <header className="ev-head">
@@ -173,6 +173,17 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
         );
       })}
       {hidden > 0 && <small className="ev-more">+{hidden} more</small>}
+      {/* Disqualified: still on the board, struck through, after everyone still running. Never counted, never voted for. */}
+      {race && !(crowded && !open) && race.disqualified?.map((d) => (
+        <div key={d.uid} className={`ev-cand out ${d.uid === uid ? 'me' : ''}`}>
+          <span className="ev-rank">🚫</span>
+          <span className="ev-avatar"><Face uid={d.uid} username={d.username ?? d.name} size="fill" /></span>
+          <span className="ev-cinfo">
+            <b>{nameOf(d)}{d.uid === uid ? ' · You' : ''}</b>
+            <small>Disqualified · {DISQUALIFY_REASON[d.reason]}</small>
+          </span>
+        </div>
+      ))}
       {voting && tooNewFor > 0 && <small className="ev-note">New accounts can vote once they are 12 hours old · {banLeft(tooNewFor)} to go</small>}
 
       {!me && blocked && <small className="ev-note">{blocked}</small>}
@@ -199,6 +210,11 @@ export function ElectionBoard() {
       {loading && !data && <p className="muted">Loading the election board…</p>}
       {data && OFFICES.map((office) => <OfficeCard key={office} office={office} />)}
       {data && <small className="ev-foot">Anyone can file. Voting is {POLLS_OPEN_AT} to {POLLS_CLOSE_AT}.</small>}
+      {data && (
+        <button type="button" className="ev-inec" onClick={() => { useElection.setState({ open: false }); useGame.setState({ panel: 'phone', openApp: 'inec' }); }}>
+          <Emoji char="🗳️" size={14} /> Seen fake votes? Report them to INEC
+        </button>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
 import { naira, nairaShort } from '../game/store';
-import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
+import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, lawText, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
 import { cityRunBy, isSuspended, useCivic, type CivicHolder, type StateInfo } from '../net/civic';
 import { useOfficeBudget } from '../net/office';
 import { useRoads } from '../net/roads';
@@ -317,15 +317,15 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
           const cap = caps[key];
           return canEdit ? (
             <div className="law-control" key={key}>
-              <span><b>{law.title}</b><small>{law.hint} The president’s maximum is {cap}{law.unit}.</small></span>
+              <span><b>{law.title}</b><small>{law.hint} The president’s maximum is {lawText(key, cap)}.</small></span>
               <div className="law-options" role="group" aria-label={law.title}>
                 {lawChoices(cap).map(({ step, value: option }) => (
-                  <button key={step} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onLaw(key, step)}>{option}{law.unit}</button>
+                  <button key={step} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onLaw(key, step)}>{lawText(key, option)}</button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="tr-law-line" key={key}><span>{law.title}</span><b>{value}{law.unit}<em> / max {cap}{law.unit}</em></b></div>
+            <div className="tr-law-line" key={key}><span>{law.title}</span><b>{lawText(key, value)}<em> / max {lawText(key, cap)}</em></b></div>
           );
         })}
       </div>

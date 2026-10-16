@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { banLeft, CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, VOTE_BUYING_BAN_MS, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type LootCase, type GazetteKind, type PoliticalOffice } from '../game/civic';
-import { setOkadaBan } from '../game/cityLaws';
-import type { StateAsset, StateCaps, StateLawKey, StateLaws } from '../game/treasury';
+import { CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type DisqualifyReason, type LootCase, type GazetteKind, type PoliticalOffice } from '../game/civic';
+import { setGovRents, setOkadaBan } from '../game/cityLaws';
+import { DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, type StateAsset, type StateCaps, type StateLawKey, type StateLaws } from '../game/treasury';
 import { refreshBalance, setServerBalance } from './wallet';
 import { api, useSession } from './session';
 import { naira, useGame } from '../game/store';
@@ -25,6 +25,8 @@ export interface CivicRace {
   /** Everyone in the race, and every vote cast, shown or not. */
   running: number;
   totalVotes: number;
+  /** Thrown out of the race: still shown, struck through, never counted (worker/civic.ts snapshot). */
+  disqualified?: { uid: string; username: string | null; name: string | null; reason: DisqualifyReason }[];
 }
 
 export interface CivicHolder {
@@ -56,6 +58,7 @@ export interface PolicyChange {
   capSalesTax?: number;
   capHospitalFee?: number;
   capExportLevy?: number;
+  capGovRent?: number;
   patrols?: number;
   jailMinutes?: number;
   finePct?: number;
@@ -119,9 +122,6 @@ export interface CivicSnapshot {
   cooldowns?: Partial<Record<CivicCooldown, number>>;
   /** The one post I'm running for right now. */
   runningFor: PoliticalOffice | null;
-  /** Barred from running after an EFCC vote-buying sting, and when the ban runs out. */
-  banned: boolean;
-  bannedUntil?: number | null;
   /** When my account is old enough to vote (VOTER_MIN_AGE_MS after it was made). */
   voteFrom?: number;
   /** What the government did lately, newest first (worker/gazette.ts). */
@@ -255,6 +255,9 @@ function apply(snapshot: CivicSnapshot) {
     useGame.setState({ taxRate: snapshot.policies.taxRate, roadBlockUntil: snapshot.roadBlockUntil });
   }
   setOkadaBan(CIVIC_CITIES.filter((city) => !!snapshot.policies[OKADA_BAN_LAW[city]]));
+  // Government house rent: each state's own rate, never above the president's maximum.
+  const cap = snapshot.policies.capGovRent ?? DEFAULT_STATE_CAPS.govRent;
+  setGovRents(Object.fromEntries(CIVIC_CITIES.map((city) => [city, Math.min(snapshot.states?.[city]?.laws?.govRent ?? DEFAULT_STATE_LAWS.govRent, cap)])));
   // My salary is paid on the server: when a new pay round has gone out, pick up what landed.
   const round = snapshot.salariesPaidAt ?? 0;
   if (round !== payRound) {
@@ -270,7 +273,7 @@ let payRound = 0;
 function report(body: Record<string, unknown>, r: CivicResult) {
   const g = useGame.getState();
   if (r.outcome === 'stung') {
-    g.toast(`🚨 EFCC STING! You were caught buying votes: disqualified, fined, arrested and barred from running for office for ${banLeft(VOTE_BUYING_BAN_MS)}.`);
+    g.toast(`🚨 EFCC STING! You were caught buying votes: disqualified from this race, fined and arrested. You can run again in the next election.`);
     void loadPolice();
   } else if (r.outcome === 'fled') g.toast('🏃🏾 Your hired crowd ran off when the money finished. Small boost only. 😂');
   else if (body.event === 'buyVotes') {

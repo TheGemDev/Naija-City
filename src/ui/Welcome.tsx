@@ -5,6 +5,7 @@ import { useGame } from '../game/store';
 import { defaultAppearance, encodeLook, fits, GARMENT_BY_ID, HAIR_COLORS, HAIRS, isFullOutfit, randomAppearance, SHAPE_LABELS, SKINS, SLOTS, starterGarments, type Appearance, type Body, type Garment, type Outfit, type Shape, type Slot } from '../game/wardrobe';
 import { claimUsername, useSession } from '../net/session';
 import { drawOriginOnServer, walletOrigin, walletState } from '../net/wallet';
+import { invitedState, spendInvitedState } from '../net/referral';
 import { REGION_IDS } from '../game/regions';
 import { PersonPreview, swatch } from './Closet';
 import { BirthCert } from './BirthCert';
@@ -70,8 +71,11 @@ export function Welcome() {
     try {
       const drawn = await drawOriginOnServer();
       setOrigin(drawn ?? NEW_LIFE_ORIGIN);
-      // The server draws the state too. A guest's is drawn here; a life from before there were states is Kaduna's.
-      setState(drawn ? walletState() ?? 'kaduna' : REGION_IDS[Math.floor(Math.random() * REGION_IDS.length)]);
+      // The server draws the state too. A guest's is drawn here (or comes from an invite link, net/referral.ts); a life
+      // from before there were states is Kaduna's.
+      const invited = invitedState();
+      if (!drawn) spendInvitedState();
+      setState(drawn ? walletState() ?? 'kaduna' : invited ?? REGION_IDS[Math.floor(Math.random() * REGION_IDS.length)]);
       setStep('cert');
     } catch {
       setError('Network wahala. Check your connection and try again.');

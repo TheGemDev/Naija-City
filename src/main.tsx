@@ -4,10 +4,11 @@ import './game/theme';
 import { CrashScreen } from './ui/CrashScreen';
 import { freshPage, isMissingFile } from './net/freshPage';
 import { startErrorReporting } from './net/sentry';
-import { takeReferral } from './net/referral';
+import { takeBirthState, takeReferral } from './net/referral';
 
 startErrorReporting();
 takeReferral();
+takeBirthState();
 
 // Browser translate, extensions and some keyboards rewrite text nodes behind React's back. When React then tries to
 // remove or insert next to a node that is no longer where it left it, it throws NotFoundError and the whole tree dies.

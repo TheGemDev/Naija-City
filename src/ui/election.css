@@ -16,6 +16,10 @@
 .ev-rank { width: 18px; text-align: center; font-size: 13px; font-weight: 800; color: var(--fg-64748b); }
 .ev-cinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ev-cinfo b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A disqualified candidate (worker/civic.ts civic_disqualified): kept on the board, name struck through in red. */
+.ev-cand.out .ev-avatar { opacity: .55; filter: grayscale(1); }
+.ev-cand.out .ev-cinfo b { color: var(--fg-dc2626); text-decoration: line-through; }
+.ev-cand.out .ev-cinfo small { color: var(--fg-dc2626); font-size: 10.5px; font-weight: 700; }
 .ev-votes { flex: none; min-width: 18px; text-align: right; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .ev-bar { display: block; height: 5px; border-radius: 99px; background: var(--bg-e2e8f0); overflow: hidden; }
 .ev-bar i { display: block; height: 100%; border-radius: 99px; background: #64748b; transition: width 0.5s ease; }
@@ -24,6 +28,7 @@
 .ev-vote:disabled { cursor: default; }
 .ev-more, .ev-note, .ev-foot, .ev-wait { color: var(--fg-64748b); font-size: 11.5px; }
 .ev-foot { text-align: center; }
+.ev-inec { justify-self: center; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 11.5px; font-weight: 700; }
 .ev-cta { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-radius: 12px; background: #334155; color: #fff; font-size: 13px; font-weight: 800; }
 .ev-cta b { padding: 2px 9px; border-radius: 99px; background: rgba(255, 255, 255, 0.2); font-size: 12px; }
 .ev-cta:disabled { opacity: 0.4; }
