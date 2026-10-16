@@ -720,7 +720,7 @@ function Bubble({
             <ReactionOr text={m.text}>{m.text}</ReactionOr>
             <small>
               {timeAgo(m.at)}
-              {mine && <span className={`bub-ticks ${m.read ? 'seen' : ''}`} title={m.read ? 'Seen' : 'Sent'}> {m.read ? '✓✓ Seen' : '✓ Sent'}</span>}
+              {mine && <Ticks seen={!!m.read} />}
             </small>
           </div>
         </div>
@@ -951,5 +951,16 @@ function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () 
         <button type="button" className="btn pay-submit request" disabled={busy || n < 1} onClick={() => void go('request')}>↙ Request</button>
       </div>
     </form>
+  );
+}
+
+/** Delivery marks on your own messages: one tick when sent, two blue ones once they have seen it. */
+function Ticks({ seen }: { seen: boolean }) {
+  return (
+    <svg className={`bub-ticks ${seen ? 'seen' : ''}`} viewBox="0 0 18 11" width="16" height="10" role="img" aria-label={seen ? 'Seen' : 'Sent'}>
+      <title>{seen ? 'Seen' : 'Sent'}</title>
+      <path d="M1 5.8 4.6 9.4 11.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      {seen && <path d="M7.2 8.2 7.8 9 16.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />}
+    </svg>
   );
 }

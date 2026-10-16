@@ -1,9 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { birthCertSvg, CERT_H, CERT_W, destinyLine, randomBirthdate } from '../game/birthCert';
 import { ORIGINS, type OriginId } from '../game/origins';
+import { PHONE_BY_ID } from '../game/phones';
+import { naira } from '../game/store';
 import { regionOf } from '../game/regions';
 import { inviteLink, shareLink, userLink } from '../net/deeplink';
 import { useSession } from '../net/session';
+import { Emoji } from './Icons';
 import { saveImage } from './saveImage';
 import './birthcert.css';
 
@@ -28,8 +31,8 @@ async function certPng(svg: string): Promise<File | null> {
   }
 }
 
-/** Last step of a new life: what you drew (`summary`), and your birth certificate to keep or show off, before you step into the city. */
-export function BirthCert({ name, look, origin, state, summary, onBack, onStart }: { name: string; look: string; origin: OriginId; state: string; summary?: ReactNode; onBack?: () => void; onStart: () => void }) {
+/** Last step of a new life: your birth certificate, which holds what you drew, to keep or show off, before you step into the city. */
+export function BirthCert({ name, look, origin, state, onBack, onStart }: { name: string; look: string; origin: OriginId; state: string; onBack?: () => void; onStart: () => void }) {
   const user = useSession((s) => s.user);
   const [at] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -41,9 +44,13 @@ export function BirthCert({ name, look, origin, state, summary, onBack, onStart 
   const dob = user?.birthdate ?? randomBirthdate(user?.uid ?? username ?? name, at);
   const destiny = destinyLine(origin, user?.uid ?? username ?? name);
   const status = ORIGINS[origin].label;
+  const start = useMemo(() => {
+    const o = ORIGINS[origin];
+    return { money: naira(o.money), home: o.home, phone: PHONE_BY_ID[o.phone]?.name ?? 'None', catches: o.catches };
+  }, [origin]);
   const svg = useMemo(
-    () => birthCertSvg({ name, username, look, city: region.name, state: stateName, status, destiny, dob, at, uid: user?.uid }),
-    [name, username, look, region.name, stateName, status, destiny, dob, at, user?.uid],
+    () => birthCertSvg({ name, username, look, city: region.name, state: stateName, status, destiny, dob, at, uid: user?.uid, start }),
+    [name, username, look, region.name, stateName, status, destiny, dob, at, user?.uid, start],
   );
   const src = useMemo(() => `data:image/svg+xml,${encodeURIComponent(svg)}`, [svg]);
 
@@ -55,33 +62,29 @@ export function BirthCert({ name, look, origin, state, summary, onBack, onStart 
       setBusy(false);
     }
   };
-  const save = () => run(async () => {
-    const file = await certPng(svg);
-    if (file) await saveImage(file);
-  });
   const share = () => run(async () => {
     const line = `I was just born in ${stateName}, status: ${status}. My destiny: “${destiny}”. Come and find me in Naija City.`;
-    const file = CAN_SHARE_FILES ? await certPng(svg) : null;
+    const file = await certPng(svg);
+    // No file sharing here (most desktops): keep the picture instead, so the one button never does nothing.
+    if (file && !CAN_SHARE_FILES) return void (await saveImage(file));
     if (!file) return void shareLink(username ? userLink(username) : 'https://naija.city', line);
     await navigator.share({ files: [file], title: 'My Naija City birth certificate', text: `${line}\nPlay here 👉 ${username ? inviteLink(username) : 'https://naija.city'}` }).catch(() => { /* closed the share sheet */ });
   });
 
   return (
     <>
-      <div className="fate-intro">
-        <h3 className="fate-title">You were born…</h3>
-        <p className="muted small">It’s official. Save your certificate or show your people before you enter the city.</p>
+      <div className="cert-head">
+        <div className="fate-intro">
+          <h3 className="fate-title">You were born…</h3>
+          <p className="muted small">It’s official. Keep your certificate or show your people.</p>
+        </div>
+        <div className="cert-tools">
+          <button type="button" className="cert-tool" aria-label="Share certificate" title="Share or save" disabled={busy} onClick={() => void share()}>
+            <Emoji char="📤" size={18} />
+          </button>
+        </div>
       </div>
-      {summary}
       <img className="cert-paper" src={src} width={CERT_W} height={CERT_H} alt={`Naija City birth certificate of ${name}${username ? ` (@${username})` : ''}, born in ${stateName}. Status: ${status}. Destiny: ${destiny}`} draggable={false} />
-      <div className="cert-actions">
-        <button className="btn" disabled={busy} onClick={() => void save()}>
-          ⬇️ Download
-        </button>
-        <button className="btn go" disabled={busy} onClick={() => void share()}>
-          📤 Share
-        </button>
-      </div>
       <div className="row-btns wiz-foot">
         {onBack && (
           <button className="btn" onClick={onBack}>

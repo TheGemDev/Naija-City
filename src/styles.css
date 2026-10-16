@@ -986,6 +986,10 @@ body.map-far .river-name { opacity: 0.9; }
 @media (max-width: 560px) {
   .maker, .closet-body { grid-template-columns: 1fr; }
   .closet-left .person-preview { height: 170px !important; }
+}
+
+/* The sign-up wizard stacks (model behind, steps in a bottom sheet) on anything narrower than its two columns: they need ~940px side by side. */
+@media (max-width: 760px) {
   .welcome.wiz { display: block; }
   .wiz-stage { position: absolute; inset: 0; }
   .wiz-stage .wiz-head { padding: 14px 16px 0; position: relative; z-index: 1; }
@@ -2181,7 +2185,7 @@ body.high .scene-wrap { animation: high-sway 6s ease-in-out infinite; }
 
 
 /* Messages: read ticks and an always-visible reply button */
-.bub-ticks { margin-left: 4px; color: #94a3b8; font-weight: 700; }
+.bub-ticks { margin-left: 5px; color: #94a3b8; vertical-align: -1px; flex: none; }
 .bub-ticks.seen { color: #0ea5e9; }
 .bub-line { display: flex; align-items: center; gap: 6px; max-width: 100%; }
 .bub-line.mine { flex-direction: row-reverse; }
@@ -3159,21 +3163,27 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 /* Keep the house in view above the Finishes tab, so a finish can be tried on live. */
 .sheet.catalogue.on-finishes { max-height: 42vh; }
 
-/* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task beside and above, Phone alone bottom right, Map above it. */
-.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 170px); pointer-events: none; }
+/* Corner HUD (ui/Hud.tsx CORNER_HUD): you bottom left with the task above, Phone alone in the bottom right corner, Map on its left, chat above it. */
+.corner-left { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: calc(100% - 180px); pointer-events: none; }
 .corner-left > * { pointer-events: auto; }
-.corner-ctx { display: flex; flex-wrap: wrap; gap: 6px; }
-.corner-ctx button { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); font-size: 12px; font-weight: 600; color: var(--fg-0f172a); }
-.corner-ctx button span { font-size: 16px; display: grid; }
+.corner-ctx { display: flex; flex-wrap: wrap; gap: 8px; }
+.corner-ctx button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 52px; height: 52px; padding: 0 6px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
+.corner-ctx button span { font-size: 22px; line-height: 1; display: grid; }
 .corner-ctx button.on { background: var(--inverse); color: #fff; }
 .corner-ctx button.leave { background: #dc2626; color: #fff; }
 .corner-ctx button:disabled { opacity: 0.35; }
-.corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: column-reverse; align-items: center; gap: 14px; }
+.corner-right { position: absolute; right: 12px; bottom: calc(20px + var(--safe-b)); z-index: 20; display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 12px; }
 .corner-right button { display: grid; place-items: center; gap: 0; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); font-size: 10px; font-weight: 700; color: var(--muted); }
 .corner-right button span { font-size: 22px; display: grid; }
 .corner-right button[data-k="phone"] { width: 64px; height: 64px; }
-.corner-right button[data-k="map"] { width: 46px; height: 46px; }
+.corner-right button[data-k="map"] { width: 52px; height: 52px; }
 .corner-right button.on { background: var(--inverse); color: #fff; }
 .corner-right button:disabled { opacity: 0.35; }
 body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
-body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 64px + 14px + 46px + 14px); }
+body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 64px + 12px); }
+.wiz-handle { border-width: 2px; border-radius: 14px; background: var(--bg-f8fafc); }
+.wiz-handle input { padding: 13px 8px 13px 4px; font-size: 16px; font-weight: 600; outline: none; background: transparent; }
+.wiz-handle b { padding-right: 14px; font-size: 14px; }
+.wiz-handle.ok b { color: #16a34a; }
+.wiz-handle.bad { border-color: #dc2626; }
+.wiz-handle.bad b { color: #dc2626; }

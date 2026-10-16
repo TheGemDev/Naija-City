@@ -1,17 +1,16 @@
 import { useState } from 'react';
-import { NEW_LIFE_ORIGIN, ORIGINS, type OriginId } from '../game/origins';
+import { NEW_LIFE_ORIGIN, type OriginId } from '../game/origins';
 import { startGuide } from '../game/guide';
-import { naira, useGame } from '../game/store';
+import { useGame } from '../game/store';
 import { defaultAppearance, encodeLook, fits, GARMENT_BY_ID, HAIR_COLORS, HAIRS, isFullOutfit, randomAppearance, SHAPE_LABELS, SKINS, SLOTS, starterGarments, type Appearance, type Body, type Garment, type Outfit, type Shape, type Slot } from '../game/wardrobe';
-import { useSession } from '../net/session';
+import { claimUsername, useSession } from '../net/session';
 import { drawOriginOnServer, walletOrigin, walletState } from '../net/wallet';
-import { REGION_IDS, regionOf } from '../game/regions';
+import { REGION_IDS } from '../game/regions';
 import { PersonPreview, swatch } from './Closet';
-import { PHONE_BY_ID } from '../game/phones';
-import { MiniPhone } from './PhoneShop';
 import { BirthCert } from './BirthCert';
 import { Emoji } from './Icons';
 
+const HANDLE_RE = /^[a-z0-9_]{3,15}$/;
 type Step = 'you' | 'cert';
 type Tab = 'body' | 'hair' | 'outfit' | 'extras';
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -30,6 +29,11 @@ export function Welcome() {
   const begin = useGame((s) => s.begin);
   const status = useSession((s) => s.status);
   const userName = useSession((s) => s.user?.name);
+  // Guests are given a username when they sign in; this is where they can pick their own.
+  const given = useSession((s) => s.user?.username ?? '');
+  const [typedHandle, setHandle] = useState<string | null>(null);
+  const handle = (typedHandle ?? given).replace(/^@/, '');
+  const handleOk = HANDLE_RE.test(handle);
   const [step, setStep] = useState<Step>('you');
   const [tab, setTab] = useState<Tab>('body');
   const [typed, setName] = useState<string | null>(null);
@@ -47,10 +51,22 @@ export function Welcome() {
   const locked = walletOrigin();
 
   const draw = async () => {
-    // Once drawn it stays drawn: coming back to change your look is not another roll.
-    if (origin) return setStep('cert');
     setBusy(true);
     setError(null);
+    // Taking a different username comes first: someone may already have it, and then nothing else has happened yet.
+    if (handle !== given) {
+      const taken = await claimUsername(handle);
+      if (taken) {
+        setError(taken);
+        setBusy(false);
+        return;
+      }
+    }
+    // Once drawn it stays drawn: coming back to change your look is not another roll.
+    if (origin) {
+      setBusy(false);
+      return setStep('cert');
+    }
     try {
       const drawn = await drawOriginOnServer();
       setOrigin(drawn ?? NEW_LIFE_ORIGIN);
@@ -128,6 +144,24 @@ export function Welcome() {
               <span className="opt-label">Your name</span>
               <input className="wiz-input" value={name} maxLength={18} placeholder="e.g. Musa" onChange={(e) => setName(e.target.value)} />
             </section>
+            <section className="wiz-section">
+              <span className="opt-label">Username</span>
+              <div className={`at-input wiz-handle ${handle ? (handleOk ? 'ok' : 'bad') : ''}`}>
+                <span>@</span>
+                <input
+                  value={handle}
+                  maxLength={15}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="musa_kd"
+                  aria-label="Username"
+                  onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                />
+                {handle && <b>{handleOk ? '✓' : '✕'}</b>}
+              </div>
+              <small className="muted">How players find you, message you and send you money.</small>
+            </section>
             <div className="wiz-tabs" role="tablist">
               {TABS.map((t) => (
                 <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
@@ -195,7 +229,7 @@ export function Welcome() {
             <p className="muted small">Buy more clothes later at the market, the mall or the boutique.</p>
             {error && <p className="auth-msg">{error}</p>}
             <div className="row-btns wiz-foot">
-              <button className="btn big go" disabled={busy || !name.trim()} onClick={() => void draw()}>
+              <button className="btn big go" disabled={busy || !name.trim() || !handleOk} onClick={() => void draw()}>
                 {busy ? (
                   'Being born…'
                 ) : origin || locked ? (
@@ -211,7 +245,7 @@ export function Welcome() {
         )}
 
         {step === 'cert' && origin && (
-          <BirthCert name={name.trim()} look={look} origin={origin} state={state} summary={<Drawn origin={origin} state={state} />} onBack={() => setStep('you')} onStart={() => (begin(name, look, origin, state), startGuide(true))} />
+          <BirthCert name={name.trim()} look={look} origin={origin} state={state} onBack={() => setStep('you')} onStart={() => (begin(name, look, origin, state), startGuide(true))} />
         )}
       </main>
     </div>
@@ -255,52 +289,3 @@ function Pieces({ label, items, worn, onPick, onNone }: { label: string; items: 
 }
 
 const STEP_LABELS: Record<Step, string> = { you: 'You', cert: 'Certificate' };
-
-/** Your start in life, and the money, home and phone that come with it. */
-function Drawn({ origin, state }: { origin: OriginId; state: string }) {
-  const o = ORIGINS[origin];
-  const phone = PHONE_BY_ID[o.phone];
-  return (
-    <>
-      <div className="origin-card landed" style={{ ['--oc' as string]: o.color }}>
-        <span className="origin-emoji">
-          <Emoji char={o.emoji} size={56} />
-        </span>
-        <b>{o.label}</b>
-        <small>Born in {regionOf(state).name}</small>
-        <i>{o.tagline}</i>
-      </div>
-      <div className="origin-facts">
-        <div>
-          <small>Starting money</small>
-          <b>{naira(o.money)}</b>
-        </div>
-        <div>
-          <small>Home</small>
-          <b>{o.home}</b>
-        </div>
-        {phone && (
-          <div className="origin-phone">
-            <MiniPhone phone={phone} size={40} />
-            <span>
-              <small>Your phone</small>
-              <b>{phone.name}</b>
-            </span>
-          </div>
-        )}
-      </div>
-      <ul className="perks">
-        {o.perks.map((p) => (
-          <li key={p}>
-            <Emoji char="✅" size={16} /> {p}
-          </li>
-        ))}
-        {o.catches.map((c) => (
-          <li key={c} className="catch">
-            <Emoji char="⚠️" size={16} /> {c}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}

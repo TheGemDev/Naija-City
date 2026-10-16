@@ -22,10 +22,14 @@ export interface BirthCertOf {
   at: number;
   /** Who it is: gives the same certificate number every time. */
   uid?: string | null;
+  /** What came with the start in life, already worded: the register has a line for it. */
+  start?: { money: string; home: string; phone: string; catches: string[] };
 }
 
 export const CERT_W = 800;
-export const CERT_H = 1000;
+export const CERT_H = 1120;
+/** The signature, seal and footer sit this much lower than they would on a plain certificate: the register's "at birth" entries go above them. */
+const LOWER = 120;
 
 const GREEN = '#0f6b3a';
 const INK = '#1b2a20';
@@ -83,7 +87,7 @@ function longDate(ymd: string): string {
 /** The largest size that keeps a line of serif text inside `width`. */
 const fit = (text: string, width: number, max: number, perChar = 0.56) => Math.min(max, width / (Math.max(text.length, 1) * perChar));
 
-export function birthCertSvg({ name, username, look, city, state, status, destiny, dob, at, uid }: BirthCertOf): string {
+export function birthCertSvg({ name, username, look, city, state, status, destiny, dob, at, uid, start }: BirthCertOf): string {
   const d = new Date(at);
   const date = longDate(dob);
   const who = name.trim() || 'New Citizen';
@@ -145,7 +149,23 @@ export function birthCertSvg({ name, username, look, city, state, status, destin
     out += `<line x1="306" y1="${y + size + 13}" x2="728" y2="${y + size + 13}" stroke="${INK}" stroke-width="1" stroke-dasharray="1 4" stroke-linecap="round" opacity="0.7"/>`;
   });
 
+  // What came with the start: money, home and phone, and the catch if there is one.
+  if (start) {
+    out += `<line x1="72" y1="790" x2="728" y2="790" stroke="${GOLD}" stroke-width="1.2"/>`;
+    out += `<text x="72" y="814" font-family="${SERIF}" font-size="11.5" letter-spacing="2.6" fill="${SOFT}">AT BIRTH, YOU RECEIVED</text>`;
+    ([['MONEY', start.money, 72, 176], ['HOME', start.home, 268, 236], ['PHONE', start.phone, 524, 204]] as [string, string, number, number][]).forEach(([label, value, x, w]) => {
+      out += `<text x="${x}" y="842" font-family="${SERIF}" font-size="10.5" letter-spacing="2.2" fill="${SOFT}">${label}</text>`;
+      out += `<text x="${x}" y="870" font-family="${SERIF}" font-weight="700" font-size="${fit(value, w, 24, 0.6).toFixed(1)}" fill="${INK}">${esc(value)}</text>`;
+      out += `<line x1="${x}" y1="880" x2="${x + w}" y2="880" stroke="${INK}" stroke-width="1" stroke-dasharray="1 4" stroke-linecap="round" opacity="0.7"/>`;
+    });
+    if (start.catches.length) {
+      const line = `The catch: ${start.catches.join(' · ')}`;
+      out += `<text x="72" y="910" font-family="${SERIF}" font-style="italic" font-size="${fit(line, 656, 17, 0.5).toFixed(1)}" fill="#9a3412">${esc(line)}</text>`;
+    }
+  }
+
   // Signed and sealed.
+  out += `<g transform="translate(0,${LOWER})">`;
   out += `<path d="M84,850 c14,-30 24,-34 26,-14 c2,22 -12,34 -4,8 c8,-24 22,-30 26,-10 c2,12 6,12 14,-2 c6,-10 12,-8 14,2 c2,8 8,6 16,-6 c10,-14 20,-10 22,4 c8,-6 22,-10 44,-12" fill="none" stroke="#1e3a5f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
   out += `<line x1="72" y1="866" x2="300" y2="866" stroke="${INK}" stroke-width="1.2"/>`;
   out += `<text x="72" y="886" font-family="${SERIF}" font-size="13" letter-spacing="1.6" fill="${SOFT}">REGISTRAR OF BIRTHS</text>`;
@@ -163,6 +183,8 @@ export function birthCertSvg({ name, username, look, city, state, status, destin
   // Where to play, big enough to read when the picture is shared small.
   out += `<rect x="${mid - 118}" y="897" width="236" height="34" rx="17" fill="${GREEN}"/><text x="${mid}" y="920" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="19" fill="#fff">https://naija.city</text>`;
   out += `<text x="${mid}" y="945" text-anchor="middle" font-family="${SERIF}" font-size="10.5" fill="${SOFT}" opacity="0.9">Issued inside the game Naija City. For fun only: not a legal document.</text>`;
+
+  out += '</g>';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CERT_W}" height="${CERT_H}" viewBox="0 0 ${CERT_W} ${CERT_H}">${out}</svg>`;
 }
