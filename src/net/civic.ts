@@ -60,6 +60,8 @@ export interface PolicyChange {
   jailMinutes?: number;
   finePct?: number;
   reportHours?: number;
+  /** EFCC chair: minutes before someone can be investigated again (10 to 720). */
+  caseCooldownMin?: number;
   loanRate?: number;
   transferFee?: number;
   /** The President's fare subsidy, percent off airline seats and train tickets (game/transport.ts). */

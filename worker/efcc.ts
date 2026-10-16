@@ -444,11 +444,13 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
       if (!evidence.length) return err(409, `Nobody has voted for @${username} yet. There is nothing to investigate`);
     } else {
       // One case at a time per person, and then a rest: the same player can't be reported over and over.
+      // How long that rest is, the EFCC chair sets (10 minutes to 12 hours: civic_policies.case_cooldown_min).
       const since = target.efcc_case_at ?? 0;
-      const rest = since + EFCC.caseCooldownMs - Date.now();
+      const rest = since + (await loadLaws(env.DB)).caseCooldownMin * 60_000 - Date.now();
       if (rest > 0) {
-        const hours = Math.ceil(rest / 3_600_000);
-        return err(429, `@${username} was investigated recently. A new case can be filed in ${hours} hour${hours === 1 ? '' : 's'}`);
+        const mins = Math.ceil(rest / 60_000);
+        const when = mins < 60 ? `${mins} minute${mins === 1 ? '' : 's'}` : `${Math.ceil(mins / 60)} hour${Math.ceil(mins / 60) === 1 ? '' : 's'}`;
+        return err(429, `@${username} was investigated recently. A new case can be filed in ${when}`);
       }
       evidence = await audit(env.DB, target.uid, since);
       // Everything older was already judged in their last case.

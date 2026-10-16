@@ -65,15 +65,18 @@ export interface CrimeLaws {
   finePct: number;
   /** EFCC chair: how many real hours a victim has to report a theft. */
   reportHours: number;
+  /** EFCC chair: real minutes after a case on someone before another can be filed on them (10 min to 12 h). */
+  caseCooldownMin: number;
 }
 
-export const DEFAULT_LAWS: CrimeLaws = { policeFunding: 50, patrols: 50, jailMinutes: 20, finePct: 25, reportHours: 48 };
+export const DEFAULT_LAWS: CrimeLaws = { policeFunding: 50, patrols: 50, jailMinutes: 20, finePct: 25, reportHours: 48, caseCooldownMin: 720 };
 
 export const LAW_LIMITS = {
   patrols: [0, 100],
   jailMinutes: [5, 30],
   finePct: [0, 200],
   reportHours: [6, 72],
+  caseCooldownMin: [10, 720],
 } as const;
 
 export const CRIME = {

@@ -10,8 +10,9 @@ export const EFCC = {
   revealFee: 150_000,
   investigationMs: 90_000,
   /**
-   * Once a case is filed on someone, nobody can file another on them for this long. And a new case only audits income
-   * that landed after the last one: nobody is judged twice for the same money.
+   * Once a case is filed on someone, nobody can file another on them for this long: the default, and the most the EFCC
+   * chair can set it to (the law is civic_policies.case_cooldown_min, 10 minutes to 12 hours). A new case only audits
+   * income that landed after the last one: nobody is judged twice for the same money.
    */
   caseCooldownMs: 12 * 60 * 60_000,
   /** What the EFCC takes on a conviction. It goes to the federal treasury, as does a seized house bought back. */

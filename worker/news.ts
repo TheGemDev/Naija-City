@@ -154,6 +154,7 @@ const LAW_ASIDES: Record<string, [up: string, down: string]> = {
   jailMinutes: ['Longer nights in the cell for anybody caught. ⛓️', 'Shorter stays in the cell from today. 🔓'],
   finePct: ['Thieves will pay more when they are caught. ⚖️', 'Getting caught just got cheaper. 🤨'],
   reportHours: ['Victims now have longer to report a theft. 🕵🏾', 'Victims now have less time to report a theft. ⏳'],
+  caseCooldownMin: ['Anybody investigated now gets a longer break before the EFCC can come again. 😮‍💨', 'The EFCC can now come back for the same person sooner. 👀'],
 };
 const ROADS_ASIDE: [string, string] = ['Contractors are smiling. 🛣️', 'The potholes are smiling. 🕳️'];
 

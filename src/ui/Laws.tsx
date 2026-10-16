@@ -69,6 +69,11 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
   efcc: [
     { key: 'finePct', title: 'Theft fine', unit: '%', options: [0, 25, 50, 100, 200], hint: 'Fine on arrest, on top of paying back what was stolen.', treasury: true },
     { key: 'reportHours', title: 'Reporting deadline', unit: 'h', options: [6, 12, 24, 48, 72], hint: 'How long victims have to report a theft.' },
+    {
+      key: 'caseCooldownMin', title: 'Case cooldown', unit: ' min', options: [10, 30, 60, 180, 360, 720],
+      labels: { 10: '10 min', 30: '30 min', 60: '1 hour', 180: '3 hours', 360: '6 hours', 720: '12 hours' },
+      hint: 'After a case on someone, how long before anybody can file another on them. 12 hours at most, 10 minutes at least.',
+    },
   ],
 };
 

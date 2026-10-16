@@ -184,7 +184,7 @@ function notify(env: Env, ctx: ExecutionContext, uid: string, event: object) {
 export async function loadLaws(db: D1Database): Promise<CrimeLaws> {
   const p = await loadPolicy(db);
   if (!p) return DEFAULT_LAWS;
-  return { policeFunding: p.policeFunding, patrols: p.patrols, jailMinutes: p.jailMinutes, finePct: p.finePct, reportHours: p.reportHours };
+  return { policeFunding: p.policeFunding, patrols: p.patrols, jailMinutes: p.jailMinutes, finePct: p.finePct, reportHours: p.reportHours, caseCooldownMin: p.caseCooldownMin ?? DEFAULT_LAWS.caseCooldownMin };
 }
 
 export const rand = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;

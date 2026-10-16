@@ -139,6 +139,7 @@ const GAZETTE_LAWS = {
   jailMinutes: { column: 'jail_minutes', office: 'igp', icon: '⛓️', label: 'jail terms', unit: ' min' },
   finePct: { column: 'fine_pct', office: 'efcc', icon: '⚖️', label: 'fines on thieves', unit: '%' },
   reportHours: { column: 'report_hours', office: 'efcc', icon: '🕵🏾', label: 'the deadline to report a theft', unit: ' hours' },
+  caseCooldownMin: { column: 'case_cooldown_min', office: 'efcc', icon: '📁', label: 'the wait before someone can be investigated again', unit: ' minutes' },
 } as const satisfies Record<string, { column: string; office: PoliticalOffice; icon: string; label: string; unit: string }>;
 
 /** Each city's okada ban: the law's name, its column, and the office that signs it. */
@@ -381,6 +382,7 @@ async function snapshot(db: D1Database, uid: string) {
       jailMinutes: (policies?.jail_minutes as number) ?? 20,
       finePct: (policies?.fine_pct as number) ?? 25,
       reportHours: (policies?.report_hours as number) ?? 48,
+      caseCooldownMin: (policies?.case_cooldown_min as number | undefined) ?? 720,
       loanRate: (policies?.loan_rate as number) ?? LOAN.defaultRate,
       transferFee: (policies?.transfer_fee as number) ?? 0,
       federalCut: (policies?.federal_cut as number | undefined) ?? FEDERAL_CUT.default,
@@ -453,6 +455,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     jailMinutes?: number;
     finePct?: number;
     reportHours?: number;
+    caseCooldownMin?: number;
     loanRate?: number;
     transferFee?: number;
     airSubsidy?: number;
@@ -1195,6 +1198,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       ['jailMinutes', 'jail_minutes', 'igp'],
       ['finePct', 'fine_pct', 'efcc'],
       ['reportHours', 'report_hours', 'efcc'],
+      ['caseCooldownMin', 'case_cooldown_min', 'efcc'],
     ];
     for (const [key, column, office] of laws) {
       const value = body[key];

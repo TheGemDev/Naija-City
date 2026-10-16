@@ -103,6 +103,8 @@ function Seized() {
 /** The commission's rules printed like the Civic gazette: what it costs, what gets you convicted, what you lose. */
 function RulesReceipt() {
   const chair = useCivic((s) => s.data?.policies.efcc);
+  // The chair's law: how long before the same person can be investigated again (10 minutes to 12 hours).
+  const cooldown = useCivic((s) => s.data?.policies.caseCooldownMin) ?? EFCC.caseCooldownMs / 60_000;
   const line = (title: string, value: string) => (
     <div className="law-line" key={title}><span>{title}</span><i /><b>{value}</b></div>
   );
@@ -116,7 +118,7 @@ function RulesReceipt() {
         <div className="law-signer"><span>Chairman</span><span>{chair?.username ? `@${chair.username}` : chair?.name ?? 'Vacant'}</span></div>
         {line('Filing a case', naira(EFCC.filingFee))}
         {line('Incomes audited', `last ${EFCC.auditSize}, new since their last case`)}
-        {line('Next case on the same person', `after ${EFCC.caseCooldownMs / 3_600_000}h`)}
+        {line('Next case on the same person', `after ${cooldown < 60 ? `${cooldown} min` : `${+(cooldown / 60).toFixed(1)}h`}`)}
         {line('Time to respond', `${EFCC.investigationMs / 1000}s`)}
         {line('Unmask your accuser', naira(EFCC.revealFee))}
         {line('Bribe', `${naira(EFCC.bribeAmount)} · ${Math.round(EFCC.bribeChance * 100)}% works`)}

@@ -16,6 +16,8 @@ export interface Policy {
   jailMinutes: number;
   finePct: number;
   reportHours: number;
+  /** EFCC chair: minutes before someone can be investigated again. Missing on a copy cached before the law existed. */
+  caseCooldownMin?: number;
   /** Percent of every player-to-player transfer the treasury takes. */
   transferFee: number;
   /** The cities whose government has banned okada. Missing on a copy cached before the ban existed. */
@@ -40,6 +42,7 @@ async function fromD1(db: D1Database): Promise<Policy | null> {
     okadaBan: CIVIC_CITIES.filter((city) => !!p[`okada_ban_${city}`]),
     airSubsidy: Number(p.air_subsidy ?? 0),
     railSubsidy: Number(p.rail_subsidy ?? 0),
+    caseCooldownMin: Number(p.case_cooldown_min ?? 720),
   };
 }
 
