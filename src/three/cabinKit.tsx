@@ -147,12 +147,12 @@ function compose(at: V3, rot: V3, scale: V3) {
 }
 
 /** Draws a built kit: one mesh per finish. Lamps and windows cast no shadow. */
-export function KitMeshes({ kit, shadows = true }: { kit: Built; shadows?: boolean }) {
+export function KitMeshes({ kit, shadows = true, materials }: { kit: Built; shadows?: boolean; materials?: Partial<Record<Finish, Material>> }) {
   useEffect(() => () => Object.values(kit).forEach((g) => g?.dispose()), [kit]);
   return (
     <>
       {FINISHES.map((f) => kit[f] && (
-        <mesh key={f} geometry={kit[f]} material={FINISH_MATERIAL[f]} castShadow={shadows && f !== 'glow'} receiveShadow={f !== 'glow'} />
+        <mesh key={f} geometry={kit[f]} material={materials?.[f] ?? FINISH_MATERIAL[f]} castShadow={shadows && f !== 'glow'} receiveShadow={f !== 'glow'} />
       ))}
     </>
   );

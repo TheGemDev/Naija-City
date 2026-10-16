@@ -1,6 +1,7 @@
 // Town buildings for the map, built from primitives with trim, framed windows and smooth curves. Each model is centred on its footprint (w along x,
 // d along z, in tiles), sits on y=0 and has its entrance on the +z side.
 
+import { TrainStation } from './StationModel';
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, type Group, type Mesh } from 'three';
@@ -917,41 +918,6 @@ function TechHub({ w, d }: { w: number; d: number }) {
         ))}
         {/* entrance canopy */}
         <B p={[0, 0.9, bd / 2 + 0.35]} s={[1.2, 0.05, 0.6]} c="#22c55e" />
-      </group>
-    </group>
-  );
-}
-
-function Station({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#9ca3af" />
-      {/* Rails */}
-      {[-1.9, -1.4].map((z) => (
-        <B key={z} p={[0, 0.06, z]} s={[w, 0.05, 0.06]} c="#57534e" />
-      ))}
-      {/* Train: green & white */}
-      <group position={[-0.6, 0, -1.65]}>
-        {[-2.2, 0, 2.2].map((x) => (
-          <group key={x} position={[x, 0, 0]}>
-            <B p={[0, 0.6, 0]} s={[2.1, 0.9, 0.8]} c="#f8fafc" />
-            <B p={[0, 0.35, 0.41]} s={[2.1, 0.12, 0.02]} c="#15803d" />
-            <Win p={[0, 0.75, 0.41]} s={[1.7, 0.25, 0.02]} />
-          </group>
-        ))}
-        <B p={[3.45, 0.55, 0]} s={[0.3, 0.8, 0.78]} c="#15803d" />
-      </group>
-      {/* Platform & canopy */}
-      <B p={[0, 0.2, -0.5]} s={[w - 0.5, 0.4, 1]} c="#d6d3d1" />
-      <B p={[0, 1.6, -0.6]} s={[w - 1, 0.08, 1.4]} c="#15803d" />
-      {[-3, -1, 1, 3].map((x) => (
-        <B key={x} p={[x, 0.95, -0.5]} s={[0.08, 1.3, 0.08]} c="#94a3b8" />
-      ))}
-      {/* Terminal */}
-      <group position={[0, 0, 1.2]}>
-        <B p={[0, 0.8, 0]} s={[4, 1.6, 1.6]} c="#f5f5f4" />
-        <B p={[0, 1.7, 0]} s={[4.3, 0.18, 1.9]} c="#15803d" />
-        <WindowRow w={4} d={1.6} y={0.95} n={5} />
       </group>
     </group>
   );
@@ -2139,7 +2105,7 @@ export function PlaceModel({ model, w, d }: { model: string; w: number; d: numbe
     case 'museum': return <Museum {...props} />;
     case 'park': return <Park {...props} />;
     case 'techhub': return <TechHub {...props} />;
-    case 'station': return <Station {...props} />;
+    case 'station': return <TrainStation {...props} />;
     case 'poly': return <Poly {...props} />;
     case 'motorpark': return <MotorPark {...props} />;
     case 'stadium': return <Stadium {...props} />;

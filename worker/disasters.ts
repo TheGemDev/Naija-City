@@ -352,7 +352,7 @@ async function relief(env: Env, ctx: ExecutionContext, d: Disaster, now: number)
       `${CITY_NAME[city]} don suffer ${named(d)}. ${victims.length} families dey count loss, ${naira(total)} for repairs. ${who}, where SEMA dey? Not one mattress, not one bag of rice. Una dey wait make water dry before una come snap picture? 🤬`,
       (state?.balance ?? 0) > 0
         ? `After ${named(d)}, people dey sleep for church. ${who} never show face. Treasury dey there but relief no dey. Na only campaign season una dey find road to ${d.area}? 😤`
-        : `${named(d)} and the ${CITY_NAME[city]} treasury is empty. Empty! ${who}, who chop the money wey for be emergency fund? Victims dey on their own again. 🤬`,
+        : `After ${named(d)}, the ${CITY_NAME[city]} treasury is empty. Empty! ${who}, who chop the money wey for be emergency fund? Victims dey on their own again. 🤬`,
     ];
     await db.prepare(
       `INSERT INTO feed (uid, kind, icon, text, created_at, city) VALUES (?, 'vdm', ?, ?, ?, ?)`,

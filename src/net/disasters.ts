@@ -156,6 +156,7 @@ if (import.meta.env.DEV) {
   Object.assign(window, {
     __disaster: add,
     __clearDisasters: () => useDisasters.setState({ fake: [] }),
+    __disasterStore: useDisasters,
   });
   const q = new URLSearchParams(location.search);
   const kinds = (q.get('disaster') ?? '').split(',').filter((k): k is DisasterKind => DISASTER_KINDS.includes(k as DisasterKind));
