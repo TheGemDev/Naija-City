@@ -1090,10 +1090,13 @@ function MapEffects() {
     // When NEPA takes the light, only the houses with a generator stay lit.
     windowsLit.value = litShare(h) * (gridOn() ? 1 : 0.4);
     lampMat.emissiveIntensity = night * 2.5;
+    // The pools only show once it is actually getting dark: added onto bright late-afternoon ground they glared.
     // Wet tarmac throws more of the lamplight back.
-    poolMat.opacity = night * (0.42 + 0.35 * sky.wet);
+    const dark = 1 - Math.min(1, Math.max(0, Math.sin(((h - 6) / 12) * Math.PI)) * 2.5);
+    poolMat.opacity = night * dark * (0.42 + 0.35 * sky.wet);
     roadMat.color.copy(ROAD).lerp(ROAD_WET, sky.wet * 0.85);
-    roadMat.roughness = 1 - sky.wet * 0.6;
+    // Only a soft sheen: shinier tarmac threw the noon sun back as glare.
+    roadMat.roughness = 1 - sky.wet * 0.35;
     const isFar = camera.position.y > 48;
     if (isFar !== far.current) {
       far.current = isFar;

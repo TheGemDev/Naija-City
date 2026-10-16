@@ -17,7 +17,7 @@ export const windowsLit = { value: 1 };
 
 // Not every room is lit at once. Each window has a seed from where it stands (StaticBatch.tsx): the ones under
 // `windowsLit` glow, a few with the cold white of a fluorescent tube instead of a warm bulb, each a little
-// brighter or dimmer. By day the seed gives the glass a slightly different shade per pane.
+// brighter or dimmer. By day the seed gives some panes a slightly darker glass (never a brighter one).
 windowMat.onBeforeCompile = (shader) => {
   shader.uniforms.uLit = windowsLit;
   shader.vertexShader = shader.vertexShader
@@ -25,7 +25,7 @@ windowMat.onBeforeCompile = (shader) => {
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSeed = seed;');
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', '#include <common>\nuniform float uLit;\nvarying float vSeed;')
-    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= 0.82 + 0.36 * fract(vSeed * 53.0);')
+    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= 0.84 + 0.16 * fract(vSeed * 53.0);')
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       vec3 tube = vec3(0.62, 0.92, 1.45);
       totalEmissiveRadiance *= step(vSeed, uLit) * mix(vec3(1.0), tube, step(0.8, fract(vSeed * 37.0))) * (0.55 + 0.9 * fract(vSeed * 91.0));`);

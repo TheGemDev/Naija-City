@@ -164,7 +164,7 @@ export function SkyBodies() {
     halo.current.scale.setScalar(halfH * 0.42);
     const hm = halo.current.material as MeshBasicMaterial;
     hm.color.copy(sm.color);
-    hm.opacity = sunUp * clear * (1 - sky.haze * 0.8) * 0.55;
+    hm.opacity = sunUp * clear * (1 - sky.haze * 0.8) * 0.4;
 
     const mAngle = angle + Math.PI;
     const mUp = Math.sin(mAngle);
@@ -296,7 +296,7 @@ export function Rain() {
     u.uLen.value = 0.7 + dist * 0.02;
     // A storm drives the rain sideways.
     u.uWind.value = 0.12 + sky.rain * 0.18;
-    u.uOpacity.value = Math.min(1, sky.rain * 1.2) * 0.85;
+    u.uOpacity.value = Math.min(1, sky.rain * 1.2) * (low ? 0.6 : 0.5);
   });
 
   return <lineSegments ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={5} visible={false} />;
@@ -344,9 +344,13 @@ export function Clouds() {
   }), [n]);
   const o = useMemo(() => new Object3D(), []);
 
-  useFrame(({ camera, controls }) => {
+  useFrame(({ camera, controls, scene }) => {
     const mesh = ref.current;
-    const on = sky.cloud > 0.03;
+    // Zoomed right in, the camera is only a little above them: fade them so the street stays clear.
+    const room = MathUtils.smoothstep(camera.position.y - 22, 6, 30);
+    const opacity = sky.cloud * 0.25 * room;
+    // Nothing to see: skip the draw rather than blend invisible quads over the whole screen.
+    const on = opacity > 0.01;
     mesh.visible = on;
     if (!on) return;
     const t = (controls as OrbitControlsImpl | null)?.target ?? { x: 0, z: 0 };
@@ -361,10 +365,10 @@ export function Clouds() {
     });
     mesh.instanceMatrix.needsUpdate = true;
     const m = mesh.material as MeshBasicMaterial;
-    m.color.copy(CLOUD_WHITE).lerp(CLOUD_GREY, sky.rain * 0.8);
-    // Zoomed right in, the camera is only a little above them: fade them so the street stays clear.
-    const room = MathUtils.smoothstep(camera.position.y - 22, 6, 30);
-    m.opacity = sky.cloud * 0.42 * room;
+    // Sky-coloured, a little lighter, and greyer in rain: a veil over the map, never a white-out.
+    const bg = scene.background as Color | null;
+    m.color.copy(bg?.isColor ? bg : CLOUD_WHITE).lerp(CLOUD_WHITE, 0.3).lerp(CLOUD_GREY, sky.rain * 0.6);
+    m.opacity = opacity;
   });
 
   return (

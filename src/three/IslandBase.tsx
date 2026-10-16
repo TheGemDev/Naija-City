@@ -40,8 +40,13 @@ function strata(t: number, out: Color) {
   return out.copy(ca).lerp(cb, k * k * (3 - 2 * k));
 }
 
-/** The rock's outline at depth t (0 top, 1 tip): straight cliffs first, then a bulging taper to a point. */
-const taper = (t: number) => Math.pow(Math.max(0, 1 - Math.pow(t, 1.7)), 0.75);
+/** Share of the depth that is sheer cliff before the rock starts to narrow. */
+const CLIFF = 0.18;
+/**
+ * The rock's outline at depth t (0 top, 1 tip): a sheer cliff first, then a bulging taper to a point. The camera looks
+ * almost straight down, so only a sheer face shows at all: anything sloping in from the very top would be hidden.
+ */
+const taper = (t: number) => (t < CLIFF ? 1 : Math.pow(Math.max(0, 1 - Math.pow((t - CLIFF) / (1 - CLIFF), 1.7)), 0.75));
 
 /** Collects triangles with per-vertex colours; everything static ends up in one geometry. */
 class Builder {
@@ -129,7 +134,7 @@ function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low
     [0.45, 0.0, () => grass],
     [0.72, -0.24, (i) => c.copy(grass).lerp(grassDark, 0.4 + 0.2 * noise(seed + i))],
   ];
-  const lip = lipRows.map(([off, y, col]) => pts.map(([x, z], i) => b.vert(x + normals[i][0] * off, y - mouth[i] * 0.12, z + normals[i][1] * off, mouth[i] > 0 ? c.copy(col(i)).lerp(wet, mouth[i]) : col(i))));
+  const lip = lipRows.map(([off, y, col]) => pts.map(([x, z], i) => b.vert(x + normals[i][0] * off, y, z + normals[i][1] * off, mouth[i] > 0 ? c.copy(col(i)).lerp(wet, mouth[i]) : col(i))));
   lip.push(pts.map(([x, z], i) => {
     // Alternate long and short points so the fringe hangs like turf, not a clean hem.
     const hang = 0.4 + (i % 2) * 0.25 + noise(seed * 3 + i) * 0.45;
@@ -142,9 +147,14 @@ function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low
   const rockAt = (i: number, t: number): [number, number, number] => {
     const [x, z] = pts[i];
     const ridge = (vnoise(i / 3 + t * 1.5, seed * 31) - 0.5) * 0.7 + (vnoise(i / 8 + t * 4, seed * 37 + 50) - 0.5) * 0.5;
-    const ledge = ((t * 7 + vnoise(i / 10, seed * 41) * 0.6) % 1) * 0.03;
-    const s = taper(t) * (1 + (ridge * 0.09 + ledge) * Math.min(1, t * 6 + 0.25));
-    const off = 0.5 * (1 - t);
+    const ledge = (t * 7 + vnoise(i / 10, seed * 41) * 0.6) % 1;
+    // Down the cliff, crags and ledges stand out in world units; buttresses jut out past the grass lip in places, so
+    // even from overhead the rock shows under the edge. Below the cliff they scale with the narrowing rock.
+    const cliff = Math.min(1, t / CLIFF);
+    const buttress = Math.max(0, vnoise(i / 4, seed * 47) - 0.45) * 4.5 * Math.sin(Math.PI * Math.min(1, t / 0.3));
+    const off = 0.5 + buttress + (ridge * 0.8 + ledge * 0.6) * cliff;
+    const below = Math.min(1, Math.max(0, (t - CLIFF) / 0.15));
+    const s = taper(t) * (1 + (ridge * 0.09 + ledge * 0.03) * below);
     const px = x + normals[i][0] * off - cx, pz = z + normals[i][1] * off - cz;
     const y = ROCK_TOP - H * t + (noise(seed * 7 + i * 13 + t * 97) - 0.5) * (H / RINGS) * 0.5 * Math.min(1, t * 8);
     return [cx + px * s, y, cz + pz * s];

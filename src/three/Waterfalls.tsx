@@ -198,7 +198,7 @@ const FRAG = /* glsl */ `
     float foam = exp(-abs(lip) * 1.4) * (0.55 + 0.45 * n);
     float falling = smoothstep(-0.3, 0.5, lip);
     vec3 col = mix(uWater, uFoam, clamp(mix(streak * 0.35, 0.55 + 0.45 * streak, falling) + foam, 0.0, 1.0));
-    float a = edge * vFlow.z * mix(0.92, body * fade * (0.8 + 0.2 * streak), falling);
+    float a = edge * vFlow.z * mix(0.95, (0.5 + 0.5 * body) * fade * (0.85 + 0.15 * streak), falling);
     a = max(a, foam * edge * vFlow.z * 0.9);
     if (a < 0.06) discard;
     gl_FragColor = vec4(col, a);

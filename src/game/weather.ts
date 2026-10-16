@@ -86,8 +86,8 @@ export const rainedJustNow = (now = Date.now(), city = 'kaduna') => {
 /** Lightning strikes at the same instants for everybody in a storm: a flash this bright (0 to 1) right now. */
 export function lightningAt(now = Date.now()) {
   const second = Math.floor(now / 1000);
-  // About one strike every fifteen seconds, each a quick double flicker.
-  if (hash(second * 3 + 11) % 15 !== 0) return 0;
+  // About one strike every forty seconds, each a quick double flicker.
+  if (hash(second * 3 + 11) % 40 !== 0) return 0;
   const t = (now % 1000) / 1000;
   const flick = t < 0.08 ? 1 : t < 0.14 ? 0.15 : t < 0.22 ? 0.8 : Math.max(0, 0.8 - (t - 0.22) * 3);
   return flick;
