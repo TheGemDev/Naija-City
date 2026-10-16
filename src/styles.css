@@ -3315,3 +3315,7 @@ body.corner-hud .corner-fan .chat-fab .chat-form { margin: 0 calc(-1 * (12px + (
 /* You stay at the top whatever you are doing (Decor, a venue, a drive): nothing moves you off it. */
 body.corner-hud .needs { top: 10px !important; bottom: auto !important; }
 body.corner-hud .ui .needs { display: flex !important; }
+
+/* Decorating: no notices, tips, music or toasts in the way, and the undo / redo / select bar sits under you at the top left. */
+.left-stack.decorating { display: none; }
+body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + env(safe-area-inset-top, 0px)); left: 12px; transform: none; }

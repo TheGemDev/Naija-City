@@ -1070,7 +1070,7 @@ export function Hud() {
   return (
     <>
       <TopBar />
-      <div ref={leftStack} className={`left-stack ${leftStackCollapsed ? 'collapsed' : ''}`}>
+      <div ref={leftStack} className={`left-stack ${leftStackCollapsed ? 'collapsed' : ''} ${mode === 'buy' ? 'decorating' : ''}`}>
         {/* Radio sits right under the clock; a .stack-tools row so collapsing the notices never hides it */}
         <div className="stack-tools">
           <RadioPill />
