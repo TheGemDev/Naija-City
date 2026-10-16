@@ -5,8 +5,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
-  BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, Euler, Float32BufferAttribute,
-  FrontSide, Matrix3, Matrix4, MeshBasicMaterial, MeshStandardMaterial, Quaternion, ShapeGeometry, SphereGeometry,
+  Box3, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, Euler, Float32BufferAttribute,
+  FrontSide, Matrix3, Matrix4, MeshBasicMaterial, MeshStandardMaterial, Quaternion, ShapeGeometry, Sphere, SphereGeometry,
   Vector3, type Group, type Material, type Mesh, type Object3D, type Shape, type Side,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -193,39 +193,72 @@ function bake(root: Object3D): Part[] {
   const out: Part[] = [];
   const m = new Matrix4();
   for (const g of groups.values()) {
-    const pos: number[] = [], nor: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [];
+    // Sized first, then filled: one pass to count, one to copy, straight into typed arrays.
+    let verts = 0, tris = 0;
+    for (const mesh of g.meshes) {
+      const geo = mesh.geometry;
+      verts += geo.getAttribute('position').count;
+      tris += geo.getIndex()?.count ?? geo.getAttribute('position').count;
+    }
+    const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3);
+    const uv = g.textured ? new Float32Array(verts * 2) : null;
+    const col = g.textured ? null : new Float32Array(verts * 3);
+    const idx = new Uint32Array(tris);
+    let vo = 0, io = 0;
+    const lo = new Vector3(Infinity, Infinity, Infinity), hi = new Vector3(-Infinity, -Infinity, -Infinity);
     for (const mesh of g.meshes) {
       m.multiplyMatrices(inv, mesh.matrixWorld);
       n3.getNormalMatrix(m);
+      const e4 = m.elements, e3 = n3.elements;
       const geo = mesh.geometry;
-      const P = geo.getAttribute('position'), N = geo.getAttribute('normal'), U = geo.getAttribute('uv') as BufferAttribute | undefined;
+      // People's shapes are plain (not interleaved) attributes, so their arrays are read directly: much the quickest.
+      const P = geo.getAttribute('position') as BufferAttribute, N = geo.getAttribute('normal') as BufferAttribute | undefined, U = geo.getAttribute('uv') as BufferAttribute | undefined;
+      const pa = P.array, na = N?.array, ua = U?.array;
       c.copy((mesh.material as MeshStandardMaterial).color);
-      const base = pos.length / 3;
-      for (let i = 0; i < P.count; i++) {
-        v.fromBufferAttribute(P, i).applyMatrix4(m);
-        pos.push(v.x, v.y, v.z);
-        if (N) v.fromBufferAttribute(N, i).applyMatrix3(n3).normalize();
-        else v.set(0, 1, 0);
-        nor.push(v.x, v.y, v.z);
-        if (g.textured) uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0);
-        else col.push(c.r, c.g, c.b);
+      const base = vo;
+      for (let i = 0; i < P.count; i++, vo++) {
+        const x = pa[i * 3], y = pa[i * 3 + 1], z = pa[i * 3 + 2];
+        const px = e4[0] * x + e4[4] * y + e4[8] * z + e4[12], py = e4[1] * x + e4[5] * y + e4[9] * z + e4[13], pz = e4[2] * x + e4[6] * y + e4[10] * z + e4[14];
+        pos[vo * 3] = px;
+        pos[vo * 3 + 1] = py;
+        pos[vo * 3 + 2] = pz;
+        if (px < lo.x) lo.x = px; if (px > hi.x) hi.x = px;
+        if (py < lo.y) lo.y = py; if (py > hi.y) hi.y = py;
+        if (pz < lo.z) lo.z = pz; if (pz > hi.z) hi.z = pz;
+        const a = na ? na[i * 3] : 0, b = na ? na[i * 3 + 1] : 1, d = na ? na[i * 3 + 2] : 0;
+        const nx = e3[0] * a + e3[3] * b + e3[6] * d, ny = e3[1] * a + e3[4] * b + e3[7] * d, nz = e3[2] * a + e3[5] * b + e3[8] * d;
+        const len = Math.hypot(nx, ny, nz) || 1;
+        nor[vo * 3] = nx / len;
+        nor[vo * 3 + 1] = ny / len;
+        nor[vo * 3 + 2] = nz / len;
+        if (uv) {
+          uv[vo * 2] = ua ? ua[i * 2] : 0;
+          uv[vo * 2 + 1] = ua ? ua[i * 2 + 1] : 0;
+        } else if (col) {
+          col[vo * 3] = c.r;
+          col[vo * 3 + 1] = c.g;
+          col[vo * 3 + 2] = c.b;
+        }
       }
       const flip = m.determinant() < 0;
-      const index = geo.getIndex();
-      const n = index ? index.count : P.count;
-      for (let i = 0; i < n; i += 3) {
-        const a = index ? index.getX(i) : i, b = index ? index.getX(i + 1) : i + 1, cc = index ? index.getX(i + 2) : i + 2;
-        if (flip) idx.push(base + a, base + cc, base + b);
-        else idx.push(base + a, base + b, base + cc);
+      const ia = geo.getIndex()?.array;
+      const n = ia ? ia.length : P.count;
+      for (let i = 0; i < n; i += 3, io += 3) {
+        const a = ia ? ia[i] : i, b = ia ? ia[i + 1] : i + 1, cc = ia ? ia[i + 2] : i + 2;
+        idx[io] = base + a;
+        idx[io + 1] = base + (flip ? cc : b);
+        idx[io + 2] = base + (flip ? b : cc);
       }
     }
     const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new Float32BufferAttribute(pos, 3));
-    geometry.setAttribute('normal', new Float32BufferAttribute(nor, 3));
-    if (g.textured) geometry.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-    else geometry.setAttribute('color', new Float32BufferAttribute(col, 3));
-    geometry.setIndex(idx);
-    geometry.computeBoundingSphere();
+    geometry.setAttribute('position', new BufferAttribute(pos, 3));
+    geometry.setAttribute('normal', new BufferAttribute(nor, 3));
+    if (uv) geometry.setAttribute('uv', new BufferAttribute(uv, 2));
+    if (col) geometry.setAttribute('color', new BufferAttribute(col, 3));
+    geometry.setIndex(new BufferAttribute(idx, 1));
+    // From the box gathered on the way: computing it over every vertex again took as long as the copy.
+    geometry.boundingBox = new Box3(lo, hi);
+    geometry.boundingSphere = new Sphere(lo.clone().add(hi).multiplyScalar(0.5), lo.distanceTo(hi) / 2);
     out.push({ geometry, material: g.material });
   }
   return out;

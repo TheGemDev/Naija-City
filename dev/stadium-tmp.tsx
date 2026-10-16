@@ -20,7 +20,15 @@ function Info() {
     lampMat.emissiveIntensity = night ? 2.5 : 0;
     windowMat.emissiveIntensity = night ? 0.9 : 0;
   });
+  const camera = useThree((s) => s.camera);
   useEffect(() => {
+    (window as never as Record<string, unknown>).__measure = () => {
+      gl.info.autoReset = false; gl.info.reset(); gl.render(scene, camera);
+      const r = { calls: gl.info.render.calls, triangles: gl.info.render.triangles };
+      gl.info.autoReset = true;
+      let meshes = 0, tris = 0; scene.traverse((o) => { const m = o as unknown as { isMesh?: boolean; visible: boolean; geometry: { index: { count: number } | null; attributes: { position: { count: number } } } }; if (m.isMesh && m.visible) { meshes++; tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; } });
+      return { ...r, meshes, tris };
+    };
     const t = setTimeout(() => {
       gl.info.autoReset = false;
       gl.info.reset();
@@ -32,7 +40,7 @@ function Info() {
       }));
     }, 1500);
     return () => clearTimeout(t);
-  }, [gl, scene]);
+  }, [gl, scene, camera]);
   return null;
 }
 
@@ -45,7 +53,7 @@ function App() {
       <directionalLight position={[10, 15, 8]} intensity={night ? 0.15 : 2.35} castShadow shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-10} shadow-camera-right={10} shadow-camera-top={10} shadow-camera-bottom={-10} />
       {!q.has('noground') && <mesh rotation-x={-Math.PI / 2} position-y={-0.01} receiveShadow><planeGeometry args={[40, 40]} /><meshStandardMaterial color="#c9a46a" /></mesh>}
-      <StaticBatch><PlaceModel model="stadium" w={w} d={d} /></StaticBatch>
+      <group position={[-8, 0, -8]}><StaticBatch><group position={[8, 0, 8]}><PlaceModel model="stadium" w={w} d={d} /></group></StaticBatch></group>
       <Info />
       <OrbitControls target={[0, 0.5, 0]} />
     </Canvas>
