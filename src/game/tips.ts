@@ -19,7 +19,7 @@ export const TIPS: Tip[] = [
     '🗺️ The Map shows all the places in the city. Tap a spot to travel there.',
     '🎯 Not sure what to do? Open Goals and pick a daily quest to follow.',
     '🚶🏾 Walk the streets for random encounters. Your choices change your needs, your reputation and sometimes your luck.',
-    '👆🏾 Tap your avatar (bottom left) to see your mood and which need is lowest.',
+    '👆🏾 Tap your avatar (top left) to see your mood and which need is lowest.',
     '🔔 Tap a notification to jump straight to what it is about.',
     '📚 Tap any tip to read more about it in the Help app.',
     '💾 Your game saves itself. Sign in so your money, house and friends follow you to any device.',

@@ -3,7 +3,7 @@ import { GlBoundary } from './NoWebGL';
 import { originOf } from '../game/origins';
 import { toastApp, toastHome, toastPlace } from '../game/toastTarget';
 import { tipOfToast, useHelp } from '../game/tips';
-import { Children, cloneElement, isValidElement, memo, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useNet } from '../net/multiplayer';
 import { api, useSession } from '../net/session';
@@ -519,7 +519,6 @@ function ChatButton() {
       )}
       <button type="button" className={`chat-fab-btn ${open ? 'on' : ''}`} aria-label={open ? 'Close chat' : 'Open chat'} aria-expanded={open} onClick={() => setOpen(!open)}>
         <Emoji char={open ? '✖️' : '💬'} size={24} />
-        <ArcLabel text={open ? 'Close' : 'Chat'} />
       </button>
     </div>
   );
@@ -771,30 +770,11 @@ export const ProfilePortrait = memo(function ProfilePortrait({ look }: { look: s
 });
 
 /**
- * Where the game's buttons sit. Corner layout: you (with what you are doing) bottom left, Phone alone bottom right, Map just above it.
+ * Where the game's buttons sit. Corner layout: you and your money at the top, the time on the right; at the bottom a Home/Decor pill
+ * on the left and Phone, Map and Chat fanned in the right corner.
  * Switch it off to get the old bottom bar back.
  */
 const CORNER_HUD = true;
-
-/** A button's name bent along the bottom curve of its circle, the icon sitting above it. */
-function ArcLabel({ text }: { text: string }) {
-  const id = `arc${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  return (
-    <svg className="arc-label" viewBox="0 0 100 100" aria-hidden="true">
-      <path id={id} d="M 8 50 A 42 42 0 0 0 92 50" fill="none" />
-      <text><textPath href={`#${id}`} startOffset="50%" textAnchor="middle">{text}</textPath></text>
-    </svg>
-  );
-}
-
-/** The corner buttons are made with their name as plain text after the icon: bend that text round the circle. */
-const withArc = (c: ReactElement<{ children?: ReactNode; className?: string }>): ReactElement => {
-  if (!isValidElement(c) || (c.props.className ?? '').includes('leave')) return c;
-  const kids = Children.toArray(c.props.children);
-  const label = kids.filter((k) => typeof k === 'string').join('').trim();
-  if (!label) return c;
-  return cloneElement(c, undefined, ...kids.filter((k) => typeof k !== 'string'), <ArcLabel key="arc" text={label} />);
-};
 
 function NavShell({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -805,16 +785,16 @@ function NavShell({ children }: { children: ReactNode }) {
   if (!CORNER_HUD) return <nav className="nav">{children}</nav>;
   const all = Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[];
   const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
-  const arc = (c: ReactElement<{ 'data-k'?: string }>) => withArc(c as never) as ReactElement<{ 'data-k'?: string }>;
   return (
     <>
-      {/* Left: one capsule tucked against you, with the situational buttons (Home, Decor, Activities, Leave...) as flat tabs in it. */}
-      <div className="corner-dock">{all.filter((c) => !key(c))}</div>
-      {/* Right: round buttons with their names bent round the circle. */}
-      <nav className="corner-right">
-        {all.filter((c) => key(c) === 'map').map(arc)}
-        {all.filter((c) => key(c) === 'phone').map(arc)}
-      </nav>
+      {/* Bottom left: what is here (Home, Decor, Activities, Leave...) in one small pill, with plain names. */}
+      <div className="corner-pill">{all.filter((c) => !key(c))}</div>
+      {/* Bottom right: Phone in the corner, Map beside it and Chat above them, fanned round the Phone. */}
+      <div className="corner-fan">
+        <ChatButton />
+        {all.filter((c) => key(c) === 'map')}
+        {all.filter((c) => key(c) === 'phone')}
+      </div>
     </>
   );
 }
@@ -1128,7 +1108,7 @@ export function Hud() {
       </div>
       <LobbyShoutout />
       <GazetteBanner />
-      <ChatButton />
+      {!CORNER_HUD && <ChatButton />}
       <MoneyRain />
       {mode === 'live' && <Needs />}
       <GameTips />

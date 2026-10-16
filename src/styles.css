@@ -3218,3 +3218,88 @@ body.corner-hud .corner-side { bottom: calc(20px + (var(--me) - 58px) / 2 + var(
 .corner-dock button:disabled { opacity: 0.35; }
 .corner-dock button.leave { width: auto; flex-direction: row; gap: 8px; padding: 0 16px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
 .corner-dock button.leave span { font-size: 18px; line-height: 1; }
+
+/* One tidy bottom row: you and your capsule on the left, Chat, Map and Phone together on the right, all on one centre line. */
+body.corner-hud { --row-mid: calc(20px + var(--me, 54px) / 2 + var(--safe-b)); }
+.corner-right { align-items: center; gap: 10px; bottom: calc(var(--row-mid) - 35px); }
+.corner-right button[data-k="map"] { width: 62px; height: 62px; }
+.corner-right button[data-k="phone"] { width: 70px; height: 70px; }
+body.corner-hud .chat-fab { right: calc(12px + 70px + 10px + 62px + 10px); bottom: calc(var(--row-mid) - 31px); }
+body.corner-hud .chat-fab .chat-form { margin-right: calc(-1 * (70px + 10px + 62px + 10px)); }
+body.corner-hud .chat-fab-btn { width: 62px; height: 62px; }
+/* The chat box opens above the "where you are" label, and the open chat button keeps the shared look so its name stays readable. */
+body.corner-hud .chat-fab .chat-form { margin-bottom: 46px; }
+body.corner-hud .chat-fab-btn.on { background: var(--hud-bg); }
+
+/* Tidy up: the bottom row is only your two groups, evenly sized and spaced; the "where you are" card sits above it, not between them. */
+body.corner-hud .house-card { bottom: calc(20px + var(--me, 54px) + 14px + var(--safe-b)); }
+.corner-right { gap: 8px; bottom: calc(var(--row-mid) - 34px); }
+.corner-right button[data-k="map"] { width: 64px; height: 64px; }
+.corner-right button[data-k="phone"] { width: 68px; height: 68px; }
+body.corner-hud .chat-fab-btn { width: 64px; height: 64px; }
+body.corner-hud .chat-fab { right: calc(12px + 68px + 8px + 64px + 8px); bottom: calc(var(--row-mid) - 32px); }
+body.corner-hud .chat-fab .chat-form { margin-right: calc(-1 * (68px + 8px + 64px + 8px)); margin-bottom: 92px; }
+
+/* ===== Layout v3: you at the top beside the clock; every button together in one bottom row. ===== */
+body.corner-hud { --me: 56px; --b: min(66px, calc((100vw - 24px - 4 * 8px) / 5)); }
+/* You, top left, where the clock was; the clock moves over to make room. */
+body.corner-hud .needs { left: 12px; top: 10px; bottom: auto; }
+body.corner-hud .topbar { left: calc(12px + var(--me) + 8px); }
+body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--hud-h) + 12px); }
+/* Low-need icons run down the right edge under the money, so nothing crowds the top left. */
+body.corner-hud .need-alerts { position: fixed; right: 12px; top: calc(14px + var(--hud-h) + 12px); left: auto; bottom: auto; flex-direction: column; align-items: center; gap: 8px; z-index: 19; }
+body.corner-hud .need-alerts .thought-dot { display: none; }
+/* The row. */
+.corner-row { position: absolute; left: 12px; right: 12px; bottom: calc(18px + var(--safe-b)); z-index: 20; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.corner-row > button, .corner-row > .chat-fab > button { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: var(--b); height: var(--b); padding: 0; border-radius: 50%; font-size: 0; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); color: var(--muted); }
+.corner-row > button > span, .corner-row > .chat-fab > button > :first-child { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; margin-top: -9px; }
+.corner-row > button svg:not(.arc-label), .corner-row > button img { width: 28px !important; height: 28px !important; }
+.corner-row > button[data-k="phone"] { width: calc(var(--b) + 6px); height: calc(var(--b) + 6px); }
+.corner-row > button.leave { width: auto; padding: 0 18px; gap: 8px; border-radius: 999px; background: #dc2626; border-color: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
+.corner-row > button.leave > span { margin-top: 0; font-size: 18px; line-height: 1; }
+.corner-row > button:disabled { opacity: 0.35; }
+.corner-row > button.on, .corner-row > .chat-fab > button.on { background: var(--hud-bg); }
+.corner-row > .chat-fab { position: static; display: block; }
+body.corner-hud .corner-row .chat-fab { position: static; right: auto; bottom: auto; }
+.corner-row .chat-fab .chat-form { position: absolute; right: 0; bottom: calc(100% + 64px); margin: 0; }
+/* The "where you are" card sits above the row. */
+body.corner-hud .house-card { bottom: calc(18px + var(--b) + 6px + 14px + var(--safe-b)); }
+body.corner-hud .corner-row .chat-fab .chat-form { margin: 0; right: 0; bottom: calc(100% + 64px); }
+
+/* Top: you and your money together on the left (the money tucked against your picture), the time and date on the right. */
+body.corner-hud .topbar { left: calc(12px + var(--me) / 2); right: 12px; justify-content: flex-start; }
+body.corner-hud .topbar .money-card-top { order: 0; margin-left: 0; padding-left: calc(var(--me) / 2 + 12px); padding-right: 16px; }
+body.corner-hud .topbar .time-card { order: 1; margin-left: auto; }
+body.corner-hud .topbar .hud-actions { order: 2; }
+
+
+/* ===== Layout v4: Home/Decor pill bottom left; Phone in the right corner with Map beside it and Chat above them. ===== */
+.corner-pill { position: absolute; left: 12px; bottom: calc(18px + var(--safe-b)); z-index: 20; display: flex; align-items: center; gap: 4px; height: 62px; padding: 0 8px; border-radius: 999px; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); }
+.corner-pill button { font-size: 10px; font-weight: 700; line-height: 1; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 56px; height: 50px; padding: 0; border-radius: 16px; background: none; border: 0; box-shadow: none; }
+.corner-pill button span { display: flex; align-items: center; justify-content: center; font-size: 0; line-height: 0; }
+.corner-pill button:active { background: rgba(15, 107, 58, 0.1); }
+.corner-pill button.on { background: rgba(15, 107, 58, 0.12); color: var(--fg-0f172a); }
+.corner-pill button:disabled { opacity: 0.35; }
+.corner-pill button.leave { width: auto; flex-direction: row; gap: 8px; padding: 0 16px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
+.corner-pill button.leave span { font-size: 18px; line-height: 1; }
+.corner-fan { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.corner-fan > button, .corner-fan .chat-fab-btn { pointer-events: auto; display: grid; place-items: center; padding: 0; border-radius: 50%; font-size: 0; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); }
+.corner-fan > button span { display: grid; place-items: center; font-size: 0; line-height: 0; }
+.corner-fan > button svg, .corner-fan > button img, .corner-fan .chat-fab-btn svg, .corner-fan .chat-fab-btn img { width: 30px !important; height: 30px !important; }
+.corner-fan > button[data-k="phone"] { position: absolute; right: 12px; bottom: calc(18px + var(--safe-b)); width: 68px; height: 68px; }
+.corner-fan > button[data-k="phone"] svg, .corner-fan > button[data-k="phone"] img { width: 36px !important; height: 36px !important; }
+.corner-fan > button[data-k="map"] { position: absolute; right: 88px; bottom: calc(18px + var(--safe-b)); width: 56px; height: 56px; }
+.corner-fan .chat-fab { pointer-events: none; position: absolute; right: 56px; bottom: calc(18px + 68px + 10px + var(--safe-b)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.corner-fan .chat-fab .chat-fab-btn { width: 54px; height: 54px; }
+.corner-fan .chat-fab .chat-fab-btn.on { background: var(--hud-bg); }
+.corner-fan .chat-fab .chat-form { pointer-events: auto; position: static; margin: 0 -44px 0 0; }
+body.corner-hud .house-card { bottom: calc(18px + 68px + 16px + var(--safe-b)); }
+
+/* The clock has no picture box in its middle (the round picture up there is you): the sun or moon sits as a small badge on the card's top right corner. */
+body.corner-hud .time-card { position: relative; padding: 0 16px; }
+body.corner-hud .time-card .sky { position: absolute; top: -10px; right: -6px; width: auto; height: auto; border-radius: 0; background: none; border: 0; box-shadow: none; filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.35)); display: grid; place-items: center; }
+body.corner-hud .time-card.night .sky { background: none; }
+body.corner-hud .time-card .sky svg, body.corner-hud .time-card .sky img { width: 24px !important; height: 24px !important; }
+body.corner-hud .corner-fan .chat-fab { position: absolute; right: 60px; bottom: calc(18px + 68px + 10px + var(--safe-b)); }
+body.corner-hud .corner-fan .chat-fab .chat-form { margin: 0 -48px 0 0; width: min(300px, calc(100vw - 24px)); }
+body.corner-hud .corner-fan .chat-fab .chat-fab-btn { width: 54px; height: 54px; }

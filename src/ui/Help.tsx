@@ -31,7 +31,7 @@ const TOPICS: Topic[] = [
     apps: ['goals', 'settings'],
     body: [
       'The bar at the bottom has Home (your place), Buy (furniture), Map (travel the city) and Phone.',
-      'Tap a spot to walk there. Tap furniture to see what you can do with it: eat, sleep, wash, relax and more. Tap your avatar (bottom left) to see your mood and which need is lowest.',
+      'Tap a spot to walk there. Tap furniture to see what you can do with it: eat, sleep, wash, relax and more. Tap your avatar (top left) to see your mood and which need is lowest.',
       'Your game is auto-saved. Sign in so your money, house and friends follow you to any device.',
       'Tips pop up while you play. Tap one to land here on its topic. You can switch them off at the bottom of this page.',
     ],
