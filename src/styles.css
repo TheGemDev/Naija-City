@@ -3186,9 +3186,6 @@ body.corner-hud .needs { left: 12px; bottom: calc(20px + var(--safe-b)); }
 /* Chat sits on top of the Map and Phone row, on the right. */
 body.corner-hud .chat-fab { right: 12px; bottom: calc(20px + var(--safe-b) + 68px + 10px); }
 body.corner-hud .chat-fab .chat-form { margin-right: 0; }
-/* The low-need bubbles sit past the button beside you, so the space above you is free for Home. */
-body.corner-hud .need-alerts { position: absolute; left: calc(100% + 8px + 68px); bottom: 0; flex-direction: row; align-items: center; }
-body.corner-hud .need-alerts .thought-dot { display: none; }
 
 /* Every corner button says what it is: the name bent along the bottom of its circle, the icon above it. */
 .arc-label { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
@@ -3211,3 +3208,13 @@ body.corner-hud .corner-side { bottom: calc(20px + (var(--me) - 58px) / 2 + var(
 /* "Last online ..." under or beside a name when they are not in the game now. */
 .last-online { color: var(--muted); font-size: 11px; font-weight: 600; }
 .convo-body small.last-online { font-size: 11px; }
+
+/* The left: a capsule beside you, a different shape from the round buttons on the right. */
+.corner-dock { position: absolute; left: calc(12px + var(--me, 54px) / 2); bottom: calc(20px + (var(--me, 54px) - 64px) / 2 + var(--safe-b)); z-index: 19; display: flex; align-items: center; gap: 4px; height: 64px; padding: 0 10px 0 calc(var(--me, 54px) / 2 + 6px); border-radius: 999px; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); }
+.corner-dock button { font-size: 10px; font-weight: 700; line-height: 1; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 54px; height: 52px; padding: 0; border-radius: 16px; background: none; border: 0; box-shadow: none; }
+.corner-dock button span { display: flex; align-items: center; justify-content: center; font-size: 0; line-height: 0; }
+.corner-dock button:active { background: rgba(15, 107, 58, 0.1); }
+.corner-dock button.on { background: rgba(15, 107, 58, 0.12); color: var(--fg-0f172a); }
+.corner-dock button:disabled { opacity: 0.35; }
+.corner-dock button.leave { width: auto; flex-direction: row; gap: 8px; padding: 0 16px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
+.corner-dock button.leave span { font-size: 18px; line-height: 1; }

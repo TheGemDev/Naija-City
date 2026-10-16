@@ -803,19 +803,17 @@ function NavShell({ children }: { children: ReactNode }) {
     return () => document.body.classList.remove('corner-hud');
   }, []);
   if (!CORNER_HUD) return <nav className="nav">{children}</nav>;
-  const all = (Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[]).map((c) => withArc(c as never) as ReactElement<{ 'data-k'?: string }>);
+  const all = Children.toArray(children) as ReactElement<{ 'data-k'?: string }>[];
   const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
+  const arc = (c: ReactElement<{ 'data-k'?: string }>) => withArc(c as never) as ReactElement<{ 'data-k'?: string }>;
   return (
     <>
-      <div className="corner-left">
-        {/* The first situational button (Home, Go outside, Leave...) sits right above you. */}
-        <div className="corner-ctx">{all.filter((c) => !key(c)).slice(0, 1)}</div>
-      </div>
-      {/* What else is here (Decor, Activities, Estates) is beside you. */}
-      <div className="corner-side">{all.filter((c) => !key(c)).slice(1)}</div>
+      {/* Left: one capsule tucked against you, with the situational buttons (Home, Decor, Activities, Leave...) as flat tabs in it. */}
+      <div className="corner-dock">{all.filter((c) => !key(c))}</div>
+      {/* Right: round buttons with their names bent round the circle. */}
       <nav className="corner-right">
-        {all.filter((c) => key(c) === 'map')}
-        {all.filter((c) => key(c) === 'phone')}
+        {all.filter((c) => key(c) === 'map').map(arc)}
+        {all.filter((c) => key(c) === 'phone').map(arc)}
       </nav>
     </>
   );
