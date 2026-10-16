@@ -30,19 +30,29 @@ const useHover = create<{ target: Object3D | null }>(() => ({ target: null }));
  *  when it is selected (Scene.tsx CameraRig). */
 export const lastPointed: { obj: Object3D | null } = { obj: null };
 
+/** A pointer-out waiting a frame to clear the outline (offHover). */
+let leaving = 0;
+
 /** Pointer entered something clickable: the pointer cursor, and its outline (`target`, or the object the handler is on). */
 export function onHover(e: ThreeEvent<PointerEvent>, target?: Object3D | null) {
   e.stopPropagation();
+  cancelAnimationFrame(leaving);
+  leaving = 0;
   document.body.style.cursor = 'pointer';
   lastPointed.obj = target === undefined ? e.eventObject : target;
   // `target` null: the pointer cursor only (a floating label), no outline.
   if (CAN_HOVER) useHover.setState({ target: target === undefined ? e.eventObject : target });
 }
 
-/** Pointer left it. */
+/** Pointer left it. Cleared a frame later: crossing from one mesh of a model to the next fires out then over, and
+ *  clearing at once made the outline blink at every seam. An over in between cancels it, and the same target is a no-op. */
 export function offHover() {
-  document.body.style.cursor = '';
-  if (useHover.getState().target) useHover.setState({ target: null });
+  cancelAnimationFrame(leaving);
+  leaving = requestAnimationFrame(() => {
+    leaving = 0;
+    document.body.style.cursor = '';
+    if (useHover.getState().target) useHover.setState({ target: null });
+  });
 }
 
 const resolution = { value: new Vector2(1, 1) };
