@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'rea
 import { useFrame, useThree } from '@react-three/fiber';
 import {
   BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Fog,
-  IcosahedronGeometry, MeshStandardMaterial, Object3D, type BufferAttribute, type Group, type InstancedMesh,
+  IcosahedronGeometry, InstancedBufferAttribute, MeshStandardMaterial, Object3D, type Group, type InstancedMesh,
 } from 'three';
 import { useGame } from '../game/store';
 import { useLowPerf } from '../game/quality';
@@ -171,29 +171,42 @@ function batch(list: Item[], geometry: BufferGeometry, material: MeshStandardMat
   return { geometry, material, items, far: list.filter((i) => !i.near).length * 2, tones, palms };
 }
 
-/** A ground-hugging mesh whose colours follow the climate: each vertex keeps which tone it is and how light. */
-interface Painted { geometry: BufferGeometry; kinds: Uint8Array; shades: Float32Array; tones: Tone[] }
-
-function painted(pos: number[], index: number[], kinds: number[], shades: number[], tones: Tone[], normals?: number[]): Painted {
+/**
+ * A ground-hugging mesh whose colours follow the climate. Each vertex carries its colour twice, as it is in the dry
+ * north (`color`) and in the wet south (`wetColor`), both already lit or shaded, and the shader blends between them
+ * (greening). Repainting the whole ground on the CPU and sending it to the GPU again, a few dozen times a flight, was
+ * a hitch each time on a phone.
+ */
+function painted(pos: number[], index: number[], kinds: number[], shades: number[], tones: Tone[], normals?: number[]) {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(new Float32Array(pos.length), 3));
+  const dry = new Float32Array(pos.length), wet = new Float32Array(pos.length);
+  kinds.forEach((kind, v) => {
+    const [d, w] = tones[kind], k = shades[v];
+    dry[v * 3] = d.r * k; dry[v * 3 + 1] = d.g * k; dry[v * 3 + 2] = d.b * k;
+    wet[v * 3] = w.r * k; wet[v * 3 + 1] = w.g * k; wet[v * 3 + 2] = w.b * k;
+  });
+  geometry.setAttribute('color', new Float32BufferAttribute(dry, 3));
+  geometry.setAttribute('wetColor', new Float32BufferAttribute(wet, 3));
   geometry.setIndex(index);
   if (normals) geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
   else geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  return { geometry, kinds: Uint8Array.from(kinds), shades: Float32Array.from(shades), tones };
+  return geometry;
 }
 
-const mixed = new Color();
-function tint(p: Painted, wet: number) {
-  const now = p.tones.map(([dry, green]) => new Color().lerpColors(dry, green, wet));
-  const col = p.geometry.getAttribute('color') as BufferAttribute;
-  for (let v = 0; v < p.kinds.length; v++) {
-    mixed.copy(now[p.kinds[v]]).multiplyScalar(p.shades[v]);
-    col.setXYZ(v, mixed.r, mixed.g, mixed.b);
-  }
-  col.needsUpdate = true;
+/**
+ * Teaches a material to blend each colour between its dry and its wet tone by `wet` (0 dry to 1 wet): `from` is the
+ * dry colour the shader already has (vertex or instance colour), `to` the attribute holding the wet one.
+ */
+function greening(material: MeshStandardMaterial, wet: { value: number }, from: 'color' | 'instanceColor', to: string) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.wet = wet;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\nattribute vec3 ${to};\nuniform float wet;`)
+      .replace('#include <color_vertex>', `#include <color_vertex>\nvColor.rgb = mix(${from}, ${to}, wet);`);
+  };
+  material.customProgramCacheKey = () => `greening:${from}:${to}`;
 }
 
 /** Palm fronds: a star of drooping leaves, seen from above as the green asterisk of an oil palm. */
@@ -228,8 +241,9 @@ function shapes() {
   };
 }
 
-function materials() {
-  return {
+/** `wet` is how green the land is just now: the ground, the farm plots and the leaves follow it (greening). */
+function materials(wet: { value: number }) {
+  const m = {
     ground: new MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
     plots: new MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
     roads: new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
@@ -242,6 +256,12 @@ function materials() {
     rock: new MeshStandardMaterial({ flatShading: true, roughness: 1 }),
     cloud: new MeshStandardMaterial({ color: '#ffffff', emissive: '#dbeafe', emissiveIntensity: 0.3, flatShading: true, transparent: true, opacity: 0, depthWrite: false }),
   };
+  greening(m.ground, wet, 'color', 'wetColor');
+  greening(m.plots, wet, 'color', 'wetColor');
+  // Only the leaves change with the climate; walls, roofs and rocks are the same colour all the way.
+  greening(m.leaf, wet, 'instanceColor', 'instanceWetColor');
+  greening(m.frond, wet, 'instanceColor', 'instanceWetColor');
+  return m;
 }
 type Shapes = ReturnType<typeof shapes>;
 type Materials = ReturnType<typeof materials>;
@@ -604,11 +624,16 @@ function place(mesh: InstancedMesh, items: Item[]) {
   mesh.instanceMatrix.needsUpdate = true;
 }
 
-function colourIn(mesh: InstancedMesh, b: Batch, wet: number) {
+/** Each thing's colour, dry and (if its kind changes with the climate) wet too, painted once: the shader blends them (greening). */
+const shaded = new Color();
+function colourIn(mesh: InstancedMesh, b: Batch) {
   if (!b.tones.length) return;
-  const now = b.tones.map(([dry, green]) => new Color().lerpColors(dry, green, wet));
-  b.items.forEach((it, i) => mesh.setColorAt(i, mixed.copy(now[it.tone]).multiplyScalar(it.shade)));
+  b.items.forEach((it, i) => mesh.setColorAt(i, shaded.copy(b.tones[it.tone][0]).multiplyScalar(it.shade)));
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  if (b.tones.every(([dry, green]) => dry.equals(green))) return;
+  const wet = new Float32Array(b.items.length * 3);
+  b.items.forEach((it, i) => shaded.copy(b.tones[it.tone][1]).multiplyScalar(it.shade).toArray(wet, i * 3));
+  b.geometry.setAttribute('instanceWetColor', new InstancedBufferAttribute(wet, 3));
 }
 
 /** Where you are flying from and to: from the city you are in, to the one in the flight's action id (fly_lagos, fly_kano_jet). */
@@ -630,7 +655,8 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
   const low = useLowPerf();
   const { from, to } = useMemo(route, []);
   const geo = useMemo(shapes, []);
-  const mat = useMemo(materials, []);
+  const wet = useMemo(() => ({ value: 0 }), []);
+  const mat = useMemo(() => materials(wet), [wet]);
   const land = useMemo(() => {
     let seed = 7;
     for (const ch of `${from}>${to}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
@@ -640,7 +666,7 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
   const cloudLayer = useRef<Group>(null!);
   const meshes = useRef<(InstancedMesh | null)[]>([]);
   const cloudMesh = useRef<InstancedMesh>(null!);
-  const shownWet = useRef(-1);
+  const frames = useRef(0);
   const { scene, camera } = useThree();
   const fog = useMemo(() => new Fog('#bfe3f5', 100, 300), []);
 
@@ -649,8 +675,8 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
     Object.values(mat).forEach((m) => m.dispose());
   }, [geo, mat]);
   useEffect(() => () => {
-    land.ground.geometry.dispose();
-    land.plots.geometry.dispose();
+    land.ground.dispose();
+    land.plots.dispose();
     land.water.dispose();
     land.roads.dispose();
   }, [land]);
@@ -662,9 +688,9 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
   }, [scene, fog]);
 
   useLayoutEffect(() => {
-    land.batches.forEach((b, i) => { const m = meshes.current[i]; if (m) place(m, b.items); });
+    land.batches.forEach((b, i) => { const m = meshes.current[i]; if (m) { place(m, b.items); colourIn(m, b); } });
     place(cloudMesh.current, land.clouds.items);
-    shownWet.current = -1;
+    colourIn(cloudMesh.current, land.clouds);
   }, [land]);
 
   useFrame(() => {
@@ -673,26 +699,22 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
     cloudLayer.current.position.z = -((m.travel * CLOUD_DRIFT) % TILE_D);
 
     // The land greens or dries over the middle of the flight, from the city you left to the one you are flying to.
-    const wet = lerp(WET[from], WET[to], smoothstep(0.15, 0.85, m.progress));
-    if (Math.abs(wet - shownWet.current) > 0.015) {
-      shownWet.current = wet;
-      tint(land.ground, wet);
-      tint(land.plots, wet);
-      land.batches.forEach((b, i) => { const mesh = meshes.current[i]; if (mesh) colourIn(mesh, b, wet); });
-      colourIn(cloudMesh.current, land.clouds, wet);
-    }
+    // Only a number for the shaders (greening): nothing is repainted.
+    wet.value = lerp(WET[from], WET[to], smoothstep(0.15, 0.85, m.progress));
 
     // Nothing tall by the runway while you are still on it; palms only as far as the land is green enough for them.
     const onRunway = m.alt < 0.3;
     land.batches.forEach((b, i) => {
       const mesh = meshes.current[i];
       if (!mesh) return;
-      mesh.count = b.palms ? 2 * Math.round((b.items.length / 2) * palmShare(wet)) : onRunway ? b.far : b.items.length;
+      mesh.count = b.palms ? 2 * Math.round((b.items.length / 2) * palmShare(wet.value)) : onRunway ? b.far : b.items.length;
     });
 
-    // The cloud layer only once you are well up, so it never drifts across the cabin.
+    // The cloud layer only once you are well up, so it never drifts across the cabin. It is drawn (unseen, at no
+    // opacity) for the first frame too: its shader is then built with everything else as the flight opens, not halfway
+    // up the climb, where building it stalled a phone for a moment.
     const cloud = smoothstep(0.65, 0.9, m.alt);
-    cloudLayer.current.visible = cloud > 0.01;
+    cloudLayer.current.visible = cloud > 0.01 || frames.current++ < 1;
     mat.cloud.opacity = cloud * 0.8;
 
     if (scene.background instanceof Color) fog.color.copy(scene.background);
@@ -705,8 +727,8 @@ export function FlightTerrain({ motion }: { motion: RefObject<FlightMotion> }) {
       <group ref={tile}>
         {[0, TILE_D].map((z) => (
           <group key={z} position-z={z}>
-            <mesh geometry={land.ground.geometry} material={mat.ground} />
-            <mesh geometry={land.plots.geometry} material={mat.plots} />
+            <mesh geometry={land.ground} material={mat.ground} />
+            <mesh geometry={land.plots} material={mat.plots} />
             <mesh geometry={land.water} material={mat.water} />
             <mesh geometry={land.roads} material={mat.roads} />
           </group>

@@ -16,6 +16,7 @@ import { useSession } from '../net/session';
 import './chat-money.css';
 import { useLive } from '../net/live';
 import { PHONE_SEARCH } from '../game/phoneSearch';
+import { GUNS } from '../game/guns';
 import { Face } from './Face';
 
 /** Ticks once a second so countdowns move. */
@@ -412,7 +413,7 @@ export function Jail() {
         {details ? 'Hide charges ▴' : 'See charges ▾'}
       </button>
       {details && <ChargeCard lines={charge} loading={loading} />}
-      {details && search?.searched && search.until && Math.abs(search.until - until) < 60_000 && <PhoneSearchCard search={search} />}
+      {details && (search?.searched || search?.gun) && search.until && Math.abs(search.until - until) < 60_000 && <PhoneSearchCard search={search} />}
       {asking ? (
         <AskBail amount={bail} onClose={() => setAsking(false)} />
       ) : (
@@ -447,7 +448,7 @@ function ChargeCard({ lines, loading }: { lines: string[]; loading: boolean }) {
 
 /** What the police or EFCC found on your phone, laid out like a charge sheet: one row per app, then the total. */
 function PhoneSearchCard({ search }: { search: NonNullable<ReturnType<typeof useLive.getState>['phoneSearch']> }) {
-  const found = search.found.length > 0;
+  const found = search.found.length > 0 || !!search.gun;
   const who = search.agency === 'efcc' ? 'EFCC' : 'Police';
   const name = (id: string) => (PHONE_SEARCH.labels[id] ?? id).replace(/^the /, '');
   return (
@@ -458,6 +459,13 @@ function PhoneSearchCard({ search }: { search: NonNullable<ReturnType<typeof use
       </div>
       {found ? (
         <>
+          {search.gun && (
+            <div className="charge-row">
+              <span>{GUNS[search.gun.gun]?.name ?? 'Gun'} · seized</span>
+              <i />
+              <b>+{naira(search.gun.fine)}</b>
+            </div>
+          )}
           {search.found.map((id) => (
             <div key={id} className="charge-row">
               <span>{name(id)}</span>
@@ -467,7 +475,7 @@ function PhoneSearchCard({ search }: { search: NonNullable<ReturnType<typeof use
           ))}
           <div className="charge-total">
             <span>Total</span>
-            <b>+{naira(search.fine)}{search.extraMinutes ? ` · +${search.extraMinutes} min` : ''}</b>
+            <b>+{naira(search.fine + (search.gun?.fine ?? 0))}{search.extraMinutes ? ` · +${search.extraMinutes} min` : ''}</b>
           </div>
         </>
       ) : (

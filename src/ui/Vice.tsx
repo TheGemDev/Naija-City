@@ -372,7 +372,7 @@ export function FixerApp() {
       {s && tab === 'contracts' && <Contracts busy={busy} />}
       {s && tab === 'ransoms' && <Ransoms busy={busy} />}
       {s && tab === 'cell' && <Cell busy={busy} />}
-      {tab === 'guns' && <GunCounter source="black" />}
+      {tab === 'guns' && <GunCounter />}
     </>
   );
 }

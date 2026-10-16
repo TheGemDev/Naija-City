@@ -2,6 +2,8 @@
 // (src/game/apps.ts) make the case worse: a bigger fine, a longer stay in the cell, and some apps get
 // seized. The EFCC is far harsher about the Yahoo app than the police are. Decided in worker/phoneSearch.ts.
 
+import type { GunSeizure } from './guns';
+
 export type Agency = 'police' | 'efcc';
 
 export interface AppEvidence {
@@ -66,4 +68,6 @@ export interface PhoneSearchResult {
   until: number | null;
   lines: string[];
   at: number;
+  /** A gun found on them in the pat-down: seized, with its fine (src/game/guns.ts). Not counted in `fine`. */
+  gun?: GunSeizure | null;
 }

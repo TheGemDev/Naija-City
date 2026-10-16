@@ -17,6 +17,8 @@ import { driveHooks } from '../game/driveState';
 import { type CrimeTier } from '../game/underworld';
 import { type PhoneSearchResult } from '../game/phoneSearch';
 import { useApps } from '../game/apps';
+import { GUNS } from '../game/guns';
+import { loadGuns } from './guns';
 import { type CrewResult } from '../game/heist';
 import { loadParty, onSprayed } from './owambe';
 import { squareName } from '../game/owambe';
@@ -371,6 +373,11 @@ export function onFunEvent(e: FunEvent) {
     const r = e.search;
     useLive.setState({ phoneSearch: r });
     for (const id of r.seized) useApps.getState().uninstall(id);
+    if (r.gun) {
+      g.toast(`🔫 The police found your ${GUNS[r.gun.gun]?.name ?? 'gun'}! Seized, and a ${naira(r.gun.fine)} fine.`);
+      void loadGuns();
+      void refreshBalance();
+    }
     if (r.found.length) {
       g.toast(`📱 ${r.agency === 'efcc' ? 'EFCC' : 'Police'} searched your phone! ${naira(r.fine)} extra fine${r.extraMinutes ? `, +${r.extraMinutes} min in the cell` : ''}.`);
       void refreshBalance();

@@ -9,7 +9,15 @@ import { refreshBalance, setServerBalance } from './wallet';
 
 export interface SkillInfo { id: SkillId; xp: number; level: number; next: number | null; fee: number; readyAt: number }
 export interface JobInfo { id: string; shifts: number; rank: number; title: string; mult: number; nextAt: number | null }
-export interface BusinessListing { id: number; product: string; price: number; stock: number; sold: number }
+export interface BusinessListing {
+  id: number; product: string; price: number; stock: number;
+  /** Units sold so far, to players and customers alike. */
+  sold: number;
+  /** Auto-restock: refill once stock is at `min`, up to `to`. `short` when the wallet couldn't cover the last refill. Null when off. */
+  auto: { min: number; to: number; short: boolean } | null;
+}
+/** Something that happened at a shop without the owner: customers buying (amount is what they were paid) or an auto-restock (amount is what it cost, negative). */
+export interface BizActivity { kind: 'sale' | 'restock'; product: string; quantity: number; amount: number; at: number }
 export interface BizInfo {
   id: number; type: BusinessType; name: string; level: number; staff: number; slots: number;
   /** Something is on the shelf for players to buy. */
@@ -21,6 +29,8 @@ export interface BizInfo {
   area: string; listings: BusinessListing[];
   /** The city the stall is in, the place there, and whether the stall is still held (it lapses after days with an empty shelf). */
   city: string; place: string; hasStall: boolean;
+  /** What customers who aren't players bought over the last day, and the latest of that and of auto-restocks. */
+  customers: { units: number; net: number }; activity: BizActivity[];
   /** Left over from timed stock, which is gone: what it earned and the owner hasn't collected yet. */
   pending: number; upgrade: number | null;
 }
@@ -75,6 +85,9 @@ export const moveBusiness = (id: number, place: string) => act('/api/business/mo
 export const manageBusinessListing = (id: number, product: string, price: number, quantity: number) =>
   act('/api/business/listing', { id, product, price, quantity, requestId: crypto.randomUUID() },
     () => quantity > 0 ? 'Stock added to your shelf 📦' : 'Listing price updated');
+/** Turn auto-restock on (refill at `min`, up to `to`) or off for one product. */
+export const setAutoRestock = (id: number, product: string, auto: { min: number; to: number } | null) =>
+  act('/api/business/auto', { id, product, on: !!auto, ...auto }, () => (auto ? 'Auto-restock on 🔁' : 'Auto-restock off'));
 
 export function startCareer() {
   const unsub = useSession.subscribe((s, p) => {

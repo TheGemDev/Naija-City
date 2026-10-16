@@ -1,5 +1,5 @@
-// Guns on the phone (rules: game/guns.ts, server: worker/guns.ts): what I carry, buying from the gun shop or the
-// Fixer's dealer, and the armed jobs. Being shot arrives as a 'shot' event (onShotEvent).
+// Guns on the phone (rules: game/guns.ts, server: worker/guns.ts): what I carry, buying from the Fixer's dealer, and
+// the armed jobs. Being shot arrives as a 'shot' event (onShotEvent).
 
 import { create } from 'zustand';
 import { GUNS, type GunId, type GunResult, type GunState, type HoldupKind, type ShotEvent } from '../game/guns';
@@ -28,7 +28,10 @@ export async function loadGuns() {
   try {
     const state = await call<GunState>('/api/guns');
     useGuns.setState({ state });
-    if (state.seized) useGame.getState().toast(`🚔 The police kept your ${state.seized} when they arrested you. It had no licence.`);
+    if (state.seized) {
+      useGame.getState().toast(`🚔 The police kept your ${GUNS[state.seized.gun].name} when they arrested you, and fined you ${naira(state.seized.fine)}.`);
+      void refreshBalance();
+    }
   } catch {
     /* offline: the app shows what it last knew */
   }
@@ -51,9 +54,9 @@ function act(path: string, body: object, then?: (r: { result?: GunResult }) => v
     .finally(() => useGuns.setState({ busy: false }));
 }
 
-export const buyGun = (gun: GunId, source: 'shop' | 'black') =>
-  act('/api/guns/buy', { gun, source }, () => useGame.getState().toast(`${GUNS[gun].icon} The ${GUNS[gun].name} is yours${source === 'shop' ? ', licensed and on the police register' : '. No papers, no questions'}.`));
-export const buyAmmo = (source: 'shop' | 'black') => act('/api/guns/ammo', { source }, () => useGame.getState().toast('📦 A box of rounds. Loaded.'));
+export const buyGun = (gun: GunId) =>
+  act('/api/guns/buy', { gun }, () => useGame.getState().toast(`${GUNS[gun].icon} The ${GUNS[gun].name} is yours. No papers, no questions. Don’t get caught with it.`));
+export const buyAmmo = () => act('/api/guns/ammo', {}, () => useGame.getState().toast('📦 A box of rounds. Loaded.'));
 export const buyVest = () => act('/api/guns/vest', {}, () => useGame.getState().toast('🦺 Vest on. It stops a bullet or two.'));
 export const hireEscort = () => act('/api/guns/escort', {}, () => useGame.getState().toast('🕶️ Your armed bodyguard is walking behind you.'));
 
@@ -78,7 +81,7 @@ function sayResult(r: GunResult, who: string | null) {
     vest: `🦺 You hit ${them}, but their vest stopped it.${police}`,
     escort: `🕶️ ${them}’s armed bodyguard was on you before you could move.${hit || ' You ran.'}${police}`,
     shotBack: who ? `🔫 ${them} was carrying too, and drew first.${hit || ' You ran for your life.'}${police}` : `🏪 The shopkeeper had a gun under the counter.${hit}`,
-    arrested: '🚔 A police patrol was round the corner. Straight to the cell.',
+    arrested: `🚔 A police patrol was round the corner. Straight to the cell.${r.seized ? ` They took your ${GUNS[r.seized.gun].name} and fined you ${naira(r.seized.fine)}.` : ''}`,
     failed: who ? `🏃🏾 ${them} ran off before you could do anything.${police}` : '🏃🏾 They ran off screaming. You got nothing.',
   };
   g.toast(lines[r.outcome]);

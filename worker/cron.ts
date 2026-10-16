@@ -24,6 +24,7 @@ import { settle as settleRentals, settleNpcTenants } from './rentals';
 import { spawn as spawnPotholes } from './roads';
 import { onlineEverywhere } from './shards';
 import { pruneSnaps } from './snaps';
+import { runShops } from './shops';
 import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
 
@@ -58,6 +59,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     ['contracts', () => settleContracts(env, ctx, now)],
     ['potholes', () => spawnPotholes(env.DB, now)],
     ['market', () => tickMarket(env.DB, now)],
+    // Customers who aren't players buy from players' shops, and shelves with auto-restock on are topped up.
+    ['shops', () => runShops(env, ctx, now)],
     ['vdm', () => vdmGrumbles(env.DB, now)],
   ];
   // Visits come from Cloudflare's own analytics; refresh them in KV on every run (every 5 minutes).

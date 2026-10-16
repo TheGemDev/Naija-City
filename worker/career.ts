@@ -2,7 +2,8 @@
 //
 // Promotions are counted from the work ledger (one row per shift, ref = job id), so they can't be
 // claimed. A business is open while its shelf holds something to sell, and stock leaves the shelf only
-// when a player buys: the owner buys units at wholesale, sets a price and is paid per sale. A business
+// when someone buys: a player, or customers who aren't players (worker/shops.ts, from the cron). The owner
+// buys units at wholesale (by hand, or by auto-restock), sets a price and is paid per sale. A business
 // rents a stall at one place: the place sets how many stalls fit.
 // What the state charges (registration, move permits, the delivery levy) lands in the treasury.
 //
@@ -24,7 +25,7 @@ import '../src/game/lagos';
 import '../src/game/kano';
 import { CITY_MAPS, type Place } from '../src/game/city';
 import {
-  BIZ, BIZ_COLOURS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESS_BY_ID, BUSINESSES, JOB_RANKS, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, OPERATE_XP_PER_HOUR, SKILLS, SKILL_BY_ID, STALLS, TRAIN, allowedIcon, deliveryFee, demandAt, hourlyOf, nextSkillXp, rankIndex, rankMults, registrationFee,
+  BIZ, BIZ_COLOURS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESS_BY_ID, BUSINESSES, JOB_RANKS, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, NPC_SHOP, OPERATE_XP_PER_HOUR, SKILLS, SKILL_BY_ID, STALLS, TRAIN, allowedIcon, deliveryFee, demandAt, hourlyOf, nextSkillXp, rankIndex, rankMults, registrationFee,
   openCost, rentOf, resizeCost, shelfOf, sizeOf, skillLevel, slotsOf, trainFee, upgradeCost, wageOf, type BusinessDef, type SkillId,
 } from '../src/game/career';
 
@@ -87,9 +88,43 @@ interface ProductRow {
   id: number; business_id: number; product: string; price: number; stock: number; sold: number;
 }
 
-function listingView(row: ProductRow) {
+/** A listing's auto-restock (migrations/0099_npc_shoppers.sql): refill at `min` up to `to`; `short` once the wallet couldn't cover it. */
+interface AutoRow { id: number; auto_min: number | null; auto_to: number | null; auto_short: number }
+
+function listingView(row: ProductRow, auto?: AutoRow) {
   const product = MARKET_PRODUCT_BY_ID[row.product];
-  return product ? { id: row.id, product: row.product, price: row.price, stock: row.stock, sold: row.sold } : null;
+  return product ? {
+    id: row.id, product: row.product, price: row.price, stock: row.stock, sold: row.sold,
+    auto: auto?.auto_min != null && auto.auto_to != null ? { min: auto.auto_min, to: auto.auto_to, short: !!auto.auto_short } : null,
+  } : null;
+}
+
+/** What customers (worker/shops.ts) and auto-restock did at a player's shops lately, newest first, for the Business app. */
+async function shopActivity(db: D1Database, uid: string, now: number) {
+  const since = now - DAY;
+  const [events, totals] = await Promise.all([
+    db.prepare(
+      `SELECT bp.business_id, o.product, o.quantity, o.total - o.tax AS amount, o.created_at AS at, 'sale' AS kind
+       FROM marketplace_orders o JOIN business_products bp ON bp.id = o.product_id
+       WHERE o.seller_uid = ?1 AND o.status = 'paid' AND o.created_at > ?2 AND o.buyer_uid = ?3
+       UNION ALL
+       SELECT business_id, product, quantity, -cost, created_at, 'restock' FROM business_restock_requests
+       WHERE id >= 'auto:' AND id < 'auto;' AND uid = ?1 AND status = 'paid' AND created_at > ?2
+       ORDER BY at DESC LIMIT 60`,
+    ).bind(uid, since, NPC_SHOP.buyer).all<{ business_id: number; product: string; quantity: number; amount: number; at: number; kind: 'sale' | 'restock' }>(),
+    db.prepare(
+      `SELECT bp.business_id, SUM(o.quantity) AS units, SUM(o.total - o.tax) AS net
+       FROM marketplace_orders o JOIN business_products bp ON bp.id = o.product_id
+       WHERE o.seller_uid = ?1 AND o.status = 'paid' AND o.created_at > ?2 AND o.buyer_uid = ?3 GROUP BY bp.business_id`,
+    ).bind(uid, since, NPC_SHOP.buyer).all<{ business_id: number; units: number; net: number }>(),
+  ]).catch(() => [{ results: [] }, { results: [] }] as const);
+  const activity = new Map<number, { kind: 'sale' | 'restock'; product: string; quantity: number; amount: number; at: number }[]>();
+  for (const e of events.results) {
+    const list = activity.get(e.business_id) ?? [];
+    if (list.length < 8) list.push({ kind: e.kind, product: e.product, quantity: e.quantity, amount: e.amount, at: e.at });
+    activity.set(e.business_id, list);
+  }
+  return { activity, customers: new Map(totals.results.map((t) => [t.business_id, { units: t.units, net: t.net }])) };
 }
 
 /* ---------- Stalls and foot traffic ---------- */
@@ -105,10 +140,10 @@ const cityOf = (id: string | null | undefined): string | null => (id == null || 
 const placeIn = (city: string, id: string | null | undefined): Place | undefined =>
   (id && Object.hasOwn(CITY_MAPS, city) ? CITY_MAPS[city].placeById[id] : undefined);
 /** A stall is one place in one city. */
-const spot = (city: string, place: string) => `${city}:${place}`;
+export const spot = (city: string, place: string) => `${city}:${place}`;
 
 /** Players who walked into each place today or yesterday, by `spot`. */
-async function visitorsAt(db: D1Database, at: { city: string; place_id: string }[], now: number): Promise<Map<string, number>> {
+export async function visitorsAt(db: D1Database, at: { city: string; place_id: string }[], now: number): Promise<Map<string, number>> {
   const ids = [...new Set(at.map((a) => a.place_id).filter((p) => p in STALLS))];
   if (!ids.length) return new Map();
   const { results } = await db
@@ -119,10 +154,10 @@ async function visitorsAt(db: D1Database, at: { city: string; place_id: string }
 }
 
 /** SQL for "this business has something on its shelf", which is what makes it open. */
-const HAS_STOCK = 'EXISTS (SELECT 1 FROM business_products bp WHERE bp.business_id = businesses.id AND bp.stock > 0)';
+export const HAS_STOCK = 'EXISTS (SELECT 1 FROM business_products bp WHERE bp.business_id = businesses.id AND bp.stock > 0)';
 /** SQL for "this business still holds its stall": something on the shelf, or the shelf emptied (or the stall opened) within the hold window. Binds one value: now - BIZ.stallHoldMs. */
 const HOLDS_STALL = `(${HAS_STOCK} OR shelf_at > ?1 OR created_at > ?1)`;
-const holdsStall = (row: BizRow, now: number) => row.stocked > 0 || Math.max(row.shelf_at, row.created_at) > now - BIZ.stallHoldMs;
+export const holdsStall = (row: Pick<BizRow, 'stocked' | 'shelf_at' | 'created_at'>, now: number) => row.stocked > 0 || Math.max(row.shelf_at, row.created_at) > now - BIZ.stallHoldMs;
 
 /** Stalls taken at a place, not counting business `except`. */
 async function stallsTaken(db: D1Database, city: string, place: string, now: number, except = 0) {
@@ -178,6 +213,106 @@ function bizView(row: BizRow, skill: number, now: number, visitors: number) {
 
 const owned = (db: D1Database, uid: string, id: number) =>
   db.prepare(`SELECT *, ${HAS_STOCK} AS stocked FROM businesses WHERE id = ? AND uid = ?`).bind(id, uid).first<BizRow>();
+
+/* ---------- Restocks and sales, whoever starts them ---------- */
+
+export interface Restock {
+  /** Unique per restock: the client's request id, or 'auto:<tick>:<listing>' for an automatic one. */
+  requestId: string;
+  uid: string; businessId: number; listingId: number; product: string;
+  quantity: number;
+  /** The shelf price the listing keeps (the owner's restock can change it at the same time). */
+  price: number;
+  /** What the units cost all in, and the part of that which is the origin state's export levy. */
+  cost: number; levy: number; origin: CivicCity | null | undefined;
+  /** Units of one product the shelf holds. */
+  shelf: number;
+}
+
+/**
+ * Buying stock at wholesale from the owner's wallet: the owner's own restock (/api/business/listing) and the
+ * automatic one (worker/shops.ts) both run these. Each statement checks the request itself, so one batch can hold
+ * several restocks; afterwards the request is 'paid' or 'failed', and a request id that was used already does nothing.
+ */
+export function restockStmts(db: D1Database, r: Restock, now: number) {
+  return [
+    ensureWallet(db, r.uid),
+    db.prepare(
+      "INSERT OR IGNORE INTO business_restock_requests (id, business_id, uid, product, quantity, cost, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+    ).bind(r.requestId, r.businessId, r.uid, r.product, r.quantity, r.cost, now),
+    db.prepare(
+      `UPDATE wallets SET balance = balance - ?3, updated_at = ?4
+       WHERE uid = ?1 AND balance >= ?3
+         AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?2 AND uid = ?1 AND business_id = ?5 AND product = ?6
+                     AND quantity = ?7 AND cost = ?3 AND status = 'pending')
+         AND EXISTS (SELECT 1 FROM business_products WHERE id = ?8 AND business_id = ?5 AND stock + ?7 <= ?9)`,
+    ).bind(r.uid, r.requestId, r.cost, now, r.businessId, r.product, r.quantity, r.listingId, r.shelf),
+    db.prepare(
+      `UPDATE business_products SET price = ?3, stock = stock + ?4
+       WHERE id = ?1 AND business_id = ?2 AND stock + ?4 <= ?5
+         AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?6 AND uid = ?7 AND business_id = ?2
+                     AND product = ?8 AND quantity = ?4 AND cost = ?9 AND status = 'pending')
+         AND changes() = 1`,
+    ).bind(r.listingId, r.businessId, r.price, r.quantity, r.shelf, r.requestId, r.uid, r.product, r.cost),
+    db.prepare(
+      `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
+       SELECT ?1, ?2, 'spend', ?3, ?4, 1, ?5
+       WHERE changes() = 1 AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?6 AND status = 'pending')`,
+    ).bind(r.uid, `market-stock:${r.requestId}`, `market-stock:${r.product}`, -r.cost, now, r.requestId),
+    db.prepare("UPDATE business_restock_requests SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
+      .bind(r.requestId),
+    // The levy goes to the state the goods come from, only when this very batch marked the request paid.
+    // With the state named the shop owner isn't in the statement at all: binding them anyway makes D1 refuse the whole batch.
+    ...(r.levy > 0 && r.origin ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', r.origin)).bind(r.levy)] : []),
+    db.prepare("UPDATE business_restock_requests SET status = 'failed' WHERE id = ? AND status = 'pending'")
+      .bind(r.requestId),
+    db.prepare("UPDATE businesses SET shelf_at = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?3 AND status = 'paid')")
+      .bind(now, r.businessId, r.requestId),
+  ];
+}
+
+export interface Sale {
+  /** The marketplace_orders row, already written as 'pending'. */
+  orderId: string;
+  listingId: number; seller: string; quantity: number;
+  /** The shelf price times the units: what the seller is paid before the sales tax the order row holds. */
+  total: number;
+  /** What the state gets out of the order: the sales tax, plus any delivery levy. */
+  stateTake: number;
+  /** The shop's city, and whose home state takes the money if that city has no government of its own. */
+  city: string; payer: string;
+}
+
+/**
+ * The seller's side of an order, the same whoever the buyer is (a player at /api/market/buy, or customers from
+ * worker/shops.ts): the units leave the shelf, the seller is paid the shelf price less sales tax, the order is marked
+ * paid and the state gets its take. The first statement only goes ahead if the one just before it in the batch changed
+ * a row (the buyer paying, or the customers' order being written), and each one after only if the one before did.
+ */
+export function saleStmts(db: D1Database, o: Sale, now: number) {
+  const state = civicCity(o.city);
+  return [
+    db.prepare(
+      `UPDATE business_products SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2 AND changes() = 1
+         AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?3 AND product_id = ?1 AND quantity = ?2 AND status = 'pending')`,
+    ).bind(o.listingId, o.quantity, o.orderId),
+    db.prepare(
+      `UPDATE wallets SET balance = balance + ?2 - (SELECT tax FROM marketplace_orders WHERE id = ?4), updated_at = ?3 WHERE uid = ?1 AND changes() = 1
+         AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?4 AND seller_uid = ?1 AND total = ?2 AND status = 'pending')`,
+    ).bind(o.seller, o.total, now, o.orderId),
+    db.prepare("UPDATE marketplace_orders SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
+      .bind(o.orderId),
+    // Only when this very batch marked the order paid. With the shop's own state named, the payer isn't in the
+    // statement at all: binding them anyway makes D1 refuse the whole batch.
+    ...(o.stateTake > 0 ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', state)).bind(...(state ? [o.stateTake] : [o.stateTake, o.payer]))] : []),
+    db.prepare(
+      `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
+       SELECT seller_uid, 'market-sale:' || id, 'market_sale', product, total - tax, 1, ?2
+       FROM marketplace_orders WHERE id = ?1 AND status = 'paid'
+       ON CONFLICT(uid, client_id) DO NOTHING`,
+    ).bind(o.orderId, now),
+  ];
+}
 
 /* ---------- Router ---------- */
 
@@ -310,9 +445,18 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
          FROM business_products bp WHERE bp.business_id IN (${rows.map(() => '?').join(',')}) ORDER BY bp.id`,
       ).bind(...rows.map((r) => r.id)).all<ProductRow>()
       : { results: [] as ProductRow[] };
+    // Read on their own, so the Business app still loads before migrations/0099_npc_shoppers.sql has run.
+    const [autos, recent] = await Promise.all([
+      rows.length
+        ? db.prepare(`SELECT id, auto_min, auto_to, auto_short FROM business_products WHERE business_id IN (${rows.map(() => '?').join(',')})`)
+          .bind(...rows.map((r) => r.id)).all<AutoRow>().then((r) => r.results).catch(() => [] as AutoRow[])
+        : [] as AutoRow[],
+      shopActivity(db, me, now),
+    ]);
+    const autoById = new Map(autos.map((a) => [a.id, a]));
     const listingsByBusiness = new Map<number, NonNullable<ReturnType<typeof listingView>>[]>();
     for (const p of products.results) {
-      const listing = listingView(p);
+      const listing = listingView(p, autoById.get(p.id));
       if (listing) listingsByBusiness.set(p.business_id, [...(listingsByBusiness.get(p.business_id) ?? []), listing]);
     }
     const trained = await db.prepare('SELECT skill, trained_at FROM skills WHERE uid = ?').bind(me).all<{ skill: string; trained_at: number }>();
@@ -333,6 +477,8 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       businesses: rows.map((r) => ({
         ...bizView(r, skillLevel(xp[BUSINESS_BY_ID[r.type].skill]), now, visitors.get(spot(r.city, r.place_id)) ?? 0),
         listings: listingsByBusiness.get(r.id) ?? [],
+        customers: recent.customers.get(r.id) ?? { units: 0, net: 0 },
+        activity: recent.activity.get(r.id) ?? [],
       })),
     });
   }
@@ -448,40 +594,10 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       return json({ ok: true, balance: await getBalance(db, me) });
     }
 
-    await db.batch([
-      ensureWallet(db, me),
-      db.prepare(
-        "INSERT OR IGNORE INTO business_restock_requests (id, business_id, uid, product, quantity, cost, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-      ).bind(b.requestId, row.id, me, product.id, b.quantity, cost, now),
-      db.prepare(
-        `UPDATE wallets SET balance = balance - ?3, updated_at = ?4
-         WHERE uid = ?1 AND balance >= ?3
-           AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?2 AND uid = ?1 AND business_id = ?5 AND product = ?6
-                       AND quantity = ?7 AND cost = ?3 AND status = 'pending')
-           AND EXISTS (SELECT 1 FROM business_products WHERE id = ?8 AND business_id = ?5 AND stock + ?7 <= ?9)`,
-      ).bind(me, b.requestId, cost, now, row.id, product.id, b.quantity, listing.id, shelf),
-      db.prepare(
-        `UPDATE business_products SET price = ?3, stock = stock + ?4
-         WHERE id = ?1 AND business_id = ?2 AND stock + ?4 <= ?5
-           AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?6 AND uid = ?7 AND business_id = ?2
-                       AND product = ?8 AND quantity = ?4 AND cost = ?9 AND status = 'pending')
-           AND changes() = 1`,
-      ).bind(listing.id, row.id, b.price, b.quantity, shelf, b.requestId, me, product.id, cost),
-      db.prepare(
-        `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
-         SELECT ?1, ?2, 'spend', ?3, ?4, 1, ?5
-         WHERE changes() = 1 AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?6 AND status = 'pending')`,
-      ).bind(me, `market-stock:${b.requestId}`, `market-stock:${product.id}`, -cost, now, b.requestId),
-      db.prepare("UPDATE business_restock_requests SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
-        .bind(b.requestId),
-      // The levy goes to the state the goods come from, only when this very batch marked the request paid.
-      // With the state named the shop owner isn't in the statement at all: binding them anyway makes D1 refuse the whole batch.
-      ...(levy > 0 && origin ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', origin)).bind(levy)] : []),
-      db.prepare("UPDATE business_restock_requests SET status = 'failed' WHERE id = ? AND status = 'pending'")
-        .bind(b.requestId),
-      db.prepare("UPDATE businesses SET shelf_at = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM business_restock_requests WHERE id = ?3 AND status = 'paid')")
-        .bind(now, row.id, b.requestId),
-    ]);
+    await db.batch(restockStmts(db, {
+      requestId: b.requestId, uid: me, businessId: row.id, listingId: listing.id, product: product.id,
+      quantity: b.quantity!, price: b.price!, cost, levy, origin, shelf,
+    }, now));
     const request = await db.prepare('SELECT status FROM business_restock_requests WHERE id = ?').bind(b.requestId).first<{ status: string }>();
     if (request?.status !== 'paid') {
       const balance = await getBalance(db, me);
@@ -534,27 +650,11 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
                        AND product_id = ?5 AND quantity = ?6 AND total = ?3 AND total + fee = ?9 AND status = 'pending')
            AND EXISTS (SELECT 1 FROM business_products WHERE id = ?5 AND business_id = ?8 AND stock >= ?6)`,
       ).bind(me, b.requestId, total, now, listing.id, b.quantity, listing.seller_uid, listing.business_id, charge),
-      db.prepare(
-        `UPDATE business_products SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2 AND changes() = 1
-           AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?3 AND product_id = ?1 AND quantity = ?2 AND status = 'pending')`,
-      ).bind(listing.id, b.quantity, b.requestId),
-      db.prepare(
-        `UPDATE wallets SET balance = balance + ?2 - (SELECT tax FROM marketplace_orders WHERE id = ?4), updated_at = ?3 WHERE uid = ?1 AND changes() = 1
-           AND EXISTS (SELECT 1 FROM marketplace_orders WHERE id = ?4 AND seller_uid = ?1 AND total = ?2 AND status = 'pending')`,
-      ).bind(listing.seller_uid, total, now, b.requestId),
-      db.prepare("UPDATE marketplace_orders SET status = 'paid' WHERE id = ? AND status = 'pending' AND changes() = 1")
-        .bind(b.requestId),
-      // The delivery levy and the sales tax are the state's. Only when this very batch marked the order paid.
-      // With the shop's own state named, the buyer isn't in the statement at all: binding them anyway makes D1 refuse the whole order.
-      ...(fee + salesTax > 0 ? [db.prepare(stateRevenueSql('?1', '?2', 'changes() = 1', civicCity(listing.city))).bind(...(civicCity(listing.city) ? [fee + salesTax] : [fee + salesTax, me]))] : []),
+      // The delivery levy and the sales tax both go to the state; the buyer's home state if the shop's city has no government.
+      ...saleStmts(db, { orderId: b.requestId, listingId: listing.id, seller: listing.seller_uid, quantity: b.quantity!, total, stateTake: fee + salesTax, city: listing.city, payer: me }, now),
       db.prepare(
         `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
          SELECT buyer_uid, 'market-buy:' || id, 'market_buy', product, -(total + fee), 1, ?2
-         FROM marketplace_orders WHERE id = ?1 AND status = 'paid'`,
-      ).bind(b.requestId, now),
-      db.prepare(
-        `INSERT INTO ledger (uid, client_id, kind, ref, amount, applied, created_at)
-         SELECT seller_uid, 'market-sale:' || id, 'market_sale', product, total - tax, 1, ?2
          FROM marketplace_orders WHERE id = ?1 AND status = 'paid'`,
       ).bind(b.requestId, now),
       // The shelf held stock up to this sale: if that was the last unit, the hold on the stall runs from here.
@@ -642,6 +742,25 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       color: b?.color && BIZ_COLOURS.includes(b.color) ? b.color : row.color,
     }).run();
     return res.meta.changes ? json({ ok: true }) : clash();
+  }
+
+  // Auto-restock for one product on the shelf: worker/shops.ts refills it to `to` from the wallet once it drops to `min`.
+  if (path === '/api/business/auto') {
+    const b = await body<{ product?: string; on?: boolean; min?: number; to?: number }>(req);
+    const product = b?.product && Object.hasOwn(MARKET_PRODUCT_BY_ID, b.product) ? MARKET_PRODUCT_BY_ID[b.product] : undefined;
+    if (!product || product.business !== row.type) return err(400, 'That product does not belong in this business');
+    const listing = await db.prepare('SELECT id FROM business_products WHERE business_id = ? AND product = ?').bind(id, product.id).first<{ id: number }>();
+    if (!listing) return err(400, 'Stock it once yourself, then turn on auto-restock');
+    const shelf = shelfOf(sizeOf(row.size));
+    const on = b?.on === true;
+    if (on && (!Number.isInteger(b?.min) || !Number.isInteger(b?.to) || b!.min! < 0 || b!.to! > shelf || b!.min! >= b!.to!)) {
+      return err(400, `Refill below the top level, and fill to at most ${shelf}`);
+    }
+    // A fresh setting forgets an old "couldn't pay": the next shortfall is told again.
+    const res = await db.prepare('UPDATE business_products SET auto_min = ?1, auto_to = ?2, auto_short = 0 WHERE id = ?3 AND business_id = ?4')
+      .bind(on ? b!.min : null, on ? b!.to : null, listing.id, id).run().catch(() => null);
+    if (!res) return err(503, 'Auto-restock is not open yet. Try again later');
+    return json({ ok: true });
   }
 
   if (path === '/api/business/hire') {

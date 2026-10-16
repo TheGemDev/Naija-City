@@ -1,60 +1,59 @@
-// Guns (rules: src/game/guns.ts, migration 0098). Buying one at the licensed shop or from the Fixer's dealer, rounds,
+// Guns (rules: src/game/guns.ts, migration 0098). Guns are illegal: buying one from the Fixer's dealer, rounds,
 // a vest and an armed bodyguard; then robbing a player at gunpoint, shooting one, or holding up a passer-by or a shop.
 // A robbery or shooting of a player is written into `crimes` like any street robbery (kind 'pickpocket', `armed` set),
 // so the victim reports it, the police hunt the robber and bail works the same. Nobody dies: a player who is shot is
-// hurt for a while and pays a hospital bill.
+// hurt for a while and pays a hospital bill. Anyone arrested with a gun loses it and pays a huge fine (confiscateGun).
 
 import type { CrimeReport } from '../src/game/crime';
-import { GUNS, GUN_RULES, HOLDUPS, isGun, type GunId, type GunResult, type GunState, type HoldupKind, type ShotEvent } from '../src/game/guns';
+import { GUNS, GUN_RULES, HOLDUPS, isGun, type GunId, type GunResult, type GunSeizure, type GunState, type HoldupKind, type ShotEvent } from '../src/game/guns';
 import type { FirebaseUser } from './auth';
 import { injuredUntil, jailedUntil, jailStmt, loadLaws, rand, transfer } from './crime';
 import { handle, naira, postFeed } from './feed';
 import { notifyPlayer, whereIs } from './shards';
-import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
+import { applyStmts, ensureWallet, getBalance } from './wallet';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const err = (status: number, error: string) => json({ error }, status);
 
-interface GunRow { gun: GunId; ammo: number; licensed: number; bought_at: number }
+interface GunRow { gun: GunId; ammo: number; bought_at: number }
 interface PlayerRow { username: string | null; vest_hits: number; escort_until: number | null; gun_at: number | null; last_arrest_at: number | null }
 
 const playerOf = (db: D1Database, uid: string) =>
   db.prepare('SELECT username, vest_hits, escort_until, gun_at, last_arrest_at FROM players WHERE uid = ?').bind(uid).first<PlayerRow>();
 
 /**
- * The gun this player carries. An unlicensed gun bought before their last arrest was kept by the police: it goes now,
- * and `seized` names it (once, on the call that takes it).
+ * The police found a gun on someone they arrested: it goes, and they pay its fine (as much as they have). Null when
+ * there was no gun, or another call already took it. Run on every arrest's search (worker/phoneSearch.ts).
  */
-async function gunOf(db: D1Database, uid: string): Promise<{ gun: GunRow | null; seized: string | null }> {
+export async function confiscateGun(db: D1Database, uid: string, now = Date.now()): Promise<GunSeizure | null> {
+  const gone = await db.prepare('DELETE FROM guns WHERE uid = ? RETURNING gun').bind(uid).first<{ gun: string }>();
+  if (!gone || !isGun(gone.gun)) return null;
+  const fine = await transfer(db, uid, null, GUNS[gone.gun].fine, 'fine', '', `gun-fine:${uid}:${now}`);
+  return { gun: gone.gun, fine };
+}
+
+/**
+ * The gun this player carries. One bought before their last arrest should have gone at that arrest's search; if an
+ * arrest skipped the search, it goes now, fine and all, and `seized` says so (once, on the call that takes it).
+ */
+async function gunOf(db: D1Database, uid: string): Promise<{ gun: GunRow | null; seized: GunSeizure | null }> {
   const r = await db
-    .prepare('SELECT g.gun, g.ammo, g.licensed, g.bought_at, p.last_arrest_at FROM guns g JOIN players p ON p.uid = g.uid WHERE g.uid = ?')
+    .prepare('SELECT g.gun, g.ammo, g.bought_at, p.last_arrest_at FROM guns g JOIN players p ON p.uid = g.uid WHERE g.uid = ?')
     .bind(uid)
     .first<GunRow & { last_arrest_at: number | null }>();
   if (!r || !isGun(r.gun)) return { gun: null, seized: null };
-  if (!r.licensed && r.last_arrest_at && r.last_arrest_at > r.bought_at) {
-    const gone = await db.prepare('DELETE FROM guns WHERE uid = ? AND bought_at = ? RETURNING uid').bind(uid, r.bought_at).first();
-    return { gun: null, seized: gone ? GUNS[r.gun].name : null };
-  }
+  if (r.last_arrest_at && r.last_arrest_at > r.bought_at) return { gun: null, seized: await confiscateGun(db, uid) };
   return { gun: r, seized: null };
 }
 
-/** Whether the gun shop will sell to them: no cell, and no arrest for a while. */
-function licenseOf(p: PlayerRow | null, jailed: number | null, now: number) {
-  if (jailed) return { ok: false, why: 'Nobody sells guns into a police cell' };
-  const clean = (p?.last_arrest_at ?? 0) + GUN_RULES.license.cleanMs - now;
-  if (clean > 0) return { ok: false, why: `You were arrested recently. Come back in ${Math.ceil(clean / 3_600_000)} hours` };
-  return { ok: true, why: null };
-}
-
 async function stateOf(db: D1Database, uid: string, now: number): Promise<GunState> {
-  const [{ gun, seized }, p, jailed] = await Promise.all([gunOf(db, uid), playerOf(db, uid), jailedUntil(db, uid)]);
+  const [{ gun, seized }, p] = await Promise.all([gunOf(db, uid), playerOf(db, uid)]);
   return {
-    gun: gun ? { id: gun.gun, ammo: gun.ammo, licensed: !!gun.licensed } : null,
+    gun: gun ? { id: gun.gun, ammo: gun.ammo } : null,
     vest: p?.vest_hits ?? 0,
     escortUntil: p?.escort_until && p.escort_until > now ? p.escort_until : null,
     readyAt: (p?.gun_at ?? 0) + GUN_RULES.cooldownMs,
-    license: licenseOf(p, jailed, now),
     seized,
   };
 }
@@ -86,14 +85,14 @@ async function closeEnough(env: Env, a: string, b: string): Promise<string | nul
 async function ready(db: D1Database, me: string, now: number): Promise<{ error: string; status: number } | { gun: GunRow; p: PlayerRow }> {
   const [{ gun, seized }, p] = await Promise.all([gunOf(db, me), playerOf(db, me)]);
   if (!p?.username) return { error: 'Pick a username first', status: 403 };
-  if (!gun) return { error: seized ? `The police kept your ${seized} when they arrested you` : 'You don’t have a gun', status: 409 };
+  if (!gun) return { error: seized ? `The police kept your ${GUNS[seized.gun].name} when they arrested you` : 'You don’t have a gun', status: 409 };
   if (gun.ammo < GUNS[gun.gun].rounds) return { error: 'You are out of rounds. Buy a box first', status: 409 };
   if (await jailedUntil(db, me)) return { error: 'You are in a police cell', status: 403 };
   if (await injuredUntil(db, me)) return { error: 'You are hurt. Rest first', status: 403 };
   const claimed = await db.prepare('UPDATE players SET gun_at = ?1 WHERE uid = ?2 AND COALESCE(gun_at, 0) <= ?3 RETURNING uid').bind(now, me, now - GUN_RULES.cooldownMs).first();
   if (!claimed) return { error: 'Lie low for a few minutes before the next job', status: 429 };
-  // The rounds are spent whatever happens next. A licensed gun used in a crime loses its licence.
-  await db.prepare('UPDATE guns SET ammo = ammo - ?1, licensed = 0 WHERE uid = ?2').bind(GUNS[gun.gun].rounds, me).run();
+  // The rounds are spent whatever happens next.
+  await db.prepare('UPDATE guns SET ammo = ammo - ? WHERE uid = ?').bind(GUNS[gun.gun].rounds, me).run();
   return { gun, p };
 }
 
@@ -106,7 +105,7 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
 
   if (path === '/api/guns' && req.method === 'GET') return json(await stateOf(db, me, now));
   if (req.method !== 'POST') return err(405, 'Method not allowed');
-  const b = (await req.json().catch(() => null)) as { gun?: string; source?: string; target?: string; kind?: string } | null;
+  const b = (await req.json().catch(() => null)) as { gun?: string; target?: string; kind?: string } | null;
   const done = async (extra: object = {}) => json({ ...extra, state: await stateOf(db, me, now), balance: await getBalance(db, me) });
 
   /* ---------- Buying ---------- */
@@ -114,24 +113,12 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
   if (path === '/api/guns/buy') {
     if (!isGun(b?.gun)) return err(400, 'Pick a gun');
     const def = GUNS[b.gun];
-    const shop = b?.source === 'shop';
-    const [p, jailed] = await Promise.all([playerOf(db, me), jailedUntil(db, me)]);
-    if (jailed) return err(403, 'You are in a police cell');
-    if (shop) {
-      if (def.shop === null) return err(400, `The gun shop doesn’t sell the ${def.name}`);
-      const license = licenseOf(p, jailed, now);
-      if (!license.ok) return err(403, license.why!);
-    }
-    const price = shop ? def.shop! : def.black;
-    const total = price + (shop ? GUN_RULES.license.fee : 0);
-    if ((await getBalance(db, me)) < total) return err(402, `You need ${naira(total)}`);
-    const id = `gun-buy:${me}:${now}`;
+    if (await jailedUntil(db, me)) return err(403, 'You are in a police cell');
+    if ((await getBalance(db, me)) < def.price) return err(402, `You need ${naira(def.price)}`);
     await db.batch([
-      ...pay(db, me, id, `gun:${def.id}`, price),
-      // The licence is the government's: its fee goes to the federal treasury.
-      ...(shop ? treasuryStmts(db, me, `${id}:license`, 'fee', 'gun-license', GUN_RULES.license.fee, null, 'federal') : []),
-      db.prepare('INSERT INTO guns (uid, gun, ammo, licensed, bought_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(uid) DO UPDATE SET gun = ?2, ammo = ?3, licensed = ?4, bought_at = ?5')
-        .bind(me, def.id, GUN_RULES.startRounds, shop ? 1 : 0, now),
+      ...pay(db, me, `gun-buy:${me}:${now}`, `gun:${def.id}`, def.price),
+      db.prepare('INSERT INTO guns (uid, gun, ammo, licensed, bought_at) VALUES (?1, ?2, ?3, 0, ?4) ON CONFLICT(uid) DO UPDATE SET gun = ?2, ammo = ?3, licensed = 0, bought_at = ?4')
+        .bind(me, def.id, GUN_RULES.startRounds, now),
     ]);
     return done();
   }
@@ -139,10 +126,7 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
   if (path === '/api/guns/ammo') {
     const { gun } = await gunOf(db, me);
     if (!gun) return err(409, 'Buy a gun first');
-    const shop = b?.source === 'shop';
-    // The shop sells rounds only for a gun on its register.
-    if (shop && !gun.licensed) return err(403, 'The gun shop only sells rounds for licensed guns');
-    const price = shop ? GUN_RULES.box.shop : GUN_RULES.box.black;
+    const price = GUN_RULES.box.price;
     if ((await getBalance(db, me)) < price) return err(402, `You need ${naira(price)}`);
     await db.batch([...pay(db, me, `gun-ammo:${me}:${now}`, 'gun-ammo', price), db.prepare('UPDATE guns SET ammo = ammo + ? WHERE uid = ?').bind(GUN_RULES.box.rounds, me)]);
     return done();
@@ -223,9 +207,9 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
       success = true;
     }
 
-    // Gunshots bring the police: always when the victim's guard or gun answered, always for a gun on the register,
-    // most of the time otherwise. Then it is a warrant like any other.
-    const wanted = result.outcome === 'escort' || result.outcome === 'shotBack' || !!gun.licensed || rand() < GUN_RULES.traced;
+    // Gunshots bring the police: always when the victim's guard or gun answered, most of the time otherwise. Then it
+    // is a warrant like any other, and the arrest takes the gun.
+    const wanted = result.outcome === 'escort' || result.outcome === 'shotBack' || rand() < GUN_RULES.traced;
     const row = await db
       .prepare(
         `INSERT INTO crimes (thief_uid, victim_uid, kind, success, amount, status, reported_at, created_at, armed)
@@ -278,12 +262,13 @@ export async function handleGuns(req: Request, env: Env, ctx: ExecutionContext, 
       const [lo, hi] = h.loot;
       const loot = Math.round((lo + rand() * (hi - lo)) / 500) * 500;
       if (rand() < h.police) {
-        // The police were round the corner: the loot goes back and so do you, to a cell.
+        // The police were round the corner: the loot goes back and so do you, to a cell. They keep the gun and fine you.
         const laws = await loadLaws(db);
         const until = now + laws.jailMinutes * 60_000;
         await jailStmt(db, me, until, [`Armed robbery · ${kind === 'shop' ? 'held up a shop' : 'robbed a passer-by'} at gunpoint`]).run();
-        result = { outcome: 'arrested', amount: 0, jailedUntil: until };
-        await postFeed(db, me, 'crime', '🚔', `${who} ${kind === 'shop' ? 'held up a shop' : 'robbed a passer-by at gunpoint'} and ran straight into a police patrol. Gun, loot and all, straight to the cell. ⛓️`).catch(() => {});
+        const seized = await confiscateGun(db, me, now);
+        result = { outcome: 'arrested', amount: 0, jailedUntil: until, seized };
+        await postFeed(db, me, 'crime', '🚔', `${who} ${kind === 'shop' ? 'held up a shop' : 'robbed a passer-by at gunpoint'} and ran straight into a police patrol. Gun, loot and all, straight to the cell${seized ? `, with a ${naira(seized.fine)} fine for the gun` : ''}. ⛓️`).catch(() => {});
       } else {
         // Robbery money is dirty money: the EFCC can read it in the ledger.
         await db.batch([ensureWallet(db, me), ...applyStmts(db, me, `holdup:${me}:${now}`, 'theft_in', kind, loot)]);

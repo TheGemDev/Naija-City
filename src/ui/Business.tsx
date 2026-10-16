@@ -9,13 +9,14 @@ import { useEffect, useState } from 'react';
 import { naira, useGame } from '../game/store';
 import {
   BIZ, BIZ_COLOURS, BIZ_ICONS, BIZ_SIZES, BIZ_SIZE_ORDER, BUSINESSES, BUSINESS_BY_ID, MARKET_PRODUCTS, MARKET_PRODUCT_BY_ID, SKILL_BY_ID, STALLS,
-  openTotal, registrationFee, resizeCost, type BizSize, type BusinessDef, type BusinessType,
+  autoDefaults, openTotal, registrationFee, resizeCost, type BizSize, type BusinessDef, type BusinessType,
 } from '../game/career';
 import { cityMap, placeHere } from '../game/city';
 import { regionOf } from '../game/regions';
 import { useSession } from '../net/session';
 import {
-  brandBusiness, buyBusiness, collectBusiness, loadCareer, manageBusinessListing, moveBusiness, resizeBusiness, useCareer, type BizInfo,
+  brandBusiness, buyBusiness, collectBusiness, loadCareer, manageBusinessListing, moveBusiness, resizeBusiness, setAutoRestock, useCareer,
+  type BizActivity, type BizInfo, type BusinessListing,
 } from '../net/career';
 import { cityHere, loadPlaceShops, standingIn, useCityHere, usePlaceShops, useSharedShop, type PlaceShops } from '../net/market';
 import { shareLink, shopLink } from '../net/deeplink';
@@ -27,6 +28,11 @@ type Page = { kind: 'home' } | { kind: 'create' } | { kind: 'manage'; id: number
 const Badge = ({ icon, color, large }: { icon: string; color: string; large?: boolean }) => (
   <span className={`biz-badge ${large ? 'lg' : ''}`} style={{ background: color }}>{icon}</span>
 );
+
+const ago = (at: number) => {
+  const m = Math.floor((Date.now() - at) / 60_000);
+  return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ago`;
+};
 
 const freeStalls = (id: string, summary: Record<string, PlaceShops>) => (STALLS[id]?.slots ?? 0) - (summary[id]?.taken ?? 0);
 
@@ -197,7 +203,7 @@ function CreatePage({ back, done }: { back(): void; done(type: BusinessType): vo
             <div><span>CAC registration<small className="biz-gov">🏛️ {regionOf(city).name}: {laws.bizFee}% of standard · max {caps.bizFee}%</small></span><b>{naira(registration)}</b></div>
             <div className="total"><span>To open today</span><b>{naira(cost)}</b></div>
           </div>
-          <small className="muted">No guaranteed income: you buy stock at wholesale, set your price and earn when other players buy from your shop. Stock only leaves the shelf when someone buys, and the shop is open for as long as there is something on it.</small>
+          <small className="muted">No guaranteed income: you buy stock at wholesale, set your price and earn when players, or customers passing your stall, buy from it. Customers come more often to a fair price. Stock only leaves the shelf when someone buys, and the shop is open for as long as there is something on it.</small>
         </>
       )}
 
@@ -212,6 +218,55 @@ function CreatePage({ back, done }: { back(): void; done(type: BusinessType): vo
 }
 
 /* ---------- Manage ---------- */
+
+/** Auto-restock for one product: a switch, and the two levels it works between. The cron refills from your wallet at the price shown above. */
+function AutoRestock({ b, listing, unit }: { b: BizInfo; listing: BusinessListing; unit: number }) {
+  const saved = listing.auto ?? autoDefaults(b.shelf);
+  const [min, setMin] = useState(saved.min);
+  const [to, setTo] = useState(saved.to);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setMin(saved.min); setTo(saved.to); }, [saved.min, saved.to]);
+  const ok = Number.isInteger(min) && Number.isInteger(to) && min >= 0 && to <= b.shelf && min < to;
+  const changed = !!listing.auto && (min !== listing.auto.min || to !== listing.auto.to);
+
+  async function save(auto: { min: number; to: number } | null) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await setAutoRestock(b.id, listing.product, auto);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="biz-auto">
+      <label className="biz-auto-head">
+        <span className="tile-info">
+          <b>🔁 Auto-restock</b>
+          <small>{listing.auto ? `Back up to ${listing.auto.to} once ${listing.auto.min} or fewer are left` : 'Buys more from your wallet when stock runs low'}</small>
+        </span>
+        <input type="checkbox" role="switch" aria-label="Auto-restock" checked={!!listing.auto} disabled={busy || (!listing.auto && !ok)}
+          onChange={(e) => void save(e.target.checked ? { min, to } : null)} />
+      </label>
+      {listing.auto?.short && <small className="biz-warn">Paused: your wallet couldn't pay for the last refill. It carries on by itself once you can.</small>}
+      <div className="biz-auto-levels">
+        <label>
+          <small>When stock is down to</small>
+          <input className="text-input" type="number" inputMode="numeric" min={0} max={b.shelf - 1} value={min} disabled={busy} onChange={(e) => setMin(Math.floor(Number(e.target.value)))} />
+        </label>
+        <label>
+          <small>Fill back up to</small>
+          <input className="text-input" type="number" inputMode="numeric" min={1} max={b.shelf} value={to} disabled={busy} onChange={(e) => setTo(Math.floor(Number(e.target.value)))} />
+        </label>
+      </div>
+      {ok
+        ? <small>A refill is about {to - min} units, {naira(unit * (to - min))} from your wallet.</small>
+        : <small className="biz-warn">Refill below the top level, and fill to at most {b.shelf}.</small>}
+      {changed && <button className="btn go" disabled={busy || !ok} onClick={() => void save({ min, to })}>{busy ? 'Saving…' : 'Save levels'}</button>}
+    </div>
+  );
+}
 
 /** One product on the shelf. Tap it to open its price and stock controls; everything else stays folded away. */
 function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: string; open: boolean; toggle(): void }) {
@@ -249,7 +304,8 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
         <span className="tile-icon">{item.icon}</span>
         <span className="tile-info">
           <b>{item.name}</b>
-          <small>{listing ? `${naira(listing.price)} each · ${listing.stock} in stock · ${listing.sold} sold` : 'Not on your shelf yet'}</small>
+          <small>{listing ? `${naira(listing.price)} each · ${listing.stock} in stock · ${listing.sold} sold${listing.auto ? ' · 🔁 auto' : ''}` : 'Not on your shelf yet'}</small>
+          {listing?.auto?.short && <small className="biz-warn">Auto-restock paused: top up your wallet</small>}
         </span>
         <span className="biz-product-cta">{open ? 'Close' : listing ? 'Edit' : 'Sell this'}</span>
       </button>
@@ -272,8 +328,25 @@ function ProductRow({ b, productId, open, toggle }: { b: BizInfo; productId: str
           <button className="btn go" disabled={busy || !priceOk || !changed || (!listing && quantity < 1)} onClick={() => void save()}>
             {busy ? 'Saving…' : quantity > 0 ? `Buy ${quantity} · ${naira(stock.unit * quantity)}` : 'Save price'}
           </button>
+          {listing && <AutoRestock b={b} listing={listing} unit={stock.unit} />}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One thing customers or auto-restock did while you were away. */
+function ActivityRow({ a }: { a: BizActivity }) {
+  const item = MARKET_PRODUCT_BY_ID[a.product];
+  const sale = a.kind === 'sale';
+  return (
+    <div>
+      <span className="tile-icon">{sale ? '🛍️' : '🔁'}</span>
+      <span className="tile-info">
+        <b>{sale ? 'Customers bought' : 'Auto-restocked'} {a.quantity} × {item?.name ?? a.product}</b>
+        <small>{ago(a.at)}</small>
+      </span>
+      <b className={sale ? 'good' : ''}>{sale ? '+' : '−'}{naira(Math.abs(a.amount))}</b>
     </div>
   );
 }
@@ -337,8 +410,12 @@ function ManagePage({ b, back }: { b: BizInfo; back(): void }) {
           </div>
           <div className="biz-do">
             <span className="tile-info">
-              <small>Sold to players</small>
+              <small>Sold so far</small>
               <b>{sold} unit{sold === 1 ? '' : 's'}</b>
+            </span>
+            <span className="tile-info" style={{ alignItems: 'flex-end', textAlign: 'right' }}>
+              <small>To customers, last 24h</small>
+              <b>{b.customers.units} · <span className="good">{naira(b.customers.net)}</span></b>
             </span>
           </div>
           {b.pending > 0 && (
@@ -350,13 +427,21 @@ function ManagePage({ b, back }: { b: BizInfo; back(): void }) {
               <button className="btn go" onClick={() => void collectBusiness(b.id)}>💰 Collect</button>
             </div>
           )}
-          <small className="muted">Every sale is paid straight into your wallet. Stock stays on the shelf until a player buys it.</small>
+          <small className="muted">Every sale is paid straight into your wallet, whether a player buys or a customer walks in. Customers come more often to a busy place, a bigger shop with staff and a fair price. Turn on auto-restock under Products to keep the shelf full.</small>
+          {b.activity.length > 0 && (
+            <>
+              <h4>Lately</h4>
+              <div className="biz-activity">
+                {b.activity.map((a, i) => <ActivityRow key={i} a={a} />)}
+              </div>
+            </>
+          )}
         </>
       )}
 
       {tab === 'products' && (
         <>
-          <small className="muted">What players can buy from you. Tap a product to set its price or add stock. Your {BIZ_SIZES[b.size].label.toLowerCase()} holds {b.shelf} of each.</small>
+          <small className="muted">What players and customers can buy from you. Tap a product to set its price or add stock. Your {BIZ_SIZES[b.size].label.toLowerCase()} holds {b.shelf} of each.</small>
           {products.map((p) => (
             <ProductRow key={p.id} b={b} productId={p.id} open={openProduct === p.id} toggle={() => setOpenProduct(openProduct === p.id ? null : p.id)} />
           ))}
@@ -457,7 +542,7 @@ function Home({ open, create }: { open(id: number): void; create(): void }) {
             </div>
             <div className="biz-card-money">
               <b>{units(b)}</b>
-              <small>in stock</small>
+              <small>in stock{b.customers.units > 0 ? ` · ${b.customers.units} sold to customers in 24h` : ''}</small>
             </div>
             <div className="biz-card-actions">
               {b.pending > 0 && <button className="btn go" onClick={() => void collectBusiness(b.id)}>💰 Collect {naira(b.pending)}</button>}
@@ -471,7 +556,7 @@ function Home({ open, create }: { open(id: number): void; create(): void }) {
         <div className="biz-empty">
           <span>🏪</span>
           <b>You don’t run a business yet</b>
-          <p>Rent a stall at a place on the map: a POS stand at the Secretariat, a bar at the club, a kiosk in the market. Players who walk in buy from you.</p>
+          <p>Rent a stall at a place on the map: a POS stand at the Secretariat, a bar at the club, a kiosk in the market. Players and passing customers buy from you.</p>
         </div>
       )}
 

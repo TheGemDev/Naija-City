@@ -1,18 +1,29 @@
 // After every arrest the police or EFCC go through the player's phone (rules: src/game/phoneSearch.ts).
 // Installed apps come from the cloud save; shady ones add a fine and jail time, and some are seized.
+// They always pat you down first: a gun on you is seized with a huge fine (worker/guns.ts).
 
 import { notifyPlayer } from './shards';
 import { rand, transfer, usernames } from './crime';
 import { handle, naira, postFeed } from './feed';
 import { PHONE_SEARCH, type Agency, type PhoneSearchResult } from '../src/game/phoneSearch';
 import { fineItem, recordExhibits } from './exhibits';
+import { confiscateGun } from './guns';
+import { GUNS } from '../src/game/guns';
 
 
 /** Search the phone of someone who has just been jailed for baseMinutes. Tells them what was found. */
 export async function searchPhone(env: Env, uid: string, agency: Agency, baseMinutes: number): Promise<PhoneSearchResult> {
   const db = env.DB;
   const now = Date.now();
-  const result: PhoneSearchResult = { agency, searched: false, found: [], seized: [], fine: 0, extraMinutes: 0, until: null, lines: [], at: now };
+  const result: PhoneSearchResult = { agency, searched: false, found: [], seized: [], fine: 0, extraMinutes: 0, until: null, lines: [], at: now, gun: null };
+  // Guns are illegal. Whatever they arrested you for, a gun on you goes, and so does its fine.
+  result.gun = await confiscateGun(db, uid, now);
+  if (result.gun) {
+    const name = GUNS[result.gun.gun].name;
+    result.lines.push(`They patted you down and found your ${name}. Seized, and a ${naira(result.gun.fine)} fine.`);
+    const who = (await usernames(db, [uid])).get(uid);
+    await postFeed(db, uid, 'arrest', '🔫', `${agency === 'efcc' ? 'EFCC' : 'Police'} found a ${name.toLowerCase()} on ${handle(who)} at the arrest. Gun seized, ${naira(result.gun.fine)} fine. Illegal firearm, case closed. ⛓️`).catch(() => {});
+  }
   const row = await db.prepare('SELECT data FROM saves WHERE uid = ?').bind(uid).first<{ data: string }>();
   let save: { apps?: unknown } | null = null;
   try {

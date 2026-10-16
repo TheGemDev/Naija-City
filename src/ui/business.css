@@ -129,3 +129,17 @@
 .shop-scope { display: flex; gap: 6px; }
 .shop-scope button { flex: none; padding: 6px 14px; border-radius: 999px; background: var(--bg-f1f5f9); font-size: 12px; font-weight: 700; color: inherit; }
 .shop-scope button.on { background: #166534; color: #fff; }
+
+/* Auto-restock inside a product (src/ui/Business.tsx AutoRestock): the switch on its own line, then the two levels side by side. */
+.biz-auto { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--bg-f1f5f9); }
+.biz-product-body .biz-auto-head { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+.biz-auto-head .tile-info b { font-size: 13px; }
+.biz-auto-levels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+
+/* What customers and auto-restock did lately, on the manage page's overview. */
+.biz-activity { display: flex; flex-direction: column; border-radius: 16px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06); overflow: hidden; }
+.biz-activity > div { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.biz-activity > div + div { border-top: 1px solid var(--bg-f1f5f9); }
+.biz-activity .tile-info { min-width: 0; }
+.biz-activity .tile-info b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.biz-activity > div > b { flex-shrink: 0; margin-left: auto; font-size: 12.5px; white-space: nowrap; }

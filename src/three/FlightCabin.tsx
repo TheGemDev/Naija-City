@@ -4,7 +4,8 @@
 
 import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { DoubleSide, Shape, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { BoxGeometry, DoubleSide, Object3D, PlaneGeometry, Shape, type BufferGeometry, type Group, type InstancedMesh, type Mesh, type MeshStandardMaterial } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { taskDurationSeconds, useGame } from '../game/store';
 import { usePhoto } from '../game/photo';
 import { useLowPerf } from '../game/quality';
@@ -30,11 +31,41 @@ const CLIMB = 0.18;
 
 const smooth = (t: number) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-/** How far through the flight you are, 0 to 1. */
-const progress = () => {
+/** How far through the flight you are, 0 to 1, as the game last ticked it. */
+const ticked = () => {
   const t = useGame.getState().task;
   return t && t.total > 0 ? 1 - t.remaining / t.total : 0;
 };
+
+/**
+ * The game only ticks ten times a second (three/Scene.tsx GameLoop), so `ticked` moves in steps. In the cruise nothing
+ * hangs on it, but on the climb and the landing the height, the runway and the nose all do, and they jerked along at
+ * ten frames a second however smooth the rest was. This runs it on between ticks at the pace the ticks have been
+ * setting, never more than a tick and a half ahead, and works it out once a frame (keyed on the clock) so every part
+ * of the plane sees the same moment.
+ */
+const glide = { frame: -1, p: 0, tickP: -1, tickAt: 0, rate: 0 };
+function progress(now: number) {
+  if (now === glide.frame) return glide.p;
+  const p = ticked();
+  // A new flight, or a new canvas whose clock starts again from nothing: start over at the flight's own pace.
+  if (p < glide.tickP || now < glide.frame) {
+    glide.tickP = -1;
+    glide.rate = 0;
+  }
+  const fresh = glide.tickP < 0;
+  if (p !== glide.tickP) {
+    const dt = now - glide.tickAt;
+    glide.rate = !fresh && dt > 0 ? (p - glide.tickP) / dt : 1 / shape().seconds;
+    glide.tickP = p;
+    glide.tickAt = now;
+  }
+  glide.frame = now;
+  // Never backwards: a tick that comes in a little behind where the glide had got to just waits for it.
+  const next = Math.min(1, p + glide.rate * Math.min(now - glide.tickAt, 0.15));
+  glide.p = fresh ? next : Math.max(glide.p, next);
+  return glide.p;
+}
 
 /**
  * The landing, timed in real seconds so even a five-second hop gets one: the approach (the runway coming up ahead, a
@@ -284,8 +315,8 @@ function Partition({ z, r, axis, cut, door, colour, trim }: { z: number; r: numb
 /** The undercarriage: down on the runway, up once you are climbing, and down again early on the approach. */
 function WheelsDown({ children }: { children: ReactNode }) {
   const group = useRef<Group>(null!);
-  useFrame(() => {
-    const p = progress();
+  useFrame(({ clock }) => {
+    const p = progress(clock.elapsedTime);
     const f = shape();
     group.current.visible = p < CLIMB ? altitude(p, f) < 0.22 : p >= f.descent && approachOf(p, f) > 0.3;
   });
@@ -702,12 +733,38 @@ const APPROACH_LIGHTS = Array.from({ length: 9 }, (_, i) => -RW_LEN / 2 - 8 - i 
 /** Where the main wheels meet the runway, as offsets from the plane's centre line. */
 const MAIN_GEAR: Record<Kind, number> = { ticket: 2.3, jet: 1.7 };
 
+/**
+ * Many copies of one small shape baked into a single mesh. The runway's markings and lights were a mesh each, well
+ * over a hundred with a material each, and the phone paid for every one of them all through the climb and the landing.
+ */
+function copies(make: () => BufferGeometry, at: V3[]) {
+  return mergeGeometries(at.map(([x, y, z]) => make().translate(x, y, z)))!;
+}
+/** A flat strip lying on the runway, `w` across and `d` along it. */
+const strip = (w: number, d: number) => () => new PlaneGeometry(w, d).rotateX(-Math.PI / 2);
+const box = (s: number, h = s) => () => new BoxGeometry(s, h, s);
+/** Built once and kept: every flight lands on the same runway. */
+const RW_SHAPES = {
+  edges: copies(strip(0.3, RW_LEN), [[-(RW_HALF - 0.8), 0.005, 0], [RW_HALF - 0.8, 0.005, 0]]),
+  dashes: copies(strip(0.4, 7), DASHES.map((z): V3 => [0, 0.005, z])),
+  // The start of the runway: the white "piano keys", and the aiming bars where the wheels should land.
+  keys: mergeGeometries([
+    copies(strip(0.7, 9), [-1, 1].flatMap((side) => [1.2, 2.6, 4, 5.4, 6.8].map((x): V3 => [side * x, 0.006, -RW_LEN / 2 + 6]))),
+    copies(strip(2.2, 11), [-1, 1].map((side): V3 => [side * 4.2, 0.006, -RW_LEN / 2 + TOUCHDOWN_PAST])),
+  ])!,
+  // Edge lights down both sides, and the approach lights reaching back from the start, bright enough to see from the air.
+  edgeLights: copies(box(0.25, 0.3), [-1, 1].flatMap((side) => EDGE_LIGHTS.map((z): V3 => [side * (RW_HALF + 0.5), 0.15, z]))),
+  approachLights: copies(box(0.3), APPROACH_LIGHTS.flatMap((z, i) => [-2.4, -1.2, 0, 1.2, 2.4].slice(i % 2 ? 1 : 0, i % 2 ? 4 : 5).map((x): V3 => [x, 0.2, z]))),
+};
+
+const puff = new Object3D();
+
 /** Cloud streaming past, the runway under the wheels, and the land (three/FlightTerrain.tsx) dropping away below on the climb and coming back up to land. */
 function Sky({ kind, floor }: { kind: Kind; floor: number }) {
-  const clouds = useRef<Group>(null!);
+  const clouds = useRef<InstancedMesh>(null!);
   const ground = useRef<Group>(null!);
   const runway = useRef<Group>(null!);
-  const dashes = useRef<Group>(null!);
+  const dashes = useRef<Mesh>(null!);
   const smoke = useRef<Group>(null!);
   const smokeMat = useRef<MeshStandardMaterial>(null!);
   const tarmac = useRef<MeshStandardMaterial>(null!);
@@ -719,17 +776,33 @@ function Sky({ kind, floor }: { kind: Kind; floor: number }) {
     return { x: (near ? 1 : -1) * (12 + Math.random() * 34), y: near ? -13 + Math.random() * 8 : -9 + Math.random() * 9, z: -70 + Math.random() * 140, s: 0.9 + Math.random() * 1.6 };
   }), [low]);
   const motion = useRef<FlightMotion>({ travel: 0, alt: 0, progress: 0 });
-  useFrame((_, dt) => {
-    const p = progress();
+  const warm = useRef(true);
+  useFrame(({ clock }, dt) => {
+    const p = progress(clock.elapsedTime);
     const f = shape();
     const alt = altitude(p, f);
     const step = Math.min(dt, 0.1);
     const speed = groundSpeed(p, f);
-    for (const c of clouds.current.children) {
-      c.position.z -= speed * step;
-      if (c.position.z < -70) c.position.z += 140;
-    }
-    clouds.current.visible = alt > 0.25;
+    // The clouds are one instanced mesh, every puff of every cloud a copy, so they cost one draw, not one per puff.
+    const shown = alt > 0.25;
+    spots.forEach((c, i) => {
+      c.z -= speed * step;
+      if (c.z < -70) c.z += 140;
+      if (!shown) return;
+      PUFFS.forEach(([x, y, z, r], j) => {
+        puff.position.set(c.x + x * c.s, c.y + y * c.s, c.z + z * c.s);
+        puff.scale.set(r * c.s, r * 0.6 * c.s, r * c.s);
+        puff.updateMatrix();
+        clouds.current.setMatrixAt(i * PUFFS.length + j, puff.matrix);
+      });
+    });
+    clouds.current.instanceMatrix.needsUpdate = shown;
+    // On the very first frame they are drawn with no copies at all: that builds their shader as the flight opens, not
+    // a moment into the climb, where building it stalled a phone.
+    const first = warm.current;
+    warm.current = false;
+    clouds.current.count = first && !shown ? 0 : spots.length * PUFFS.length;
+    clouds.current.visible = shown || first;
     // The land slides back under you, and the runway lies over it: on the ground the wheels stand on it.
     ground.current.position.y = floor - RUNWAY - alt * 48;
     motion.current.travel += speed * 1.6 * step;
@@ -755,9 +828,9 @@ function Sky({ kind, floor }: { kind: Kind; floor: number }) {
     marks.current.opacity = fade;
     // Tyre smoke: the wheels hit the runway and leave two puffs behind on it.
     const since = p >= f.touch ? (p - f.touch) * f.seconds : -1;
-    const puff = since >= 0 && since < 1.1;
-    smoke.current.visible = puff;
-    if (puff) {
+    const puffing = since >= 0 && since < 1.1;
+    smoke.current.visible = puffing;
+    if (puffing) {
       const k = since / 1.1;
       smoke.current.scale.setScalar(0.4 + k * 1.6);
       smokeMat.current.opacity = 0.55 * (1 - k);
@@ -766,18 +839,10 @@ function Sky({ kind, floor }: { kind: Kind; floor: number }) {
   const gear = MAIN_GEAR[kind];
   return (
     <>
-      <group ref={clouds}>
-        {spots.map((c, i) => (
-          <group key={i} position={[c.x, c.y, c.z]} scale={c.s}>
-            {PUFFS.map(([x, y, z, r], j) => (
-              <mesh key={j} position={[x, y, z]} scale={[r, r * 0.6, r]}>
-                <sphereGeometry args={[1, 10, 8]} />
-                <meshStandardMaterial color="#ffffff" emissive="#dbeafe" emissiveIntensity={0.35} flatShading />
-              </mesh>
-            ))}
-          </group>
-        ))}
-      </group>
+      <instancedMesh key={spots.length} ref={clouds} args={[undefined, undefined, spots.length * PUFFS.length]} frustumCulled={false} visible={false}>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshStandardMaterial color="#ffffff" emissive="#dbeafe" emissiveIntensity={0.35} flatShading />
+      </instancedMesh>
       <group ref={ground}>
         <FlightTerrain motion={motion} />
         <group ref={runway} position={[0, RUNWAY - 0.006, 0]}>
@@ -785,50 +850,21 @@ function Sky({ kind, floor }: { kind: Kind; floor: number }) {
             <planeGeometry args={[RW_HALF * 2, RW_LEN]} />
             <meshStandardMaterial ref={tarmac} color="#3f3f46" transparent />
           </mesh>
-          {[-(RW_HALF - 0.8), RW_HALF - 0.8].map((x) => (
-            <mesh key={x} position={[x, 0.005, 0]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[0.3, RW_LEN]} />
-              <meshStandardMaterial ref={x < 0 ? marks : undefined} color="#f8fafc" transparent />
-            </mesh>
-          ))}
-          <group ref={dashes}>
-            {DASHES.map((z) => (
-              <mesh key={z} position={[0, 0.005, z]} rotation-x={-Math.PI / 2}>
-                <planeGeometry args={[0.4, 7]} />
-                <meshStandardMaterial color="#f8fafc" />
-              </mesh>
-            ))}
-          </group>
-          {/* The start of the runway: the white "piano keys", and the aiming bars where the wheels should land. */}
-          {[-1, 1].flatMap((side) => [1.2, 2.6, 4, 5.4, 6.8].map((x) => (
-            <mesh key={`k${side}${x}`} position={[side * x, 0.006, -RW_LEN / 2 + 6]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[0.7, 9]} />
-              <meshStandardMaterial color="#f8fafc" />
-            </mesh>
-          )))}
-          {[-1, 1].map((side) => (
-            <mesh key={`a${side}`} position={[side * 4.2, 0.006, -RW_LEN / 2 + TOUCHDOWN_PAST]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[2.2, 11]} />
-              <meshStandardMaterial color="#f8fafc" />
-            </mesh>
-          ))}
-          {/* Edge lights down both sides, and the approach lights reaching back from the start, bright enough to see from the air. */}
-          {[-1, 1].flatMap((side) => EDGE_LIGHTS.map((z) => (
-            <mesh key={`e${side}${z}`} position={[side * (RW_HALF + 0.5), 0.15, z]}>
-              <boxGeometry args={[0.25, 0.3, 0.25]} />
-              <meshStandardMaterial color="#fef3c7" emissive="#fde68a" emissiveIntensity={1.2} />
-            </mesh>
-          )))}
-          {APPROACH_LIGHTS.map((z, i) => (
-            <group key={`l${z}`} position={[0, 0.2, z]}>
-              {[-2.4, -1.2, 0, 1.2, 2.4].slice(i % 2 ? 1 : 0, i % 2 ? 4 : 5).map((x) => (
-                <mesh key={x} position={[x, 0, 0]}>
-                  <boxGeometry args={[0.3, 0.3, 0.3]} />
-                  <meshStandardMaterial color="#ffffff" emissive="#e0f2fe" emissiveIntensity={1.5} />
-                </mesh>
-              ))}
-            </group>
-          ))}
+          <mesh geometry={RW_SHAPES.edges}>
+            <meshStandardMaterial ref={marks} color="#f8fafc" transparent />
+          </mesh>
+          <mesh ref={dashes} geometry={RW_SHAPES.dashes}>
+            <meshStandardMaterial color="#f8fafc" />
+          </mesh>
+          <mesh geometry={RW_SHAPES.keys}>
+            <meshStandardMaterial color="#f8fafc" />
+          </mesh>
+          <mesh geometry={RW_SHAPES.edgeLights}>
+            <meshStandardMaterial color="#fef3c7" emissive="#fde68a" emissiveIntensity={1.2} />
+          </mesh>
+          <mesh geometry={RW_SHAPES.approachLights}>
+            <meshStandardMaterial color="#ffffff" emissive="#e0f2fe" emissiveIntensity={1.5} />
+          </mesh>
           <group ref={smoke} position={[0, 0.5, -RW_LEN / 2 + TOUCHDOWN_PAST]} visible={false}>
             {[-gear, gear].map((x) => (
               <mesh key={x} position={[x, 0, 0]} scale={[1, 0.6, 1.6]}>
@@ -848,7 +884,7 @@ export function FlightCabin({ kind }: { kind: Kind }) {
   const myLook = useGame((s) => s.look);
   const official = useGame((s) => !!s.task?.official);
   useFrame(({ clock }) => {
-    const p = progress();
+    const p = progress(clock.elapsedTime);
     const f = shape();
     const t = clock.elapsedTime;
     const alt = altitude(p, f);

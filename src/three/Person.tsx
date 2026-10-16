@@ -1200,7 +1200,7 @@ const EYE_Y = 0.01;
 const spots = new Map<boolean, { eyeZ: number; browZ: number; lipZ: number }>();
 function faceSpots(f: boolean) {
   let s = spots.get(f);
-  if (!s) spots.set(f, (s = { eyeZ: faceZ(f, EYE_X, EYE_Y) - 0.005, browZ: faceZ(f, EYE_X, EYE_Y + 0.032) + 0.002, lipZ: faceZ(f, 0.016, -0.062) - 0.001 }));
+  if (!s) spots.set(f, (s = { eyeZ: faceZ(f, EYE_X, EYE_Y) - 0.005, browZ: faceZ(f, EYE_X, EYE_Y + 0.032) - 0.001, lipZ: faceZ(f, 0.016, -0.062) - 0.001 }));
   return s;
 }
 
@@ -1388,9 +1388,9 @@ function HeadWear({ g }: { g: Garment }) {
             <cylinderGeometry args={[0.155, 0.15, 0.13, 32]} />
           </M>
           <M color={g.color} geometry={dome(0.14)} position={[0, 0.13, -0.005]} />
-          {/* The veil wrapped under the chin */}
-          <M color={g.color} position={[0, -0.1, 0.02]} rotation={[Math.PI / 2 - 0.3, 0, 0]}>
-            <torusGeometry args={[0.105, 0.03, 8, 16]} />
+          {/* The veil wrapped under the chin, low enough to leave the mouth showing */}
+          <M color={g.color} position={[0, -0.142, 0.02]} rotation={[Math.PI / 2 - 0.3, 0, 0]}>
+            <torusGeometry args={[0.11, 0.028, 8, 16]} />
           </M>
         </>
       );
@@ -1417,7 +1417,8 @@ function HeadWear({ g }: { g: Garment }) {
     case 'durag':
       return (
         <>
-          <M color={g.color} geometry={dome(0.155, 0.6)} position={[0, 0.02, -0.01]} rough={0.3} />
+          {/* Tied on at the forehead, so it is tipped back off the brows */}
+          <M color={g.color} geometry={dome(0.155, 0.6)} position={[0, 0.02, -0.01]} rotation={[-0.3, 0, 0]} rough={0.3} />
           {([-1, 1] as const).map((s) => (
             <M key={s} color={g.color} position={[s * 0.03, -0.02, -0.17]} rotation={[0.2, 0, s * 0.2]}>
               <boxGeometry args={[0.03, 0.2, 0.008]} />

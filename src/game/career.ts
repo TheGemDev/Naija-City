@@ -308,3 +308,59 @@ export const upgradeCost = (def: BusinessDef, level: number) => Math.round(def.c
 
 /** Skill XP earned per stocked hour of trading when the owner collects. */
 export const OPERATE_XP_PER_HOUR = 4;
+
+/* ---------- Customers who aren't players, and automatic restocking ---------- */
+
+/**
+ * Every cron tick (worker/shops.ts) each product on a shelf has its chance of being bought by passers-by. What they
+ * would spend an hour at fair prices is a share of the business's hourlyOf (level, staff, the owner's skill and the
+ * place's demand), split between the products on the shelf; the building size, the hour of the day and the asking
+ * price move it from there. The units are counted out at random, so most ticks a shop sells nothing and now and then
+ * it sells several. Auto-restock tops a shelf back up from the owner's wallet when it runs low.
+ */
+export const NPC_SHOP = {
+  /** Share of hourlyOf customers spend at fair prices. A level-1 Suya Spot at a quiet place: ₦3,500 an hour at a normal hour, about 1.75 meals. */
+  share: 0.5,
+  /** Demand × (normal price ÷ asking price) ^ this: at 1.2× the normal price it sells ~63%, at 2× ~18%, near the 5×-wholesale cap ~10%. */
+  elasticity: 2.5,
+  /** Selling under the normal price helps, but only up to this many times the fair demand. */
+  maxCheapBoost: 1.6,
+  /** A plaza draws more walk-ins than a stall. */
+  size: { small: 1, medium: 1.25, large: 1.5 } as Record<BizSize, number>,
+  /** How busy the street is each hour of a real Nigerian day (WAT, 00 to 23): dead at 3am, peaking after work. Averages ~0.8. */
+  dayHours: [0.15, 0.1, 0.05, 0.05, 0.1, 0.25, 0.5, 0.8, 1, 1.1, 1.1, 1.2, 1.3, 1.2, 1.1, 1.1, 1.2, 1.4, 1.5, 1.4, 1.2, 0.9, 0.6, 0.3],
+  /** Night spots do their trade after dark instead. Averages ~0.8 too. */
+  nightHours: [0.9, 0.7, 0.4, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.7, 0.7, 0.8, 0.9, 1.1, 1.4, 1.7, 1.9, 1.9, 1.7, 1.3],
+  nightTypes: ['suya', 'bar'] as BusinessType[],
+  /** Most units of one product customers take in one tick. */
+  maxUnits: 6,
+  /** How often the cron runs: expected sales are worked out per this much time. */
+  tickMs: 5 * 60_000,
+  /** Bounds on one tick's work over every shop: stocked products looked at, and customer orders written (each is ~6 D1 statements). */
+  maxListings: 1_000,
+  maxSales: 30,
+  /** Who the buyer is on a customer's order. Never a real uid, like NPC tenants' 'npc:<uuid>'. */
+  buyer: 'npc:customers',
+  /** Auto-restock, when the owner turns it on: refill once a quarter of the shelf is left, up to full. */
+  autoMinShare: 0.25,
+  autoToShare: 1,
+  /** Most products restocked automatically in one tick, across every shop (each is ~10 D1 statements). */
+  autoPerTick: 12,
+} as const;
+
+/** How busy the street is for this kind of business at real time `now`. Nigeria is UTC+1 all year. */
+export const npcHourFactor = (type: BusinessType, now: number) =>
+  (NPC_SHOP.nightTypes.includes(type) ? NPC_SHOP.nightHours : NPC_SHOP.dayHours)[(new Date(now).getUTCHours() + 1) % 24];
+
+/** What the asking price does to customers: cheap sells faster (up to a point), dear rarely sells. */
+export const npcPriceFactor = (price: number, normal: number) => Math.min(NPC_SHOP.maxCheapBoost, (normal / Math.max(1, price)) ** NPC_SHOP.elasticity);
+
+/**
+ * Units of one product customers are expected to buy in one tick. `gross` is the business's hourlyOf, `products` how
+ * many products its shelf holds, `normal` the product's normal price and `hour` what npcHourFactor says now.
+ */
+export const npcExpected = (gross: number, size: BizSize, products: number, normal: number, price: number, hour: number) =>
+  (gross * NPC_SHOP.share * NPC_SHOP.size[size] * hour * npcPriceFactor(price, normal) * (NPC_SHOP.tickMs / 3_600_000)) / Math.max(1, products) / normal;
+
+/** Where auto-restock starts when the owner turns it on: the levels for a shelf of this size. */
+export const autoDefaults = (shelf: number) => ({ min: Math.round(shelf * NPC_SHOP.autoMinShare), to: Math.round(shelf * NPC_SHOP.autoToShare) });

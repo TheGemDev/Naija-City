@@ -1,6 +1,5 @@
-// The gun counter (rules: game/guns.ts): the licensed Gun Shop app, and the Fixer's dealer under the counter (the
-// Fixer's Guns tab). Same counter, different stock: the shop wants a clean record and puts your gun on the police
-// register; the dealer sells anything to anyone, dearer, and throws in the stick-ups.
+// The Fixer's gun dealer (the Fixer's Guns tab; rules: game/guns.ts). Guns are illegal, so this is the only counter:
+// guns, rounds, a vest and a bodyguard, and the stick-ups. Get arrested with a gun on you and it goes, with a huge fine.
 
 import { useEffect } from 'react';
 import { GUN_LIST, GUN_RULES, GUNS, HOLDUPS, type HoldupKind } from '../game/guns';
@@ -15,7 +14,7 @@ import './vice.css';
 const short = (n: number) => (n >= 1_000_000 ? `₦${+(n / 1_000_000).toFixed(1)}m` : `₦${Math.round(n / 1_000)}k`);
 
 /** What I carry: the gun and its rounds, my vest, my bodyguard. */
-function Carrying({ source }: { source: 'shop' | 'black' }) {
+function Carrying() {
   const state = useGuns((s) => s.state);
   const busy = useGuns((s) => s.busy);
   const money = useGame((s) => s.money);
@@ -23,18 +22,14 @@ function Carrying({ source }: { source: 'shop' | 'black' }) {
   if (!state) return <p className="muted">Loading…</p>;
   const gun = state.gun && GUNS[state.gun.id];
   const box = GUN_RULES.box;
-  const canBuyRounds = !!state.gun && (source === 'black' || state.gun.licensed);
   return (
     <>
       <Section title="On you" />
       {gun ? (
-        <FxCard icon={gun.icon} tone="mine" title={gun.name} pill={`${state.gun!.ammo} rounds`} sub={state.gun!.licensed ? 'Licensed and on the police register.' : 'No licence: the police take it at your next arrest.'}>
-          {canBuyRounds && (
-            <div className="fx-actions">
-              <button className="btn sm" disabled={busy || money < box[source]} onClick={() => void buyAmmo(source)}>Box of {box.rounds} rounds · {short(box[source])}</button>
-            </div>
-          )}
-          {!canBuyRounds && <small className="fx-note">The gun shop only sells rounds for licensed guns. The Fixer’s dealer sells them for anything.</small>}
+        <FxCard icon={gun.icon} tone="mine" title={gun.name} pill={`${state.gun!.ammo} rounds`} sub={`Illegal. Get arrested with it on you and it’s gone, with a ${naira(gun.fine)} fine.`}>
+          <div className="fx-actions">
+            <button className="btn sm" disabled={busy || money < box.price} onClick={() => void buyAmmo()}>Box of {box.rounds} rounds · {short(box.price)}</button>
+          </div>
         </FxCard>
       ) : (
         <p className="fx-empty">You aren’t carrying a gun.</p>
@@ -50,36 +45,31 @@ function Carrying({ source }: { source: 'shop' | 'black' }) {
 }
 
 /** The guns on sale here. Buying one replaces the one you have. */
-function Stock({ source }: { source: 'shop' | 'black' }) {
+function Stock() {
   const state = useGuns((s) => s.state);
   const busy = useGuns((s) => s.busy);
   const money = useGame((s) => s.money);
-  const license = source === 'shop' ? state?.license : null;
-  const fee = source === 'shop' ? GUN_RULES.license.fee : 0;
   return (
     <>
-      <Section title={source === 'shop' ? 'On the shelf' : 'Under the counter'} />
-      {license && !license.ok && <FxCard icon="🔒" tone="alert" title="No licence for you" sub={license.why ?? undefined} />}
-      {GUN_LIST.filter((g) => (source === 'shop' ? g.shop !== null : true)).map((g) => {
-        const price = (source === 'shop' ? g.shop! : g.black) + fee;
+      <Section title="Under the counter" />
+      {GUN_LIST.map((g) => {
         const mine = state?.gun?.id === g.id;
         return (
-          <FxCard key={g.id} icon={g.icon} title={g.name} pill={`${Math.round(g.aim * 100)}% hit`} sub={g.blurb}>
+          <FxCard key={g.id} icon={g.icon} title={g.name} pill={`${Math.round(g.aim * 100)}% hit`} sub={`${g.blurb} Caught with it: ${short(g.fine)} fine.`}>
             <div className="fx-actions">
-              <button className="btn sm" disabled={busy || money < price || (license ? !license.ok : false)} onClick={() => {
+              <button className="btn sm" disabled={busy || money < g.price} onClick={() => {
                 if (state?.gun && !window.confirm(`Swap your ${GUNS[state.gun.id].name} for the ${g.name}? The old one goes.`)) return;
-                void buyGun(g.id, source);
-              }}>{mine ? 'Buy another' : 'Buy'} · {naira(price)}</button>
+                void buyGun(g.id);
+              }}>{mine ? 'Buy another' : 'Buy'} · {naira(g.price)}</button>
             </div>
           </FxCard>
         );
       })}
-      {source === 'shop' && <small className="fx-note">Prices include the {naira(fee)} licence, paid to the federal treasury. A licensed gun used in a crime loses its licence.</small>}
     </>
   );
 }
 
-/** Protection, from the shop: a vest and an armed bodyguard. */
+/** Protection: a vest and an armed bodyguard. */
 function Protection() {
   const busy = useGuns((s) => s.busy);
   const money = useGame((s) => s.money);
@@ -122,7 +112,7 @@ function Stickups() {
   );
 }
 
-export function GunCounter({ source }: { source: 'shop' | 'black' }) {
+export function GunCounter() {
   const signedIn = !!useSession((s) => s.user?.username);
   useEffect(() => {
     if (signedIn) void loadGuns();
@@ -131,28 +121,13 @@ export function GunCounter({ source }: { source: 'shop' | 'black' }) {
   return (
     <>
       <HowItWorks>
-        {source === 'shop'
-          ? `The licensed gun shop: no arrest in the last ${GUN_RULES.license.cleanMs / 86_400_000} days, and the gun goes on the police register. Use it in a crime and the police know exactly whose it was.`
-          : 'The dealer’s guns have no papers: the police only trace them most of the time, but they take one off you at your next arrest. Dearer, and he has things the shop will never sell.'}
-        {' '}Shoot someone and they wake up in hospital. Gunshots bring the police.
+        Guns are illegal in Nigeria, so they only come from here. Get arrested for anything with one on you and the police
+        seize it and fine you hard. Shoot someone and they wake up in hospital. Gunshots bring the police.
       </HowItWorks>
-      <Carrying source={source} />
-      <Stock source={source} />
-      {source === 'shop' ? <Protection /> : <Stickups />}
-    </>
-  );
-}
-
-/** The licensed Gun Shop phone app. */
-export function GunShopApp() {
-  return (
-    <>
-      <div className="hero hero-dark">
-        <small>Licensed firearms dealer</small>
-        <b>🔫 Gun Shop</b>
-        <small>Clean record, paperwork, and a vest for the road.</small>
-      </div>
-      <GunCounter source="shop" />
+      <Carrying />
+      <Stock />
+      <Protection />
+      <Stickups />
     </>
   );
 }

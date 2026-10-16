@@ -1,11 +1,10 @@
-// Guns: bought legally at the licensed gun shop (a clean record, and the gun is on the police register) or off the
-// books from the Fixer's dealer. With one you can rob a player at gunpoint, shoot one, or stick up a passer-by or a
-// shop. Rules here; the server plays them out (worker/guns.ts).
+// Guns: illegal. The only way to get one is off the books from the Fixer's dealer. With one you can rob a player at
+// gunpoint, shoot one, or stick up a passer-by or a shop. Rules here; the server plays them out (worker/guns.ts).
 //
-// Nobody dies. Someone shot wakes up in hospital with a bill and stays hurt for a while. Gunshots bring the police:
-// a shooter with a licensed gun is traced at once, one with an unlicensed gun most of the time. Victims can fight
-// back: an armed victim shoots back, a bulletproof vest stops a bullet or two, an armed bodyguard stops most robbers.
-// A licensed gun used in a crime loses its licence, and the police take any unlicensed gun at your next arrest.
+// Nobody dies. Someone shot wakes up in hospital with a bill and stays hurt for a while. Gunshots bring the police,
+// most of the time. Victims can fight back: an armed victim shoots back, a bulletproof vest stops a bullet or two, an
+// armed bodyguard stops most robbers. Get arrested for anything with a gun on you and the police take it, along with
+// a huge fine (worker/phoneSearch.ts).
 
 export type GunId = 'danegun' | 'pistol' | 'pump' | 'ak47';
 
@@ -14,10 +13,10 @@ export interface GunDef {
   name: string;
   icon: string;
   blurb: string;
-  /** At the licensed gun shop; null: not sold there. */
-  shop: number | null;
-  /** From the Fixer's dealer: no paperwork, so dearer. */
-  black: number;
+  /** From the Fixer's dealer. */
+  price: number;
+  /** What the police fine you when they catch you with it, and they keep the gun. */
+  fine: number;
   /** The chance a shot hits. */
   aim: number;
   /** How long someone it hits stays hurt (real minutes). */
@@ -27,10 +26,10 @@ export interface GunDef {
 }
 
 export const GUNS: Record<GunId, GunDef> = {
-  danegun: { id: 'danegun', name: 'Dane gun', icon: '🪵', blurb: 'Locally made, loads from the front. Sometimes it just goes click.', shop: null, black: 90_000, aim: 0.35, hurtMin: 12, rounds: 1 },
-  pistol: { id: 'pistol', name: 'Pistol', icon: '🔫', blurb: 'Small, quiet enough, fits under a shirt.', shop: 450_000, black: 650_000, aim: 0.55, hurtMin: 20, rounds: 1 },
-  pump: { id: 'pump', name: 'Pump-action', icon: '💥', blurb: 'What the mai-gadi at the bank carries. Nobody argues with it.', shop: 1_200_000, black: 1_600_000, aim: 0.65, hurtMin: 30, rounds: 2 },
-  ak47: { id: 'ak47', name: 'AK-47', icon: '🪖', blurb: 'Not for sale to civilians. Which is why the Fixer has one.', shop: null, black: 4_500_000, aim: 0.78, hurtMin: 40, rounds: 3 },
+  danegun: { id: 'danegun', name: 'Dane gun', icon: '🪵', blurb: 'Locally made, loads from the front. Sometimes it just goes click.', price: 90_000, fine: 1_000_000, aim: 0.35, hurtMin: 12, rounds: 1 },
+  pistol: { id: 'pistol', name: 'Pistol', icon: '🔫', blurb: 'Small, quiet enough, fits under a shirt.', price: 650_000, fine: 2_500_000, aim: 0.55, hurtMin: 20, rounds: 1 },
+  pump: { id: 'pump', name: 'Pump-action', icon: '💥', blurb: 'What the mai-gadi at the bank carries. Nobody argues with it.', price: 1_600_000, fine: 4_000_000, aim: 0.65, hurtMin: 30, rounds: 2 },
+  ak47: { id: 'ak47', name: 'AK-47', icon: '🪖', blurb: 'Not for sale to civilians. Which is why the Fixer has one.', price: 4_500_000, fine: 8_000_000, aim: 0.78, hurtMin: 40, rounds: 3 },
 };
 export const GUN_LIST = Object.values(GUNS);
 export const isGun = (id: unknown): id is GunId => typeof id === 'string' && id in GUNS;
@@ -38,9 +37,7 @@ export const isGun = (id: unknown): id is GunId => typeof id === 'string' && id 
 export const GUN_RULES = {
   /** A new gun comes with this many rounds, and a box adds this many. */
   startRounds: 6,
-  box: { rounds: 10, shop: 20_000, black: 30_000 },
-  /** The licence at the gun shop: its fee (to the federal treasury), and no arrest for this long before you apply. */
-  license: { fee: 250_000, cleanMs: 3 * 24 * 3600_000 },
+  box: { rounds: 10, price: 30_000 },
   /** A bulletproof vest stops this many hits before it is done. */
   vest: { price: 400_000, hits: 2 },
   /** An armed bodyguard walks with you for this long and stops this share of robberies and shootings. */
@@ -57,7 +54,7 @@ export const GUN_RULES = {
   shoot: { grab: 0.2, grabCap: 300_000, bill: 25_000, billPct: 0.1, billCap: 150_000 },
   /** An armed victim draws first this often, scaled by how good their gun is. */
   shootBack: 0.6,
-  /** The police come for an unlicensed shooter this often (a licensed gun is on the register: always). */
+  /** The police come for a shooter this often. */
   traced: 0.7,
 };
 
@@ -70,17 +67,21 @@ export const HOLDUPS: Record<HoldupKind, { label: string; icon: string; blurb: s
 
 /** What I carry, as the server tells it (GET /api/guns). */
 export interface GunState {
-  gun: { id: GunId; ammo: number; licensed: boolean } | null;
+  gun: { id: GunId; ammo: number } | null;
   /** Hits my vest can still stop. */
   vest: number;
   /** My armed bodyguard is with me until then. */
   escortUntil: number | null;
   /** My next armed job can be from then. */
   readyAt: number;
-  /** Whether the gun shop will sell to me, and if not, why. */
-  license: { ok: boolean; why: string | null };
-  /** The police took my unlicensed gun when I was last arrested. */
-  seized?: string | null;
+  /** The police took my gun, and fined me, when I was last arrested. */
+  seized?: GunSeizure | null;
+}
+
+/** A gun the police found on someone they arrested: which, and the fine they paid (as much of it as they had). */
+export interface GunSeizure {
+  gun: GunId;
+  fine: number;
 }
 
 /** The outcome of an armed job, for the one who did it. */
@@ -94,6 +95,8 @@ export interface GunResult {
   wanted?: boolean;
   /** Jailed on the spot (a hold-up gone wrong) until then. */
   jailedUntil?: number | null;
+  /** …and the police took the gun, with a fine. */
+  seized?: GunSeizure | null;
 }
 
 /** Someone shot me (or held me up at gunpoint), pushed to me (worker/guns.ts). */

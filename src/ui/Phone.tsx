@@ -52,7 +52,6 @@ import { HireApp } from './HireApp';
 import { ForbesApp } from './ForbesApp';
 import { BlackMarketApp } from './BlackMarket';
 import { FixerApp, GrindApp, PlugApp } from './Vice';
-import { GunShopApp } from './Guns';
 import { ElectionBoard } from './Election';
 import { LoansPanel } from './Loans';
 import { openAdsSheet } from '../net/ads';
@@ -68,7 +67,7 @@ import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
-  | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games' | 'gunshop';
+  | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
 
 interface AppDef {
   id: AppId;
@@ -97,7 +96,6 @@ const APPS: Record<AppId, AppDef> = {
   blackmarket: { id: 'blackmarket', label: 'Black Market', icon: '🕶️', bg: ['#44403c', '#0c0a09'], tint: '#1c1917' },
   plug: { id: 'plug', label: 'Plug', icon: '🌿', bg: ['#4ade80', '#14532d'], tint: '#14532d' },
   fixer: { id: 'fixer', label: 'Fixer', icon: '🕴🏾', bg: ['#a8a29e', '#1c1917'], tint: '#1c1917' },
-  gunshop: { id: 'gunshop', label: 'Gun Shop', icon: '🔫', bg: ['#78716c', '#292524'], tint: '#292524' },
   grind: { id: 'grind', label: 'Dirty Work', icon: '🛠️', bg: ['#fb923c', '#7c2d12'], tint: '#7c2d12' },
   area: { id: 'area', label: 'Area', icon: '🕴🏾', bg: ['#64748b', '#0f172a'], tint: '#0f172a' },
   legacy: { id: 'legacy', label: 'Legacy', icon: '🏆', bg: ['#fde047', '#a16207'], tint: '#a16207' },
@@ -1787,7 +1785,6 @@ const SCREENS: Record<AppId, () => ReactNode> = {
   blackmarket: BlackMarketApp,
   plug: PlugApp,
   fixer: FixerApp,
-  gunshop: GunShopApp,
   grind: GrindApp,
   games: () => <Suspense fallback={null}><GamesApp /></Suspense>,
   area: AreaApp,

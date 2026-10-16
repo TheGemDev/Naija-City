@@ -30,7 +30,8 @@ export function avatarSvg(look: string | null | undefined, bg: string, prison = 
   if (top?.accent) out += `<path d="M150,276 Q200,318 250,276" fill="none" stroke="${top.accent}" stroke-width="10"/>`;
   out += `<rect x="170" y="220" width="60" height="68" rx="22" fill="${skin}"/>`;
   out += `<circle cx="128" cy="172" r="14" fill="${skin}"/><circle cx="272" cy="172" r="14" fill="${skin}"/>`;
-  out += `<ellipse cx="200" cy="165" rx="72" ry="84" fill="${skin}"/>`;
+  // A face rather than an egg: full at the cheekbones, then a jaw that turns in to a chin.
+  out += `<path d="M200,81 C241,81 272,112 272,156 C272,186 266,211 250,229 C236,245 220,253 200,253 C180,253 164,245 150,229 C134,211 128,186 128,156 C128,112 159,81 200,81 Z" fill="${skin}"/>`;
 
   if (hijab) {
     out += `<path d="M124,165 C120,60 280,60 276,165 C262,118 138,118 124,165 Z" fill="${worn.color}"/><ellipse cx="200" cy="268" rx="76" ry="34" fill="${worn.color}"/>`;
@@ -42,7 +43,8 @@ export function avatarSvg(look: string | null | undefined, bg: string, prison = 
   }
 
   out += '<circle cx="172" cy="168" r="7" fill="#111"/><circle cx="228" cy="168" r="7" fill="#111"/>';
-  out += '<path d="M176,206 Q200,226 224,206" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/>';
+  out += '<path d="M194,190 Q200,197 206,190" fill="none" stroke="#000" stroke-opacity="0.3" stroke-width="4" stroke-linecap="round"/>';
+  out += '<path d="M178,212 Q200,230 222,212" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/>';
   if (eyes?.shape === 'shades') out += `<rect x="146" y="150" width="46" height="32" rx="12" fill="${eyes.color}"/><rect x="208" y="150" width="46" height="32" rx="12" fill="${eyes.color}"/><rect x="190" y="160" width="20" height="6" fill="${eyes.color}"/>`;
   else if (eyes) out += `<circle cx="172" cy="168" r="22" fill="none" stroke="${eyes.color}" stroke-width="5"/><circle cx="228" cy="168" r="22" fill="none" stroke="${eyes.color}" stroke-width="5"/><rect x="192" y="165" width="16" height="5" fill="${eyes.color}"/>`;
 

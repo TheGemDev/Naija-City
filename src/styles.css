@@ -1368,15 +1368,16 @@ body.map-far .river-name { opacity: 0.9; }
 .app-body .tabs button { flex: 1 0 auto; padding: 7px 10px; border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; color: var(--fg-475569); }
 .app-body .tabs button.on { background: var(--bg-ffffff); color: var(--fg-0f172a); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
 .app-body .tabs button:disabled { opacity: 0.45; }
-.store-row { align-items: flex-start; }
+.store-row { align-items: flex-start; flex-wrap: wrap; }
 .store-rank { font-weight: 800; color: #94a3b8; font-size: 13px; width: 14px; padding-top: 12px; }
 .store-icon { color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); }
 .store-shady { font-style: normal; font-size: 9px; font-weight: 800; background: #dc2626; color: #fff; padding: 1px 5px; border-radius: 6px; vertical-align: middle; }
 .store-warn { color: var(--fg-b91c1c); font-weight: 600; }
 .store-bar { display: block; height: 4px; border-radius: 99px; background: var(--bg-e2e8f0); overflow: hidden; margin-top: 4px; }
 .store-bar i { display: block; height: 100%; background: #2563eb; transition: width 0.12s linear; }
-.store-actions { flex: none; display: flex; align-items: center; align-self: center; gap: 6px; }
-.store-row .store-actions .btn.sm { min-width: 0; padding-inline: 11px; }
+/* Installed: Delete and Open share a full-width row under the app, side by side. */
+.store-actions { flex: 1 0 100%; display: flex; gap: 8px; }
+.store-row .store-actions .btn.sm { flex: 1; min-width: 0; }
 .store-remove { font-size: 14px; opacity: 0.7; }
 .store-row .btn.sm { align-self: center; min-width: 56px; }
 .hero-purple { background: linear-gradient(135deg, #a855f7, #3b0764); }
