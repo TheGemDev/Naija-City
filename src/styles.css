@@ -3171,7 +3171,6 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
 .corner-side { position: absolute; left: calc(12px + 54px + 10px); bottom: calc(21px + var(--safe-b)); z-index: 20; display: flex; align-items: center; gap: 10px; }
 :is(.corner-ctx, .corner-side) button { font-size: 0; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 0; border-radius: 50%; background: var(--hud-bg); border: 1px solid rgba(15, 107, 58, 0.16); box-shadow: var(--shadow); color: var(--fg-0f172a); }
 :is(.corner-ctx, .corner-side) button span { display: flex; align-items: center; justify-content: center; flex: none; font-size: 0; line-height: 0; }
-:is(.corner-ctx, .corner-side) button.on, .corner-right button.on { border-color: #16a34a; box-shadow: 0 0 0 2px #16a34a, var(--shadow); }
 /* Leaving and clocking out say what they do. */
 :is(.corner-ctx, .corner-side) button.leave { width: auto; padding: 0 18px; gap: 8px; border-radius: 999px; background: #dc2626; border-color: #dc2626; color: #fff; font-size: 13px; font-weight: 700; }
 :is(.corner-ctx, .corner-side) button.leave span { font-size: 18px; line-height: 1; }
