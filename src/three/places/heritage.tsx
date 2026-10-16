@@ -38,7 +38,6 @@ const DARK = '#1f2937';
 const STEEL = '#94a3b8';
 const ZINC = '#9aa3ad';
 const WHITE = '#f4f6f8';
-const CREAM = '#efe6d2';
 const NG_GREEN = '#15803d';
 const SAND = '#dcc08f';
 const DUST = '#c9a46a';

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { useEffect } from 'react';
-import { PlaceModel, LandmarkModel, lampMat, windowMat } from '../src/three/cityModels';
+import { PlaceModel, LandmarkModel, lampMat, windowMat, windowsLit } from '../src/three/cityModels';
 import { StaticBatch } from '../src/three/StaticBatch';
 import { useQuality } from '../src/game/quality';
 
@@ -23,6 +23,7 @@ function Info() {
   useFrame(() => {
     lampMat.emissiveIntensity = night ? 2.5 : 0;
     windowMat.emissiveIntensity = night ? 0.9 : 0;
+    windowsLit.value = 0.55;
   });
   useEffect(() => {
     (window as never as Record<string, unknown>).__tris = () => {

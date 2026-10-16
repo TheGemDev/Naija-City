@@ -49,7 +49,7 @@ const pos: [number, number, number] = cam === 'close' ? [span * 0.55, span * 0.4
 function App() {
   const name = model === 'nda' ? 'Nda' : model === 'compvillage' ? 'CompVillage' : model === 'techhub' ? 'TechHub' : model === 'motorpark' ? 'MotorPark' : model[0].toUpperCase() + model.slice(1);
   const N = (NEW as Record<string, unknown>)[name] as ((p: { w: number; d: number }) => JSX.Element) | undefined;
-  const M = q.has('old') || !N ? (land ? LandmarkModel : PlaceModel) : ({ w, d }: { model: string; w: number; d: number }) => N({ w, d });
+  const M = true || !N ? (land ? LandmarkModel : PlaceModel) : ({ w, d }: { model: string; w: number; d: number }) => N({ w, d });
   return (
     <Canvas shadows camera={{ position: pos, fov: 35 }} gl={{ preserveDrawingBuffer: true }}>
       <color attach="background" args={[night ? '#0b1020' : '#cfe3ef']} />

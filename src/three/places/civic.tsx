@@ -6,15 +6,12 @@
 // Centred on its footprint (w along x, d along z), sits on y=0, door on the +z side.
 //
 // Built with the place kit (placeKit.tsx, as the stadium is): one merged geometry per colour, so StaticBatch folds a
-// whole building into the town's buckets. Windows use 'glass…' keys (lit at night with the town's windows), lamps
+// whole building into the town's buckets. Windows are 'glass' panes (each lit or dark at night on its own), lamps
 // 'lamp…' keys, and floodlit facades and domes go in one night-only Glow. Low performance mode keeps the shapes and
 // drops the small things: people, most cars, railings, column bases, half the windows and trees.
 
-import { useEffect, useMemo, useState } from 'react';
-import { IcosahedronGeometry, Vector3 } from 'three';
-import { useLowPerf } from '../../game/quality';
-import { lampMat, windowMat } from '../cityModels';
-import { clamp, frame, Glow, Kit, NightGlow, prep, rng, scale, unitCyl, type Built, type RGB, type V3 } from '../placeKit';
+import { IcosahedronGeometry } from 'three';
+import { clamp, frame, Glow, Kit, KitModel, prep, rng, scale, unitCyl, type Built, type RGB, type V3 } from '../placeKit';
 
 /* ---------- Colours ---------- */
 
@@ -58,8 +55,8 @@ const NIGERIA = [GREEN, FLAG_WHITE, GREEN];
 const ICO = prep(new IcosahedronGeometry(1, 0));
 const TAU = Math.PI * 2;
 
-/** One of several glass keys, so windows light at night in patches rather than all at once (see CivicModel). */
-const glassKey = (rand: () => number) => `glass${Math.floor(rand() * 6)}`;
+/** Window glass. The kit seeds each pane on its own, so at night some rooms are lit and others dark. */
+const GLASS = 'glass';
 
 /** A wall to put things on: its middle at (x, z), running along `ax`, facing `n` (+1 or -1) across it. */
 interface Wall { x: number; z: number; ax: 'x' | 'z'; n: 1 | -1 }
@@ -87,7 +84,7 @@ function windows(kit: Kit, rand: () => number, w: Wall, len: number, o: { y0: nu
     for (let c = 0; c < o.cols; c++) {
       if (o.skip?.(c, r)) continue;
       const u = -len / 2 + step * (c + 0.5);
-      panel(kit, glassKey(rand), w, u - o.pw / 2, u + o.pw / 2, y, y + o.ph);
+      panel(kit, GLASS, w, u - o.pw / 2, u + o.pw / 2, y, y + o.ph);
       if (o.sill) panel(kit, o.sill, w, u - o.pw / 2 - 0.02, u + o.pw / 2 + 0.02, y - 0.03, y, 0.012);
     }
   }
@@ -251,53 +248,11 @@ function parking(kit: Kit, rand: () => number, x0: number, x1: number, z0: numbe
   for (let i = 0; i < n; i++) if (rand() < fill) car(kit, x0 + (i + 0.5) * bw, (z0 + z1) / 2, nose > 0 ? 0 : Math.PI, CARS[Math.floor(rand() * CARS.length)]);
 }
 
-/* ---------- Drawing a built model ---------- */
-
-/**
- * The kit's KitModel, except each glass key's mesh sits at the middle of its own panes. StaticBatch gives each window
- * mesh a seed from where the mesh stands, and the seed decides which windows are lit at night: with every key at the
- * building's origin they would all share one seed and the whole building would light or go dark at once.
- */
-function CivicModel({ build, deps }: { build: (low: boolean) => Built; deps: unknown[] }) {
-  const lowNow = useLowPerf();
-  const [low] = useState(lowNow);
-  const built = useMemo(() => {
-    const b = build(low);
-    const parts = b.parts.map(({ key, g }) => {
-      if (!key.startsWith('glass')) return { key, g, at: [0, 0, 0] as V3 };
-      g.computeBoundingBox();
-      const c = g.boundingBox!.getCenter(new Vector3());
-      g.translate(-c.x, -c.y, -c.z);
-      return { key, g, at: [c.x, c.y, c.z] as V3 };
-    });
-    return { parts, glow: b.glow };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [low, ...deps]);
-  useEffect(() => () => {
-    built.parts.forEach((p) => p.g.dispose());
-    built.glow?.dispose();
-  }, [built]);
-  return (
-    <group>
-      {built.parts.map(({ key, g, at }) =>
-        key.startsWith('lamp') ? (
-          <mesh key={key} geometry={g} material={lampMat} />
-        ) : key.startsWith('glass') ? (
-          <mesh key={key} geometry={g} position={at} material={windowMat} />
-        ) : (
-          <mesh key={key} geometry={g} castShadow receiveShadow>
-            <meshStandardMaterial color={key} emissiveIntensity={0} flatShading />
-          </mesh>
-        ),
-      )}
-      {built.glow && <NightGlow geometry={built.glow} />}
-    </group>
-  );
-}
+/* ---------- The model wrapper ---------- */
 
 const model = (build: (w: number, d: number, low: boolean) => Built) =>
   function Model({ w, d }: { w: number; d: number }) {
-    return <CivicModel build={(low) => build(w, d, low)} deps={[w, d]} />;
+    return <KitModel build={(low) => build(w, d, low)} deps={[w, d]} />;
   };
 
 /* ---------- Government House / Aso Villa ---------- */
@@ -350,7 +305,7 @@ function govHouse(w: number, d: number, low: boolean): Built {
   const gx = gate / 2 + 0.4, gz = d / 2 - 0.38;
   kit.box(WHITE, [gx, 0.17, gz], [0.36, 0.34, 0.3]);
   kit.box(GREEN_DEEP, [gx, 0.36, gz], [0.44, 0.04, 0.38]);
-  panel(kit, glassKey(rand), wallsOf(gx, gz, 0.36, 0.3).left, -0.1, 0.1, 0.14, 0.27);
+  panel(kit, GLASS, wallsOf(gx, gz, 0.36, 0.3).left, -0.1, 0.1, 0.14, 0.27);
   kit.box(RED, [gate / 2 - 0.12, 0.17, gz - 0.12], [0.5, 0.025, 0.025]);
   for (let i = 0; i < 3; i++) kit.box(FLAG_WHITE, [gate / 2 - 0.3 + i * 0.13, 0.17, gz - 0.12], [0.05, 0.027, 0.027]);
 
@@ -389,7 +344,7 @@ function govHouse(w: number, d: number, low: boolean): Built {
   const mid: Wall = { x: 0, z: zb + 0.12 + (D + 0.24) / 2, ax: 'x', n: 1 };
   windows(kit, rand, mid, mw - 0.1, { y0: 0.62, rows: 1, fh: 0.55, cols: 4, pw: 0.1, ph: 0.34 });
   panel(kit, DOOR, mid, -0.12, 0.12, 0.08, 0.5);
-  panel(kit, glassKey(rand), mid, -0.09, 0.09, 0.42, 0.5, 0.008);
+  panel(kit, GLASS, mid, -0.09, 0.09, 0.42, 0.5, 0.008);
   // The portico: six columns, a pediment with the coat of arms in gold, steps down to the drive.
   const pz = mid.z + 0.32;
   kit.box(STONE, [0, 0.05, pz - 0.14], [mw + 0.2, 0.1, 0.5]);
@@ -686,7 +641,7 @@ function cityGate(w: number, d: number, low: boolean): Built {
       const x = s * (w / 2 - 0.2), z = s * (pz - 0.3);
       kit.box(WHITE, [x, 0.13, z], [0.2, 0.26, 0.2]);
       kit.box(GREEN, [x, 0.28, z], [0.26, 0.03, 0.26]);
-      panel(kit, glassKey(rand), wallsOf(x, z, 0.2, 0.2).front, -0.06, 0.06, 0.12, 0.21);
+      panel(kit, GLASS, wallsOf(x, z, 0.2, 0.2).front, -0.06, 0.06, 0.12, 0.21);
       person(kit, rand, x - s * 0.18, z);
     }
   }
@@ -792,7 +747,7 @@ function tower(kit: Kit, rand: () => number, x: number, z: number, tw: number, t
     const cols = Math.max(1, Math.round(len / (o.low ? o.bay * 1.6 : o.bay)));
     const pw = (len / cols) * (1 - (o.pier ?? 0.18));
     // In low mode a floor is one strip of glass; otherwise a pane per bay.
-    if (o.low) for (let f = 0; f < floors; f++) panel(kit, glassKey(rand), wall, -len / 2 + 0.04, len / 2 - 0.04, y0 + f * fh + fh * 0.2, y0 + f * fh + fh * 0.88);
+    if (o.low) for (let f = 0; f < floors; f++) panel(kit, GLASS, wall, -len / 2 + 0.04, len / 2 - 0.04, y0 + f * fh + fh * 0.2, y0 + f * fh + fh * 0.88);
     else windows(kit, rand, wall, len - 0.06, { y0, rows: floors, fh, cols, pw, ph: fh * 0.7 });
     for (let f = 0; f <= floors && !o.low; f += 2) panel(kit, o.band, wall, -len / 2, len / 2, y0 + f * fh - 0.012, y0 + f * fh + 0.012, 0.01);
   }
@@ -832,7 +787,7 @@ function cbn(w: number, d: number, low: boolean): Built {
   kit.box('#cfc6b6', [0, PH / 2, pz], [PW, PH, PD]);
   kit.box(TRIM, [0, PH + 0.02, pz], [PW + 0.06, 0.04, PD + 0.06]);
   const pod = wallsOf(0, pz, PW, PD);
-  panel(kit, glassKey(rand), pod.front, -PW / 2 + 0.1, PW / 2 - 0.1, 0.06, PH - 0.06);
+  panel(kit, GLASS, pod.front, -PW / 2 + 0.1, PW / 2 - 0.1, 0.06, PH - 0.06);
   for (let i = 0; i <= 8; i++) kit.box(STONE, [-PW / 2 + 0.08 + (i * (PW - 0.16)) / 8, PH / 2, pz + PD / 2 + 0.03], [0.07, PH, 0.07]);
   panel(kit, DOOR, pod.front, -0.18, 0.18, 0.04, 0.3, 0.04);
   kit.box(STONE, [0, 0.33, pz + PD / 2 + 0.16], [0.7, 0.03, 0.3]);
@@ -853,8 +808,8 @@ function cbn(w: number, d: number, low: boolean): Built {
     const bays = Math.max(1, Math.round(len / (low ? 0.36 : 0.24)));
     for (let b = 0; b < bays; b++) {
       const f0 = (b + 0.2) / bays, f1 = (b + 0.8) / bays;
-      if (low) kit.quad(glassKey(rand), P(f0, PH + 0.05, 0.006), P(f1, PH + 0.05, 0.006), P(f1, TH - 0.08, 0.006), P(f0, TH - 0.08, 0.006), out);
-      else for (let f = 0; f < floors; f++) kit.quad(glassKey(rand), P(f0, PH + f * fh + 0.04, 0.006), P(f1, PH + f * fh + 0.04, 0.006), P(f1, PH + (f + 1) * fh - 0.02, 0.006), P(f0, PH + (f + 1) * fh - 0.02, 0.006), out);
+      if (low) kit.quad(GLASS, P(f0, PH + 0.05, 0.006), P(f1, PH + 0.05, 0.006), P(f1, TH - 0.08, 0.006), P(f0, TH - 0.08, 0.006), out);
+      else for (let f = 0; f < floors; f++) kit.quad(GLASS, P(f0, PH + f * fh + 0.04, 0.006), P(f1, PH + f * fh + 0.04, 0.006), P(f1, PH + (f + 1) * fh - 0.02, 0.006), P(f0, PH + (f + 1) * fh - 0.02, 0.006), out);
     }
   }
   // The roof of the shaft, two setbacks and the gold band, the mast.
@@ -912,7 +867,7 @@ function nnpc(w: number, d: number, low: boolean): Built {
   const PW = w - 0.35, PD = d - 0.75, pz = -0.2, PH = 0.35;
   kit.box('#cbd5e1', [0, PH / 2, pz], [PW, PH, PD]);
   kit.box(LINE, [0, PH + 0.015, pz], [PW + 0.04, 0.03, PD + 0.04]);
-  panel(kit, glassKey(rand), wallsOf(0, pz, PW, PD).front, -PW / 2 + 0.1, PW / 2 - 0.1, 0.05, PH - 0.06);
+  panel(kit, GLASS, wallsOf(0, pz, PW, PD).front, -PW / 2 + 0.1, PW / 2 - 0.1, 0.05, PH - 0.06);
   const TW = Math.min(0.95, PW * 0.3), TD = Math.min(0.85, PD * 0.38);
   const gx = PW / 2 - TW / 2 - 0.12, gz = PD / 2 - TD / 2 - 0.08;
   const spots: [number, number, number][] = [[-gx, pz - gz, 3.9], [gx, pz - gz, 3.9], [-gx, pz + gz, 3.4], [gx, pz + gz, 3.4]];
@@ -969,9 +924,9 @@ function wtc(w: number, d: number, low: boolean): Built {
   kit.box('#cbd5e1', [0, PH / 2, pz], [PW, PH, PD]);
   kit.box(LINE, [0, PH + 0.015, pz], [PW + 0.04, 0.03, PD + 0.04]);
   const pod = wallsOf(0, pz, PW, PD);
-  panel(kit, glassKey(rand), pod.front, -PW / 2 + 0.06, PW / 2 - 0.06, 0.05, PH - 0.06);
-  panel(kit, glassKey(rand), pod.left, -PD / 2 + 0.1, PD / 2 - 0.1, 0.05, PH - 0.06);
-  panel(kit, glassKey(rand), pod.right, -PD / 2 + 0.1, PD / 2 - 0.1, 0.05, PH - 0.06);
+  panel(kit, GLASS, pod.front, -PW / 2 + 0.06, PW / 2 - 0.06, 0.05, PH - 0.06);
+  panel(kit, GLASS, pod.left, -PD / 2 + 0.1, PD / 2 - 0.1, 0.05, PH - 0.06);
+  panel(kit, GLASS, pod.right, -PD / 2 + 0.1, PD / 2 - 0.1, 0.05, PH - 0.06);
   kit.box(LINE, [0, PH - 0.02, pz + PD / 2 + 0.12], [PW * 0.6, 0.03, 0.25]);
   const BODY = '#2c5878';
   // The tall tower, back left.
@@ -1051,9 +1006,8 @@ function ecowas(w: number, d: number, low: boolean): Built {
     kit.quad('#e5e7eb', at(a0, R0, H), at(a1, R0, H), at(a1, R1, H), at(a0, R1, H), [0, 1, 0]);
     for (let f = 0; f < floors; f++) {
       const y0 = 0.12 + f * fh + 0.05, y1 = 0.12 + (f + 1) * fh - 0.04;
-      const g = glassKey(rand);
-      kit.quad(g, at(a0 + 0.004, R0 - 0.006, y0), at(a1 - 0.004, R0 - 0.006, y0), at(a1 - 0.004, R0 - 0.006, y1), at(a0 + 0.004, R0 - 0.006, y1), inN);
-      if (!low && f % 2 === 0) kit.quad(glassKey(rand), at(a0 + 0.02, R1 + 0.006, y0), at(a1 - 0.02, R1 + 0.006, y0), at(a1 - 0.02, R1 + 0.006, y1), at(a0 + 0.02, R1 + 0.006, y1), outN);
+            kit.quad(GLASS, at(a0 + 0.004, R0 - 0.006, y0), at(a1 - 0.004, R0 - 0.006, y0), at(a1 - 0.004, R0 - 0.006, y1), at(a0 + 0.004, R0 - 0.006, y1), inN);
+      if (!low && f % 2 === 0) kit.quad(GLASS, at(a0 + 0.02, R1 + 0.006, y0), at(a1 - 0.02, R1 + 0.006, y0), at(a1 - 0.02, R1 + 0.006, y1), at(a0 + 0.02, R1 + 0.006, y1), outN);
     }
     // A green cornice and the fins between bays.
     kit.quad(GREEN, at(a0, R0 - 0.02, H - 0.02), at(a1, R0 - 0.02, H - 0.02), at(a1, R0 - 0.02, H + 0.08), at(a0, R0 - 0.02, H + 0.08), inN);
@@ -1068,7 +1022,7 @@ function ecowas(w: number, d: number, low: boolean): Built {
   kit.box(GREEN, [0, H + 0.26, cz - (R0 + R1) / 2], [0.8, 0.04, 0.5]);
   const ez = cz - R0 + 0.1;
   kit.box(WHITE, [0, 0.62, ez], [0.9, 0.06, 0.36]);
-  panel(kit, glassKey(rand), { x: 0, z: ez + 0.13, ax: 'x', n: 1 }, -0.35, 0.35, 0.05, 0.58);
+  panel(kit, GLASS, { x: 0, z: ez + 0.13, ax: 'x', n: 1 }, -0.35, 0.35, 0.05, 0.58);
   for (const s of [-1, 1]) column(kit, WHITE, s * 0.4, 0, ez + 0.15, 0.6, 0.03, low);
   // The emblem: a green disc with the yellow ring and the member states' link.
   const mz = cz - R0 * 0.48;
@@ -1155,7 +1109,7 @@ function nass(w: number, d: number, low: boolean): Built {
       const u = -B / 2 + (B / arches) * (i + 0.5), aw = (B / arches) * 0.55;
       kit.quad(OPENING, wpt(wl, u - aw / 2, 0.08), wpt(wl, u + aw / 2, 0.08), wpt(wl, u + aw / 2, 0.55), wpt(wl, u - aw / 2, 0.55), wout(wl));
       kit.tri(OPENING, wpt(wl, u - aw / 2, 0.55), wpt(wl, u + aw / 2, 0.55), wpt(wl, u, 0.72), wout(wl));
-      panel(kit, glassKey(rand), wl, u - aw * 0.32, u + aw * 0.32, 0.12, 0.5, 0.01);
+      panel(kit, GLASS, wl, u - aw * 0.32, u + aw * 0.32, 0.12, 0.5, 0.01);
     }
   }
   // The grand stair up to the arcade.
@@ -1252,7 +1206,7 @@ function nationalMosque(w: number, d: number, low: boolean): Built {
       const top = big ? 0.66 : 0.5;
       kit.quad(big ? DOOR : OPENING, wpt(wl, u - aw / 2, 0.06), wpt(wl, u + aw / 2, 0.06), wpt(wl, u + aw / 2, top), wpt(wl, u - aw / 2, top), wout(wl));
       kit.tri(big ? DOOR : OPENING, wpt(wl, u - aw / 2, top), wpt(wl, u + aw / 2, top), wpt(wl, u, top + 0.16), wout(wl));
-      if (!big) panel(kit, glassKey(rand), wl, u - aw * 0.3, u + aw * 0.3, 0.6, 0.78, 0.008);
+      if (!big) panel(kit, GLASS, wl, u - aw * 0.3, u + aw * 0.3, 0.6, 0.78, 0.008);
     }
     if (k === 'front') {
       // A tall entrance frame round the main door, green and gold.
@@ -1279,7 +1233,7 @@ function nationalMosque(w: number, d: number, low: boolean): Built {
     const out: V3 = [Math.cos(a), 0, Math.sin(a)];
     const hwid = 0.05;
     const P = (u: number, y: number): V3 => [wl.x + ta[0] * u + out[0] * 0.006, y, wl.z + ta[2] * u + out[2] * 0.006];
-    kit.quad(glassKey(rand), P(-hwid, dy + 0.06), P(hwid, dy + 0.06), P(hwid, dy + 0.22), P(-hwid, dy + 0.22), out);
+    kit.quad(GLASS, P(-hwid, dy + 0.06), P(hwid, dy + 0.06), P(hwid, dy + 0.22), P(-hwid, dy + 0.22), out);
   }
   const by = dy + 0.34, seg = low ? 16 : 24;
   const prof: [number, number][] = [[R * 1.04, 0], [R * 1.06, R * 0.22], [R * 1.0, R * 0.45], [R * 0.86, R * 0.68], [R * 0.64, R * 0.88], [R * 0.36, R * 1.04], [R * 0.12, R * 1.14], [0, R * 1.2]];
@@ -1384,13 +1338,13 @@ function secretariat(w: number, d: number, low: boolean): Built {
   const CH = H + 0.45;
   kit.box('#e2dccd', [0, CH / 2, zc + 0.06], [core, CH, D + 0.12]);
   const cw: Wall = { x: 0, z: zc + D / 2 + 0.12, ax: 'x', n: 1 };
-  for (let f = 0; f < floors; f++) panel(kit, glassKey(rand), cw, -0.12, 0.12, 0.45 + f * fh, 0.35 + (f + 1) * fh);
+  for (let f = 0; f < floors; f++) panel(kit, GLASS, cw, -0.12, 0.12, 0.45 + f * fh, 0.35 + (f + 1) * fh);
   panel(kit, GREEN, cw, -core / 2 + 0.02, core / 2 - 0.02, H + 0.1, H + 0.36, 0.008);
   for (let i = 0; i < 5; i++) panel(kit, FLAG_WHITE, cw, -0.24 + i * 0.12 - 0.035, -0.24 + i * 0.12 + 0.035, H + 0.16, H + 0.3, 0.012);
   kit.box(TRIM, [0, CH + 0.03, zc + 0.06], [core + 0.06, 0.06, D + 0.18]);
   // The entrance: a canopy on two posts over the steps, glass doors.
   const ez = zc + D / 2 + 0.12;
-  panel(kit, glassKey(rand), cw, -0.24, 0.24, 0.06, 0.38, 0.01);
+  panel(kit, GLASS, cw, -0.24, 0.24, 0.06, 0.38, 0.01);
   kit.box(WHITE, [0, 0.44, ez + 0.22], [0.8, 0.05, 0.46]);
   for (const s of [-1, 1]) kit.post(WHITE, [s * 0.35, 0, ez + 0.4], 0.025, 0.42, 6);
   steps(kit, STONE, 0, ez + 0.2, 0.7, 0.06, 2, 0.06);
