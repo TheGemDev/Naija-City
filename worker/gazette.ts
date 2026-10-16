@@ -46,7 +46,7 @@ export async function gazette(env: Env, ctx: ExecutionContext | undefined, notic
     if (!ctx) return;
     // One notification for the lot; the tag makes a newer notice replace an older one still on the lock screen.
     const body = notices.map((n) => n.text).join(' ').slice(0, 240);
-    ctx.waitUntil(broadcastPush(env, { title: `${notices[0].icon} Government notice`, body, tag: 'gazette', category: 'news' }));
+    ctx.waitUntil(broadcastPush(env, { title: `${notices[0].icon} Government notice`, body, tag: 'gazette', category: 'news', app: 'gist' }));
   } catch (error) {
     console.error('Gazette alert failed', error);
   }

@@ -38,7 +38,7 @@ type SaveProperty = { id?: string; region?: string; design?: string | null; stag
 function tell(env: Env, ctx: ExecutionContext, uid: string, title: string, text: string) {
   if (isNpcTenant(uid)) return;
   ctx.waitUntil(notifyPlayer(env, uid, { t: 'rental', text }));
-  sendPush(env, ctx, uid, { title, body: text, tag: 'rental', category: 'money' });
+  sendPush(env, ctx, uid, { title, body: text, tag: 'rental', category: 'money', app: 'gida' });
 }
 
 /** The least a finished house of this design can have cost here: the smallest plot, every material, the cheapest builder. */

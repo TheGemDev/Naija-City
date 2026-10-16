@@ -28,6 +28,7 @@ import { abujaEventButtons } from './AbujaEvents';
 import { lagosEventButtons } from './LagosEvents';
 import { kanoEventButtons } from './KanoEvents';
 import { Face } from './Face';
+import { Emoji } from './Icons';
 import { DailyTab, DispatchTile, FarmTab, FreelanceTab, HUSTLE_TABS, type HustleTab } from './Hustles';
 
 function useNow(ms = 1000) {
@@ -666,14 +667,17 @@ export function LiveBanner() {
     if (current.view === 'city' && place) current.selectPlace(place.id);
   };
   return (
-    <div className="live-banner">
-      <span className="live-banner-icon">{e.def.icon}</span>
-      <div className="live-banner-info">
-        <b>LIVE · {e.def.title}</b>
-        <small>{mmss(e.endsAt - now)} left{place ? ` · ${place.name}` : ''}</small>
-        {place && <button className="live-banner-go" onClick={goToPlace}>📍 Go to {place.name}</button>}
-      </div>
-      <button className="live-banner-close" onClick={() => setHidden(key)} aria-label="Dismiss live event">✕</button>
+    <div className="hud-card live-pill">
+      {/* Tap the pill to go to where it's on. */}
+      <button type="button" className="live-pill-go" disabled={!place} onClick={goToPlace} aria-label={place ? `Go to ${place.name}` : undefined}>
+        <span className="live-pill-icon"><Emoji char={e.def.icon} size={28} /></span>
+        <span className="live-pill-text">
+          <em><i className="live-dot" />LIVE · {mmss(e.endsAt - now)} left</em>
+          <b>{e.def.title}</b>
+          {place && <small>📍 Tap to go to {place.name}</small>}
+        </span>
+      </button>
+      <button type="button" className="live-pill-close" onClick={() => setHidden(key)} aria-label="Dismiss live event">✕</button>
     </div>
   );
 }

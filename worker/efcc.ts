@@ -322,7 +322,7 @@ export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, 
       title: 'New EFCC investigation',
       body: 'Someone has opened an investigation on you. Open the EFCC app to respond, or pay to see who filed it.',
       tag: `efcc-case-${id}`,
-      category: 'crime',
+      category: 'crime', app: 'efcc',
     });
     return json({ balance: await balance(env.DB, uid), id }, 201);
   }

@@ -22,6 +22,8 @@ interface PushPayload {
   /** Which switch in the player's settings turns this off. */
   category: PushCategory;
   chatUid?: string;
+  /** The phone app a tap on the notification opens (an AppId in ui/Phone.tsx), when it isn't a chat. */
+  app?: string;
 }
 
 const json = (data: unknown, status = 200) =>

@@ -641,7 +641,7 @@ export async function sendGameChallenge(env: Env, ctx: ExecutionContext, from: s
     .bind(from, to, text, Date.now())
     .first<MessageRow>();
   notify(env, ctx, to, { t: 'dm', message: toMessage(row!), from: { uid: from, username: sender.username, name: sender.name } });
-  sendPush(env, ctx, to, { title: `@${sender.username} challenges you`, body: 'Open Games on your phone to answer.', tag: `message-${from}`, category: 'invites', chatUid: from });
+  sendPush(env, ctx, to, { title: `@${sender.username} challenges you`, body: 'Open Games on your phone to answer.', tag: `message-${from}`, category: 'invites', app: 'games' });
 }
 
 /** A plain message from one player that the game wrote for them (the looting case in worker/loot.ts). Never throws. */

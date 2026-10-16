@@ -14,6 +14,8 @@ self.addEventListener('push', (event) => {
     data: {
       url: '/',
       chatUid: typeof payload.chatUid === 'string' ? payload.chatUid : null,
+      // The phone app the notification is about (Police, Business, Family…): tapping it opens that app.
+      app: typeof payload.app === 'string' ? payload.app : null,
     },
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -22,17 +24,19 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const { url, chatUid } = event.notification.data || {};
+    const { url, chatUid, app } = event.notification.data || {};
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
       if ('focus' in client) {
         await client.focus();
         if (chatUid) client.postMessage({ type: 'open-chat', uid: chatUid });
+        else if (app) client.postMessage({ type: 'open-app', app });
         return;
       }
     }
     const target = new URL(url || '/', self.registration.scope);
     if (chatUid) target.searchParams.set('chat', chatUid);
+    else if (app) target.searchParams.set('app', app);
     await self.clients.openWindow(target);
   })());
 });

@@ -121,7 +121,7 @@ async function npcSales(env: Env, ctx: ExecutionContext, now: number) {
         title: '🛍️ Customers at your shop',
         body: `Customers bought ${o.units} item${o.units === 1 ? '' : 's'} in the last hour. ${naira(o.net)} is in your wallet after sales tax.`,
         tag: 'shop-customers',
-        category: 'money',
+        category: 'money', app: 'business',
       });
     }
   }
@@ -206,7 +206,7 @@ async function autoRestock(env: Env, ctx: ExecutionContext, now: number) {
       title: '📦 Auto-restock paused',
       body: `Not enough money in your wallet to restock ${what.slice(0, 3).join(', ')}${what.length > 3 ? ` and ${what.length - 3} more` : ''}. It carries on by itself once you can pay.`,
       tag: 'shop-restock',
-      category: 'money',
+      category: 'money', app: 'business',
     });
   }
 }

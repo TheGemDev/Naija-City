@@ -40,7 +40,7 @@ interface CandidateRow {
 async function announceElection(env: Env, ctx: ExecutionContext | undefined, event: { phase: 'open' | 'result'; office: PoliticalOffice; endsAt?: number; winner?: string | null; votes?: number }, title: string, body: string) {
   await announceAll(env, { t: 'election', ...event });
   if (!ctx) return;
-  ctx.waitUntil(broadcastPush(env, { title, body, tag: `election-${event.phase}-${event.office}`, category: 'news' }));
+  ctx.waitUntil(broadcastPush(env, { title, body, tag: `election-${event.phase}-${event.office}`, category: 'news', app: 'civic' }));
 }
 
 export async function settleElections(env: Env, now: number, ctx?: ExecutionContext) {

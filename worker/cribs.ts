@@ -401,7 +401,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     const rows = await refreshCribs(db, b.owner);
     const house = rows.find((r) => r.pid === b.pid);
     if (stars >= 4) {
-      sendPush(env, ctx, b.owner, { title: `${'⭐'.repeat(stars)} for your house`, body: `@${self.username} rated your crib${comment ? `: “${comment}”` : '.'}`, tag: 'crib-rating', category: 'invites' });
+      sendPush(env, ctx, b.owner, { title: `${'⭐'.repeat(stars)} for your house`, body: `@${self.username} rated your crib${comment ? `: “${comment}”` : '.'}`, tag: 'crib-rating', category: 'invites', app: 'cribs' });
     }
     return json({ ok: true, score: house?.score ?? null, tier: house?.tier ?? null });
   }
@@ -599,7 +599,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
       return err(402, 'Not enough money');
     }
     await logStmt(db, job.id, me, 'hired', `Fee ${naira(fee)}, budget ${naira(budget)}, ${hours}h${note ? `: ${note}` : ''}`, fee + budget).run();
-    sendPush(env, ctx, designer.uid, { title: '🛋️ Interior design job', body: `@${self.username} wants you to decorate their house for ${naira(fee)}. Open Cribs to accept.`, tag: `design-${job.id}`, category: 'invites' });
+    sendPush(env, ctx, designer.uid, { title: '🛋️ Interior design job', body: `@${self.username} wants you to decorate their house for ${naira(fee)}. Open Cribs to accept.`, tag: `design-${job.id}`, category: 'invites', app: 'cribs' });
     return json({ ok: true, id: job.id, balance: await getBalance(db, me) });
   }
 
@@ -631,7 +631,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
       .first<JobRow>();
     if (!r) return err(409, 'That offer is no longer open');
     await logStmt(db, job.id, me, 'accepted', `Keys for ${job.hours}h`).run();
-    sendPush(env, ctx, job.client_uid, { title: '🛋️ Your designer is in', body: `They have ${job.hours} hour${job.hours === 1 ? '' : 's'} to work on your house.`, tag: `design-${job.id}`, category: 'invites' });
+    sendPush(env, ctx, job.client_uid, { title: '🛋️ Your designer is in', body: `They have ${job.hours} hour${job.hours === 1 ? '' : 's'} to work on your house.`, tag: `design-${job.id}`, category: 'invites', app: 'cribs' });
     return json({ ok: true, expiresAt: r.expires_at });
   }
 
@@ -735,7 +735,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
       .first();
     if (!r) return err(409, 'This job is not open');
     await logStmt(db, job.id, me, 'submitted', 'Design handed to the client').run();
-    sendPush(env, ctx, job.client_uid, { title: '🛋️ Your new interior is ready', body: 'Open Cribs to see it, then approve or revert.', tag: `design-${job.id}`, category: 'invites' });
+    sendPush(env, ctx, job.client_uid, { title: '🛋️ Your new interior is ready', body: 'Open Cribs to see it, then approve or revert.', tag: `design-${job.id}`, category: 'invites', app: 'cribs' });
     return json({ ok: true });
   }
 
@@ -751,7 +751,7 @@ export async function handleCribs(req: Request, env: Env, ctx: ExecutionContext,
     sendPush(env, ctx, job.designer_uid, {
       title: action === 'approve' ? `💸 Paid ${naira(job.fee)} for your design` : 'The client reverted your design',
       body: action === 'approve' ? 'The client loved it. +design skill.' : `You keep ${naira(Math.round(job.fee * DESIGN_JOB.calloutShare))} for your time.`,
-      tag: `design-${job.id}`, category: 'money',
+      tag: `design-${job.id}`, category: 'money', app: 'cribs',
     });
     const fresh = await db.prepare('SELECT * FROM design_jobs WHERE id = ?').bind(job.id).first<JobRow>();
     return json({ ok: true, job: jobView(fresh!, me, names, true), balance: await getBalance(db, me) });

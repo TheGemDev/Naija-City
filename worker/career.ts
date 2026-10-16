@@ -678,7 +678,7 @@ export async function handleCareer(req: Request, env: Env, ctx: ExecutionContext
       title: `🛍️ Sale at ${listing.business_name}`,
       body: `${handle(buyer)} bought ${b.quantity} × ${product.name}. ${naira(total - salesTax)} is in your wallet${salesTax ? ` after ${naira(salesTax)} sales tax` : ''}.`,
       tag: `shop-sale-${listing.business_id}`,
-      category: 'money',
+      category: 'money', app: 'business',
     });
     return json({ ok: true, product: product.id, quantity: b.quantity, total, fee, balance: await getBalance(db, me) });
   }

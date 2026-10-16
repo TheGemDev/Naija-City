@@ -77,7 +77,8 @@ export default function App() {
   const ready = useSession((s) => s.status === 'ready');
   // Account opened in another tab/device: unmount the whole game so this tab renders and polls nothing.
   const replaced = useNet((s) => s.replaced);
-  const [pendingChatUid, setPendingChatUid] = useState<string | null>(null);
+  // Where a tapped notification wants to land: a chat, or a phone app. Held until the game is ready.
+  const [pendingPush, setPendingPush] = useState<{ chat: string } | { app: string } | null>(null);
   const [pendingLink, setPendingLink] = useState<DeepLink | null>(() => takeDeepLink());
   // Signing in drops straight into the world; signing out goes quiet.
   useEffect(() => {
@@ -114,28 +115,39 @@ export default function App() {
   useEffect(() => startMishaps(), []);
   useEffect(() => startBreakdowns(), []);
   useEffect(() => {
+    const isApp = (v: unknown): v is string => typeof v === 'string' && /^[a-z]{2,24}$/.test(v);
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: unknown; uid?: unknown } | null;
+      const data = event.data as { type?: unknown; uid?: unknown; app?: unknown } | null;
       if (data?.type === 'open-chat' && typeof data.uid === 'string' && data.uid.length > 0 && data.uid.length <= 128) {
-        setPendingChatUid(data.uid);
+        setPendingPush({ chat: data.uid });
+      } else if (data?.type === 'open-app' && isApp(data.app)) {
+        setPendingPush({ app: data.app });
       }
     };
     navigator.serviceWorker?.addEventListener('message', onMessage);
+    // Opened from a notification while the game was closed: /?chat=<uid> or /?app=<id>.
     const url = new URL(window.location.href);
     const uid = url.searchParams.get('chat');
-    if (uid && uid.length <= 128) setPendingChatUid(uid);
-    if (url.searchParams.has('chat')) {
+    const app = url.searchParams.get('app');
+    if (uid && uid.length <= 128) setPendingPush({ chat: uid });
+    else if (isApp(app)) setPendingPush({ app });
+    if (url.searchParams.has('chat') || url.searchParams.has('app')) {
       url.searchParams.delete('chat');
+      url.searchParams.delete('app');
       window.history.replaceState({}, '', url);
     }
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
   }, []);
   useEffect(() => {
-    if (!pendingChatUid || !ready) return;
-    useSocial.setState({ openWith: pendingChatUid });
-    useGame.setState({ panel: 'phone' });
-    setPendingChatUid(null);
-  }, [pendingChatUid, ready]);
+    if (!pendingPush || !ready) return;
+    if ('chat' in pendingPush) {
+      useSocial.setState({ openWith: pendingPush.chat });
+      useGame.setState({ panel: 'phone' });
+    } else {
+      useGame.setState({ panel: 'phone', openApp: pendingPush.app });
+    }
+    setPendingPush(null);
+  }, [pendingPush, ready]);
 
   useEffect(() => {
     if (!pendingLink || !ready) return;

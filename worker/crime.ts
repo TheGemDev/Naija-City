@@ -171,7 +171,7 @@ function tellOwner(env: Env, ctx: ExecutionContext, victim: string, crime: Crime
     title: '🏚️ Your house was broken into',
     body: `${item ? `Your ${item} was stolen. ` : ''}Open the Police app and accuse up to ${ACCUSE.max} suspects.`,
     tag: `burglary-${crime.id}`,
-    category: 'crime',
+    category: 'crime', app: 'police',
   });
 }
 
@@ -268,7 +268,7 @@ async function cameraCatch(env: Env, ctx: ExecutionContext, thief: string, victi
     await markCaught(env.DB, thief, victim, now);
     await settle(env, ctx, thief, null);
     const name = (await usernames(env.DB, [thief])).get(thief) ?? 'someone';
-    sendPush(env, ctx, victim, { title: '📹 CCTV caught a burglar', body: `@${name} came back to your house and the police arrested them.`, tag: 'cctv', category: 'crime' });
+    sendPush(env, ctx, victim, { title: '📹 CCTV caught a burglar', body: `@${name} came back to your house and the police arrested them.`, tag: 'cctv', category: 'crime', app: 'police' });
     return true;
   }
   const crime = await env.DB.prepare(
@@ -283,7 +283,7 @@ async function cameraCatch(env: Env, ctx: ExecutionContext, thief: string, victi
   if (rand() < CRIME.cameraArrestChance) {
     await env.DB.prepare(`UPDATE crimes SET status = 'wanted', reported_at = ?2 WHERE id = ?1`).bind(crime.id, now).run();
     await settle(env, ctx, thief, null);
-    sendPush(env, ctx, victim, { title: '📹 CCTV caught a burglar', body: `@${thiefName} was filmed in your house and the police arrested them.`, tag: 'cctv', category: 'crime' });
+    sendPush(env, ctx, victim, { title: '📹 CCTV caught a burglar', body: `@${thiefName} was filmed in your house and the police arrested them.`, tag: 'cctv', category: 'crime', app: 'police' });
     return true;
   }
   const report: CrimeReport = {
@@ -291,7 +291,7 @@ async function cameraCatch(env: Env, ctx: ExecutionContext, thief: string, victi
     returned: 0, at: now, reportedAt: null, guard: 'camera', bounty: 0, thief: thiefName, victim: names.get(victim) ?? 'someone',
   };
   notify(env, ctx, victim, { t: 'robbed', crime: report });
-  sendPush(env, ctx, victim, { title: '📹 CCTV identified a burglar', body: `@${thiefName} was caught on camera. Open Police to file a report.`, tag: 'cctv', category: 'crime' });
+  sendPush(env, ctx, victim, { title: '📹 CCTV identified a burglar', body: `@${thiefName} was caught on camera. Open Police to file a report.`, tag: 'cctv', category: 'crime', app: 'police' });
   return true;
 }
 

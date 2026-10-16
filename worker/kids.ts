@@ -563,6 +563,6 @@ export async function sweepKids(env: Env, ctx: ExecutionContext, now: number) {
     const res = await saveStmt(db, r, old.at, old.status).run();
     if (!res.meta.changes) continue;
     await announce(db, r, ev);
-    if (push) sendPush(env, ctx, r.uid, { ...push, category: 'family' });
+    if (push) sendPush(env, ctx, r.uid, { ...push, category: 'family', app: push.tag.endsWith('-taken') ? 'adopt' : 'family' });
   }
 }

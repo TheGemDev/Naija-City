@@ -152,6 +152,17 @@ async function pushHere(): Promise<PushHere> {
   return (await registration?.pushManager.getSubscription()) ? 'on' : 'off';
 }
 
+/** Where to allow notifications for this site, in the browser in hand. */
+function unblockSteps(): string {
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) return 'iPhone Settings → Notifications → Naija City → Allow Notifications';
+  if (/Android/.test(ua)) return 'Tap the lock by the address (or App info) → Notifications → Allow';
+  if (/Firefox\//.test(ua)) return 'Lock icon by the address → Send Notifications → Allow, then reload';
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'Safari → Settings → Websites → Notifications → Allow, then reload';
+  return 'Click the icon left of the address → Notifications → Allow, then reload';
+}
+
 /**
  * A notice that stays until this device can get notifications: there is no closing it. It checks the device itself
  * (not just whether the browser was ever asked), so a phone that allowed notifications but never registered with the
@@ -161,6 +172,8 @@ function NotificationBanner() {
   const signedIn = useSession((s) => !!s.user);
   const [working, setWorking] = useState(false);
   const [here, setHere] = useState<PushHere>('checking');
+  // Clicked, but the browser has blocked this site and showed no prompt: point to the browser's own settings.
+  const [noPrompt, setNoPrompt] = useState(false);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -183,6 +196,7 @@ function NotificationBanner() {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         setHere(permission === 'denied' ? 'blocked' : 'off');
+        if (permission === 'denied') setNoPrompt(true);
         return;
       }
       const keyRes = await fetch('/api/push/key');
@@ -212,12 +226,17 @@ function NotificationBanner() {
     }
   }
 
+  // Blocked looks like off: one click tries the browser's prompt. A blocked site gets no prompt, so then it says
+  // where to allow them instead (and keeps trying on each click, in case they did).
   if (here === 'blocked') {
     return (
-      <div className="hud-card notification-banner" role="status">
-        <Emoji char="🔕" size={18} />
-        <span className="nb-text"><b>Notifications blocked</b><small>Allow them in your browser settings</small></span>
-      </div>
+      <button className="hud-card notification-banner tap" type="button" disabled={working} onClick={() => void enable()}>
+        <Emoji char="🔔" size={18} />
+        <span className="nb-text">
+          <b>{working ? 'Turning on…' : noPrompt ? 'Allow notifications in settings' : 'Click to activate notifications'}</b>
+          {noPrompt && <small>{unblockSteps()}</small>}
+        </span>
+      </button>
     );
   }
   if (here === 'homescreen') {
@@ -536,7 +555,9 @@ function PowerChip() {
   const daylight = useGame((s) => isDaylight(s.minutes));
   const atHome = useGame(inOwnHouse);
   const load = useGame((s) => homeLoad(s));
-  if (!atHome) return null; // light only matters in your own house
+  // Sits centred just above the house card (ui/HouseCard.tsx), so it shows exactly when that does.
+  const shown = useGame((s) => s.view === 'home' && s.mode === 'live' && !s.selectedId && !s.panel && !s.placing);
+  if (!atHome || !shown) return null; // light only matters in your own house
   const source = grid ? '💡 NEPA'
     : solar ? (daylight ? '☀️ Solar' : `🔋 Inverter ${battery}%`)
       : powered ? `⛽ Gen ${fuel}%`
@@ -550,7 +571,7 @@ function PowerChip() {
   return (
     <button
       type="button"
-      className={`chip power-chip ${powered ? '' : 'chip-warn'}`}
+      className={`chip power-chip power-dock ${powered ? '' : 'chip-warn'}`}
       aria-label="Power and water. Open the Light app"
       onClick={() => {
         useGame.setState({ openApp: 'light' });
@@ -857,7 +878,7 @@ function NeedsRow() {
             style={{ borderColor: needColor(v) }}
             aria-label={`${n.label} is ${critical ? 'critical' : 'low'}: ${Math.round(v)}. ${NEED_HINT[n.key]}`}
           >
-            <Emoji char={n.icon} size={16} />
+            <span className="need-alert-icon"><Emoji char={n.icon} size={20} /></span>
             <b className="need-alert-num" style={{ background: needColor(v) }}>{Math.round(v)}</b>
           </button>
         );
@@ -1252,6 +1273,7 @@ export function Hud() {
   return (
     <>
       <TopBar />
+      <PowerChip />
       <div ref={leftStack} className={`left-stack ${leftStackCollapsed ? 'collapsed' : ''} ${mode === 'buy' ? 'decorating' : ''}`}>
         {/* Radio sits right under the clock (inside the time card on the corner layout); a .stack-tools row so collapsing the notices never hides it */}
         {!CORNER_HUD && (
@@ -1268,7 +1290,6 @@ export function Hud() {
         <ElectionDayPill />
         <DebtPill />
         <BudgetChip />
-        <PowerChip />
         <ChowChip />
         <StayChip />
         <WorkChip />
