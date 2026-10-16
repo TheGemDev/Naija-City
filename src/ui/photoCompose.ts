@@ -8,8 +8,8 @@ export const CAPTION_STYLES: CaptionStyle[] = ['outline', 'bar', 'pop'];
 /** Something placed on the photo. Positions are fractions of the picture, sizes fractions of its short side, so they hold at any resolution. */
 export interface Layer {
   id: number;
-  /** An emoji, a word badge, or a line of the player's own text. */
-  kind: 'emoji' | 'tag' | 'caption';
+  /** An emoji, a word badge, a line of the player's own text, or a Snap-style info pill (the time, the weather, where). */
+  kind: 'emoji' | 'tag' | 'caption' | 'info';
   text: string;
   x: number;
   y: number;
@@ -62,7 +62,7 @@ export interface Mark {
 }
 
 export const EMOJI_STICKERS = ['🔥', '😂', '😎', '🥳', '😍', '🤑', '🙏🏾', '💯', '👑', '💸', '❤️', '✨', '🎉', '👀', '💪🏾', '🤝🏾', '🛺', '🏠', '🚗', '🍚', '🌴', '📍', '🇳🇬', '⚡'];
-export const TAG_STICKERS = ['ODOGWU', 'NO WAHALA', 'GOD WHEN?', 'SAPA NO DEY', 'SOFT LIFE', 'KADUNA TO THE WORLD', 'ABUJA TO THE WORLD', 'LAGOS TO THE WORLD', 'KANO TO THE WORLD', 'WE MOVE', 'E CHOKE', 'BIG BOSS', 'NA ME BE THIS', 'OUTSIDE', 'MY NEW CRIB'];
+export const TAG_STICKERS = ['OWAMBE VIBES', 'JOLLOF O\'CLOCK', 'DETTY DECEMBER', 'JAPA LOADING', 'ENJOYMENT MINISTER', 'NEPA TAKE LIGHT', 'ODOGWU', 'NO WAHALA', 'GOD WHEN?', 'SAPA NO DEY', 'SOFT LIFE', 'KADUNA TO THE WORLD', 'ABUJA TO THE WORLD', 'LAGOS TO THE WORLD', 'KANO TO THE WORLD', 'WE MOVE', 'E CHOKE', 'BIG BOSS', 'NA ME BE THIS', 'OUTSIDE', 'MY NEW CRIB'];
 
 const GREEN = '#0f6b3a';
 const AMBER = '#f59e0b';
@@ -71,6 +71,126 @@ const INK = '#0f172a';
 const SITE = 'https://naija.city';
 /** Badge background and text colours. */
 export const TAG_TONES: [string, string][] = [[AMBER, INK], [GREEN, '#fff'], ['#fff', INK], ['#ef4444', '#fff'], [INK, '#facc15']];
+
+/** Info pill backgrounds and text colours: white, Snap yellow, smoked glass. */
+export const INFO_TONES: [string, string][] = [['#fff', INK], ['#fffc00', '#000'], ['rgba(0,0,0,0.62)', '#fff']];
+
+/* ---------- Lenses: colour filters over the whole picture ---------- */
+
+type Step = ['brightness' | 'contrast' | 'saturate' | 'sepia' | 'grayscale' | 'hue-rotate', number];
+export interface Lens {
+  id: string;
+  label: string;
+  /** CSS filter functions, in order: the live preview on the scene uses them as they are, the picture as one colour matrix. */
+  steps: Step[];
+  /** A wash of colour over it, top to bottom (or left to right), and a dark edge. */
+  wash?: [string, string, 'v' | 'h'];
+  vignette?: number;
+}
+export const LENSES: Lens[] = [
+  { id: 'none', label: 'Normal', steps: [] },
+  { id: 'golden', label: 'Golden hour', steps: [['sepia', 0.25], ['saturate', 1.35], ['brightness', 1.06], ['contrast', 1.05]], wash: ['rgba(255,170,60,0.2)', 'rgba(255,90,40,0.1)', 'v'] },
+  { id: 'owambe', label: 'Owambe', steps: [['saturate', 1.8], ['contrast', 1.12], ['brightness', 1.04]], wash: ['rgba(236,72,153,0.16)', 'rgba(250,204,21,0.16)', 'v'], vignette: 0.25 },
+  { id: 'harmattan', label: 'Harmattan', steps: [['sepia', 0.4], ['contrast', 0.84], ['brightness', 1.1], ['saturate', 0.8]], wash: ['rgba(235,205,150,0.32)', 'rgba(200,160,110,0.14)', 'v'] },
+  { id: 'eko', label: 'Eko nights', steps: [['hue-rotate', -12], ['saturate', 1.25], ['contrast', 1.2], ['brightness', 0.9]], wash: ['rgba(30,64,175,0.26)', 'rgba(147,51,234,0.14)', 'v'], vignette: 0.35 },
+  { id: 'naija', label: 'Green white', steps: [['saturate', 1.2], ['contrast', 1.05]], wash: ['rgba(0,135,81,0.34)', 'rgba(0,135,81,0.34)', 'h'] },
+  { id: 'nolly', label: 'Nollywood', steps: [['contrast', 1.3], ['saturate', 0.75], ['sepia', 0.2]], vignette: 0.55 },
+  { id: 'bw', label: 'Black & white', steps: [['grayscale', 1], ['contrast', 1.15]] },
+];
+export const LENS_BY_ID: Record<string, Lens> = Object.fromEntries(LENSES.map((l) => [l.id, l]));
+
+/** The lens as a CSS filter, for the live view of the scene. */
+export const lensFilter = (lens: Lens) => lens.steps.map(([f, v]) => (f === 'hue-rotate' ? `${f}(${v}deg)` : `${f}(${v})`)).join(' ') || 'none';
+/** The lens's wash and edge as a CSS background, laid over the live view. */
+export function lensVeil(lens: Lens) {
+  const layers: string[] = [];
+  if (lens.vignette) layers.push(`radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,${lens.vignette}) 100%)`);
+  if (lens.wash) {
+    const [a, b, dir] = lens.wash;
+    layers.push(dir === 'h' ? `linear-gradient(to right, ${a}, transparent 22%, transparent 78%, ${b})` : `linear-gradient(to bottom, ${a}, ${b})`);
+  }
+  return layers.join(', ') || 'none';
+}
+
+/** One CSS filter function as a 3x4 colour matrix (rows r, g, b; the last column is the offset, 0 to 1). */
+function stepMatrix([f, v]: Step): number[] {
+  if (f === 'brightness') return [v, 0, 0, 0, 0, v, 0, 0, 0, 0, v, 0];
+  if (f === 'contrast') return [v, 0, 0, 0.5 - 0.5 * v, 0, v, 0, 0.5 - 0.5 * v, 0, 0, v, 0.5 - 0.5 * v];
+  if (f === 'saturate') return [0.213 + 0.787 * v, 0.715 - 0.715 * v, 0.072 - 0.072 * v, 0, 0.213 - 0.213 * v, 0.715 + 0.285 * v, 0.072 - 0.072 * v, 0, 0.213 - 0.213 * v, 0.715 - 0.715 * v, 0.072 + 0.928 * v, 0];
+  if (f === 'sepia') {
+    const k = 1 - v;
+    return [0.393 + 0.607 * k, 0.769 - 0.769 * k, 0.189 - 0.189 * k, 0, 0.349 - 0.349 * k, 0.686 + 0.314 * k, 0.168 - 0.168 * k, 0, 0.272 - 0.272 * k, 0.534 - 0.534 * k, 0.131 + 0.869 * k, 0];
+  }
+  if (f === 'grayscale') {
+    const k = 1 - v;
+    return [0.2126 + 0.7874 * k, 0.7152 - 0.7152 * k, 0.0722 - 0.0722 * k, 0, 0.2126 - 0.2126 * k, 0.7152 + 0.2848 * k, 0.0722 - 0.0722 * k, 0, 0.2126 - 0.2126 * k, 0.7152 - 0.7152 * k, 0.0722 + 0.9278 * k, 0];
+  }
+  const a = (v * Math.PI) / 180;
+  const c = Math.cos(a);
+  const n = Math.sin(a);
+  return [
+    0.213 + c * 0.787 - n * 0.213, 0.715 - c * 0.715 - n * 0.715, 0.072 - c * 0.072 + n * 0.928, 0,
+    0.213 - c * 0.213 + n * 0.143, 0.715 + c * 0.285 + n * 0.14, 0.072 - c * 0.072 - n * 0.283, 0,
+    0.213 - c * 0.213 - n * 0.787, 0.715 - c * 0.715 + n * 0.715, 0.072 + c * 0.928 + n * 0.072, 0,
+  ];
+}
+/** `b` applied after `a`. */
+function chain(a: number[], b: number[]) {
+  const out: number[] = [];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) out.push(b[r * 4] * a[c] + b[r * 4 + 1] * a[4 + c] + b[r * 4 + 2] * a[8 + c] + (c === 3 ? b[r * 4 + 3] : 0));
+  }
+  return out;
+}
+
+/** The picture with a lens baked in: its colours run through the lens's filters, then its wash and edge laid on top.
+ *  Done once per lens on a copy (the editor keeps it), so dragging stickers about never re-filters the picture. */
+export function applyLens(shot: HTMLCanvasElement, lens: Lens): HTMLCanvasElement {
+  if (!lens.steps.length && !lens.wash && !lens.vignette) return shot;
+  const out = document.createElement('canvas');
+  out.width = shot.width;
+  out.height = shot.height;
+  const ctx = out.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return shot;
+  ctx.drawImage(shot, 0, 0);
+  const { width: w, height: h } = out;
+  if (lens.steps.length) {
+    const m = lens.steps.map(stepMatrix).reduce(chain);
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    const o = [m[3] * 255, m[7] * 255, m[11] * 255];
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      d[i] = m[0] * r + m[1] * g + m[2] * b + o[0];
+      d[i + 1] = m[4] * r + m[5] * g + m[6] * b + o[1];
+      d[i + 2] = m[8] * r + m[9] * g + m[10] * b + o[2];
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  if (lens.wash) {
+    const [a, b, dir] = lens.wash;
+    const g = dir === 'h' ? ctx.createLinearGradient(0, 0, w, 0) : ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, a);
+    if (dir === 'h') {
+      g.addColorStop(0.22, 'rgba(0,0,0,0)');
+      g.addColorStop(0.78, 'rgba(0,0,0,0)');
+    }
+    g.addColorStop(1, b);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  if (lens.vignette) {
+    const r = Math.hypot(w, h) / 2;
+    const g = ctx.createRadialGradient(w / 2, h / 2, r * 0.52, w / 2, h / 2, r);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(0,0,0,${lens.vignette})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  return out;
+}
 
 const SANS = `'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif`;
 const MONO = `ui-monospace, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace`;
@@ -107,6 +227,24 @@ function drawLayer(ctx: CanvasRenderingContext2D, l: Layer, w: number, h: number
     ctx.shadowOffsetY = px * 0.04;
     ctx.fillText(l.text, 0, px * 0.06);
     return { hw: px * 0.62, hh: px * 0.62 };
+  }
+  if (l.kind === 'info') {
+    // A rounded pill, like the time and weather stickers on Snapchat.
+    const [bg, fg] = INFO_TONES[l.tone % INFO_TONES.length];
+    ctx.font = font(800, px);
+    const hw = ctx.measureText(l.text).width / 2 + px * 0.7;
+    const hh = px * 0.95;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = px * 0.35;
+    ctx.shadowOffsetY = px * 0.1;
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(-hw, -hh, hw * 2, hh * 2, hh);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = fg;
+    ctx.fillText(l.text, 0, px * 0.05);
+    return { hw, hh };
   }
   if (l.kind === 'tag') {
     const [bg, fg] = TAG_TONES[l.tone % TAG_TONES.length];

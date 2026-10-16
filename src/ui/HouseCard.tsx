@@ -7,6 +7,8 @@ import { useVisit } from '../game/visits';
 import { CAP, sectionOf } from '../game/estate';
 import { builtOn, houseTitle, isComplete, REGION_BY_ID } from '../game/property';
 import { useTravel } from './TravelPicker';
+import { ParkedCarSheet } from './ParkedCar';
+import { useParkedCar } from './parkedCarStore';
 import './homes.css';
 import { getRegion } from '../game/regions';
 import { Icon } from './Icons';
@@ -60,7 +62,11 @@ export function HouseCard() {
   const properties = useGame((s) => s.properties);
   const rentedOut = useGame((s) => s.rentedOut);
   const city = useGame((s) => s.homeState);
-  if (!shown || visiting) return null;
+  const carOpen = useParkedCar((c) => !!c.carId);
+  if (visiting) return null;
+  // A car tapped in the bay shows its actions where this card sits.
+  if (carOpen) return <ParkedCarSheet />;
+  if (!shown) return null;
   const homes = properties.filter((p) => isComplete(p) && (p.id === house?.id || (!p.rented && !rentedOut.includes(p.id))));
   const at = house ? homes.findIndex((p) => p.id === house.id) : -1;
   const step = (d: -1 | 1) => {

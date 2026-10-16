@@ -140,7 +140,7 @@ function leafTone(l: Look, pal: Leaf, ny: number, h: number, out: Color) {
   if (t < 0.5) out.copy(pal.dark).lerp(pal.mid, t * 2);
   else out.copy(pal.mid).lerp(pal.light, (t - 0.5) * 2);
   out.multiplyScalar(0.93 + l.rand() * 0.14);
-  if (l.dust > 0) out.lerp(DUST, l.dust * 0.5 * (0.35 + 0.65 * Math.max(0, ny)));
+  if (l.dust > 0) out.lerp(DUST, l.dust * 0.42 * (0.35 + 0.65 * Math.max(0, ny)));
   return out;
 }
 

@@ -34,6 +34,12 @@ const clock = (ms: number) => {
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s % 60).padStart(2, '0')}`;
 };
 
+/** "20 min", "1h 30m", "3h". */
+const growLabel = (ms: number) => {
+  const m = Math.round(ms / 60_000);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}`;
+};
+
 /** Loads the hustle state once the tab opens, and shows a placeholder until it has. */
 function useLoaded() {
   const state = useHustle((s) => s.state);
@@ -293,7 +299,7 @@ export function FarmTab() {
                     <button key={c} className="hs-crop" disabled={busy || money < def.seed} onClick={() => { setPicking(null); void plantCrop(p.slot, c); }}>
                       <span aria-hidden>{def.icon}</span>
                       <b>{def.label}</b>
-                      <small>Seeds {naira(def.seed)} · {clock(def.growMs)}</small>
+                      <small>Seeds {naira(def.seed)} · {growLabel(def.growMs)}</small>
                       <small className="good">Sells ~{naira(cropPrice(c, state.day))}</small>
                     </button>
                   );

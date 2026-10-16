@@ -1,10 +1,14 @@
 // TEMP harness (delete after): the real home scene and decorate UI, driven from window.__h. ?low=1
+// cityModels first: placeKit -> cityModels -> StationModel -> trainKit -> placeKit is a cycle that breaks when placeKit loads first.
+import '../src/three/cityModels';
 import { createRoot } from 'react-dom/client';
 import '../src/game/theme';
 import '../src/theme.css';
 import '../src/styles.css';
 import { useGame } from '../src/game/store';
 import { useQuality } from '../src/game/quality';
+import { pinWeather } from '../src/game/weather';
+pinWeather('clear');
 import { Scene } from '../src/three/Scene';
 import { BuyPanel, OwnedSheet } from '../src/ui/Sheets';
 import { DEFAULT_ITEMS } from '../src/game/store';

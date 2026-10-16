@@ -667,6 +667,17 @@ useGame.subscribe((s, prev) => {
     future.length = 0;
     counts();
   }
+  // Something that stood on a piece that is gone (stolen, sold from the phone, trimmed by the server) goes into storage.
+  if (s.items !== prev.items && s.view === 'home' && !useVisit.getState().current) {
+    let orphans: PlacedItem[] | null = null;
+    for (const it of s.items) {
+      if (it.on && mountOf(it) === 'surface' && !s.items.some((b) => b.id === it.on)) (orphans ??= []).push(it);
+    }
+    if (orphans) {
+      const gone = new Set(orphans.map((o) => o.id));
+      useGame.setState({ items: s.items.filter((i) => !gone.has(i.id)), furnitureInventory: [...s.furnitureInventory, ...orphans] });
+    }
+  }
   if (s.items !== prev.items && useDecor.getState().sel.length) {
     const sel = useDecor.getState().sel.filter((id) => s.items.some((i) => i.id === id));
     if (sel.length !== useDecor.getState().sel.length) useDecor.setState({ sel });

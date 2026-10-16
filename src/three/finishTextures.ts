@@ -314,11 +314,11 @@ const PAINTERS: Record<string, (g: G, S: number, rnd: Rnd, def: FinishDef) => vo
     g.fillRect(S / 2, 0, 1.5, S);
   },
   marble_white(g, S, rnd) {
-    g.fillStyle = '#eeece8';
+    g.fillStyle = '#f0eeea';
     g.fillRect(0, 0, S, S);
-    blotches(g, S, rnd, 10, ['#e2dfd9', '#f7f6f3'], S * 0.3, 0.6);
-    veins(g, S, rnd, 7, '#9e9a94', 1.4, 0.45);
-    veins(g, S, rnd, 10, '#c4c0b9', 0.8, 0.35);
+    blotches(g, S, rnd, 8, ['#e7e4de', '#f8f7f4'], S * 0.3, 0.3);
+    veins(g, S, rnd, 5, '#a9a49d', 1.1, 0.35);
+    veins(g, S, rnd, 8, '#cdc9c2', 0.7, 0.3);
     g.fillStyle = 'rgba(150,146,140,0.6)';
     g.fillRect(0, 0, S, 1);
     g.fillRect(0, 0, 1, S);
@@ -326,9 +326,9 @@ const PAINTERS: Record<string, (g: G, S: number, rnd: Rnd, def: FinishDef) => vo
   marble_black(g, S, rnd) {
     g.fillStyle = '#1f1d1c';
     g.fillRect(0, 0, S, S);
-    blotches(g, S, rnd, 10, ['#2c2926', '#141312'], S * 0.3, 0.6);
-    veins(g, S, rnd, 6, '#d4af37', 1.3, 0.7);
-    veins(g, S, rnd, 9, '#e8e4dc', 0.7, 0.4);
+    blotches(g, S, rnd, 8, ['#2a2724', '#171615'], S * 0.3, 0.35);
+    veins(g, S, rnd, 3, '#d4af37', 1.6, 0.6);
+    veins(g, S, rnd, 4, '#e8e4dc', 0.8, 0.28);
     g.fillStyle = 'rgba(212,175,55,0.5)';
     g.fillRect(0, 0, S, 1);
     g.fillRect(0, 0, 1, S);
@@ -515,11 +515,11 @@ export function finishMaterial(value: string): MeshStandardMaterial | null {
     tex.colorSpace = SRGBColorSpace;
     tex.minFilter = LinearMipmapLinearFilter;
     tex.anisotropy = 4;
-    m = new MeshStandardMaterial({ map: tex, roughness: def.roughness, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    m = new MeshStandardMaterial({ map: tex, roughness: def.roughness, metalness: 0 });
   } else {
     const hex = paintHex(value);
     if (!hex) return null;
-    m = new MeshStandardMaterial({ color: hex, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    m = new MeshStandardMaterial({ color: hex, roughness: 0.85, metalness: 0 });
   }
   m.name = `finish:${value}`;
   materials.set(value, m);

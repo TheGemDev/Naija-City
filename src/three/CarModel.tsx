@@ -601,7 +601,7 @@ function build(look: Look): [Part, BufferGeometry][] {
   });
 }
 
-export function CarModel({ carId, position = [3.2, 0, 11.2], rotation = [0, Math.PI / 2, 0] }: { carId: string; position?: [number, number, number]; rotation?: [number, number, number] }) {
+export function CarModel({ carId, position = [3.2, 0, 11.2], rotation = [0, Math.PI / 2, 0], onTap }: { carId: string; position?: [number, number, number]; rotation?: [number, number, number]; /** Tapped: instead of the toast (the car's actions at home, ui/ParkedCar.tsx). */ onTap?: () => void }) {
   const car: CarDef = CAR_BY_ID[carId] ?? CAR_BY_ID['peugeot_504'];
   const toast = useGame((s) => s.toast);
   const look = lookOf(car);
@@ -610,6 +610,7 @@ export function CarModel({ carId, position = [3.2, 0, 11.2], rotation = [0, Math
   const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     audio.honk();
+    if (onTap) return onTap();
     toast(`📯 Beep beep! That's your ${car.name}. Open KD Autos to cruise.`);
   };
 

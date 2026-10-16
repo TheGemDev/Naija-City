@@ -93,7 +93,11 @@ interface PhotoState {
   result: PhotoResult | null;
   /** Opened from the Snap app: the picture is for posting there, not just for keeping. */
   forSnap: boolean;
-  open(forSnap?: boolean): void;
+  /** The colour filter over the picture (ui/photoCompose.ts LENSES): shown live on the scene, then baked in by the editor. */
+  lens: string;
+  /** Friends the snap is already addressed to (the camera button on a Snap chat row), ticked on the send screen. */
+  sendTo: string[];
+  open(forSnap?: boolean, sendTo?: string[]): void;
   close(): void;
   snap(): void;
   discard(): void;
@@ -109,8 +113,11 @@ export const usePhoto = create<PhotoState>((set, get) => ({
   shutter: 0,
   result: null,
   forSnap: false,
+  lens: 'none',
+  sendTo: [],
   // Opens on 4:5, the shape that shows biggest in a social feed; a wide desktop screen starts on 16:9.
-  open: (forSnap = false) => set({ forSnap, active: true, shot: 'selfie', pose: 'idle', light: 'now', format: window.innerWidth > window.innerHeight ? 'wide' : 'post', hideMe: false, result: null }),
+  // A snap opens on 9:16, the shape Snap shows full screen.
+  open: (forSnap = false, sendTo = []) => set({ forSnap, sendTo, lens: 'none', active: true, shot: 'selfie', pose: 'idle', light: 'now', format: forSnap ? 'story' : window.innerWidth > window.innerHeight ? 'wide' : 'post', hideMe: false, result: null }),
   close: () => {
     get().discard();
     set({ active: false });

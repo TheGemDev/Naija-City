@@ -37,7 +37,14 @@ Object.defineProperty(WebGLRenderer.prototype, 'render', {
       if ((scene as { isScene?: boolean }).isScene && gl.getRenderTarget() === null) {
         let objects = 0, meshes = 0;
         scene.traverse((o) => { objects++; if ((o as { isMesh?: boolean }).isMesh && o.visible) meshes++; });
-        w.__stats = { calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, objects, visibleMeshes: meshes };
+        let mapTris = 0, mapN = 0, placeTris = 0;
+        scene.traverse((o) => {
+          const m = o as unknown as { isMesh?: boolean; geometry?: { getAttribute(n: string): { count: number } | undefined }; material?: { vertexColors?: boolean }; userData: { noShade?: boolean }; parent: { userData: { noShade?: boolean } } | null; visible: boolean };
+          if (!m.isMesh || !m.material?.vertexColors || !m.geometry?.getAttribute('color')) return;
+          const n = m.geometry.getAttribute('position')!.count / 3;
+          if (m.userData.noShade) { mapTris += n; mapN++; } else if (m.parent?.userData.noShade && !m.visible) placeTris += n;
+        });
+        w.__stats = { mapTrees: mapN, mapTreeTris: mapTris, placeTreeTris: placeTris, calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, objects, visibleMeshes: meshes };
         w.__frames++;
       }
     } });

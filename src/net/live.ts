@@ -35,6 +35,12 @@ export interface FeedPost {
   likes: number;
   liked: number | boolean;
   replies?: number;
+  /** Reposts, whether I reposted it, and how many times it was opened (src/net/twitter.ts). */
+  reposts?: number;
+  reposted?: number | boolean;
+  views?: number;
+  /** Following tab: the friend (or me) who reposted it there. */
+  reposter?: string | null;
 }
 
 /** The feed only ever shows this many top-level posts (server enforces it too). */

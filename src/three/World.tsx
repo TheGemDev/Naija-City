@@ -13,6 +13,10 @@ import { FinishGuides, finishTap } from './FinishGuides';
 import { avatar, avatarCell } from '../game/avatar';
 import { Tree } from './models';
 import { CarModel } from './CarModel';
+import { HomeCarport, HouseDoors } from './homeYard';
+import { designOfKey, exteriorOf, withPark } from '../game/exterior';
+import { useVisit } from '../game/visits';
+import { useParkedCar } from '../ui/parkedCarStore';
 import { homeTransform } from '../game/origins';
 import { StaticBatch } from './StaticBatch';
 import { DEFAULT_INNER_WALL, paintHex, type HousePaint } from '../game/paint';
@@ -357,7 +361,12 @@ export function World({ readOnly = false, items = [], origin, design, walls, pai
   const ownedCars = useGame((s) => readOnly ? null : s.ownedCars);
   const parked = parkedCars(visitCars ?? ownedCars ?? []);
   const homeItems = useGame((s) => s.items);
-  const layout = houseLayout(design, walls);
+  // The cars stand in a bay inside the compound (game/grid.ts), so the layout carries it: walkable, under a carport.
+  const layout = houseLayout(withPark(design, parked.length), walls);
+  // The carport's style and colour: your own house's outside, or the one you are visiting.
+  const ownExt = useGame((s) => (readOnly ? undefined : s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId))?.exterior));
+  const visitExt = useVisit((v) => (readOnly ? v.current?.save.exterior ?? undefined : undefined));
+  const ext = exteriorOf(designOfKey(design), readOnly ? visitExt : ownExt);
   // Your own house shows the finish you are trying out in the Finishes tab over what you have bought.
   const ownFinish = useGame((s) => (readOnly ? undefined : s.houseFinish[houseKeyOf(s)]));
   const draft = useFinishUi((s) => (readOnly ? null : s.draft));
@@ -365,7 +374,7 @@ export function World({ readOnly = false, items = [], origin, design, walls, pai
   const innerColour = paintHex(paint?.inner) ?? DEFAULT_INNER_WALL;
   return (
     <group>
-      <Island layout={layout} parked={parked.length} />
+      <Island layout={layout} parked={0} />
       {/* StaticBatch reads its children once, so remount floors and walls when the layout changes. */}
       <Floors key={design ?? 'starter'} layout={layout} />
       <Walls key={`${design ?? 'starter'}|${(walls ?? []).slice().sort().join(',')}|${paint?.outer ?? ''}|${paint?.inner ?? ''}`} layout={layout} paint={paint} finish={finish} />
@@ -374,14 +383,14 @@ export function World({ readOnly = false, items = [], origin, design, walls, pai
       {!readOnly && <FinishGuides layout={layout} />}
       {!readOnly && <WallGuides layout={layout} items={homeItems} />}
       <EntryPorch layout={layout} />
-      {parked.map((id, i) => (
-        <CarModel
-          key={id}
-          carId={id}
-          position={[layout.gridW / 2 + (i - (parked.length - 1) / 2) * PARKING_GAP, 0, layout.gridH + 1.8 + PARKING_DEPTH / 2]}
-          rotation={[0, 0, 0]}
-        />
-      ))}
+      <HouseDoors layout={layout} trim={layout.shell.trim} />
+      <HomeCarport layout={layout} ext={ext} />
+      {parked.map((id, i) => {
+        const spot = layout.cars[i];
+        return spot ? (
+          <CarModel key={id} carId={id} position={[spot.x + 1, 0, spot.z + 2]} rotation={[0, 0, 0]} onTap={readOnly ? undefined : () => useParkedCar.setState({ carId: id })} />
+        ) : null;
+      })}
       <ClickPlane readOnly={readOnly} items={items} origin={origin} design={design} layout={layout} />
     </group>
   );

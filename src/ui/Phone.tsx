@@ -59,6 +59,7 @@ import { FixerApp, GrindApp, PlugApp } from './Vice';
 import { ElectionBoard } from './Election';
 import { LoansPanel } from './Loans';
 import { openAdsSheet } from '../net/ads';
+import { frequentApps, noteAppOpen, useAppUsage } from '../game/appUsage';
 import { ADS_ON_SALE } from '../game/ads';
 import { PerfSettings } from './PerfSettings';
 import { GuideSettings } from './Guide';
@@ -1928,6 +1929,8 @@ const PLAYS_BOOST = 5000;
 
 /** The four apps that stay in the dock at the bottom of the home screen. */
 const DOCK_APPS: AppId[] = ['messages', 'bank', 'camera', 'gist'];
+/** How many apps the Frequent row holds: one row of the grid. */
+const FREQUENT_N = 4;
 function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
   const stats = useCityStats((s) => s.stats);
   useEffect(() => watchCityStats(), []);
@@ -1945,6 +1948,38 @@ function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
   // Newly installed apps go first so the NEW badge is seen; the rest keep importance order. Dock apps live in the dock.
   const rest = downloaded.filter((id) => !fresh.includes(id));
   const apps = [...downloaded.filter((id) => fresh.includes(id)), ...HOME_APPS, ...rest, ...TAIL_APPS].filter((id) => !DOCK_APPS.includes(id));
+  // The grid keeps its order so apps stay where you remember them; your most used lately also sit in a row on top.
+  const usage = useAppUsage((s) => s.usage);
+  const frequent = frequentApps(usage, apps, FREQUENT_N);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const shown = q ? apps.filter((id) => APPS[id].label.toLowerCase().includes(q)) : apps;
+  const go = (id: AppId) => {
+    noteAppOpen(id);
+    setQuery('');
+    open(id);
+  };
+  const top = (
+    <>
+      {frequent.length >= 2 && !q && (
+        <div className="app-frequent">
+          <small>Frequent</small>
+          <div className="app-grid">
+            {frequent.map((id) => <AppIcon key={id} app={APPS[id]} onClick={() => go(id)} />)}
+          </div>
+        </div>
+      )}
+      <input className="app-search" type="search" value={query} placeholder="Search apps" aria-label="Search apps" onChange={(e) => setQuery(e.target.value)} />
+    </>
+  );
+  const grid = (
+    <div className="app-grid">
+      {shown.map((id) => (
+        <AppIcon key={id} app={APPS[id]} onClick={() => go(id)} />
+      ))}
+      {q && !shown.length && <p className="app-none">No app called “{query.trim()}”</p>}
+    </div>
+  );
   const money = useGame((s) => s.money);
   const brand = useGame((s) => PHONE_BY_ID[s.phone]?.brand);
   const clock = formatClock(minutes).replace(/ (AM|PM)/, '').split(':');
@@ -1967,11 +2002,8 @@ function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
                 <span>{stats ? plays : 'Naira'}</span>
               </button>
             </div>
-            <div className="app-grid">
-              {apps.map((id) => (
-                <AppIcon key={id} app={APPS[id]} onClick={() => open(id)} />
-              ))}
-            </div>
+            {top}
+            {grid}
           </div>
           <div className="duo-dots" aria-hidden><i className="on" /><i /></div>
         </div>
@@ -1992,15 +2024,12 @@ function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
             {SHOW_ONLINE && <><i className="live-dot" />{online.toLocaleString('en-NG')} online · </>}<Emoji char="👁️" size={13} /> {plays}
           </span>
         )}
-        <div className="app-grid">
-          {apps.map((id) => (
-            <AppIcon key={id} app={APPS[id]} onClick={() => open(id)} />
-          ))}
-        </div>
+        {top}
+        {grid}
       </div>
       <div className="dock">
         {DOCK_APPS.map((id) => (
-          <AppIcon key={id} app={APPS[id]} onClick={() => open(id)} />
+          <AppIcon key={id} app={APPS[id]} onClick={() => go(id)} />
         ))}
       </div>
       {/* A Pixel keeps a search bar under the dock. Here it finds apps. */}

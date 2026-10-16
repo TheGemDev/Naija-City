@@ -13,7 +13,7 @@ export { VDM_TOPICS, type VdmFacts, type VdmTopic };
 export type VdmTone = 'drag' | 'praise' | 'mixed';
 
 /** How much he remembers: phrases of his last posts are not reused, and he keeps score on people for a week. */
-export const VDM_MEMORY = { recent: 20, recordMs: 7 * 24 * 3600_000, keepMs: 14 * 24 * 3600_000, similar: 0.34, attempts: 8 };
+export const VDM_MEMORY = { recent: 20, hashes: 500, recordMs: 7 * 24 * 3600_000, keepMs: 14 * 24 * 3600_000, similar: 0.34, attempts: 12 };
 
 /** One of his recent posts, newest first: the phrase ids it was built from, and its text. */
 export interface VdmPast { phrases: string[]; text: string }
@@ -28,6 +28,8 @@ export interface VdmRequest {
   but?: { topic: VdmTopic; facts: VdmFacts };
   seed: string;
   history?: VdmPast[];
+  /** Hashes (vdmHash) of his older posts: none of them is ever posted again word for word. */
+  seen?: Iterable<string>;
   /** His score on the person this post is mostly about (the one dragged, on a mixed post). */
   record?: VdmRecord | null;
 }
@@ -55,6 +57,9 @@ function rngOf(seed: string) {
   };
 }
 
+/** A short fingerprint of a post, to remember it by without keeping its text. */
+export const vdmHash = (text: string) => fnv(text.toLowerCase().replace(/\s+/g, ' ').trim()).toString(36) + text.length.toString(36);
+
 /* ---------- Lines ---------- */
 
 interface Line { id: string; text: string; heat: number; dom: 'g' | 'c' | null; when: [string, boolean][]; needs: string[] }
@@ -64,7 +69,7 @@ function lines(key: string, list: readonly string[] | undefined): Line[] {
   if (!list?.length) return [];
   const hit = parsed.get(key);
   if (hit) return hit;
-  const out = list.map((raw, i) => {
+  const out = list.map((raw, i): Line => {
     const m = raw.match(/^\[([^\]]*)\]/);
     const tags = m ? m[1].split(/\s+/).filter(Boolean) : [];
     const text = m ? raw.slice(m[0].length) : raw;
@@ -151,7 +156,7 @@ const SHAPES: Record<VdmTone, Shape[]> = {
     S('m3', 0, 3, 'open pcore pivot dcore jab sign'),
     S('m4', 0, 3, 'dcore jab ppivot pcore commend tail'),
     S('m5', 0, 3, 'pcore pivot dcore jab rat'),
-    S('m6', 0, 3, 'open dcore ppivot pcore q'),
+    S('m6', 0, 3, 'open dcore ppivot pcore commend'),
   ],
 };
 
@@ -200,15 +205,16 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
     const all = pools.flat().filter((l) => !taken.has(l.id) && fits(l, f) && ok(l) && (crime ? l.dom !== 'g' : l.dom !== 'c') && !(signed && SIGNATURE.test(l.text)));
     if (!all.length) return null;
     const fresh = all.filter((l) => !ages.has(l.id));
-    const from = fresh.length ? fresh : (() => {
-      const oldest = Math.max(...all.map((l) => ages.get(l.id)!));
-      return all.filter((l) => ages.get(l.id) === oldest);
-    })();
+    // Every line used lately: the ones used longest ago. A retry (a draft too close to an old post) widens the
+    // choice, or every retry would come out the same.
+    const stale = [...all].filter((l) => ages.has(l.id)).sort((a, b) => ages.get(b.id)! - ages.get(a.id)!);
+    const from = [...fresh, ...(fresh.length > attempt ? [] : stale.slice(0, Math.max(1, Math.ceil((stale.length * (attempt + 1)) / 6))))];
     return from[Math.floor(rng() * from.length)];
   };
   /** Topic lines first about half the time, so a topic keeps its own flavour without hogging the slot. */
   const prefer = (own: Line[], generic: Line[]) => (own.length && rng() < 0.55 ? [own] : [own, generic]);
-  const heatOk = (l: Line) => (sev <= 0 ? l.heat <= 1 : sev === 1 ? l.heat <= 2 : sev === 2 ? l.heat >= 2 : l.heat >= 2);
+  // How hot the generic lines may run; a topic's own lines always suit it.
+  const heatOk = (l: Line) => (!!drag && l.id.startsWith(`${drag.key}.`)) || (sev <= 0 ? l.heat <= 1 : sev === 1 ? l.heat <= 2 : l.heat >= 2);
 
   const say = (l: Line | null, f: Bag) => {
     if (!l) return null;
@@ -237,7 +243,8 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
       case 'pcore': return core(true);
       case 'dcore': return core(false);
       case 'open':
-        return tone === 'praise' || (tone === 'mixed' && rng() < 0.6)
+        // A mixed post opens on whichever half comes first.
+        return tone === 'praise' || (tone === 'mixed' && shape.slots.find((t) => t.endsWith('core')) === 'pcore')
           ? say(choose([lines('open.p', GEN.openPraise)], P), P)
           : say(choose([lines('open.d', GEN.openDrag)], D, heatOk), D);
       case 'jab':
@@ -254,7 +261,7 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
           : say(choose(prefer(lines(`${drag!.key}.q`, drag!.def.q), lines('q.d', GEN.qDrag)), D), D);
       case 'tail': {
         // Not every praise is backhanded: the bigger the good deed, the less he hedges.
-        if (rng() < (sev >= 3 ? 0.35 : sev === 2 ? 0.55 : 0.75) === false) return null;
+        if (rng() >= (sev >= 3 ? 0.35 : sev === 2 ? 0.55 : 0.75)) return null;
         return say(choose(prefer(lines(`${praise!.key}.tail`, praise!.def.tail), lines('tail', GEN.tail)), P), P);
       }
       case 'rat':
@@ -272,30 +279,38 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
     const r = req.record;
     if (!r?.who || rng() < 0.2) return null;
     const towards = tone === 'praise' ? 'praise' : 'drag';
-    const f: Bag = { rwho: r.who, times: towards === 'drag' ? r.dragged : r.praised, ord: ordinal((towards === 'drag' ? r.dragged : r.praised) + 1) };
+    const f: Bag = { rwho: r.who, dragged: r.dragged, praised: r.praised, many: r.dragged >= 2, ord: ordinal((towards === 'drag' ? r.dragged : r.praised) + 1) };
     const pool = towards === 'drag'
       ? r.last === 'praise' ? lines('rec.dp', GEN.recDragAfterPraise) : r.dragged >= 2 ? lines('rec.dd', GEN.recDragAgain) : null
-      : r.dragged >= 1 ? lines('rec.pd', GEN.recPraiseAfterDrag) : r.praised >= 1 ? lines('rec.pp', GEN.recPraiseAgain) : null;
+      : r.dragged >= 1 && (r.last === 'drag' || r.last === 'mixed' || r.dragged > r.praised) ? lines('rec.pd', GEN.recPraiseAfterDrag) : r.praised >= 1 ? lines('rec.pp', GEN.recPraiseAgain) : null;
     return pool ? say(choose([pool], f), f) : null;
   };
 
-  // The shape: one that suits how hot he is, not used lately.
+  // The shape: one that suits how hot he is, not used lately (else the one used longest ago).
   const shapes = SHAPES[tone].filter((s) => sev >= s.min && sev <= s.max);
   const fresh = shapes.filter((s) => !ages.has(`shape.${s.id}`));
-  const pool = fresh.length ? fresh : shapes;
+  const oldest = Math.max(...shapes.map((s) => ages.get(`shape.${s.id}`) ?? 0));
+  const pool = fresh.length ? fresh : shapes.filter((s) => ages.get(`shape.${s.id}`) === oldest);
   const shape = pool[Math.floor(rng() * pool.length)];
   used.push(`shape.${shape.id}`);
 
   // The facts first, so the signature-phrase rule knows what the core already says.
-  const parts: { tok: string; text: string }[] = [];
-  const firstCore = shape.slots.findIndex((t) => t === 'core' || t === 'pcore' || t === 'dcore');
-  const filled: (string | null)[] = shape.slots.map(() => null);
-  for (let i = 0; i < shape.slots.length; i++) if (shape.slots[i].endsWith('core')) filled[i] = slot(shape.slots[i]);
-  const record = rec();
-  for (let i = 0; i < shape.slots.length; i++) if (!shape.slots[i].endsWith('core')) filled[i] = slot(shape.slots[i]);
-  shape.slots.forEach((tok, i) => {
-    if (filled[i]) parts.push({ tok, text: filled[i]! });
-    if (i === firstCore && record) parts.push({ tok: 'rec', text: record });
+  // Each part keeps the ids of the lines in it, so a part dropped for length is not remembered as used.
+  interface Part { tok: string; text: string; ids: string[] }
+  const run = (tok: string, f: () => string | null): Part | null => {
+    const from = used.length;
+    const text = f();
+    return text ? { tok, text: cap(text), ids: used.slice(from) } : null;
+  };
+  // His score goes right after the facts about that person: on a mixed post, the dragged half.
+  const recAfter = shape.slots.findIndex((t) => (tone === 'mixed' ? t === 'dcore' : t.endsWith('core')));
+  const filled: (Part | null)[] = shape.slots.map((tok) => (tok.endsWith('core') ? run(tok, () => slot(tok)) : null));
+  const record = run('rec', rec);
+  shape.slots.forEach((tok, i) => { if (!tok.endsWith('core')) filled[i] = run(tok, () => slot(tok)); });
+  const parts: Part[] = [];
+  shape.slots.forEach((_, i) => {
+    if (filled[i]) parts.push(filled[i]!);
+    if (i === recAfter && record) parts.push(record);
   });
 
   // The emoji: one, or two when he is hot.
@@ -319,8 +334,7 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
       const i = parts.map((p) => p.tok).lastIndexOf(tok);
       if (i < 0) break;
       const [gone] = parts.splice(i, 1);
-      const id = used.find((u) => fill(lines(u.slice(0, u.lastIndexOf('.')), []).length ? '' : '', {}) === gone.text);
-      void id;
+      for (const id of gone.ids) used.splice(used.indexOf(id), 1);
     }
   }
   let out = text();
@@ -335,14 +349,14 @@ function build(req: VdmRequest, attempt: number, ages: Map<string, number>): Vdm
  */
 export function composeVdm(req: VdmRequest): VdmPost {
   const history = (req.history ?? []).slice(0, VDM_MEMORY.recent);
+  const seen = new Set(req.seen ?? []);
   const ages = new Map<string, number>();
   history.forEach((h, age) => h.phrases.forEach((id) => { if (!ages.has(id)) ages.set(id, age); }));
-  // Older posts are "less recent": a line last used long ago is the one to reuse when a slot runs dry.
-  for (const [id, age] of ages) ages.set(id, VDM_MEMORY.recent - age);
+  // ages: how many posts ago a line was last used (0 = his latest). When a slot runs dry, the oldest is reused.
   let best: { post: VdmPost; score: number } | null = null;
   for (let attempt = 0; attempt < VDM_MEMORY.attempts; attempt++) {
     const post = build(req, attempt, ages);
-    const score = Math.max(0, ...history.map((h) => (h.text === post.text ? 1 : overlap(h.text, post.text))));
+    const score = seen.has(vdmHash(post.text)) ? 2 : Math.max(0, ...history.map((h) => (h.text === post.text ? 1 : overlap(h.text, post.text))));
     if (!best || score < best.score) best = { post, score };
     if (score < VDM_MEMORY.similar) break;
   }

@@ -39,6 +39,7 @@ import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '..
 import { Emoji } from '../ui/Icons';
 import { WeatherChip } from '../ui/WeatherChip';
 import { offHover, onHover } from './HoverOutline';
+import { EstateSignLabels, EstateSigns } from './EstateSigns';
 
 const ROAD_Y = 0.012;
 
@@ -1214,8 +1215,10 @@ export function City() {
           {places.map((p) => (
             <PlaceMesh key={p.id} place={p} />
           ))}
+          <EstateSigns city={map.id} />
         </group>
       </StaticBatch>
+      <EstateSignLabels city={map.id} />
       {/* A light touch of shade round the foot of each building: thicker looked smudged, and it costs a little. */}
       {!low && <GroundShade key={`shade|${destinationId}|${hasHome}`} source={buildings} strength={0.25} fade={0.45} />}
       <Html position={[CITY_W / 2, 27, 2]} center zIndexRange={[9, 0]} style={{ pointerEvents: 'auto' }}>

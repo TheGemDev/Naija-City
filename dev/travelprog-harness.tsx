@@ -6,7 +6,7 @@ import '../src/styles.css';
 import '../src/ui/phone-ui.css';
 import '../src/ui/safe-area.css';
 import { useGame, type TravelMode } from '../src/game/store';
-import { resetAvatar } from '../src/game/avatar';
+import { avatar, resetAvatar } from '../src/game/avatar';
 import { regionPlace, regionPlaces } from '../src/game/regions';
 import { Avatar } from '../src/three/Avatar';
 import { Hud } from '../src/ui/Hud';
@@ -39,7 +39,14 @@ setTimeout(() => {
     void s;
     if (q.get('gap') === '1') return useGame.setState({ task: null, boarding: true } as never);
     setInterval(() => useGame.getState().tick(0.1), 100);
+  } else if (q.get('estate')) {
+    // A house of your own in an estate: the ride to its road, in at the gate, and the walk to the door.
+    const region = q.get('estate')!;
+    useGame.setState({ properties: [{ id: 'h1', region, plot: 'full', design: 'bungalow', stage: 4, building: null, constructionPlan: null, stock: {}, boughtAt: 0, spent: 1, rented: false, rentFrom: 0, slot: 3, items: [] }], homePropertyId: 'h1' } as never);
+    useGame.getState().goHome(mode, undefined, 'h1');
   } else {
     useGame.getState().startPlace(to, mode, mode === 'car' ? q.get('car') ?? undefined : undefined);
   }
+  // No street stories in the way, unless asked for: they stop the ride (the card says so) until dealt with.
+  if (q.get('stories') !== '1') setInterval(() => { avatar.storyAt = null; }, 50);
 }, Number(q.get('delay') ?? 500));

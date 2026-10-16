@@ -8,7 +8,7 @@ import '../src/ui/safe-area.css';
 import { useGame } from '../src/game/store';
 import { hydrate, type SaveData } from '../src/game/save';
 import { useSession, api } from '../src/net/session';
-import { initWallet } from '../src/net/wallet';
+import { initWallet, startWallet } from '../src/net/wallet';
 import { useVisit } from '../src/game/visits';
 import { Phone } from '../src/ui/Phone';
 import { HouseVisitBar } from '../src/ui/HouseVisitBar';
@@ -20,6 +20,7 @@ const view = q.get('view') ?? 'phone';
 
 async function boot() {
   useSession.setState({ status: 'ready', user: { uid: as, email: null, name: as, username: as } });
+  startWallet();
   await initWallet();
   const save = (await (await api('/api/save')).json()) as SaveData;
   hydrate(save);

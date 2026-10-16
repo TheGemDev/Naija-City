@@ -73,3 +73,12 @@
 .phone .app-body .tile:not(.action) > .row-btns { flex: 1 0 100%; }
 .phone .app-body .tile:not(.action) > .row-btns > .btn { flex: 1 1 0; }
 .inv-actions .btn { flex: 1; }
+
+/* Home screen: your most used apps lately in a frosted row on top, and a search box over the (fixed-order) grid. */
+.phone .app-frequent { margin-top: 14px; padding: 8px 10px 12px; border-radius: 22px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(10px); }
+.phone .app-frequent > small { display: block; margin: 0 0 2px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
+.phone .app-frequent .app-grid { margin-top: 8px; }
+.phone .app-search { width: 100%; margin-top: 12px; padding: 8px 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 99px; background: rgba(255, 255, 255, 0.14); color: #fff; font: inherit; font-size: 13px; outline: none; backdrop-filter: blur(8px); }
+.phone .app-search::placeholder { color: rgba(255, 255, 255, 0.7); }
+.phone .app-search:focus { border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.2); }
+.phone .app-none { grid-column: 1 / -1; margin: 8px 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, 0.8); }
