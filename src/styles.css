@@ -3367,3 +3367,12 @@ body.corner-hud .left-stack, body.corner-hud .toasts { top: calc(14px + var(--hu
 .decor-top button span { font-size: 13px; }
 body.corner-hud .decor-top { top: calc(10px + var(--me, 56px) + 10px + 42px + env(safe-area-inset-top, 0px)); }
 .decor-top .decor-arrow { width: 26px; height: 26px; flex: none; }
+
+/* Placing bar: the turn (or height) row and the Place / Done row each share the full width evenly, the angle in the middle. */
+.placebar .decor-row.even { flex-wrap: nowrap; justify-content: center; gap: 8px; }
+.placebar .decor-row.even > button { flex: 1 1 0; min-height: 44px; font-size: 14px; }
+.placebar .decor-row.even > .decor-angle { flex: 0 0 auto; min-width: 66px; text-align: center; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.placebar .decor-hint.center { display: block; text-align: center; }
+.placebar .decor-row.even > button:not(.go) { background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); }
+.placebar .decor-row.even > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.placebar .decor-arrow { width: 20px; height: 20px; flex: none; }

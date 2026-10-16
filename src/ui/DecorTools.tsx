@@ -18,8 +18,7 @@ export function DecorPlaceBar() {
   const money = useGame((s) => s.money);
   const cancel = useGame((s) => s.cancelPlacing);
   const placeAt = useGame((s) => s.placeAt);
-  const rotate = useGame((s) => s.rotatePlacing);
-  const { pose, err, smooth, dragging } = useDecor(useShallow((s) => ({ pose: s.pose, err: s.err, smooth: s.smooth, dragging: s.dragging })));
+  const { pose, err, dragging } = useDecor(useShallow((s) => ({ pose: s.pose, err: s.err, dragging: s.dragging })));
   if (!placing) return null;
   const def = ITEMS[placing.type];
   if (!def) return null;
@@ -27,7 +26,7 @@ export function DecorPlaceBar() {
   const wall = def.mount === 'wall';
   const group = placing.group?.length ?? 0;
   const deg = Math.round(degOf(placing));
-  const step = smooth ? 5 : ROT_STEP;
+  const step = ROT_STEP;
   const status = !pose
     ? touch ? 'Tap where it should go' : 'Point where it should go'
     : err
@@ -46,40 +45,37 @@ export function DecorPlaceBar() {
       </div>
       {!dragging && (
         <>
-          <div className="decor-row">
-            {wall ? (
-              <>
-                <button onClick={() => nudgeHeight(0.1)} aria-label="Hang it higher">▲ Higher</button>
-                <span className="decor-angle">{height ? `${Math.round(((height[0] + height[1]) / 2) * 100)} cm` : '—'}</span>
-                <button onClick={() => nudgeHeight(-0.1)} aria-label="Hang it lower">▼ Lower</button>
-                <small className="decor-hint">{touch ? 'Drag it along the walls' : 'Point at a wall'}</small>
-              </>
-            ) : group > 1 ? (
-              <small className="decor-hint">{touch ? 'Drag or tap to move the group' : 'Click where the group goes'}</small>
-            ) : (
-              <>
-                <button onClick={() => turnPlacing(-step)} aria-label={`Turn left ${step}°`}>⟲ {step}°</button>
-                <span className="decor-angle">{deg}°</span>
-                <button onClick={() => turnPlacing(step)} aria-label={`Turn right ${step}°`}>⟳ {step}°</button>
-                <button onClick={rotate} aria-label="Quarter turn">⤾ 90°</button>
-                <label className="decor-toggle" title="Turn by the degree">
-                  <input type="checkbox" checked={smooth} onChange={(e) => useDecor.setState({ smooth: e.target.checked })} /> Smooth
-                </label>
-              </>
-            )}
-          </div>
-          {smooth && !wall && group <= 1 && (
-            <input className="decor-slider" type="range" min={0} max={359} step={1} value={deg} aria-label="Angle" onChange={(e) => turnPlacing(0, Number(e.target.value))} />
+          {/* Turn left · the angle · turn right (or higher · the height · lower on a wall), centred and evenly shared. */}
+          {group > 1 ? (
+            <small className="decor-hint center">{touch ? 'Drag or tap to move the group' : 'Click where the group goes'}</small>
+          ) : (
+            <div className="decor-row even">
+              {wall ? (
+                <>
+                  <button onClick={() => nudgeHeight(0.1)} aria-label="Hang it higher">▲ Higher</button>
+                  <span className="decor-angle">{height ? `${Math.round(((height[0] + height[1]) / 2) * 100)} cm` : '—'}</span>
+                  <button onClick={() => nudgeHeight(-0.1)} aria-label="Hang it lower">▼ Lower</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => turnPlacing(-step)} aria-label={`Turn left ${step}°`}><TurnArrow /> Left</button>
+                  <span className="decor-angle">{deg}°</span>
+                  <button onClick={() => turnPlacing(step)} aria-label={`Turn right ${step}°`}>Right <TurnArrow redo /></button>
+                </>
+              )}
+            </div>
           )}
-          <div className="decor-row">
+          {/* Place and Done share the bar. */}
+          <div className="decor-row even">
             {touch || pose ? (
               <button className="go" disabled={!pose || !!err} title={err ?? undefined} onClick={() => pose && placeAt({ x: pose.x, z: pose.z })}>
                 ✓ {placing.moveId ? 'Move here' : 'Place'}
               </button>
             ) : null}
             <button onClick={cancel}>{placing.moveId ? 'Cancel' : 'Done'}</button>
-            {!touch && group <= 1 && <small className="decor-hint">{wall ? 'Click to hang' : 'Click to place · R 90° · Q/E turn'}</small>}
           </div>
+          {!touch && group <= 1 && <small className="decor-hint center">{wall ? 'Click a wall to hang it' : 'Click to place · R turns 90° · Q/E turn'}</small>}
+          {touch && wall && <small className="decor-hint center">Drag it along the walls</small>}
         </>
       )}
     </div>
