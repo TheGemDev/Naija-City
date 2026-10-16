@@ -37,6 +37,7 @@ import { handleCribs, refreshCribs, type SaveJson } from './cribs';
 import { handlePushApi, pushPublicKey } from './push';
 import { handleCommunity } from './community';
 import { handleGroups } from './groups';
+import { handleBadges } from './badges';
 import { handleCareer } from './career';
 import { handleHustles } from './hustles';
 import { handleHangout } from './hangout';
@@ -504,6 +505,9 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
 
   const groups = await handleGroups(req, env, user, path, url);
   if (groups) return groups;
+
+  const badges = await handleBadges(req, env, user, path);
+  if (badges) return badges;
 
   const community = await handleCommunity(req, env, ctx, user, path);
   if (community) return community;

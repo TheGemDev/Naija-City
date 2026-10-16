@@ -35,8 +35,12 @@ const places = `✈️ 🚌 🏢 🎖️ ⛪ 🏟️ 👮🏾 💻 🚆 🕌 �
 const wizard = `👨🏾 👩🏾 🧍🏾 💇🏾 👕 🕶️ 🎲 🧵 📋 🌾 🏡 🏘️ 🛺 🛋️ 🐢 💪 🙏 😎 ⚠️ ✅ 🤖 🍏 💸 🏦 💰 👑 👋🏾 ↔️`.split(/\s+/);
 // Jumia (ui/Mall.tsx): its chrome and every dish on the menu (FOOD_DELIVERY in game/catalog.ts). A new dish just needs its emoji here.
 const mall = `🛍️ ℹ️ 🍢 🥩 🥛 🌯 🍗`.split(/\s+/);
+// Quick reactions (game/reactions.ts) not already above.
+const reactions = `😭 👍🏾`.split(/\s+/);
+// The notifications pill in the HUD (ui/Hud.tsx NotificationBanner).
+const hud = `🔕 📲`.split(/\s+/);
 const chars = JSON.parse(readFileSync('node_modules/@iconify-json/noto/chars.json', 'utf8'));
-for (const e of [...feed, ...places, ...wizard, ...mall]) {
+for (const e of [...feed, ...places, ...wizard, ...mall, ...reactions, ...hud]) {
   const n = chars[[...e].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f').join('-')];
   if (n) map[e] ??= n; else console.error('no noto icon for', e);
 }

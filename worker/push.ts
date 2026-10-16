@@ -143,6 +143,16 @@ export async function handlePushApi(req: Request, env: Env, uid: string, path: s
     const { results } = await env.DB.prepare('SELECT category FROM push_muted WHERE uid = ?').bind(uid).all<{ category: string }>();
     return json({ muted: results.map((r) => r.category) });
   }
+  // "Send a test" in Settings: a push to each of this player's devices right now, and what each push service answered,
+  // so a player (and we) can see whether notifications reach them and why not.
+  if (path === '/api/push/test') {
+    if (req.method !== 'POST') return err(405, 'Method not allowed');
+    if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return err(503, 'Push notifications are not configured yet');
+    if (env.RL_SENSITIVE && !(await env.RL_SENSITIVE.limit({ key: `pushtest:${uid}` })).success) return err(429, 'Wait a moment before sending another test');
+    const { results } = await env.DB.prepare('SELECT uid, endpoint, p256dh, auth FROM push_subscriptions WHERE uid = ?').bind(uid).all<PushSubscriptionRow>();
+    const devices = await Promise.all(results.map((s) => sendOne(env, s, { title: '🔔 Test from Naija City', body: 'Notifications are working on this device.', tag: 'push-test', category: 'messages' })));
+    return json({ devices });
+  }
   if (path !== '/api/push/subscribe') return null;
   if (req.method === 'PUT') {
     if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return err(503, 'Push notifications are not configured yet');
@@ -233,6 +243,35 @@ export type PushJob =
   | { type: 'push'; uid: string; payload: PushPayload }
   | { type: 'broadcast'; uids: string[]; payload: PushPayload };
 
+/** Send one push to one device. A device the push service says is gone (404/410) is forgotten. Never throws. */
+async function sendOne(env: Env, subscription: PushSubscriptionRow, payload: PushPayload): Promise<{ endpoint: string; service: string; status: number; detail?: string }> {
+  const service = new URL(subscription.endpoint).hostname;
+  try {
+    const authorization = await vapidAuthorization(subscription.endpoint, env);
+    const body = await encryptPayload(subscription, payload);
+    const response = await fetch(subscription.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: authorization,
+        'Content-Encoding': 'aes128gcm',
+        'Content-Type': 'application/octet-stream',
+        TTL: '86400',
+        Urgency: 'high',
+      },
+      body,
+    });
+    if (response.status === 404 || response.status === 410) {
+      await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND uid = ?').bind(subscription.endpoint, subscription.uid).run();
+    }
+    const detail = response.ok ? undefined : (await response.text().catch(() => '')).slice(0, 200);
+    if (!response.ok) console.error(`Web Push delivery failed (${response.status}) ${service}: ${detail}`);
+    return { endpoint: subscription.endpoint, service, status: response.status, detail };
+  } catch (error) {
+    console.error('Web Push delivery failed', error);
+    return { endpoint: subscription.endpoint, service, status: 0, detail: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /** Encrypt and send a push to every device these players have subscribed, unless they switched its category off. Throws only if the subscription lookup fails (so the queue retries). */
 export async function deliverPush(env: Env, uids: string[], payload: PushPayload): Promise<void> {
   if (!uids.length) return;
@@ -240,27 +279,5 @@ export async function deliverPush(env: Env, uids: string[], payload: PushPayload
     `SELECT s.uid, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
      WHERE s.uid IN (${uids.map(() => '?').join(',')}) AND NOT EXISTS (SELECT 1 FROM push_muted m WHERE m.uid = s.uid AND m.category = ?)`,
   ).bind(...uids, payload.category ?? '').all<PushSubscriptionRow>();
-  await Promise.all(results.map(async (subscription) => {
-    try {
-      const authorization = await vapidAuthorization(subscription.endpoint, env);
-      const body = await encryptPayload(subscription, payload);
-      const response = await fetch(subscription.endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: authorization,
-          'Content-Encoding': 'aes128gcm',
-          'Content-Type': 'application/octet-stream',
-          TTL: '86400',
-        },
-        body,
-      });
-      if (response.status === 404 || response.status === 410) {
-        await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND uid = ?').bind(subscription.endpoint, subscription.uid).run();
-      } else if (!response.ok) {
-        console.error(`Web Push delivery failed (${response.status})`);
-      }
-    } catch (error) {
-      console.error('Web Push delivery failed', error);
-    }
-  }));
+  await Promise.all(results.map((subscription) => sendOne(env, subscription, payload)));
 }

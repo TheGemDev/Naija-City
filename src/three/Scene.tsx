@@ -395,7 +395,8 @@ function CameraRig() {
     // Something selected: ease the view over to it and hold it there, so dragging round orbits it.
     if (picked.current && useGame.getState().selectedId && !avatar.path.length) {
       const t = controls.target;
-      const k = Math.min(1, dt * 4);
+      // Quick, so the activities aren't left waiting on the glide (about a third of a second across a room).
+      const k = Math.min(1, dt * 10);
       const dx = (picked.current.x - t.x) * k;
       const dz = (picked.current.z - t.z) * k;
       t.x += dx;

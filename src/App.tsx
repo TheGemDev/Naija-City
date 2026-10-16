@@ -17,6 +17,7 @@ import { ConnectionGate } from './ui/ConnectionGate';
 import { startSession, useSession } from './net/session';
 import { startMultiplayer, useNet } from './net/multiplayer';
 import { startSocial } from './net/social';
+import { startBadges } from './net/badges';
 import { startWallet } from './net/wallet';
 import { startEstate } from './net/estate';
 import { EstateBar } from './ui/EstateBar';
@@ -97,6 +98,7 @@ export default function App() {
   useEffect(() => startSession(), []);
   useEffect(() => startMultiplayer(), []);
   useEffect(() => startSocial(), []);
+  useEffect(() => startBadges(), []);
   useEffect(() => startWallet(), []);
   useEffect(() => startEstate(), []);
   useEffect(() => startPolice(), []);

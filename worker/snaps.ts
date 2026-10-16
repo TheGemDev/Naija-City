@@ -234,7 +234,7 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
   if (like && req.method === 'POST') {
     const id = Number(like[1]);
     const had = await db.prepare('DELETE FROM snap_likes WHERE snap_id = ? AND uid = ? RETURNING snap_id').bind(id, me).first();
-    if (!had) await db.prepare(`INSERT OR IGNORE INTO snap_likes (snap_id, uid) SELECT s.id, ?1 FROM snaps s WHERE s.id = ?2 AND s.created_at >= ?3 AND ${VISIBLE}`).bind(me, id, now - SNAP_KEEP_MS).run();
+    if (!had) await db.prepare(`INSERT OR IGNORE INTO snap_likes (snap_id, uid, created_at) SELECT s.id, ?1, ?4 FROM snaps s WHERE s.id = ?2 AND s.created_at >= ?3 AND ${VISIBLE}`).bind(me, id, now - SNAP_KEEP_MS, now).run();
     const n = await db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(uid = ?), 0) AS mine FROM snap_likes WHERE snap_id = ?').bind(me, id).first<{ n: number; mine: number }>();
     return json({ liked: !!n?.mine, likes: n?.n ?? 0 });
   }

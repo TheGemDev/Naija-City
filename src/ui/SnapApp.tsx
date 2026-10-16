@@ -8,6 +8,7 @@ import {
   type Snap,
 } from '../net/snaps';
 import { useSession } from '../net/session';
+import { openedApp } from '../net/badges';
 import { openPlayerProfile, sendText, usePlayerLabel } from '../net/social';
 import { shareLink, snapLink } from '../net/deeplink';
 import { useGame } from '../game/store';
@@ -62,6 +63,8 @@ export function SnapApp() {
   const [feed, setFeed] = useState<'friends' | 'global'>('global');
   const [host, setHost] = useState<Element | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
+  // Open: the Snap badge is cleared (net/badges.ts).
+  useEffect(() => openedApp('snap'), []);
 
   // A snap opened from a share link plays at once.
   useEffect(() => {

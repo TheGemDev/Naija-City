@@ -446,7 +446,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
   if (like && req.method === 'POST') {
     const id = Number(like[1]);
     const had = await db.prepare('DELETE FROM feed_likes WHERE post_id = ? AND uid = ? RETURNING post_id').bind(id, me).first();
-    if (!had) await db.prepare('INSERT OR IGNORE INTO feed_likes (post_id, uid) SELECT id, ? FROM feed WHERE id = ?').bind(me, id).run();
+    if (!had) await db.prepare('INSERT OR IGNORE INTO feed_likes (post_id, uid, created_at) SELECT id, ?, ? FROM feed WHERE id = ?').bind(me, now, id).run();
     const n = await db.prepare('SELECT COUNT(*) AS n FROM feed_likes WHERE post_id = ?').bind(id).first<{ n: number }>();
     return json({ liked: !had, likes: n?.n ?? 0 });
   }

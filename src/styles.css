@@ -42,7 +42,6 @@ input { font: inherit; }
 .election-pill small { font-size: 11px; font-weight: 600; color: var(--muted); }
 .election-pill.waiting { background: #15803d; color: #fff; }
 .election-pill.waiting small { color: rgba(255, 255, 255, 0.85); }
-.notification-banner span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Owing more than you hold: the balance goes red, and a pill in the same stack says what the bank wants. */
 .hud-card.debt-pill { height: auto; min-height: var(--hud-h); padding: 0; gap: 0; align-items: stretch; background: var(--bg-fee2e2); color: var(--fg-b91c1c); }
 .debt-pill-open { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 4px 8px 10px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -3397,6 +3396,9 @@ body.corner-hud .topbar .needs-row .need-alert.critical { animation: need-pulse 
 .key-cap { position: absolute; top: -6px; right: -6px; display: none; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid rgba(15, 23, 42, 0.25); border-bottom-width: 2px; border-radius: 5px; background: #fff; color: #0f172a; font: 800 10px/15px system-ui, sans-serif; text-align: center; box-sizing: border-box; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); pointer-events: none; }
 @media (hover: hover) and (pointer: fine) { .key-cap { display: block; } }
 :is(.corner-pill, .corner-fan, .nav) button, .chat-fab-btn { position: relative; }
+/* The Phone button's unread badge (net/badges.ts): the app icons' red bubble, top left, so the key cap keeps the top right. */
+.hud-badge { top: -4px; right: auto; left: -4px; z-index: 1; pointer-events: none; line-height: 1; }
+.nav button .hud-badge { top: 0; left: calc(50% - 30px); }
 
 /* Music / radio under the clock, right-aligned with it (Hud.tsx TopBar). */
 body.corner-hud .time-card .time-radio { position: absolute; top: calc(100% + 8px); right: 0; display: flex; justify-content: flex-end; }
@@ -3410,3 +3412,17 @@ body.corner-hud .topbar .money-card-top .needs.in-pill .mood-pip { width: 22px; 
 @media (max-width: 400px) { body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 28px); } }
 body.corner-hud .topbar .time-card { overflow: visible; }
 body.corner-hud .topbar .money-card-top .needs-row { left: calc(var(--av) / 2 + 18px); }
+/* Smaller still: bubbles 22px, 2px under the pill, so the picture is the HUD height + 24px. */
+body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 24px); }
+body.corner-hud .topbar .money-card-top .needs-row { top: calc(100% + 2px); }
+body.corner-hud .topbar .needs-row .need-alert { width: 22px; height: 22px; }
+@media (max-width: 400px) { body.corner-hud .topbar .money-card-top { --av: calc(var(--hud-h) + 24px); } }
+/* The notifications notice that can't be closed: its words wrap instead of being cut off. */
+.hud-card.notification-banner { height: var(--hud-h); padding: 0 14px 0 10px; gap: 8px; border: 0; color: var(--fg-1e40af); font: inherit; text-align: left; cursor: default; }
+.notification-banner > :first-child { flex: 0 0 auto; }
+.notification-banner .nb-text { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.15; white-space: nowrap; }
+.notification-banner .nb-text b { font-size: 13px; font-weight: 800; }
+.notification-banner .nb-text small { font-size: 11px; font-weight: 600; opacity: 0.8; }
+.hud-card.notification-banner.tap { cursor: pointer; background: #2563eb; color: #fff; }
+.hud-card.notification-banner.tap:active { transform: scale(0.97); }
+.hud-card.notification-banner.tap:disabled { opacity: 0.75; }

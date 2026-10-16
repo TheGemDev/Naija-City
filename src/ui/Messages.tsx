@@ -204,7 +204,6 @@ function Inbox({ me, onOpen }: { me: string; onOpen: (uid: string) => void }) {
               <Face uid={c.uid} username={c.username} look={c.look} />
               <span className="convo-body">
                 <b><PlayerLabel uid={c.uid} username={c.username} />{online[c.uid] && <span className="online-label"> · Online</span>}</b>
-                {!online[c.uid] && !!lastOnline(c.lastSeen) && <small className="last-online">{lastOnline(c.lastSeen)}</small>}
                 <small>{preview(c.last, c.last.from === myUid)}</small>
               </span>
               <span className="convo-meta">

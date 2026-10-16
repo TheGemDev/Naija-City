@@ -18,8 +18,8 @@ import { CivicNewsTab } from './Gazette';
 import { LawsTab } from './Laws';
 import { TreasuryHero, TreasuryTab } from './Treasury';
 import { CITY_HEAD, CITY_NAME, CIVIC_CITIES, LOCAL_OFFICES, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
-import { unreadCount, useSocial } from '../net/social';
-import { groupUnread, useGroups } from '../net/groups';
+import { useSocial } from '../net/social';
+import { badgeLabel, markAppSeen, useBadges, useMessagesBadge, type SeenApp } from '../net/badges';
 import { attemptBankHeist, crewAction, moveSavings, refreshBank, repayDebt, useBank } from '../net/bank';
 import { CREW } from '../game/heist';
 import { Messages } from './Messages';
@@ -2112,17 +2112,24 @@ function DuoRail({ current, onHome, open }: { current: AppDef | null; onHome: ()
   );
 }
 
+/** Apps whose badge is what is new since they were last opened. */
+const BADGE_APP: Partial<Record<AppId, SeenApp>> = { flex: 'snap', gist: 'twitter' };
+
 function AppIcon({ app, onClick }: { app: AppDef; onClick: () => void }) {
-  const unread = useSocial(unreadCount) + useGroups(groupUnread);
+  const unread = useMessagesBadge();
   // Adopt: how many children need something (or are waiting at Social Welfare, or to be brought home).
   const kidBadge = useKids((s) => (app.id !== 'adopt' ? 0 : s.kids.filter((k) => k.status === 'taken' || (k.status === 'pending' && k.readyAt <= Date.now() + s.skew)
     || (k.status === 'home' && !!kidAlert(k.name, k.sex, stageOf(k.bornAt, Date.now() + s.skew), liveSnap(k)))).length));
-  const badge = app.id === 'messages' && unread > 0 ? unread : kidBadge;
+  // Snap and Twitter: what is new since they were last opened (net/badges.ts).
+  const seenApp = BADGE_APP[app.id];
+  const appBadge = useBadges((s) => (seenApp ? s[seenApp] : 0));
+  const badge = app.id === 'messages' ? unread : app.id === 'adopt' ? kidBadge : appBadge;
   const isNew = useApps((s) => s.fresh.includes(app.id));
   return (
-    <button className="app-icon" onClick={() => { if (isNew) useApps.getState().markSeen(app.id); onClick(); }}>
+    // Tapping Snap may open its camera rather than the app, so the tap itself counts as opening it.
+    <button className="app-icon" onClick={() => { if (isNew) useApps.getState().markSeen(app.id); if (seenApp === 'snap') markAppSeen(seenApp); onClick(); }}>
       <span style={iconStyle(app)}><Emoji char={app.icon} size={32} /></span>
-      {badge > 0 && <i className="app-badge">{badge > 99 ? '99+' : badge}</i>}
+      {badge > 0 && <i className="app-badge">{badgeLabel(badge)}</i>}
       {isNew && badge === 0 && <i className="app-badge new">NEW</i>}
       <em>{app.label}</em>
     </button>

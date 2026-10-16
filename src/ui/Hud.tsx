@@ -17,6 +17,7 @@ import { leaveHouseVisit } from '../net/visit';
 import { CLUB_SHOUTS, PLACE_SHOUTS, useMoneyRain, useShoutouts } from '../game/shoutout';
 import { cityMap, placeHere } from '../game/city';
 import { useSocial } from '../net/social';
+import { badgeLabel, usePhoneBadge } from '../net/badges';
 import { loadLoans, useLoans } from '../net/loans';
 import { ReactionToggle, ReactionTray, useReactions } from './Reactions';
 import { Chevron, Emoji } from './Icons';
@@ -137,48 +138,101 @@ function TopBar() {
 }
 
 /** Prompt banner shown in the HUD after Day 1 until notifications are enabled or denied. */
+/** Does this device get notifications? 'on'; 'off' (can be turned on here); 'blocked' (the browser said no); 'homescreen'
+ *  (iPhone/iPad in a Safari tab: only the Home Screen app can get them); 'none' (this browser can't, nothing to do). */
+type PushHere = 'checking' | 'on' | 'off' | 'blocked' | 'homescreen' | 'none';
+
+async function pushHere(): Promise<PushHere> {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return ios && !standalone ? 'homescreen' : 'none';
+  if (Notification.permission === 'denied') return 'blocked';
+  if (Notification.permission !== 'granted') return 'off';
+  const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+  return (await registration?.pushManager.getSubscription()) ? 'on' : 'off';
+}
+
+/**
+ * A notice that stays until this device can get notifications: there is no closing it. It checks the device itself
+ * (not just whether the browser was ever asked), so a phone that allowed notifications but never registered with the
+ * server is caught too. Checked again whenever the game comes back to the front.
+ */
 function NotificationBanner() {
   const signedIn = useSession((s) => !!s.user);
-  const pastDay1 = useGame((s) => dayOf(s.minutes) > 1);
   const [working, setWorking] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+  const [here, setHere] = useState<PushHere>('checking');
 
-  if (!signedIn || !pastDay1 || enabled) return null;
-  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
-  if (Notification.permission === 'granted' || Notification.permission === 'denied') return null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const check = () => void pushHere().then(setHere).catch(() => setHere('none'));
+    check();
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
+    };
+  }, [signedIn]);
+
+  if (!signedIn || here === 'checking' || here === 'on' || here === 'none') return null;
 
   async function enable() {
     setWorking(true);
     try {
       const permission = await Notification.requestPermission();
-      if (permission !== 'granted') { setWorking(false); return; }
+      if (permission !== 'granted') {
+        setHere(permission === 'denied' ? 'blocked' : 'off');
+        return;
+      }
       const keyRes = await fetch('/api/push/key');
-      if (!keyRes.ok) { setWorking(false); return; }
+      if (!keyRes.ok) return;
       const { publicKey } = await keyRes.json() as { publicKey: string | null };
-      if (!publicKey) { setWorking(false); return; }
+      if (!publicKey) return;
       const registration = await navigator.serviceWorker.register('/sw.js');
       const encoded = publicKey.replace(/-/g, '+').replace(/_/g, '/');
       const applicationServerKey = Uint8Array.from(
         atob(encoded + '='.repeat((4 - encoded.length % 4) % 4)),
         (c) => c.charCodeAt(0),
       );
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey as BufferSource });
+      const subscription = (await registration.pushManager.getSubscription())
+        ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey as BufferSource });
       const res = await api('/api/push/subscribe', { method: 'PUT', body: JSON.stringify(subscription) });
-      if (!res.ok) { await subscription.unsubscribe(); setWorking(false); return; }
-      setEnabled(true);
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({})) as { error?: string };
+        useGame.getState().toast(result.error ?? 'Could not turn on notifications. Try again.');
+        return;
+      }
+      setHere('on');
+      useGame.getState().toast('🔔 Notifications are on for this device');
     } catch {
+      useGame.getState().toast('Could not turn on notifications. Try again.');
+    } finally {
       setWorking(false);
     }
   }
 
+  if (here === 'blocked') {
+    return (
+      <div className="hud-card notification-banner" role="status">
+        <Emoji char="🔕" size={18} />
+        <span className="nb-text"><b>Notifications blocked</b><small>Allow them in your browser settings</small></span>
+      </div>
+    );
+  }
+  if (here === 'homescreen') {
+    return (
+      <div className="hud-card notification-banner" role="status">
+        <Emoji char="📲" size={18} />
+        <span className="nb-text"><b>Get notifications</b><small>Share → Add to Home Screen</small></span>
+      </div>
+    );
+  }
   return (
-    <div className="hud-card notification-banner" role="button" tabIndex={0} onClick={() => !working && void enable()}>
+    <button className="hud-card notification-banner tap" type="button" disabled={working} onClick={() => void enable()}>
       <Emoji char="🔔" size={18} />
-      <span>Turn on notifications</span>
-      <button className="btn sm" disabled={working}>
-        {working ? 'Wait…' : 'Enable'}
-      </button>
-    </div>
+      <span className="nb-text"><b>{working ? 'Turning on…' : 'Click to activate notifications'}</b></span>
+    </button>
   );
 }
 
@@ -293,6 +347,34 @@ export function PushNotifications({
     }
   }
 
+  // Send a real push to every device on this account and say what each push service answered.
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
+  async function sendTest() {
+    setTesting(true);
+    setTestResult('');
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+      const mine = (await registration?.pushManager.getSubscription())?.endpoint;
+      const response = await api('/api/push/test', { method: 'POST' });
+      const result = (await response.json()) as { devices?: { endpoint: string; service: string; status: number; detail?: string }[]; error?: string };
+      if (!response.ok || !result.devices) throw new Error(result.error ?? 'Could not send a test');
+      const name = (host: string) => (host.includes('apple') ? 'Apple' : host.includes('google') ? 'Google' : host.includes('mozilla') ? 'Firefox' : host.includes('windows') ? 'Windows' : host);
+      const lines = result.devices.map((d) => {
+        const which = d.endpoint === mine ? 'This device' : `Another device (${name(d.service)})`;
+        if (d.status >= 200 && d.status < 300) return `${which}: sent ✓`;
+        if (d.status === 404 || d.status === 410) return `${which}: no longer registered (removed)`;
+        return `${which}: refused (${d.status || 'error'}${d.detail ? ` · ${d.detail}` : ''})`;
+      });
+      if (!result.devices.some((d) => d.endpoint === mine)) lines.unshift('This device is not registered on the server. Turn notifications off and on again.');
+      setTestResult(lines.length ? lines.join('\n') : 'No devices are registered for notifications.');
+    } catch (error) {
+      setTestResult(error instanceof Error ? error.message : 'Could not send a test');
+    } finally {
+      setTesting(false);
+    }
+  }
+
   enableRef.current = () => void enable();
 
   return (
@@ -309,7 +391,10 @@ export function PushNotifications({
         </small>
       </div>
       {state === 'enabled' ? (
-        <button className="btn sm" onClick={() => void disable()}>Turn off</button>
+        <span className="row-btns">
+          <button className="btn sm" disabled={testing} onClick={() => void sendTest()}>{testing ? 'Sending…' : 'Send a test'}</button>
+          <button className="btn sm" onClick={() => void disable()}>Turn off</button>
+        </span>
       ) : state === 'disabled' ? (
         <button className="btn sm" onClick={() => void enable()}>Enable</button>
       ) : state === 'working' || state === 'loading' ? (
@@ -319,6 +404,7 @@ export function PushNotifications({
         <small>On iPhone or iPad, add Naija City to your Home Screen first.</small>
       )}
       {message && state !== 'unavailable' && <small>{message}</small>}
+      {testResult && <small className="push-test-result" style={{ whiteSpace: 'pre-line' }}>{testResult}</small>}
     </div>
     {state === 'enabled' && <PushCategories />}
     </>
@@ -836,6 +922,20 @@ function withKey(el: ReactElement<{ children?: ReactNode; 'data-key'?: string }>
   return cloneElement(el, { 'data-key': k }, <>{el.props.children}<kbd className="key-cap" aria-hidden="true">{k}</kbd></>);
 }
 
+/** What is waiting on the phone (unread chats, new on Snap and Twitter), on the Phone button while the phone is away. */
+function PhoneBadge() {
+  const n = usePhoneBadge();
+  const away = useGame((s) => s.panel !== 'phone');
+  if (!away || n <= 0) return null;
+  return <i className="app-badge hud-badge" role="status" aria-label={`${n} new on your phone`}>{badgeLabel(n)}</i>;
+}
+
+/** The Phone button (any of them: every nav has one) gets the badge, top left, clear of its key cap at top right. */
+function withPhoneBadge(el: ReactElement<{ children?: ReactNode; 'data-k'?: string }>) {
+  if (!isValidElement(el) || el.props['data-k'] !== 'phone') return el;
+  return cloneElement(el, {}, <>{el.props.children}<PhoneBadge /></>);
+}
+
 /** Pressing a shortcut presses the visible button that has it. */
 function useNavKeys() {
   useEffect(() => {
@@ -863,7 +963,7 @@ function NavShell({ children }: { children: ReactNode }) {
     return () => document.body.classList.remove('corner-hud');
   }, []);
   useNavKeys();
-  const keyed = Children.map(children, (c) => (isValidElement(c) ? withKey(c as ReactElement<{ children?: ReactNode }>) : c));
+  const keyed = Children.map(children, (c) => (isValidElement(c) ? withPhoneBadge(withKey(c as ReactElement<{ children?: ReactNode }>)) : c));
   if (!CORNER_HUD) return <nav className="nav">{keyed}</nav>;
   const all = Children.toArray(keyed) as ReactElement<{ 'data-k'?: string }>[];
   const key = (c: ReactElement<{ 'data-k'?: string }>) => c.props?.['data-k'];
@@ -1159,7 +1259,10 @@ export function Hud() {
             <RadioPill />
           </div>
         )}
-        <NotificationBanner />
+        {/* Can't be collapsed away or closed: it stays until this device gets notifications. */}
+        <div className="stack-tools">
+          <NotificationBanner />
+        </div>
         <LiveBanner />
         <DisasterBanner />
         <ElectionDayPill />

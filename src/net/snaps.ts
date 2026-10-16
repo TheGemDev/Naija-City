@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { api, useSession } from './session';
 import { useGame } from '../game/store';
 import { idToken } from './firebase';
+import { bumpBadge } from './badges';
 
 export interface Snap {
   id: number;
@@ -150,6 +151,7 @@ export async function snapViewers(id: number) {
 /** A friend sent me a snap (live event from the server). */
 export function onSnapEvent(e: { from: string; username: string | null }) {
   useGame.getState().toast(`👻 New snap from @${e.username ?? 'a friend'}. Open Snap to see it.`);
+  bumpBadge('snap');
   void loadSnapChats();
 }
 

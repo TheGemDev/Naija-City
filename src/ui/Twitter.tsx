@@ -22,6 +22,7 @@ import { commentSnap, deleteSnapComment, likeSnap, loadSnapComments, loadSnaps, 
 import { useCivic } from '../net/civic';
 import { useSession } from '../net/session';
 import { useSocial } from '../net/social';
+import { openedApp } from '../net/badges';
 import { shareLink, snapLink, tweetLink } from '../net/deeplink';
 import { Face } from './Face';
 import { Mugshot, MugshotShare } from './Mugshot';
@@ -1172,6 +1173,8 @@ export function GistApp() {
   const root = useRef<HTMLDivElement>(null);
   const homeScroll = useRef(0);
   const scroller = useMemo(() => () => root.current?.closest<HTMLElement>('.app-body') ?? null, []);
+  // Open: the Twitter badge is cleared (net/badges.ts). For you shows the Following posts too, so any tab counts.
+  useEffect(() => openedApp('twitter'), []);
   const view = stack[stack.length - 1];
 
   // The state tab follows the state I am in, until I pick one myself.

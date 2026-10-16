@@ -5,11 +5,11 @@ export const REACTIONS = [
   { char: '😂', label: 'Laughing' },
   { char: '❤️', label: 'Love' },
   { char: '🔥', label: 'Fire' },
-  { char: '👋🏾', label: 'Wave' },
+  { char: '👍🏾', label: 'Thumbs up' },
   { char: '👀', label: 'Eyes' },
   { char: '🎉', label: 'Party' },
   { char: '💃🏾', label: 'Dance' },
-  { char: '😩', label: 'Tired' },
+  { char: '😭', label: 'Crying' },
 ] as const;
 
 const CHARS = new Set<string>(REACTIONS.map((r) => r.char));
