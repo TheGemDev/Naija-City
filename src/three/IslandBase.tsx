@@ -13,6 +13,7 @@ import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, Sh
 import type { CityMap, P2 } from '../game/city';
 import { useLowPerf } from '../game/quality';
 import { noise, rimOf, skyLight, vnoise, type Rim } from './islandShape';
+import { bushKind, treeDust, treeGeometry } from './trees';
 
 /** How deep the rock hangs, as a share of the island's radius. */
 const DEPTH = 0.75;
@@ -233,12 +234,15 @@ function chunk(b: Builder, x: number, y: number, z: number, r: number, grass: Co
   const last = rings[rings.length - 1];
   for (let i = 0; i < m; i++) b.tri(last[i], last[(i + 1) % m], tip, x, z);
   if (r > 1.4) {
-    // A bush: a squat cone of leaves.
-    const leaf = c.copy(grass).multiplyScalar(0.6).clone();
+    // A tree from the shared kit (trees.ts), its faces copied in as they are (already wound outwards).
     const bx = x + (noise(seed + 4) - 0.5) * r * 0.5, bz = z + (noise(seed + 5) - 0.5) * r * 0.5;
-    const base = Array.from({ length: 6 }, (_, i) => b.vert(bx + Math.cos((i / 6) * Math.PI * 2) * 0.55, y + 0.15, bz + Math.sin((i / 6) * Math.PI * 2) * 0.55, leaf));
-    const apex = b.vert(bx, y + 1.3, bz, leaf.clone().multiplyScalar(1.25));
-    for (let i = 0; i < 6; i++) b.tri(base[i], base[(i + 1) % 6], apex, bx, bz);
+    const g = treeGeometry(bushKind(seed, 0), Math.floor(noise(seed + 6) * 3), 0, low, treeDust());
+    const P = g.getAttribute('position'), C = g.getAttribute('color');
+    const s = 1.3, yaw = noise(seed + 7) * Math.PI * 2, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    for (let i = 0; i < P.count; i++) {
+      const px = P.getX(i) * s, pz = P.getZ(i) * s;
+      b.idx.push(b.vert(bx + px * cs - pz * sn, y + 0.02 + P.getY(i) * s, bz + px * sn + pz * cs, c.setRGB(C.getX(i), C.getY(i), C.getZ(i))));
+    }
   }
 }
 

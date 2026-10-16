@@ -45,6 +45,12 @@ const MAX_POST = 200;
 const quoted = (xs: readonly string[]) => xs.map((x) => `'${x}'`).join(', ');
 /** Which posts (feed f) are national news: the news kinds, and VDM when he is on the government. */
 const NEWS_SQL = `(f.kind IN (${quoted(NEWS_KINDS)}) OR (f.kind = 'vdm' AND f.icon IN (${quoted(VDM_NEWS_ICONS)})))`;
+/** Friends with me (?1): `who` is the column holding the other player's uid. */
+const FRIEND_OF_ME = (who: string) => `EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted' AND fr.a = MIN(${who}, ?1) AND fr.b = MAX(${who}, ?1))`;
+/** A post's reposts and views, and whether I (?1) reposted it, for every list of posts (feed f). */
+const REPOST_COLS = `f.views,
+                (SELECT COUNT(*) FROM feed_reposts rp WHERE rp.post_id = f.id) AS reposts,
+                EXISTS (SELECT 1 FROM feed_reposts rp WHERE rp.post_id = f.id AND rp.uid = ?1) AS reposted`;
 
 /* ---------- Bets ---------- */
 
@@ -225,7 +231,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies
+                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
+                ${REPOST_COLS}
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
          WHERE f.parent_id IS NULL AND f.id < ?2 AND f.uid IS NOT NULL AND f.created_at >= ?4
            AND (f.uid = ?1 OR EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted'
@@ -252,7 +259,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies
+                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
+                ${REPOST_COLS}
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
          WHERE f.parent_id IS NULL AND f.id < ?2 AND f.created_at >= ?5 AND ${news}
            AND f.id >= COALESCE((SELECT MIN(id) FROM (SELECT f.id FROM feed f WHERE f.parent_id IS NULL AND ${news} ORDER BY f.id DESC LIMIT ?4)), 0)
@@ -270,7 +278,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies
+                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
+                ${REPOST_COLS}
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
          WHERE f.parent_id IS NULL AND f.kind = 'vdm' AND f.created_at >= ?3
          ORDER BY f.id DESC LIMIT ?2`,
@@ -352,7 +361,8 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
         `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies
+                (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
+                ${REPOST_COLS}
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
          WHERE f.id = ?2 AND f.parent_id IS NULL AND f.created_at >= ?3`,
       )

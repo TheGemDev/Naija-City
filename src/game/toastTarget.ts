@@ -9,6 +9,8 @@ import type { GameState } from './store';
 export type ToastApp = { id: string; label: string; lightTab?: NonNullable<GameState['lightTab']> };
 
 const RULES: Array<[RegExp, ToastApp]> = [
+  // Your children (src/net/kids.ts): every one of their toasts starts with the baby.
+  [/^👶🏾/, { id: 'adopt', label: 'Adopt' }],
   // NEPA (game/store.ts). Its toasts carry 🧾 and 🚨, so they come before the Bank's and the police's. Anything about
   // the bill (taken, about to be taken, still owed) opens on Bills.
   [/overhead tank|Mai Ruwa/i, { id: 'light', label: 'NEPA', lightTab: 'water' }],

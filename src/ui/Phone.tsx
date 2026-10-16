@@ -41,6 +41,9 @@ import { STAGES } from '../game/property';
 import { AreaApp, GistApp, HustleApp, LegacyApp, YahooApp } from './LiveApps';
 import { GoalsApp, TopUpApp } from './Community';
 import { FamilyApp } from './Family';
+import { AdoptApp } from './Adopt';
+import { kidAlert, stageOf } from '../game/kids';
+import { liveSnap, useKids } from '../net/kids';
 import { CareerApp } from './Career';
 import { BusinessApp } from './Business';
 import { STORE_APP_IDS, useApps } from '../game/apps';
@@ -69,7 +72,7 @@ import { OpenSourceSettings } from './OpenSource';
 import { LinkAccount } from './Auth';
 
 type AppId = 'closet' | 'camera' | 'messages' | 'ride' | 'jobs' | 'bank' | 'invest' | 'forbes' | 'cars' | 'gida' | 'mall' | 'gist' | 'light' | 'radio' | 'settings' | 'civic' | 'police' | 'efcc'
-  | 'cribs' | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games';
+  | 'cribs' | 'hustle' | 'yahoo' | 'area' | 'legacy' | 'store' | 'babalawo' | 'flex' | 'pidgin' | 'family' | 'goals' | 'career' | 'business' | 'topup' | 'ads' | 'help' | 'hire' | 'blackmarket' | 'plug' | 'fixer' | 'grind' | 'games' | 'adopt';
 
 interface AppDef {
   id: AppId;
@@ -111,6 +114,7 @@ const APPS: Record<AppId, AppDef> = {
   police: { id: 'police', label: 'Police', icon: '🚔', bg: ['#60a5fa', '#1e3a8a'], tint: '#1e3a8a' },
   efcc: { id: 'efcc', label: 'EFCC', icon: '🕵🏾', bg: ['#f87171', '#7f1d1d'], tint: '#991b1b' },
   family: { id: 'family', label: 'Family', icon: '💞', bg: ['#fb7185', '#be123c'], tint: '#be123c' },
+  adopt: { id: 'adopt', label: 'Adopt', icon: '👶🏾', bg: ['#86efac', '#15803d'], tint: '#15803d' },
   career: { id: 'career', label: 'Career', icon: '🎓', bg: ['#38bdf8', '#1d4ed8'], tint: '#1d4ed8' },
   business: { id: 'business', label: 'Business', icon: '🏪', bg: ['#fdba74', '#c2410c'], tint: '#c2410c' },
   help: { id: 'help', label: 'Help', icon: '💡', bg: ['#fde68a', '#f59e0b'], tint: '#b45309' },
@@ -125,7 +129,7 @@ const APPS: Record<AppId, AppDef> = {
   games: { id: 'games', label: 'Games', icon: '🎲', bg: ['#fb7185', '#7c3aed'], tint: '#7c3aed' },
 };
 /** Downloaded apps (src/game/apps.ts) only show once installed from the store. */
-const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'hire', 'forbes', 'cribs', 'closet', 'radio', 'civic', 'police', 'efcc', ...(ADS_ON_SALE ? ['ads' as const] : [])];
+const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'adopt', 'hire', 'forbes', 'cribs', 'closet', 'radio', 'civic', 'police', 'efcc', ...(ADS_ON_SALE ? ['ads' as const] : [])];
 // 'topup' (buying money) is left off the home screen while card payments are switched off.
 /** Always last: the store, help and settings. */
 const TAIL_APPS: AppId[] = ['store', 'help', 'settings'];
@@ -1805,6 +1809,7 @@ const SCREENS: Record<AppId, () => ReactNode> = {
   police: PoliceApp,
   efcc: EfccApp,
   family: FamilyApp,
+  adopt: AdoptApp,
   goals: GoalsApp,
   career: CareerApp,
   business: BusinessApp,
@@ -2080,7 +2085,10 @@ function DuoRail({ current, onHome, open }: { current: AppDef | null; onHome: ()
 
 function AppIcon({ app, onClick }: { app: AppDef; onClick: () => void }) {
   const unread = useSocial(unreadCount) + useGroups(groupUnread);
-  const badge = app.id === 'messages' && unread > 0 ? unread : 0;
+  // Adopt: how many children need something (or are waiting at Social Welfare, or to be brought home).
+  const kidBadge = useKids((s) => (app.id !== 'adopt' ? 0 : s.kids.filter((k) => k.status === 'taken' || (k.status === 'pending' && k.readyAt <= Date.now() + s.skew)
+    || (k.status === 'home' && !!kidAlert(k.name, k.sex, stageOf(k.bornAt, Date.now() + s.skew), liveSnap(k)))).length));
+  const badge = app.id === 'messages' && unread > 0 ? unread : kidBadge;
   const isNew = useApps((s) => s.fresh.includes(app.id));
   return (
     <button className="app-icon" onClick={() => { if (isNew) useApps.getState().markSeen(app.id); onClick(); }}>
