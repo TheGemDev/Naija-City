@@ -83,6 +83,8 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       const seed = shared ? seedAt(v.x, v.y, v.z) : 0;
       // A merged model (placeKit) carries a seed per pane: shifted by where the model stands, so two copies differ.
       const own = shared ? geo.getAttribute('seed') : undefined;
+      // Meshes coloured per vertex (cabinKit, trainKit: the station) keep their colours, tinted by the material's.
+      const C = mat.vertexColors ? geo.getAttribute('color') : undefined;
       for (let i = 0; i < count; i++) {
         // Mirrored meshes wind the other way; swap two corners so faces still point out.
         const k = flip ? i - (i % 3) + [0, 2, 1][i % 3] : i;
@@ -92,7 +94,9 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
         if (N) n.fromBufferAttribute(N, j).applyMatrix3(normalM).normalize();
         else n.set(0, 1, 0);
         b.nor.push(n.x, n.y, n.z);
-        b.col.push(r, gr, bl);
+        // A shared material applies its own colour on top; a merged copy is turned white, so the tint goes in here.
+        if (C) b.col.push(C.getX(j) * (shared ? 1 : r), C.getY(j) * (shared ? 1 : gr), C.getZ(j) * (shared ? 1 : bl));
+        else b.col.push(r, gr, bl);
         if (shared) b.seed.push(own ? (own.getX(j) + seed) % 1 : seed);
       }
     }
@@ -103,8 +107,11 @@ export function StaticBatch({ children, chunk = 16 }: { children: ReactNode; chu
       geo.setAttribute('position', new Float32BufferAttribute(b.pos, 3));
       geo.setAttribute('normal', new Float32BufferAttribute(b.nor, 3));
       let material = b.material;
-      if (b.ownColor) geo.setAttribute('seed', new Float32BufferAttribute(b.seed, 1));
-      else {
+      if (b.ownColor) {
+        geo.setAttribute('seed', new Float32BufferAttribute(b.seed, 1));
+        // A shared material that reads vertex colours still needs them, or it draws black.
+        if (b.material.vertexColors) geo.setAttribute('color', new Float32BufferAttribute(b.col, 3));
+      } else {
         geo.setAttribute('color', new Float32BufferAttribute(b.col, 3));
         material = b.material.clone();
         (material as MeshStandardMaterial).color?.setRGB(1, 1, 1);
