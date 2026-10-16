@@ -16,7 +16,7 @@ import { INVESTMENT_BY_ID, LIQUIDATION_FACTOR, MAX_TRADE_UNITS } from '../src/ga
 import { advance, changeUnits, checkWork, loadState, saveStateStmts, taskEnd, taskStart, unitsOf, type PlayerState } from './clock';
 import { bookProperty, ownedCounts, propertyBooks, type PropertyBook } from './progress';
 import { GAME_MINUTES_PER_REAL_MS_MAX, MAX_PROPERTY_COST, RENT_CAP_PER_DAY, SALE_FACTOR, DAY_MINUTES } from '../src/game/property';
-import { drawOrigin, originOf, ORIGINS, type OriginAnswers } from '../src/game/origins';
+import { NEW_LIFE_ORIGIN, originOf, ORIGINS } from '../src/game/origins';
 import { REGION_IDS } from '../src/game/regions';
 import { GIGS, isGig, maxShiftBonus } from '../src/game/gigs';
 import { PARK_BY_ID } from '../src/game/underworld';
@@ -447,11 +447,12 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
   }
 
   if (path === '/api/wallet/reset' && req.method === 'POST') {
-    // New life. A fresh origin can be drawn once a day; before that the new life keeps the same
-    // origin and its starting money. Topping up a nearly empty wallet is limited to once a day too.
+    // New life. A new birth state can be drawn once a day; before that the new life keeps the same one, and its
+    // starting money. Topping up a nearly empty wallet is limited to once a day too. A life on one of the old draw's
+    // starts always moves on to the Fresh Start.
     const w = await getWallet(db, uid);
     const now = Date.now();
-    const keepOrigin = !!w.origin && now - (w.origin_at ?? 0) < REDRAW_COOLDOWN_MS;
+    const keepOrigin = w.origin === NEW_LIFE_ORIGIN && now - (w.origin_at ?? 0) < REDRAW_COOLDOWN_MS;
     const start = keepOrigin ? originOf(w.origin).money : START_MONEY;
     const r = await db.prepare('SELECT reset_at FROM wallets WHERE uid = ?').bind(uid).first<{ reset_at: number | null }>();
     if (w.balance < start && r?.reset_at && now - r.reset_at < RESET_COOLDOWN_MS) {
@@ -482,14 +483,10 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
   }
 
   if (path === '/api/origin' && req.method === 'POST') {
-    // The draw. Only when the player has no origin yet; the server rolls, so it can't be picked.
-    const body = (await req.json().catch(() => null)) as { answers?: OriginAnswers } | null;
-    const answers: OriginAnswers = {};
-    for (const [k, v] of Object.entries(body?.answers ?? {})) if (typeof v === 'string') answers[k.slice(0, 20)] = v.slice(0, 20);
+    // Birth. Only when the player has no origin yet: everyone gets the Fresh Start, and the server draws the state.
     const w = await getWallet(db, uid);
     if (w.origin) return json({ origin: w.origin, balance: w.balance, already: true, state: await birthState(db, uid) });
-    const r = crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
-    const origin = drawOrigin(answers, r);
+    const origin = NEW_LIFE_ORIGIN;
     const life = await db.prepare('SELECT reset_at FROM wallets WHERE uid = ?').bind(uid).first<{ reset_at: number | null }>();
     // One draw per life: the ledger id makes a second, racing request a no-op.
     await db.batch([
@@ -500,7 +497,7 @@ export async function handleWallet(req: Request, env: Env, uid: string, path: st
       ).bind(uid, ORIGINS[origin].debt ?? 0, Date.now()),
       db.prepare('UPDATE wallets SET origin = ?2, origin_at = ?3 WHERE uid = ?1 AND origin IS NULL').bind(uid, origin, Date.now()),
     ]);
-    // The state is drawn with the origin, every state as likely as the next. Only the request that won the draw sets it.
+    // The state is drawn at birth, every state as likely as the next. Only the request that won the draw sets it.
     const [pick] = crypto.getRandomValues(new Uint32Array(1));
     await db.prepare('UPDATE wallets SET state = ?2 WHERE uid = ?1 AND state IS NULL').bind(uid, REGION_IDS[pick % REGION_IDS.length]).run().catch(() => {});
     const after = await getWallet(db, uid);

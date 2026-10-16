@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { drawOrigin, ORIGINS, type OriginId } from '../game/origins';
+import { NEW_LIFE_ORIGIN, ORIGINS, type OriginId } from '../game/origins';
 import { startGuide } from '../game/guide';
 import { naira, useGame } from '../game/store';
 import { defaultAppearance, encodeLook, fits, GARMENT_BY_ID, HAIR_COLORS, HAIRS, isFullOutfit, randomAppearance, SHAPE_LABELS, SKINS, SLOTS, starterGarments, type Appearance, type Body, type Garment, type Outfit, type Shape, type Slot } from '../game/wardrobe';
@@ -24,7 +24,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 const OUTFIT_SLOTS: Slot[] = ['top', 'bottom', 'shoes'];
 const EXTRA_SLOTS: Slot[] = ['head', 'eyes', 'neck', 'wrist', 'bag'];
 
-/** New life: make your person, then the draw decides where you start, and your birth certificate says what you got. */
+/** New life: make your person, then you're born (the same Fresh Start for everyone, in a drawn state), and your birth certificate says so. */
 export function Welcome() {
   const started = useGame((s) => s.started);
   const begin = useGame((s) => s.begin);
@@ -52,8 +52,8 @@ export function Welcome() {
     setBusy(true);
     setError(null);
     try {
-      const drawn = await drawOriginOnServer({});
-      setOrigin(drawn ?? drawOrigin({}, Math.random()));
+      const drawn = await drawOriginOnServer();
+      setOrigin(drawn ?? NEW_LIFE_ORIGIN);
       // The server draws the state too. A guest's is drawn here; a life from before there were states is Kaduna's.
       setState(drawn ? walletState() ?? 'kaduna' : REGION_IDS[Math.floor(Math.random() * REGION_IDS.length)]);
       setStep('cert');
@@ -197,12 +197,12 @@ export function Welcome() {
             <div className="row-btns wiz-foot">
               <button className="btn big go" disabled={busy || !name.trim()} onClick={() => void draw()}>
                 {busy ? (
-                  'Shaking the bag…'
+                  'Being born…'
                 ) : origin || locked ? (
                   'Next →'
                 ) : (
                   <>
-                    <Emoji char="🎲" size={20} /> Draw my sim
+                    <Emoji char="👶🏾" size={20} /> Start my life
                   </>
                 )}
               </button>
@@ -256,7 +256,7 @@ function Pieces({ label, items, worn, onPick, onNone }: { label: string; items: 
 
 const STEP_LABELS: Record<Step, string> = { you: 'You', cert: 'Certificate' };
 
-/** What the draw gave you: your start in life, and the money, home and phone that come with it. */
+/** Your start in life, and the money, home and phone that come with it. */
 function Drawn({ origin, state }: { origin: OriginId; state: string }) {
   const o = ORIGINS[origin];
   const phone = PHONE_BY_ID[o.phone];

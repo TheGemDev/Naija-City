@@ -8,7 +8,7 @@ import { setOkadaBan } from '../game/cityLaws';
 import { moneyHooks, useGame, type MoneyKind } from '../game/store';
 import { cachedToken } from './firebase';
 import { api, serial, useSession } from './session';
-import { normalizeOrigin, type OriginAnswers, type OriginId } from '../game/origins';
+import { normalizeOrigin, type OriginId } from '../game/origins';
 import { clearLoans, loadLoans } from './loans';
 
 /** Money changes plus task start/end, which drive the server's game clock (worker/clock.ts). */
@@ -126,13 +126,13 @@ export async function initWallet() {
 }
 
 /**
- * Signed-in players: the server draws the origin (or returns the one already drawn for this life).
- * Returns null when there is no server wallet (guest or offline); the caller then draws locally.
+ * Signed-in players: the server gives the start and draws the birth state (or returns the ones this life already has).
+ * Returns null when there is no server wallet (guest or offline); the caller then starts locally.
  */
-export async function drawOriginOnServer(answers: OriginAnswers): Promise<OriginId | null> {
+export async function drawOriginOnServer(): Promise<OriginId | null> {
   if (serverBalance === null) return null;
   return serial(async () => {
-    const res = await api('/api/origin', { method: 'POST', body: JSON.stringify({ answers }) });
+    const res = await api('/api/origin', { method: 'POST', body: '{}' });
     if (!res.ok) throw new Error(`${res.status}`);
     const { origin, balance, debt, state } = (await res.json()) as { origin: string; balance: number; debt?: number; state?: string | null };
     serverOrigin = normalizeOrigin(origin);

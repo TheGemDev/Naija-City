@@ -52,6 +52,7 @@ const serial = (seed: string) => String((hash(seed) % 900000) + 100000);
  * certificate says they were born broke. Keyed by origin id (game/origins.ts).
  */
 const DESTINIES: Record<string, string[]> = {
+  starter: ['Small small, e go better', 'Hustle now, enjoy later', 'Na who try, e go reach'],
   almajiri: ['No gree for anybody', 'From zero to hero', 'Sapa no go last'],
   lapo: ['Small small, e go better', 'Hustle now, enjoy later', 'Na condition make crayfish bend'],
   nepo: ['Na who you know', 'Soft life loading', 'Connection pass certificate'],

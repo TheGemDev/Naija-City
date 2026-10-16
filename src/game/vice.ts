@@ -162,6 +162,7 @@ export const AMBUSH = {
   ransomWealthCap: 0.6,
   /** Floor and usual ceiling by status (src/game/origins.ts); wealth can lift the ceiling: a Dangote pikin costs far more than someone on sapa. */
   ransomRange: {
+    starter: { min: 500_000, max: 5_000_000 },
     almajiri: { min: 200_000, max: 1_000_000 },
     lapo: { min: 1_000_000, max: 10_000_000 },
     nepo: { min: 5_000_000, max: 100_000_000 },

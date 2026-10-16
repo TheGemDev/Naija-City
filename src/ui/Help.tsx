@@ -174,7 +174,7 @@ const TOPICS: Topic[] = [
     apps: ['store', 'settings'],
     body: [
       'There are 35 achievements and a street-reputation ladder. When a life ends you get a legacy score in your hall of fame.',
-      'Settings → Account → Born again. You draw a new start: Sapa / Gbese (homeless, ₦20,000 in debt), LAPO (small house and loan), Nepo Baby (large furnished home), Rich Kid (₦1,000,000, a big home and a car) or Dangote Pikin (a mansion and a Benz).',
+      'Settings → Account → Born again. Everyone starts the same: ₦300,000 in hand and a small one-room house. No loans, no rich parents. Where you end up is on you.',
     ],
   },
 ];

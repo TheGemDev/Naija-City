@@ -58,6 +58,7 @@ export const ALIAS_MAX = 24;
  * Dangote Pikin starts in a Malali GRA mansion with eye-watering rent.
  */
 export const GOV_WEEKLY_RENT: Partial<Record<OriginId, number>> = {
+  starter: 10_000,
   lapo:    10_000,
   nepo:    80_000,
   richkid: 200_000,
