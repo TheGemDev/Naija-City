@@ -1,11 +1,9 @@
 // What a city floats on: one craggy mass of banded rock under the map that narrows to a point, a grassy lip
-// overhanging the coast with roots and vines hanging off it, a few loose chunks floating beside it, water pouring
-// off the edge (Waterfalls) and soft clouds drifting far below, so the map reads as a floating island and not a
-// slab on a table.
+// overhanging the coast with roots and vines hanging off it, a few loose chunks floating beside it, and soft clouds
+// drifting far below, so the map reads as a floating island and not a slab on a table.
 //
 // Built once per city from its outline: the rock, lip, roots and chunks are a single merged mesh with one shared
-// material; the clouds and the mist under the falls are one more mesh of camera-facing puffs drawn by a small
-// shader. The camera looks almost straight down, so the rock mostly shows as the banded cliff along the south coast
+// material; the clouds are one more mesh of camera-facing puffs drawn by a small shader. The camera looks almost straight down, so the rock mostly shows as the banded cliff along the south coast
 // and, zoomed out, the underside peeking past the edges; the clouds moving at a different speed from the map as you
 // pan are what really sell the height.
 
@@ -14,8 +12,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, ShaderMaterial, UniformsLib, UniformsUtils, Vector2 } from 'three';
 import type { CityMap, P2 } from '../game/city';
 import { useLowPerf } from '../game/quality';
-import { noise, rimOf, vnoise, type Rim } from './islandShape';
-import { fallBase, planFalls, skyLight, Waterfalls, type Fall } from './Waterfalls';
+import { noise, rimOf, skyLight, vnoise, type Rim } from './islandShape';
 
 /** How deep the rock hangs, as a share of the island's radius. */
 const DEPTH = 0.75;
@@ -111,7 +108,7 @@ class Builder {
   }
 }
 
-function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low: boolean) {
+function rockGeometry(rim: Rim, ground: string, seed: number, low: boolean) {
   const b = new Builder();
   const { pts, normals, cx, cz, radius } = rim;
   const n = pts.length;
@@ -120,25 +117,17 @@ function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low
   const grass = new Color(ground);
   const grassDark = grass.clone().multiplyScalar(0.62);
   const soil = new Color('#4e3a26');
-  const wet = new Color('#3b3128');
-  // Where a river pours over, the lip is worn down and wet instead of grassed over.
-  const mouth = pts.map(([x, z]) => {
-    let m = 0;
-    for (const f of falls) if (f.lip[1] > -0.5) m = Math.max(m, 1 - Math.min(1, Math.max(0, Math.hypot(x - f.lip[0], z - f.lip[2]) - f.width / 2) / 1.2));
-    return m;
-  });
-
   // Grassy lip: a skirt of turf curling over the edge with a ragged fringe hanging under it.
   const lipRows: [number, number, (i: number) => Color][] = [
     [-0.08, 0.03, () => grass],
     [0.45, 0.0, () => grass],
     [0.72, -0.24, (i) => c.copy(grass).lerp(grassDark, 0.4 + 0.2 * noise(seed + i))],
   ];
-  const lip = lipRows.map(([off, y, col]) => pts.map(([x, z], i) => b.vert(x + normals[i][0] * off, y, z + normals[i][1] * off, mouth[i] > 0 ? c.copy(col(i)).lerp(wet, mouth[i]) : col(i))));
+  const lip = lipRows.map(([off, y, col]) => pts.map(([x, z], i) => b.vert(x + normals[i][0] * off, y, z + normals[i][1] * off, col(i))));
   lip.push(pts.map(([x, z], i) => {
     // Alternate long and short points so the fringe hangs like turf, not a clean hem.
     const hang = 0.4 + (i % 2) * 0.25 + noise(seed * 3 + i) * 0.45;
-    return b.vert(x + normals[i][0] * 0.68, -0.24 - hang, z + normals[i][1] * 0.68, c.copy(grassDark).lerp(soil, 0.55 + mouth[i] * 0.45));
+    return b.vert(x + normals[i][0] * 0.68, -0.24 - hang, z + normals[i][1] * 0.68, c.copy(grassDark).lerp(soil, 0.55));
   }));
   b.rings(lip, cx, cz);
 
@@ -183,7 +172,6 @@ function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low
   const ROOTS = low ? 14 : 44;
   for (let k = 0; k < ROOTS; k++) {
     const i = Math.floor(noise(seed * 13 + k * 1.7) * n);
-    if (mouth[i] > 0) continue;
     const deep = k % 4 === 3;
     const t = deep ? 0.25 + noise(seed + k * 5) * 0.55 : 0;
     const [sx, sy, sz] = deep ? rockAt(i, t) : [pts[i][0] + normals[i][0] * 0.62, -0.5, pts[i][1] + normals[i][1] * 0.62];
@@ -199,13 +187,12 @@ function rockGeometry(rim: Rim, falls: Fall[], ground: string, seed: number, low
     b.strand(path, deep ? 0.14 : 0.07 + noise(k) * 0.04, k % 3 === 1 ? vine : root);
   }
 
-  // Loose chunks: little floating islets of their own, grass on top, rock tapering beneath. Kept clear of the falls.
+  // Loose chunks: little floating islets of their own, grass on top, rock tapering beneath.
   const CHUNKS = low ? 4 : 8;
   for (let k = 0; k < CHUNKS; k++) {
     const i = Math.floor(((k + noise(seed * 19 + k) * 0.6) / CHUNKS) * n) % n;
     const out = 2.5 + noise(seed * 23 + k) * 6;
     const px = pts[i][0] + normals[i][0] * out, pz = pts[i][1] + normals[i][1] * out;
-    if (falls.some((f) => Math.hypot(px - (f.lip[0] + f.out[0] * f.reach * 0.5), pz - (f.lip[2] + f.out[1] * f.reach * 0.5)) < f.width + f.reach + 2)) continue;
     const y = -1.5 - noise(seed * 29 + k) * 8;
     const r = 0.7 + noise(seed * 31 + k) * 1.7;
     chunk(b, px, y, pz, r, grass, seed + k * 101, low);
@@ -255,19 +242,17 @@ function chunk(b: Builder, x: number, y: number, z: number, r: number, grass: Co
   }
 }
 
-/* ---------- Clouds and mist ---------- */
+/* ---------- Clouds ---------- */
 
 /**
- * Puffs: camera-facing soft discs, one quad each, all in one geometry. aPuff = size, seed, kind (0 cloud, 1 mist),
- * drift speed; aAlpha is the puff's own opacity. Clouds drift east and wrap round the island, fading out at the far
- * end and back in at the near one; mist billows out and fades on a loop, staggered so it never pops.
+ * Puffs: camera-facing soft discs, one quad each, all in one geometry. aPuff = size, seed, drift speed, opacity.
+ * They drift east and wrap round the island, fading out at the far end and back in at the near one.
  */
 const PUFF_VERT = /* glsl */ `
   uniform float uTime;
   uniform vec2 uWrap;
   attribute vec2 aCorner;
   attribute vec4 aPuff;
-  attribute float aAlpha;
   varying vec2 vUv;
   varying float vAlpha;
   varying float vSeed;
@@ -275,18 +260,11 @@ const PUFF_VERT = /* glsl */ `
   void main() {
     vec3 c = position;
     float size = aPuff.x, seed = aPuff.y;
-    float alpha = aAlpha;
-    if (aPuff.z < 0.5) {
-      float x = mod(c.x - uWrap.x + uTime * aPuff.w + uWrap.y, 2.0 * uWrap.y) - uWrap.y;
-      alpha *= 1.0 - smoothstep(uWrap.y * 0.7, uWrap.y, abs(x));
-      c.x = uWrap.x + x;
-      size *= 1.0 + 0.06 * sin(uTime * 0.25 + seed * 20.0);
-    } else {
-      float p = fract(uTime * 0.16 * (0.8 + 0.4 * seed) + seed);
-      size *= 0.55 + 0.7 * p;
-      alpha *= sin(3.14159 * p);
-      c.y -= p * 1.5;
-    }
+    float x = mod(c.x - uWrap.x + uTime * aPuff.z + uWrap.y, 2.0 * uWrap.y) - uWrap.y;
+    float alpha = aPuff.w * (1.0 - smoothstep(uWrap.y * 0.7, uWrap.y, abs(x)));
+    c.x = uWrap.x + x;
+    // A slow swell, so a cloud is never quite still.
+    size *= 1.0 + 0.06 * sin(uTime * 0.25 + seed * 20.0);
     vec4 mvPosition = modelViewMatrix * vec4(c, 1.0);
     mvPosition.xy += aCorner * size;
     vUv = aCorner;
@@ -319,9 +297,9 @@ const PUFF_FRAG = /* glsl */ `
   }
 `;
 
-interface Puff { x: number; y: number; z: number; size: number; kind: 0 | 1; speed: number; alpha: number; seed: number }
+interface Puff { x: number; y: number; z: number; size: number; speed: number; alpha: number; seed: number }
 
-function cloudPuffs(rim: Rim, falls: Fall[], seed: number, low: boolean): Puff[] {
+function cloudPuffs(rim: Rim, seed: number, low: boolean): Puff[] {
   const { pts, normals, cx, cz } = rim;
   const n = pts.length;
   const puffs: Puff[] = [];
@@ -329,7 +307,7 @@ function cloudPuffs(rim: Rim, falls: Fall[], seed: number, low: boolean): Puff[]
   // Three layers: wisps tucked under the coast, a ring further down, and a deep broad bank. Each cloud is a
   // cluster of a few puffs, sized so the layers stay thin: big soft quads stacked over the screen cost phones dearly.
   const layers = [
-    { y: -8, clusters: Math.round(9 * q), per: 3, size: [1.4, 2.6], out: (i: number, k: number): P2 => {
+    { y: -8, clusters: Math.round(13 * q), per: 3, size: [1.4, 2.6], out: (i: number, k: number): P2 => {
       const o = 1.2 + noise(seed * 3 + k) * 4;
       return [pts[i][0] + normals[i][0] * o, pts[i][1] + normals[i][1] * o];
     }, speed: 0.22, alpha: 0.7 },
@@ -353,51 +331,21 @@ function cloudPuffs(rim: Rim, falls: Fall[], seed: number, low: boolean): Puff[]
           x: x + (noise(seed * 43 + k * 3 + p + li) - 0.5) * size * 2.2,
           y: L.y + (noise(seed * 47 + k + p * 3 + li) - 0.5) * 2,
           z: z + (noise(seed * 53 + k * 7 + p + li) - 0.5) * size * 1.4,
-          size, kind: 0, speed: L.speed, alpha: L.alpha, seed: noise(seed * 59 + k * 13 + p + li),
+          size, speed: L.speed, alpha: L.alpha, seed: noise(seed * 59 + k * 13 + p + li),
         });
       }
-    }
-  });
-  // Mist where each fall ends, a little spray down its lower half, and a cloud bank it disappears into.
-  falls.forEach((f, fi) => {
-    const [bx, by, bz] = fallBase(f);
-    const river = f.lip[1] > -0.5;
-    const MIST = Math.round((river ? 7 : 4) * (low ? 0.6 : 1));
-    for (let m = 0; m < MIST; m++) {
-      const r = noise(f.seed * 3 + m);
-      puffs.push({
-        x: bx + (r - 0.5) * f.width * 1.6 + f.out[0] * (noise(f.seed + m * 5) - 0.3) * 2,
-        y: by + 1.5 + noise(f.seed * 7 + m) * 2,
-        z: bz + (noise(f.seed * 5 + m) - 0.5) * f.width * 1.6 + f.out[1] * (noise(f.seed + m * 9) - 0.3) * 2,
-        size: f.width * 0.7 + 1 + r * 1.5, kind: 1, speed: 0, alpha: 0.85, seed: m / MIST,
-      });
-    }
-    for (let m = 0; m < (low ? 1 : 3); m++) {
-      const t = 0.6 + m * 0.12;
-      puffs.push({
-        x: f.lip[0] + f.out[0] * f.reach * t, y: f.lip[1] - f.drop * t * t, z: f.lip[2] + f.out[1] * f.reach * t,
-        size: f.width * 0.6 + 0.4, kind: 1, speed: 0, alpha: 0.5, seed: noise(fi * 13 + m),
-      });
-    }
-    // A cloud bank round the foot of the fall, so it pours down into cloud.
-    for (let m = 0; m < (low ? 2 : 4); m++) {
-      puffs.push({
-        x: bx + (noise(f.seed * 61 + m) - 0.5) * 6, y: by - 1 - noise(f.seed * 67 + m) * 2, z: bz + (noise(f.seed * 71 + m) - 0.5) * 4,
-        size: 2.5 + noise(f.seed * 73 + m) * 2, kind: 0, speed: 0, alpha: 0.8, seed: noise(f.seed * 79 + m),
-      });
     }
   });
   return puffs;
 }
 
 function puffGeometry(puffs: Puff[]) {
-  const pos: number[] = [], corner: number[] = [], info: number[] = [], alpha: number[] = [], idx: number[] = [];
+  const pos: number[] = [], corner: number[] = [], info: number[] = [], idx: number[] = [];
   puffs.forEach((p, i) => {
     for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
       pos.push(p.x, p.y, p.z);
       corner.push(u, v);
-      info.push(p.size, p.seed, p.kind, p.speed);
-      alpha.push(p.alpha);
+      info.push(p.size, p.seed, p.speed, p.alpha);
     }
     const a = i * 4;
     idx.push(a, a + 1, a + 2, a, a + 2, a + 3);
@@ -406,7 +354,6 @@ function puffGeometry(puffs: Puff[]) {
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
   g.setAttribute('aCorner', new Float32BufferAttribute(corner, 2));
   g.setAttribute('aPuff', new Float32BufferAttribute(info, 4));
-  g.setAttribute('aAlpha', new Float32BufferAttribute(alpha, 1));
   g.setIndex(idx);
   // The puffs move in the shader and are pulled out to their size there, so the mesh is never culled (Clouds).
   return g;
@@ -416,8 +363,8 @@ const CLOUD_TOP = new Color('#ffffff');
 const CLOUD_SHADE = new Color('#a9b8c9');
 const NIGHT_CLOUD = new Color('#56688f');
 
-function Clouds({ rim, falls, seed, low }: { rim: Rim; falls: Fall[]; seed: number; low: boolean }) {
-  const geo = useMemo(() => puffGeometry(cloudPuffs(rim, falls, seed, low)), [rim, falls, seed, low]);
+function Clouds({ rim, seed, low }: { rim: Rim; seed: number; low: boolean }) {
+  const geo = useMemo(() => puffGeometry(cloudPuffs(rim, seed, low)), [rim, seed, low]);
   const mat = useMemo(
     () => new ShaderMaterial({
       vertexShader: PUFF_VERT,
@@ -454,8 +401,7 @@ function Clouds({ rim, falls, seed, low }: { rim: Rim; falls: Fall[]; seed: numb
       shade.lerp(bg, 0.3);
     }
   });
-  // Drawn after the falls (which write depth where solid) and before everything else see-through, so the sea's
-  // booking grid and ads stay on top of the clouds far below them.
+  // Drawn first of everything see-through: they are the furthest thing down, under the sea's ads and the weather.
   return <mesh geometry={geo} material={mat} renderOrder={-1} frustumCulled={false} raycast={() => null} />;
 }
 
@@ -467,14 +413,12 @@ const rockMat = new MeshStandardMaterial({ vertexColors: true, flatShading: true
 export function IslandBase({ map, ground = '#9fbf5a', seed = 1 }: { map: CityMap; ground?: string; seed?: number }) {
   const low = useLowPerf();
   const rim = useMemo(() => rimOf(map.outline, low ? 64 : 120), [map, low]);
-  const falls = useMemo(() => planFalls(map, rim, seed), [map, rim, seed]);
-  const rock = useMemo(() => rockGeometry(rim, falls, ground, seed, low), [rim, falls, ground, seed, low]);
+  const rock = useMemo(() => rockGeometry(rim, ground, seed, low), [rim, ground, seed, low]);
   useEffect(() => () => rock.dispose(), [rock]);
   return (
     <group>
       <mesh geometry={rock} material={rockMat} raycast={() => null} />
-      <Waterfalls falls={falls} city={map.id} low={low} />
-      <Clouds rim={rim} falls={falls} seed={seed} low={low} />
+      <Clouds rim={rim} seed={seed} low={low} />
     </group>
   );
 }

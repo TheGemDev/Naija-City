@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, type Group, type Mesh } from 'three';
 import { B, Keke } from './models';
 import { Airliner } from './aircraft';
+import { Stadium } from './Stadium';
 
 type V3 = [number, number, number];
 
@@ -1112,45 +1113,6 @@ function MotorPark({ w, d }: { w: number; d: number }) {
       {[-2.6, -1.6, 2.2, 3.2].map((x) => (
         <group key={x} position={[x, 0, 1.2]} scale={0.6} rotation={[0, Math.PI, 0]}>
           <Keke />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function Stadium({ w, d }: { w: number; d: number }) {
-  const rx = w / 2 - 0.4;
-  const rz = d / 2 - 0.4;
-  const n = 22;
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#9ca3af" />
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[rx - 0.9, rz - 0.9, 1]}>
-        <circleGeometry args={[1, 32]} />
-        <meshStandardMaterial color="#b45309" />
-      </mesh>
-      <B p={[0, 0.07, 0]} s={[rx * 1.05, 0.02, rz * 0.9]} c="#4ade80" />
-      <B p={[0, 0.085, 0]} s={[0.05, 0.01, rz * 0.9]} c="#fff" />
-      {/* Stands: an oval of slanted blocks */}
-      {Array.from({ length: n }, (_, i) => {
-        const a = (i / n) * Math.PI * 2;
-        const x = Math.cos(a) * rx;
-        const z = Math.sin(a) * rz;
-        const seg = ((2 * Math.PI * Math.max(rx, rz)) / n) * 1.05;
-        const gap = i === Math.round(n / 4); // entrance on the +z side
-        if (gap) return null;
-        return (
-          <group key={i} position={[x, 0, z]} rotation={[0, -a + Math.PI / 2, 0]}>
-            <B p={[0, 0.55, 0]} s={[seg, 1.1, 0.7]} c={i % 2 ? '#15803d' : '#f8fafc'} />
-          </group>
-        );
-      })}
-      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
-        <group key={i} position={[sx * (rx + 0.1), 0, sz * (rz + 0.1)]}>
-          <Cyl p={[0, 1.6, 0]} r={0.05} h={3.2} c="#94a3b8" />
-          <mesh position={[0, 3.25, 0]} material={lampMat}>
-            <boxGeometry args={[0.5, 0.3, 0.1]} />
-          </mesh>
         </group>
       ))}
     </group>

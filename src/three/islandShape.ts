@@ -1,6 +1,7 @@
-// Shared maths for what hangs off a city's island (IslandBase, Waterfalls): the coast resampled evenly with its
-// outward normals, and a cheap repeatable noise so every city builds the same rock and falls on every phone.
+// Shared maths for what hangs under a city's island (IslandBase): the coast resampled evenly with its outward
+// normals, and a cheap repeatable noise so every city builds the same rock on every phone.
 
+import type { Color } from 'three';
 import type { P2 } from '../game/city';
 
 /** A cheap repeatable "random": the same island every time, and the same on every phone. */
@@ -80,28 +81,9 @@ export function rimOf(outline: P2[], n: number): Rim {
   return { pts, normals, cx, cz, radius };
 }
 
-/** Index of the rim point nearest (x, z). */
-export function nearestRim(rim: Rim, x: number, z: number) {
-  let best = 0, bestD = Infinity;
-  rim.pts.forEach(([px, pz], i) => {
-    const d = (px - x) ** 2 + (pz - z) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
-  });
-  return best;
-}
-
-/** Distance along the ray from (ox, oz) in direction (dx, dz) to where it first crosses the outline, or null. */
-export function rayToCoast(outline: P2[], ox: number, oz: number, dx: number, dz: number): number | null {
-  let best: number | null = null;
-  for (let i = 0; i < outline.length; i++) {
-    const [ax, az] = outline[i];
-    const [bx, bz] = outline[(i + 1) % outline.length];
-    const ex = bx - ax, ez = bz - az;
-    const den = dx * ez - dz * ex;
-    if (Math.abs(den) < 1e-9) continue;
-    const t = ((ax - ox) * ez - (az - oz) * ex) / den;
-    const u = ((ax - ox) * dz - (az - oz) * dx) / den;
-    if (t > 0 && u >= 0 && u <= 1 && (best === null || t < best)) best = t;
-  }
-  return best;
+/** 0 at night, 1 in daylight, read off the sky colour (three/Scene.tsx), so it follows the weather's greying too. */
+export function skyLight(bg: Color) {
+  const m = Math.max(bg.r, bg.g, bg.b);
+  const t = Math.min(1, Math.max(0, (m - 0.03) / 0.55));
+  return t * t * (3 - 2 * t);
 }

@@ -328,12 +328,11 @@ function puffTexture(size = 128) {
 }
 
 /**
- * Clouds drifting over the map on a cloudy or rainy day, high above the roofs. They thin out as the camera comes
- * down near them so they never hide where you are going.
+ * Clouds drifting over the map on a cloudy or rainy day, high above the roofs, seen when zoomed out. They fade
+ * away as the camera comes down so they never hide where you are going. Low mode has none.
  */
 export function Clouds() {
-  const low = useLowPerf();
-  const n = low ? 6 : CLOUDS;
+  const n = CLOUDS;
   const ref = useRef<InstancedMesh>(null!);
   const tex = useMemo(() => puffTexture(), []);
   useLayoutEffect(() => () => tex.dispose(), [tex]);
@@ -346,8 +345,9 @@ export function Clouds() {
 
   useFrame(({ camera, controls, scene }) => {
     const mesh = ref.current;
-    // Zoomed right in, the camera is only a little above them: fade them so the street stays clear.
-    const room = MathUtils.smoothstep(camera.position.y - 22, 6, 30);
+    // Only over a zoomed-out map: at street level they would be big quads blended over the whole screen for little
+    // to see, which phones pay for in fill.
+    const room = MathUtils.smoothstep(camera.position.y, 45, 70);
     const opacity = sky.cloud * 0.25 * room;
     // Nothing to see: skip the draw rather than blend invisible quads over the whole screen.
     const on = opacity > 0.01;

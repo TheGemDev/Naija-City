@@ -290,9 +290,9 @@ async function hitCar(env: Env, ctx: ExecutionContext, d: Disaster, uid: string,
 async function hurt(env: Env, ctx: ExecutionContext, d: Disaster, uid: string, now: number) {
   const db = env.DB;
   const clientId = `disaster:${d.id}:hospital`;
-  const bill = hospitalBillOf(await getBalance(db, uid).catch(() => 0));
+  const due = hospitalBillOf(await getBalance(db, uid).catch(() => 0));
   const until = now + DISASTER_RULES.hurtMinutes * 60_000;
-  const c = chargeStmts(db, uid, clientId, 'hospital', `disaster:${d.id}`, bill, 1, now);
+  const c = chargeStmts(db, uid, clientId, 'hospital', `disaster:${d.id}`, due, 1, now);
   const res = await db.batch([
     ...c.debit,
     db.prepare(`UPDATE civic_policies SET treasury = treasury - (SELECT amount FROM ledger WHERE uid = ?1 AND client_id = ?2) WHERE id = 1 AND ${c.guard}`).bind(uid, clientId),
@@ -305,7 +305,8 @@ async function hurt(env: Env, ctx: ExecutionContext, d: Disaster, uid: string, n
   const paid = (res[res.length - 1].results[0] as { cost: number } | undefined)?.cost ?? 0;
   const def = DISASTERS[d.kind];
   const how = d.kind === 'flood' || d.kind === 'flashflood' ? 'The water swept you off your feet' : d.kind === 'windstorm' ? 'Flying zinc caught you' : 'The smoke and heat got to you';
-  const text = `${def.icon} ${how} in ${named(d)}. You woke up in hospital: ${naira(paid)} bill, and you are hurt for ${DISASTER_RULES.hurtMinutes} minutes.`;
+  const bill = paid ? `a ${naira(paid)} bill` : 'they treated you for free';
+  const text = `${def.icon} ${how} in ${named(d)}. You woke up in hospital (${bill}) and you are hurt for ${DISASTER_RULES.hurtMinutes} minutes.`;
   tell(env, ctx, uid, { id: d.id, kind: d.kind, what: 'hurt', text, until, paid });
   sendPush(env, ctx, uid, { title: `${def.icon} You were hurt`, body: text.slice(0, 240), tag: `disaster-${d.id}-hurt`, category: 'money' });
   return true;
@@ -349,7 +350,9 @@ async function relief(env: Env, ctx: ExecutionContext, d: Disaster, now: number)
     if (!claimed) return 0;
     const rants = [
       `${CITY_NAME[city]} don suffer ${named(d)}. ${victims.length} families dey count loss, ${naira(total)} for repairs. ${who}, where SEMA dey? Not one mattress, not one bag of rice. Una dey wait make water dry before una come snap picture? 🤬`,
-      `After ${named(d)}, people dey sleep for church. ${who} never show face. Treasury dey there but relief no dey. Na only campaign season una dey find road to ${d.area}? 😤`,
+      (state?.balance ?? 0) > 0
+        ? `After ${named(d)}, people dey sleep for church. ${who} never show face. Treasury dey there but relief no dey. Na only campaign season una dey find road to ${d.area}? 😤`
+        : `${named(d)} and the ${CITY_NAME[city]} treasury is empty. Empty! ${who}, who chop the money wey for be emergency fund? Victims dey on their own again. 🤬`,
     ];
     await db.prepare(
       `INSERT INTO feed (uid, kind, icon, text, created_at, city) VALUES (?, 'vdm', ?, ?, ?, ?)`,
@@ -429,6 +432,7 @@ async function catchPeople(env: Env, ctx: ExecutionContext, row: Row, now: numbe
   const slot = Math.floor(now / DISASTER_RULES.tickMs);
   const people = (await onlinePlayers(env)).filter((p) => p.area && !p.uid.startsWith('npc:')).slice(0, DISASTER_RULES.maxOnline * 4);
   let looked = 0;
+  let changed = false;
   for (const p of people) {
     const area = (p.area ?? '').split('#')[0];
     const [kind, a, b] = area.split(':');
@@ -446,9 +450,14 @@ async function catchPeople(env: Env, ctx: ExecutionContext, row: Row, now: numbe
     }
     if (!caught) continue;
     // Every tick in it is another chance to get hurt, and the same chance for the same tick however often it runs.
-    if (roll(d.id, strHash(p.uid), slot) < def.hurt * level) await hurt(env, ctx, d, p.uid, now).catch((e) => console.error('disaster hurt failed', e));
+    if (roll(d.id, strHash(p.uid), slot) < def.hurt * level && await hurt(env, ctx, d, p.uid, now).catch((e) => (console.error('disaster hurt failed', e), false))) changed = true;
     // A car out on the street or at a building in it is parked in it.
-    if (street || kind === 'place') await hitCar(env, ctx, d, p.uid, now).catch(() => false);
+    if ((street || kind === 'place') && await hitCar(env, ctx, d, p.uid, now).catch(() => false)) changed = true;
+  }
+  // The count of people hurt and cars hit keeps going up while it lasts.
+  if (changed) {
+    const fresh = await env.DB.prepare('SELECT struck_at, relief, relief_paid FROM disasters WHERE id = ?').bind(d.id).first<Pick<Row, 'struck_at' | 'relief' | 'relief_paid'>>();
+    if (fresh?.struck_at) await env.DB.prepare('UPDATE disasters SET toll = ? WHERE id = ?').bind(JSON.stringify(await tollOf(env.DB, d, fresh.relief_paid ? fresh.relief ?? 0 : 0)), d.id).run();
   }
 }
 

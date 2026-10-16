@@ -4,9 +4,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { AdditiveBlending, CanvasTexture, Color, DataTexture, NearestFilter, RedFormat, SRGBColorSpace, UnsignedByteType, Vector2, type MeshBasicMaterial, type ShaderMaterial } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, SRGBColorSpace, Vector2, type MeshBasicMaterial } from 'three';
 import { cityMap, type BillboardSpot } from '../game/city';
-import { BILLBOARDS_HIDDEN, cityBoard, cityBoardOpen, ESTATE_BILLBOARDS, estateBoard, parseSea, SEA_MARGIN, seaCellOpen } from '../game/boards';
+import { BILLBOARDS_HIDDEN, cityBoard, cityBoardOpen, ESTATE_BILLBOARDS, estateBoard, parseSea } from '../game/boards';
 import { ADS_ON_SALE, type Ad } from '../game/ads';
 import { photoHour } from '../game/photo';
 import { hourOf, useGame } from '../game/store';
@@ -326,83 +326,7 @@ function SeaBoard({ ad, w, d, glow }: { ad: Ad; w: number; d: number; glow: bool
   );
 }
 
-const GRID_VERT = `
-varying vec2 vCell;
-uniform vec2 uOrigin;
-void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vCell = world.xz - uOrigin;
-  gl_Position = projectionMatrix * viewMatrix * world;
-}`;
-
-// The grid is drawn per pixel instead of as GL lines: 1px lines sit exactly between pixel centres and the
-// rasteriser drops them on one axis (usually the vertical ones) in places. uLand marks every cell an ad can't sit
-// on (the island and the cells its shore cuts through). A line is suppressed when both cells it separates are
-// marked, the same rule for both directions, so only bookable cells are outlined.
-const GRID_FRAG = `
-precision highp float;
-varying vec2 vCell;
-uniform sampler2D uLand;
-uniform vec2 uSize;
-uniform vec3 uColor;
-uniform float uOpacity;
-float land(vec2 c) {
-  if (c.x < 0.0 || c.y < 0.0 || c.x >= uSize.x || c.y >= uSize.y) return 1.0;
-  return texture2D(uLand, (c + 0.5) / uSize).r;
-}
-void main() {
-  vec2 cell = floor(vCell);
-  vec2 edge = floor(vCell + 0.5);
-  vec2 d = abs(vCell - edge) / max(fwidth(vCell), vec2(1e-5));
-  vec2 line = 1.0 - smoothstep(0.35, 1.35, d);
-  float vert = land(vec2(edge.x - 1.0, cell.y)) * land(vec2(edge.x, cell.y));
-  float horiz = land(vec2(cell.x, edge.y - 1.0)) * land(vec2(cell.x, edge.y));
-  float a = max(line.x * (1.0 - vert), line.y * (1.0 - horiz));
-  if (a < 0.01) discard;
-  gl_FragColor = vec4(uColor, a * uOpacity);
-}`;
-
-/** Faint 1-unit grid on the sea surface, round the cells an ad can be booked on only. */
-function SeaGrid({ region }: { region: string }) {
-  const mat = useRef<ShaderMaterial>(null);
-  const grid = useMemo(() => {
-    const { w: CITY_W, h: CITY_H } = cityMap(region);
-    const x0 = -SEA_MARGIN, x1 = CITY_W + SEA_MARGIN;
-    const z0 = -SEA_MARGIN, z1 = CITY_H + SEA_MARGIN;
-    const w = x1 - x0, h = z1 - z0;
-    const data = new Uint8Array(w * h);
-    for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) data[z * w + x] = seaCellOpen(x + x0, z + z0, region) ? 0 : 255;
-    const land = new DataTexture(data, w, h, RedFormat, UnsignedByteType);
-    land.minFilter = NearestFilter;
-    land.magFilter = NearestFilter;
-    land.unpackAlignment = 1;
-    land.needsUpdate = true;
-    return { x0, z0, w, h, land };
-  }, [region]);
-  const uniforms = useMemo(() => ({
-    uLand: { value: grid.land },
-    uSize: { value: new Vector2(grid.w, grid.h) },
-    uOrigin: { value: new Vector2(grid.x0, grid.z0) },
-    uColor: { value: new Color('#4a6a7a') },
-    uOpacity: { value: 0 },
-  }), [grid]);
-  useFrame(({ camera }) => {
-    if (!mat.current) return;
-    const y = camera.position.y;
-    // Fade in when camera Y < 80, fully visible at Y ≤ 35.
-    const opacity = Math.max(0, Math.min(0.3, ((80 - y) / 45) * 0.3));
-    mat.current.uniforms.uOpacity.value = opacity;
-    mat.current.visible = opacity > 0.001;
-  });
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[grid.x0 + grid.w / 2, SEA_WATER_Y + 0.01, grid.z0 + grid.h / 2]} raycast={() => null}>
-      <planeGeometry args={[grid.w, grid.h]} />
-      <shaderMaterial ref={mat} vertexShader={GRID_VERT} fragmentShader={GRID_FRAG} uniforms={uniforms} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} toneMapped={false} />
-    </mesh>
-  );
-}
-
-/** The sea around a city's island, centred on (x, z), with its booking grid and the ads booked on it. */
+/** The sea around a city's island, centred on (x, z), and the ads booked on it. */
 export function SeaAds({ region, x = 30, z = 42 }: { region: string; x?: number; z?: number }) {
   const live = useAds((s) => s.live);
   const boards = useMemo(
@@ -426,7 +350,6 @@ export function SeaAds({ region, x = 30, z = 42 }: { region: string; x?: number;
         <circleGeometry args={[160, 48]} />
         <meshBasicMaterial ref={sea} color={dark ? '#0b1430' : '#bfe3f5'} toneMapped={false} depthWrite={false} />
       </mesh>
-      <SeaGrid key={region} region={region} />
       {boards.map(({ ad, r }) => (
         <group key={ad.id} position={[r.x + r.w / 2, 0, r.z + r.d / 2]}>
           <SeaBoard ad={ad} w={r.w} d={r.d} glow={dark} />

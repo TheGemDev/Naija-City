@@ -214,11 +214,12 @@ function DayNight() {
 function WeatherLayer() {
   const out = useGame((s) => outdoors(s));
   const visiting = useVisit((s) => !!s.current);
+  const low = useLowPerf();
   return (
     <>
       <SkyBodies />
       {(out || visiting) && <Rain />}
-      {(out || visiting) && <Clouds />}
+      {(out || visiting) && !low && <Clouds />}
     </>
   );
 }
