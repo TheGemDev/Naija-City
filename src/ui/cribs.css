@@ -143,6 +143,7 @@
 
 /* ---------- Confirm ---------- */
 .cb-confirm { position: fixed; inset: 0; z-index: 60; display: grid; place-items: end center; padding: 14px; background: rgba(2, 6, 23, 0.45); animation: cb-fade 0.15s ease-out; }
+.cb-confirm.in-phone { position: absolute; padding: 10px 10px 28px; border-radius: inherit; }
 .cb-confirm-card { width: min(420px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35); }
 .cb-confirm-card > b { font-size: 17px; }
 .cb-confirm-card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }

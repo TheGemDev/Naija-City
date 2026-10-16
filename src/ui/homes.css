@@ -78,3 +78,4 @@
 .hm-arrow { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--ink); font-size: 22px; font-weight: 900; display: grid; place-items: center; cursor: pointer; }
 .hm-arrow:disabled { opacity: 0.35; cursor: default; }
 .hm-switch .house-facts { flex: 1; padding: 0 4px; }
+.tile .hm-tile-pic { flex: none; width: 84px; border-radius: 10px; }

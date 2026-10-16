@@ -4,7 +4,6 @@ import { ExtrudeGeometry, Shape, type Group } from 'three';
 import { edgeKey, houseLayout, isEditableEdge, pathToCell, wallBuildError, type Edge, type HouseLayout, type PlacedItem, type WallEdge } from '../game/grid';
 import { houseKeyOf, useGame } from '../game/store';
 import { edgeHasWindow } from '../game/mount';
-import { aimAt, toHouseRay, useDecor } from '../game/decor';
 import { wallMountGroups } from './DecorEdit';
 import { applyFinish, type HouseFinish } from '../game/finishes';
 import { finishToolOn, useFinishUi } from '../game/finishUi';
@@ -313,9 +312,6 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
         if (wallTool()) {
           const edge = nearestEdge(toLocal(e));
           useGame.getState().setWallHover(isEditableEdge(layout, edge) ? edge : null);
-        } else if (useGame.getState().placing && !readOnly && e.nativeEvent.pointerType === 'mouse') {
-          // The piece follows the mouse; on a phone a tap (or dragging the ghost) moves it instead.
-          aimAt(toHouseRay(e.ray.origin, e.ray.direction));
         }
       }}
       onPointerOut={() => {
@@ -342,11 +338,8 @@ function ClickPlane({ readOnly = false, items = [], origin, design, layout }: { 
           return;
         }
         if (s.placing) {
-          // The editor works out the real spot: a wall, a table top, a whole group (game/decor.ts).
-          aimAt(toHouseRay(e.ray.origin, e.ray.direction));
-          const pose = useDecor.getState().pose;
-          // Touch: a tap only moves the preview; the Place button in the bar confirms (so you can rotate first).
-          if (!coarsePointer() && pose) s.placeAt({ x: pose.x, z: pose.z });
+          // Placing is the editor's (three/DecorEdit.tsx DecorRig): it aims at walls and table tops too, which this
+          // floor plane can't see past.
         } else if (s.selectedId) {
           s.select(null);
         } else if (s.mode === 'live') {

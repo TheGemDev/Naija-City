@@ -21,6 +21,7 @@ import { onDisasterEvent, type DisasterEvent } from './disasters';
 import type { GameEvent } from '../game/streetGames';
 import { useVisit } from '../game/visits';
 import { onCityEvent } from './cityStats';
+import { onSnapEvent } from './snaps';
 import { isPrivateRoom } from '../game/villa';
 
 /** Everyone shares one room; `area` says whether a player is at home (private) or out in the city. */
@@ -126,7 +127,8 @@ type ServerMsg =
   | ViceEvent
   | GameEvent
   | FunEvent
-  | DisasterEvent;
+  | DisasterEvent
+  | { t: 'snap'; from: string; username: string | null };
 
 /** When each player was last seen, so a quick reconnect (a server update drops everybody's connection) is not announced as someone arriving. */
 const lastSeen = new Map<string, number>();
@@ -225,6 +227,8 @@ function onMessage(m: ServerMsg) {
     onGameEvent(m);
   } else if (m.t === 'disaster') {
     onDisasterEvent(m);
+  } else if (m.t === 'snap') {
+    onSnapEvent(m);
   }
 
 }

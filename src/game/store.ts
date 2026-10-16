@@ -468,6 +468,8 @@ export interface GameState {
   /** `slot`: the empty plot the player tapped in an estate; without it they get the lowest free one. */
   buyLand(region: string, plot: PlotSize, slot?: number): void;
   setHomeProperty(propertyId: string): void;
+  /** Step straight into another of your finished houses on the same estate (the house card's ‹ ›); false if it isn't next door. */
+  hopToHouse(propertyId: string): boolean;
   /** Give a house your own name (cleaned: game/exterior.ts cleanHouseName); empty clears it. */
   renameProperty(propertyId: string, name: string): void;
   /** Change the outside of a finished house, paying for what changes (game/exterior.ts exteriorChangeCost). */
@@ -2340,7 +2342,8 @@ export const useGame = create<GameState>((set, get) => {
     goHome(travelMode = 'walk', carId, homeId) {
       const s = get();
       if (avatar.exhausted) return toast('You are too exhausted to move. Rest a little longer 😵');
-      if (s.view === 'home' || jailed()) return;
+      // At home already: only a trip to another of your houses (the house card's ‹ ›) goes anywhere.
+      if ((s.view === 'home' && (!homeId || homeId === (s.activeHouseId ?? s.homePropertyId) || homeId === 'lease' || homeId === 'gov')) || jailed()) return;
       // A house picked by name must be finished and lived in by you: one with a tenant in it is theirs for now.
       const picked = homeId && homeId !== 'lease' && homeId !== 'gov' ? s.properties.find((p) => p.id === homeId) : undefined;
       if (picked && (picked.stage < STAGES.length || picked.rented || s.rentedOut.includes(picked.id))) return toast('That house is rented out. Your tenant lives there now.');
@@ -2946,6 +2949,20 @@ export const useGame = create<GameState>((set, get) => {
         ),
       }));
       toast(`${c.icon} ${c.name} don start your full build. All ${STAGES.length - p.stage} stages are paid for and will finish automatically`);
+    },
+
+    hopToHouse(propertyId) {
+      const s = get();
+      const here = s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId));
+      const next = s.properties.find((p) => p.id === propertyId);
+      if (s.view !== 'home' || !here || !next || next.id === here.id || useVisit.getState().current) return false;
+      if (next.region !== here.region || sectionOf(next.slot ?? 0) !== sectionOf(here.slot ?? 0)) return false;
+      if (next.stage < STAGES.length || next.rented || s.rentedOut.includes(next.id)) return false;
+      if (s.task) get().cancelTask();
+      // Same estate: out of one gate and in at the next, no ride needed.
+      enterHome(next.id);
+      toast(`🏠 ${houseTitle(next)}`);
+      return true;
     },
 
     renameProperty(propertyId, name) {

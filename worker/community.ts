@@ -73,6 +73,16 @@ async function progressOf(db: D1Database, uid: string, metric: QuestMetric, sinc
       return num('SELECT COUNT(*) AS n FROM bets WHERE uid = ? AND created_at >= ?', uid, since);
     case 'friend':
       return num("SELECT COUNT(*) AS n FROM friendships WHERE status = 'accepted' AND accepted_at >= ? AND (a = ?2 OR b = ?2)", since, uid);
+    case 'shift':
+      return num("SELECT COUNT(*) AS n FROM ledger WHERE uid = ? AND kind = 'work' AND amount > 0 AND created_at >= ?", uid, since);
+    case 'rides':
+      return num("SELECT COUNT(*) AS n FROM ledger WHERE uid = ? AND kind = 'gig' AND ref IN ('keke_fare', 'okada_fare') AND amount > 0 AND created_at >= ?", uid, since);
+    case 'dispatch':
+    case 'freelance':
+    case 'farm':
+    case 'odd_job':
+      // The gig refs these pay under (game/gigs.ts, worker/hustles.ts).
+      return num("SELECT COUNT(*) AS n FROM ledger WHERE uid = ? AND kind = 'gig' AND ref = ? AND amount > 0 AND created_at >= ?", uid, metric === 'dispatch' ? 'dispatch_fare' : metric, since);
   }
 }
 

@@ -129,7 +129,7 @@ export interface FreelanceBrief {
   text?: string;
   /** design: the brand's colours, as hues (0-359). */
   hues?: number[];
-  /** code: the snippets (the bug line is only known to the server's copy, but it is in here too). */
+  /** code: the snippets (on the phone `bug` is -1: only the server's copy knows it, see publicBrief). */
   snippets?: CodeSnippet[];
 }
 
@@ -142,6 +142,10 @@ export function freelanceBrief(kind: FreelanceKind, seed: number): FreelanceBrie
   for (let i = 0; i < 3; i++) snippets.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
   return { kind, snippets };
 }
+
+/** The brief as the phone gets it: everything needed to do the job, nothing that gives the answer away (no bug lines, no seed). */
+export const publicBrief = (b: FreelanceBrief): FreelanceBrief =>
+  b.kind === 'code' ? { kind: b.kind, snippets: b.snippets!.map((s) => ({ task: s.task, lines: s.lines, bug: -1 })) } : b;
 
 /** The least time (ms) a gig takes done honestly: the server refuses a hand-in sooner than this. */
 export function freelanceMinMs(brief: FreelanceBrief) {

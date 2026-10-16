@@ -32,7 +32,7 @@ async function boot() {
   }
   if (view === 'phone') useGame.setState({ panel: 'phone', openApp: 'cribs' });
   if (view === 'profile') useGame.setState({ panel: 'profile' });
-  (window as unknown as { ready: boolean }).ready = true;
+  Object.assign(window, { ready: true, useGame, useVisit });
 }
 
 createRoot(document.getElementById('root')!).render(

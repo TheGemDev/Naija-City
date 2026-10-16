@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { estateKm, homeTripKm, hourOf, naira, ownHouseOf, useGame, type TravelMode } from '../game/store';
-import { cityEstates, DESIGN_BY_ID, estateCity, REGION_BY_ID, isComplete } from '../game/property';
+import { cityEstates, DESIGN_BY_ID, estateCity, houseTitle, REGION_BY_ID, isComplete } from '../game/property';
 import { regionAirportDoor, regionOf, regionPlace, regionStartDoor } from '../game/regions';
-import { sectionOf } from '../game/estate';
+import { CAP, sectionOf } from '../game/estate';
+import { useRentals } from '../net/rentals';
+import { cityState, OtherThumb, PropertyThumb } from './homesKit';
 import { avatarCell } from '../game/avatar';
 import { isOpen } from '../game/city';
 import { kmBetween } from '../game/fares';
@@ -13,7 +15,8 @@ import { Chevron, Emoji } from './Icons';
 import { TravelSheet, carDry, fareOf, tripCost } from './TravelSheet';
 import { TripRoute, tripLegs } from './TripSheet';
 
-type Trip = { kind: 'home' } | { kind: 'estate'; region: string; no?: number };
+/** `home` preselects one of your houses (the house card's ‹ › asks this way for a house that's a ride away). */
+type Trip = { kind: 'home'; home?: string } | { kind: 'estate'; region: string; no?: number };
 
 /** Asks how you want to get somewhere before you set off (Home and Estates in the nav bar). */
 export const useTravel = create<{ trip: Trip | null; ask(trip: Trip): void; close(): void }>((set) => ({
@@ -22,7 +25,8 @@ export const useTravel = create<{ trip: Trip | null; ask(trip: Trip): void; clos
   close: () => set({ trip: null }),
 }));
 
-type HomeChoice = { id: string; icon: string; name: string; where: string; tag: string; disabled: boolean };
+/** One home in the strip: its picture, its name (or design), where it is and what's going on there. */
+type HomeChoice = { id: string; icon: string; name: string; where: string; tag: string; disabled: boolean; pic: ReactNode; status?: string };
 
 /** Where a city lets you out with nowhere particular to be: your door in the state you were born in, the airport elsewhere. */
 const startDoor = (city: string, homeState: string) => (city === homeState ? regionStartDoor : regionAirportDoor)(city);
@@ -32,11 +36,15 @@ function HomeStrip({ homes, selected, onPick }: { homes: HomeChoice[]; selected:
   const on = useRef<HTMLButtonElement>(null);
   useEffect(() => { on.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [selected]);
   return (
-    <div className="travel-homes" role="radiogroup" aria-label="Which home">
+    <div className="travel-homes hm-strip" role="radiogroup" aria-label="Which home">
       {homes.map((h) => (
         <button key={h.id} ref={selected === h.id ? on : undefined} type="button" role="radio" aria-checked={selected === h.id} className={selected === h.id ? 'on' : ''} disabled={h.disabled} onClick={() => onPick(h.id)}>
-          <span className="travel-home-icon"><Emoji char={h.icon} size="1em" /></span>
-          <span className="travel-home-text"><b>{h.name}</b><small className={h.tag ? 'warn' : ''}>{h.tag || h.where}</small></span>
+          {h.pic}
+          <span className="hm-strip-text">
+            <b>{h.name}</b>
+            <small>{h.where}</small>
+            <small className={`tag ${h.tag ? 'warn' : h.status ? 'home' : ''}`}>{h.tag || h.status || ' '}</small>
+          </span>
         </button>
       ))}
     </div>
@@ -54,6 +62,8 @@ export function TravelPicker() {
   const lease = useGame((s) => s.lease);
   const origin = useGame((s) => s.origin);
   const usual = useGame((s) => ownHouseOf(s)?.id ?? null);
+  const homePropertyId = useGame((s) => s.homePropertyId);
+  const myListings = useRentals((s) => s.mine);
   // Only the estates of the city you are in: the others are a flight away.
   const city = useGame((s) => s.destinationId);
   const REGIONS = cityEstates(city);
@@ -71,7 +81,7 @@ export function TravelPicker() {
   const [picked, setPicked] = useState<string | null>(null);
   // Which home to go to (null = the usual one).
   const [homeId, setHomeId] = useState<string | null>(null);
-  useEffect(() => { setPicked(null); setHomeId(null); }, [trip]);
+  useEffect(() => { setPicked(null); setHomeId(trip?.kind === 'home' ? trip.home ?? null : null); }, [trip]);
   if (!trip) return null;
 
   const isHome = trip.kind === 'home';
@@ -97,24 +107,28 @@ export function TravelPicker() {
     ...properties.filter(isComplete).map((p) => {
       const let_ = p.rented || rentedOut.includes(p.id);
       const at = away(estateCity(p.region));
+      const tenant = myListings.find((l) => l.propertyId === p.id && l.tenant);
       return {
         id: p.id,
         icon: DESIGN_BY_ID[p.design ?? '']?.icon ?? '🏠',
-        name: DESIGN_BY_ID[p.design ?? '']?.name ?? 'House',
-        where: `${at.in}${REGION_BY_ID[p.region]?.name ?? 'Estate'} · Estate ${sectionOf(p.slot ?? 0) + 1}`,
-        tag: let_ ? 'Rented out' : at.stuck ? 'Another city' : '',
+        name: houseTitle(p),
+        // Estate and plot, the city when it's not this one, and the design under a name you gave it.
+        where: [`${REGION_BY_ID[p.region]?.name ?? 'Estate'} ${sectionOf(p.slot ?? 0) + 1} · Plot ${((p.slot ?? 0) % CAP) + 1}`, at.away ? cityState(at.city) : null, p.name ? DESIGN_BY_ID[p.design ?? '']?.name : null].filter(Boolean).join(' · '),
+        tag: let_ ? (tenant ? (tenant.npc ? `Let to ${tenant.tenant}` : `Rented to @${tenant.tenant}`) : 'Rented out') : at.stuck ? 'Another city' : '',
+        status: p.id === homePropertyId ? '🏠 Living here' : undefined,
         disabled: let_ || at.stuck,
         km: estateKm(sectionOf(p.slot ?? 0)),
+        pic: <PropertyThumb p={p} />,
         ...at,
       };
     }),
     ...(lease ? [away(estateCity(lease.region))].map((at) => (
       // Nobody is charged for the ride to a rented house once in its city.
-      { id: 'lease', icon: DESIGN_BY_ID[lease.design]?.icon ?? '🏠', name: DESIGN_BY_ID[lease.design]?.name ?? 'Rented house', where: `${at.in}${REGION_BY_ID[lease.region]?.name ?? 'Estate'} · rented from @${lease.ownerUsername}`, tag: at.stuck ? 'Another city' : '', disabled: at.stuck, km: at.away ? 0 : homeTripKm(useGame.getState()), ...at }
+      { id: 'lease', icon: DESIGN_BY_ID[lease.design]?.icon ?? '🏠', name: DESIGN_BY_ID[lease.design]?.name ?? 'Rented house', where: `${at.in}${REGION_BY_ID[lease.region]?.name ?? 'Estate'} · rented from @${lease.ownerUsername}`, tag: at.stuck ? 'Another city' : '', status: '🔑 Your rental', disabled: at.stuck, km: at.away ? 0 : homeTripKm(useGame.getState()), pic: <OtherThumb id={lease.propertyId} design={lease.design} />, ...at }
     )) : []),
     ...(!usual && !lease && origin !== 'almajiri' ? [away(homeState)].map((at) => (
       // You land in your own state at the government house's door.
-      { id: 'gov', icon: '🏚️', name: 'Government house', where: `${regionOf(homeState).name} town`, tag: at.stuck ? 'Another city' : '', disabled: at.stuck, km: at.away ? kmBetween(startDoor(homeState, homeState), regionPlace(homeState, 'home')?.door ?? startDoor(homeState, homeState)) : homeTripKm(useGame.getState()), ...at }
+      { id: 'gov', icon: '🏚️', name: 'Government house', where: `${regionOf(homeState).name} town`, tag: at.stuck ? 'Another city' : '', pic: <OtherThumb id="gov" design="starter" />, disabled: at.stuck, km: at.away ? kmBetween(startDoor(homeState, homeState), regionPlace(homeState, 'home')?.door ?? startDoor(homeState, homeState)) : homeTripKm(useGame.getState()), ...at }
     )) : []),
   ].sort((a, b) => Number(a.disabled) - Number(b.disabled)); // the ones you can't go to sit at the far end
   const home = homes.find((h) => h.id === homeId && !h.disabled) ?? homes.find((h) => h.id === (usual ?? (lease ? 'lease' : 'gov'))) ?? homes.find((h) => !h.disabled) ?? null;

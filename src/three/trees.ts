@@ -271,14 +271,14 @@ function crown(m: Mesher, l: Look, pal: Leaf, c: V3, size: V3, n: number, lumpR:
   const y0 = c[1] - size[1], y1 = c[1] + size[1];
   const tone = (ny: number, h: number, out: Color) => leafTone(l, pal, ny, h, out);
   // The core fills the middle so there are no holes from above.
-  lump(m, l, [c[0], c[1], c[2]], [size[0] * 0.78, size[1] * 0.8, size[2] * 0.78], tone, y0, y1, detail);
+  lump(m, l, [c[0], c[1], c[2]], [size[0] * 0.78, size[1] * 0.8, size[2] * 0.78], tone, y0, y1, l.low ? 0 : detail);
   const a0 = l.rand() * Math.PI * 2;
   for (let i = 0; i < n; i++) {
     const a = a0 + (i / n) * Math.PI * 2 + (l.rand() - 0.5) * 0.6;
     const up = (l.rand() - 0.35) * 0.9 * flat;
     const ring = Math.sqrt(Math.max(0, 1 - up * up));
     const k = lumpR * (0.8 + l.rand() * 0.4);
-    lump(m, l, [c[0] + Math.cos(a) * size[0] * 0.62 * ring, c[1] + up * size[1] * 0.65, c[2] + Math.sin(a) * size[2] * 0.62 * ring], [k, k * (0.75 + 0.2 * flat), k], tone, y0, y1, l.low ? 0 : detail > 0 && i % 2 ? 1 : 0);
+    lump(m, l, [c[0] + Math.cos(a) * size[0] * 0.62 * ring, c[1] + up * size[1] * 0.65, c[2] + Math.sin(a) * size[2] * 0.62 * ring], [k, k * (0.75 + 0.2 * flat), k], tone, y0, y1, 0);
   }
 }
 
@@ -309,7 +309,7 @@ const mango: Build = (m, l, pi) => {
   crown(m, l, pal, [0, 0.58, 0], [0.52, 0.34, 0.52], l.low ? 4 : 8, 0.24, 1, 0.7);
   if (!l.low) {
     const tone = (ny: number, h: number, o: Color) => leafTone(l, pal, ny, h, o);
-    lump(m, l, [0.05, 0.84, -0.04], [0.3, 0.16, 0.3], tone, 0.24, 0.94, 1);
+    lump(m, l, [0.05, 0.84, -0.04], [0.3, 0.16, 0.3], tone, 0.24, 0.94, 0);
   }
 };
 
@@ -317,7 +317,7 @@ const coconut: Build = (m, l, pi) => {
   const pal = COCO[pi % COCO.length];
   // A slim trunk that curves as it climbs: a lean that grows towards the top.
   const lean = 0.12 + l.rand() * 0.16;
-  const n = l.low ? 3 : 9;
+  const n = l.low ? 3 : 6;
   const pts: Vector3[] = [];
   for (let i = 1; i <= n; i++) {
     const t = i / n;
@@ -326,19 +326,19 @@ const coconut: Build = (m, l, pi) => {
   trunk(m, pts, 0.05, 0.034, l.low ? 4 : 5, PALM_BARK, 1.6);
   const top = pts[pts.length - 1];
   const head = P(top.x, top.y + 0.02, top.z);
-  const fronds = l.low ? 6 : 12;
+  const fronds = l.low ? 6 : 10;
   const a0 = l.rand() * Math.PI * 2;
   for (let i = 0; i < fronds; i++) {
     const a = a0 + (i / fronds) * Math.PI * 2 + (l.rand() - 0.5) * 0.4;
     // Young fronds stand up in the middle; the old ones arch right over.
     const young = i % 3 === 0;
-    frond(m, l, head, a, young ? 0.46 : 0.6 + l.rand() * 0.1, 0.1, young ? 0.95 : 0.45, young ? 0.5 : 1.2, pal, l.low ? 2 : 4);
+    frond(m, l, head, a, young ? 0.46 : 0.6 + l.rand() * 0.1, 0.1, young ? 0.95 : 0.45, young ? 0.5 : 1.2, pal, l.low ? 2 : 3);
   }
   if (!l.low) {
     // A dead frond hanging down the trunk, and a bunch of nuts under the crown.
     frond(m, l, P(head.x, head.y - 0.04, head.z), a0 + 0.3, 0.38, 0.05, -0.6, 0.6, DEAD, 3);
-    for (let i = 0; i < 4; i++) {
-      const a = a0 + i * 1.7;
+    for (let i = 0; i < 3; i++) {
+      const a = a0 + i * 2.1;
       lump(m, l, [head.x + Math.cos(a) * 0.05, head.y - 0.06 - (i & 1) * 0.03, head.z + Math.sin(a) * 0.05], [0.035, 0.04, 0.035], (_ny, _h, o) => o.copy(NUTS[i & 1]), 0, 1, 0, 0.1);
     }
   }
@@ -347,27 +347,27 @@ const coconut: Build = (m, l, pi) => {
 const oilpalm: Build = (m, l, pi) => {
   const pal = OILPALM[pi % OILPALM.length];
   const lean = (l.rand() - 0.5) * 0.08;
-  const n = l.low ? 2 : 7;
+  const n = l.low ? 2 : 5;
   const pts: Vector3[] = [];
   for (let i = 1; i <= n; i++) pts.push(P(lean * (i / n), 0.72 * (i / n), 0));
   // Rough with the stubs of old fronds: every other ring swells.
-  trunk(m, pts, 0.075, 0.07, l.low ? 4 : 6, OIL_BARK, 1.45, l.low ? 0 : 0.28);
+  trunk(m, pts, 0.075, 0.07, l.low ? 4 : 5, OIL_BARK, 1.45, l.low ? 0 : 0.28);
   const top = pts[pts.length - 1];
   const head = P(top.x, top.y + 0.02, top.z);
-  const fronds = l.low ? 7 : 16;
+  const fronds = l.low ? 7 : 13;
   const a0 = l.rand() * Math.PI * 2;
   for (let i = 0; i < fronds; i++) {
     const a = a0 + i * 2.399 + (l.rand() - 0.5) * 0.3;
     // A full crown: an upright inner ring and a skirt of fronds arching out and down.
     const inner = i % 2 === 0;
-    frond(m, l, head, a, inner ? 0.5 : 0.6, 0.11, inner ? 1.05 : 0.6, inner ? 0.75 : 1.15, pal, l.low ? 2 : 4);
+    frond(m, l, head, a, inner ? 0.5 : 0.6, 0.11, inner ? 1.05 : 0.6, inner ? 0.75 : 1.15, pal, l.low ? 2 : 3);
   }
   if (!l.low) lump(m, l, [head.x, head.y - 0.03, head.z], [0.08, 0.06, 0.08], (ny, h, o) => leafTone(l, pal, ny, h, o).multiplyScalar(0.8), 0, 1, 0);
 };
 
 const baobab: Build = (m, l, pi) => {
   const pal = BAOBAB[pi % BAOBAB.length];
-  const seg = l.low ? 6 : 9;
+  const seg = l.low ? 6 : 8;
   // The bottle: swelling out above the root and narrowing to a flat top.
   const ys = [0, 0.14, 0.32, 0.5, 0.6];
   const rs = [0.3, 0.25, 0.27, 0.21, 0.16];

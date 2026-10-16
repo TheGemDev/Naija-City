@@ -2,6 +2,7 @@
 // one-tap style packs and interior designers for hire. Rules in game/cribs.ts, network in net/cribs.ts.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ITEMS, ITEM_LIST } from '../game/catalog';
 import { houseLayout, type HouseLayout, type PlacedItem } from '../game/grid';
 import { PAINT_COLOURS } from '../game/paint';
@@ -56,8 +57,10 @@ function useMyHouses() {
 function Confirm({ title, lines, total, ok, onOk, onCancel, busy }: { title: string; lines: ReactNode[]; total?: number; ok: string; onOk(): void; onCancel(): void; busy?: boolean }) {
   const money = useGame((s) => s.money);
   const short = total !== undefined && total > money;
-  return (
-    <div className="cb-confirm" role="dialog" aria-label={title}>
+  // Over the phone's screen when there is one, so it stays inside the phone; else over the page.
+  const screen = document.querySelector('.phone .screen');
+  const card = (
+    <div className={`cb-confirm${screen ? ' in-phone' : ''}`} role="dialog" aria-label={title}>
       <div className="cb-confirm-card">
         <b>{title}</b>
         <ul>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
@@ -72,6 +75,7 @@ function Confirm({ title, lines, total, ok, onOk, onCancel, busy }: { title: str
       </div>
     </div>
   );
+  return screen ? createPortal(card, screen) : card;
 }
 
 /* ---------- Score card ---------- */
@@ -163,7 +167,7 @@ function MyCrib() {
             {designName(house.design)}{house.city ? ` · ${cityName(house.city)}` : ''} · {house.items} pieces · {nairaShort(house.value)}
           </span>
           {house.rating
-            ? <span className="cb-hero-sub">⭐ {house.rating.avg} from {house.rating.n} visitor{house.rating.n === 1 ? '' : 's'} · style {house.base}{house.score !== house.base ? ` ${house.score > house.base ? '+' : '−'}${Math.abs(house.score - house.base)}` : ''}</span>
+            ? <span className="cb-hero-sub">⭐ {house.rating.avg} from {house.rating.n} visitor{house.rating.n === 1 ? '' : 's'}{house.score !== house.base ? ` (${house.score > house.base ? '+' : '−'}${Math.abs(house.score - house.base)})` : ''}</span>
             : <span className="cb-hero-sub">No visitor ratings yet. Invite people round!</span>}
         </span>
       </div>

@@ -37,6 +37,7 @@ import { Mugshot, MugshotShare } from './Mugshot';
 import { Poster } from './PlayerName';
 import { shareLink, tweetLink } from '../net/deeplink';
 import { Emoji } from './Icons';
+import { DailyTab, DispatchTile, FarmTab, FreelanceTab, HUSTLE_TABS, type HustleTab } from './Hustles';
 
 function useNow(ms = 1000) {
   const [now, setNow] = useState(Date.now());
@@ -352,7 +353,7 @@ export function HustleApp() {
   const now = useNow(5000);
   const e = liveEvent(now, useGame((s) => s.destinationId));
   const scarcity = e.active && e.def.id === 'fuel';
-  const [tab, setTab] = useState<'drive' | 'fuel'>('drive');
+  const [tab, setTab] = useState<HustleTab>('daily');
   const durbar = e.active && e.def.id === 'durbar';
   const go = (fn: () => void) => {
     closePhone();
@@ -366,14 +367,18 @@ export function HustleApp() {
         <small>{stats.trips ?? 0} trips · {naira(stats.fares ?? 0)} in fares · {stats.escapes ?? 0} checkpoint escapes</small>
       </div>
       <div className="tabs">
-        <button className={tab === 'drive' ? 'on' : ''} onClick={() => setTab('drive')}>🚗 Drive</button>
-        <button className={tab === 'fuel' ? 'on' : ''} onClick={() => setTab('fuel')}>⛽ Fuel{scarcity ? ' · SCARCITY' : ''}</button>
+        {HUSTLE_TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}{t.id === 'fuel' && scarcity ? ' · SCARCITY' : ''}</button>
+        ))}
       </div>
+      {tab === 'daily' && <DailyTab />}
+      {tab === 'freelance' && <FreelanceTab />}
+      {tab === 'farm' && <FarmTab />}
       {tab === 'drive' && (
       <>
       <div className="tile">
         <span className="tile-icon">🛺</span>
-        <span className="tile-info"><b>Keke route</b><small>Rent for {naira(RENTAL.keke)} at {placeIn(useGame.getState().destinationId, 'motorpark')?.name ?? 'the motor park'} · up to ₦4k a trip</small></span>
+        <span className="tile-info"><b>Keke route</b><small>Rent for {naira(RENTAL.keke)} at {placeIn(useGame.getState().destinationId, 'motorpark')?.name ?? 'the motor park'} · up to ₦6k a trip</small></span>
         <button className="btn sm go" disabled={money < RENTAL.keke} onClick={() => go(() => startDrive('keke', { gig: 'keke' }))}>Start</button>
       </div>
       <div className="tile">
@@ -381,6 +386,7 @@ export function HustleApp() {
         <span className="tile-info"><b>Okada route</b><small>Rent for {naira(RENTAL.okada)} · faster, cheaper fares</small></span>
         <button className="btn sm go" disabled={money < RENTAL.okada || okadaBanned(useGame.getState().destinationId)} onClick={() => go(() => startDrive('okada', { gig: 'okada' }))}>{okadaBanned(useGame.getState().destinationId) ? 'Banned' : 'Start'}</button>
       </div>
+      <DispatchTile onGo={closePhone} />
       {ownedCars.map((id) => (
         <div key={id} className="tile">
           <span className="tile-icon">🚗</span>
@@ -896,6 +902,7 @@ export function PlaceEvents() {
   if (insideId === 'motorpark') {
     buttons.push({ icon: '🛺', label: `Rent a keke · ${naira(RENTAL.keke)}`, sub: 'Drive passengers for fares', disabled: money < RENTAL.keke, onClick: () => startDrive('keke', { gig: 'keke' }) });
     buttons.push({ icon: '🏍️', label: `Rent an okada · ${naira(RENTAL.okada)}`, sub: okadaBanned(g.destinationId) ? 'Okada is banned in this city' : undefined, disabled: money < RENTAL.okada || okadaBanned(g.destinationId), onClick: () => startDrive('okada', { gig: 'okada' }) });
+    buttons.push({ icon: '📦', label: `Dispatch bike · ${naira(RENTAL.dispatch)}`, sub: 'Deliver food and parcels across town', disabled: money < RENTAL.dispatch, onClick: () => startDrive('okada', { gig: 'dispatch' }) });
     buttons.push({ icon: '🛢️', label: `Black-market fuel · ${naira(blackMarketPrice())}`, sub: `${Math.round(FUEL.raidChance * 100)}% raid risk`, danger: true, disabled: money < blackMarketPrice(), onClick: () => g.buyFuel(true) });
     if (live('fuel')) buttons.push({ icon: '💰', label: `Sell a jerrycan · ${naira(FUEL.scarcitySell)}`, sub: 'Desperate drivers are queueing', disabled: g.fuelCans <= 0, onClick: () => g.sellFuel() });
     buttons.push({ icon: '🕴🏾', label: 'Godfather business', sub: 'Phone → Area', onClick: () => g.setPanel('phone') });

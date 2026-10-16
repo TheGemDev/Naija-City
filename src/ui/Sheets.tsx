@@ -151,7 +151,7 @@ export function BuyPanel() {
     { key: 'finishes', icon: '✨', label: 'Finishes', sub: 'Floors, walls, lights' },
   ];
   return (
-    <div className={`sheet catalogue ${hidden ? 'collapsed' : ''}`}>
+    <div className={`sheet catalogue ${hidden ? 'collapsed' : ''} ${tab === 'finishes' ? 'on-finishes' : ''}`}>
       {/* Head and the furniture type filter stay put; only .cat-scroll moves. */}
       <div className="cat-fixed">
       <div className="sheet-head">

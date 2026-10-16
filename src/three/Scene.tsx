@@ -12,6 +12,7 @@ import { INTERIORS } from '../game/interiors';
 import { PARKING_DEPTH, World } from './World';
 import { StreetSceneView } from './StreetScene';
 import { HouseStaff } from './HouseStaff';
+import { Children } from './Children';
 import { houseLayoutForDesign } from '../game/grid';
 import { Items, PlacementGhost } from './Items';
 import { Avatar } from './Avatar';
@@ -414,6 +415,7 @@ function Area() {
     <>
       <World design={design} walls={walls} paint={paint} />
       <HouseStaff staff={homeStaff} design={design} />
+      <Children design={design} walls={walls} />
     </>
   );
 }

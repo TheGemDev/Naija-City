@@ -3,6 +3,7 @@
 
 import type { FirebaseUser } from './auth';
 import { sniff } from './media';
+import { notifyPlayer } from './shards';
 import { DAY_MS } from '../src/game/community';
 
 /** How long a snap lasts. After this it is hidden at once and deleted for good within the hour. */
@@ -17,10 +18,33 @@ const COMMENT_COOLDOWN_MS = 5_000;
 const COMMENT_WINDOW = 200;
 /** Most snaps one player can have up at a time. */
 const MAX_LIVE = 30;
+/** Most friends one snap can be sent straight to. */
+const MAX_TO = 20;
+/** Who a snap is for (migrations/0106): everyone (friends' stories and Spotlight), friends' stories only, or only the
+ *  friends it was sent to. A snap posted with no audience given goes to everyone, as every snap did before. */
+const EVERYONE = 0;
+const DIRECT = 2;
+/** Streak days run on Lagos time (UTC+1), so a streak day ends at midnight in Nigeria. */
+const streakDay = (t: number) => Math.floor((t + 3_600_000) / DAY_MS);
+const pair = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x]);
 const TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png' };
 
 /** Snap pictures are kept apart from other uploads (s/ not u/), so sweeping them can never touch a profile or ad picture. */
 export const SNAP_KEY = /^s\/[A-Za-z0-9_-]{1,128}\/[0-9a-f-]{36}\.(png|jpg|webp)$/;
+
+/** Whether player ?1 may see snap `s`: anyone for a snap to everyone, friends for a friends-only one, and only the
+ *  friends it was sent to for a direct one. Its owner always can. */
+const VISIBLE = `(s.audience = 0 OR s.uid = ?1
+  OR (s.audience = 1 AND EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted' AND fr.a = MIN(s.uid, ?1) AND fr.b = MAX(s.uid, ?1)))
+  OR EXISTS (SELECT 1 FROM snap_sends d WHERE d.snap_id = s.id AND d.to_uid = ?1))`;
+/** The counts and my own marks on a snap, for every list that shows one (?1 is me). */
+const COUNTS = `(SELECT COUNT(*) FROM snap_likes l WHERE l.snap_id = s.id) AS likes,
+  EXISTS (SELECT 1 FROM snap_likes l WHERE l.snap_id = s.id AND l.uid = ?1) AS liked,
+  (SELECT COUNT(*) FROM snap_comments c WHERE c.snap_id = s.id) AS comments,
+  (SELECT COUNT(*) FROM snap_views v WHERE v.snap_id = s.id) AS views,
+  (s.uid = ?1 OR EXISTS (SELECT 1 FROM snap_views v WHERE v.snap_id = s.id AND v.uid = ?1)) AS seen`;
+type SnapRow = { id: number; uid: string; media_key: string; caption: string; at: number; username: string | null; likes: number; liked: number; comments: number; views: number; seen: number; audience: number };
+const view = ({ media_key, liked, seen, ...s }: SnapRow) => ({ ...s, liked: !!liked, seen: !!seen, url: `/api/media/${media_key}`, until: s.at + SNAP_KEEP_MS });
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -48,6 +72,27 @@ export async function pruneSnaps(env: Env, now: number) {
   if (!results.length) return;
   await env.MEDIA.delete(results.map((r) => r.media_key));
   await env.DB.prepare('DELETE FROM snaps WHERE id <= ? AND created_at < ?').bind(results[results.length - 1].id, now - SNAP_KEEP_MS).run();
+  // Streaks nobody has kept up for days are gone for good; there is nothing left to show for them.
+  const old = streakDay(now) - 3;
+  await env.DB.prepare('DELETE FROM snap_streaks WHERE day < ?1 AND a_day < ?1 AND b_day < ?1').bind(old).run();
+}
+
+/** A snap from `me` to friend `to` today: marks my side, and when both sides have sent one today the streak grows a day
+ *  (or starts again at one, if a day was missed). */
+function streakStmts(db: D1Database, me: string, to: string, now: number) {
+  const [a, b] = pair(me, to);
+  const d = streakDay(now);
+  const mineA = me === a;
+  return [
+    db.prepare(
+      `INSERT INTO snap_streaks (a, b, a_day, b_day) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(a, b) DO UPDATE SET a_day = MAX(a_day, excluded.a_day), b_day = MAX(b_day, excluded.b_day)`,
+    ).bind(a, b, mineA ? d : -1, mineA ? -1 : d),
+    db.prepare(
+      `UPDATE snap_streaks SET count = CASE WHEN day = ?3 - 1 THEN count + 1 ELSE 1 END, day = ?3
+       WHERE a = ?1 AND b = ?2 AND a_day = ?3 AND b_day = ?3 AND day < ?3`,
+    ).bind(a, b, d),
+  ];
 }
 
 export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, path: string, url: URL): Promise<Response | null> {
@@ -58,23 +103,56 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
 
   if (path === '/api/snaps' && req.method === 'GET') {
     const friends = url.searchParams.get('scope') === 'friends';
-    const before = Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
+    // Spotlight's "Top" is the day's most liked, then most seen: one page, no paging back.
+    const top = !friends && url.searchParams.get('sort') === 'top';
+    const before = top ? Number.MAX_SAFE_INTEGER : Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
     const { results } = await db
       .prepare(
-        `SELECT s.id, s.uid, s.media_key, s.caption, s.created_at AS at, p.username,
-                (SELECT COUNT(*) FROM snap_likes l WHERE l.snap_id = s.id) AS likes,
-                EXISTS (SELECT 1 FROM snap_likes l WHERE l.snap_id = s.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM snap_comments c WHERE c.snap_id = s.id) AS comments
+        `SELECT s.id, s.uid, s.media_key, s.caption, s.created_at AS at, s.audience, p.username, ${COUNTS}
          FROM snaps s LEFT JOIN players p ON p.uid = s.uid
          WHERE s.id < ?2 AND s.created_at >= ?3
-           ${friends ? `AND (s.uid = ?1 OR EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted'
-                AND fr.a = MIN(s.uid, ?1) AND fr.b = MAX(s.uid, ?1)))` : 'AND ?1 IS NOT NULL'}
-         ORDER BY s.id DESC LIMIT ?4`,
+           ${friends ? `AND s.audience < ${DIRECT} AND (s.uid = ?1 OR EXISTS (SELECT 1 FROM friendships fr WHERE fr.status = 'accepted'
+                AND fr.a = MIN(s.uid, ?1) AND fr.b = MAX(s.uid, ?1)))` : `AND s.audience = ${EVERYONE} AND ?1 IS NOT NULL`}
+         ORDER BY ${top ? 'likes DESC, views DESC, s.id DESC' : 's.id DESC'} LIMIT ?4`,
       )
       .bind(me, before, now - SNAP_KEEP_MS, SNAP_PAGE)
-      .all<{ id: number; uid: string; media_key: string; caption: string; at: number; username: string | null; likes: number; liked: number; comments: number }>();
-    const snaps = results.map(({ media_key, liked, ...s }) => ({ ...s, liked: !!liked, url: `/api/media/${media_key}`, until: s.at + SNAP_KEEP_MS }));
-    return json({ snaps, page: SNAP_PAGE });
+      .all<SnapRow>();
+    return json({ snaps: results.map(view), page: top ? Number.MAX_SAFE_INTEGER : SNAP_PAGE });
+  }
+
+  /** The Chat tab: snaps friends sent me (a picture only until it is opened), the last one I sent each friend, and streaks. */
+  if (path === '/api/snaps/chats' && req.method === 'GET') {
+    const since = now - SNAP_KEEP_MS;
+    const today = streakDay(now);
+    const [received, sent, streaks] = await Promise.all([
+      db
+        .prepare(
+          `SELECT s.id, s.uid, p.username, s.caption, s.created_at AS at, d.opened_at AS opened, s.media_key
+           FROM snap_sends d JOIN snaps s ON s.id = d.snap_id LEFT JOIN players p ON p.uid = s.uid
+           WHERE d.to_uid = ?1 AND s.created_at >= ?2 ORDER BY d.snap_id DESC LIMIT 100`,
+        )
+        .bind(me, since)
+        .all<{ id: number; uid: string; username: string | null; caption: string; at: number; opened: number | null; media_key: string }>(),
+      db
+        .prepare(
+          `SELECT d.to_uid AS uid, s.created_at AS at, d.opened_at AS opened
+           FROM snaps s JOIN snap_sends d ON d.snap_id = s.id
+           WHERE s.uid = ?1 AND s.created_at >= ?2 ORDER BY s.id DESC LIMIT 200`,
+        )
+        .bind(me, since)
+        .all<{ uid: string; at: number; opened: number | null }>(),
+      db
+        .prepare('SELECT a, b, count, day FROM snap_streaks WHERE (a = ?1 OR b = ?1) AND day >= ?2 AND count > 0')
+        .bind(me, today - 1)
+        .all<{ a: string; b: string; count: number; day: number }>(),
+    ]);
+    return json({
+      // View once: an opened snap's picture is not handed out again.
+      received: received.results.map(({ media_key, ...r }) => ({ ...r, url: r.opened ? null : `/api/media/${media_key}` })),
+      sent: sent.results,
+      // `ending`: the streak is from yesterday and dies at midnight unless both sides send one today.
+      streaks: streaks.results.map((r) => ({ uid: r.a === me ? r.b : r.a, count: r.count, ending: r.day < today })),
+    });
   }
 
   /** POST /api/snaps?caption=… (body = the picture, content-type = its type). */
@@ -95,18 +173,40 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
     if (bytes.length === 0 || bytes.length > MAX_BYTES) return err(413, 'That picture is too big');
     if (!sniff(type, bytes)) return err(415, 'That file is not a real ' + ext.toUpperCase());
     const caption = (url.searchParams.get('caption') ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_CAPTION);
+    // Who it goes to: ?audience=0|1|2 and ?to=<uid>,<uid> (friends only; anyone else on the list is dropped).
+    const audience = Math.max(0, Math.min(DIRECT, Math.floor(Number(url.searchParams.get('audience')) || 0)));
+    const asked = [...new Set((url.searchParams.get('to') ?? '').split(',').map((u) => u.trim()).filter((u) => /^[\w-]{1,128}$/.test(u) && u !== me))].slice(0, MAX_TO);
+    let to: string[] = [];
+    if (asked.length) {
+      const { results } = await db
+        .prepare(
+          `SELECT CASE WHEN a = ?1 THEN b ELSE a END AS uid FROM friendships
+           WHERE status = 'accepted' AND ((a = ?1 AND b IN (SELECT value FROM json_each(?2))) OR (b = ?1 AND a IN (SELECT value FROM json_each(?2))))`,
+        )
+        .bind(me, JSON.stringify(asked))
+        .all<{ uid: string }>();
+      to = results.map((r) => r.uid);
+    }
+    if (audience === DIRECT && !to.length) return err(400, 'Pick at least one friend to send it to');
     const key = `s/${me}/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: type } });
     const row = await db
-      .prepare('INSERT INTO snaps (uid, media_key, caption, created_at) VALUES (?, ?, ?, ?) RETURNING id')
-      .bind(me, key, caption, now)
+      .prepare('INSERT INTO snaps (uid, media_key, caption, created_at, audience) VALUES (?, ?, ?, ?, ?) RETURNING id')
+      .bind(me, key, caption, now, audience)
       .first<{ id: number }>()
       .catch(() => null);
     if (!row) {
       await env.MEDIA.delete(key);
       return err(500, 'Could not post that snap');
     }
-    return json({ ok: true, id: row.id, until: now + SNAP_KEEP_MS });
+    if (to.length) {
+      await db.batch([
+        ...to.map((uid) => db.prepare('INSERT OR IGNORE INTO snap_sends (snap_id, to_uid) VALUES (?, ?)').bind(row.id, uid)),
+        ...to.flatMap((uid) => streakStmts(db, me, uid, now)),
+      ]);
+      await Promise.all(to.map((uid) => notifyPlayer(env, uid, { t: 'snap', from: me, username: p.username })));
+    }
+    return json({ ok: true, id: row.id, until: now + SNAP_KEEP_MS, sent: to.length });
   }
 
   const one = path.match(/^\/api\/snaps\/(\d+)$/);
@@ -114,17 +214,13 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
   if (one && req.method === 'GET') {
     const s = await db
       .prepare(
-        `SELECT s.id, s.uid, s.media_key, s.caption, s.created_at AS at, p.username,
-                (SELECT COUNT(*) FROM snap_likes l WHERE l.snap_id = s.id) AS likes,
-                EXISTS (SELECT 1 FROM snap_likes l WHERE l.snap_id = s.id AND l.uid = ?1) AS liked,
-                (SELECT COUNT(*) FROM snap_comments c WHERE c.snap_id = s.id) AS comments
-         FROM snaps s LEFT JOIN players p ON p.uid = s.uid WHERE s.id = ?2 AND s.created_at >= ?3`,
+        `SELECT s.id, s.uid, s.media_key, s.caption, s.created_at AS at, s.audience, p.username, ${COUNTS}
+         FROM snaps s LEFT JOIN players p ON p.uid = s.uid WHERE s.id = ?2 AND s.created_at >= ?3 AND ${VISIBLE}`,
       )
       .bind(me, Number(one[1]), now - SNAP_KEEP_MS)
-      .first<{ id: number; uid: string; media_key: string; caption: string; at: number; username: string | null; likes: number; liked: number; comments: number }>();
+      .first<SnapRow>();
     if (!s) return err(404, 'That snap is gone');
-    const { media_key, liked, ...rest } = s;
-    return json({ snap: { ...rest, liked: !!liked, url: `/api/media/${media_key}`, until: s.at + SNAP_KEEP_MS } });
+    return json({ snap: view(s) });
   }
   if (one && req.method === 'DELETE') {
     // Its likes and comments go with it (snaps_cascade trigger).
@@ -138,9 +234,34 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
   if (like && req.method === 'POST') {
     const id = Number(like[1]);
     const had = await db.prepare('DELETE FROM snap_likes WHERE snap_id = ? AND uid = ? RETURNING snap_id').bind(id, me).first();
-    if (!had) await db.prepare('INSERT OR IGNORE INTO snap_likes (snap_id, uid) SELECT id, ? FROM snaps WHERE id = ? AND created_at >= ?').bind(me, id, now - SNAP_KEEP_MS).run();
+    if (!had) await db.prepare(`INSERT OR IGNORE INTO snap_likes (snap_id, uid) SELECT s.id, ?1 FROM snaps s WHERE s.id = ?2 AND s.created_at >= ?3 AND ${VISIBLE}`).bind(me, id, now - SNAP_KEEP_MS).run();
     const n = await db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(uid = ?), 0) AS mine FROM snap_likes WHERE snap_id = ?').bind(me, id).first<{ n: number; mine: number }>();
     return json({ liked: !!n?.mine, likes: n?.n ?? 0 });
+  }
+
+  /** Opened a snap: one view per player (its owner's own never count), and a snap sent to me is now opened. */
+  const seen = path.match(/^\/api\/snaps\/(\d+)\/view$/);
+  if (seen && req.method === 'POST') {
+    const id = Number(seen[1]);
+    await db.batch([
+      db.prepare(`INSERT OR IGNORE INTO snap_views (snap_id, uid, at) SELECT s.id, ?1, ?3 FROM snaps s WHERE s.id = ?2 AND s.uid != ?1 AND s.created_at >= ?4 AND ${VISIBLE}`)
+        .bind(me, id, now, now - SNAP_KEEP_MS),
+      db.prepare('UPDATE snap_sends SET opened_at = ?3 WHERE snap_id = ?2 AND to_uid = ?1 AND opened_at IS NULL').bind(me, id, now),
+    ]);
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM snap_views WHERE snap_id = ?').bind(id).first<{ n: number }>();
+    return json({ ok: true, views: n?.n ?? 0 });
+  }
+  /** Who has seen my snap, newest first: only its owner may ask. */
+  const viewers = path.match(/^\/api\/snaps\/(\d+)\/views$/);
+  if (viewers && req.method === 'GET') {
+    const { results } = await db
+      .prepare(
+        `SELECT v.uid, p.username, v.at FROM snap_views v JOIN snaps s ON s.id = v.snap_id LEFT JOIN players p ON p.uid = v.uid
+         WHERE v.snap_id = ?1 AND s.uid = ?2 ORDER BY v.at DESC LIMIT 100`,
+      )
+      .bind(Number(viewers[1]), me)
+      .all<{ uid: string; username: string | null; at: number }>();
+    return json({ viewers: results });
   }
 
   const comments = path.match(/^\/api\/snaps\/(\d+)\/comments$/);
@@ -149,9 +270,9 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
       .prepare(
         `SELECT c.id, c.uid, c.text, c.created_at AS at, p.username
          FROM snap_comments c JOIN snaps s ON s.id = c.snap_id LEFT JOIN players p ON p.uid = c.uid
-         WHERE c.snap_id = ? AND s.created_at >= ? ORDER BY c.id ASC LIMIT ?`,
+         WHERE c.snap_id = ?2 AND s.created_at >= ?3 AND ${VISIBLE} ORDER BY c.id ASC LIMIT ?4`,
       )
-      .bind(Number(comments[1]), now - SNAP_KEEP_MS, COMMENT_WINDOW)
+      .bind(me, Number(comments[1]), now - SNAP_KEEP_MS, COMMENT_WINDOW)
       .all();
     return json({ comments: results });
   }
@@ -165,8 +286,8 @@ export async function handleSnaps(req: Request, env: Env, user: FirebaseUser, pa
     const text = (typeof b?.text === 'string' ? b.text : '').replace(/\s+/g, ' ').trim().slice(0, MAX_COMMENT);
     if (!text) return err(400, 'Say something');
     const target = await db
-      .prepare('SELECT (SELECT COUNT(*) FROM snap_comments c WHERE c.snap_id = s.id) AS n FROM snaps s WHERE s.id = ? AND s.created_at >= ?')
-      .bind(id, now - SNAP_KEEP_MS)
+      .prepare(`SELECT (SELECT COUNT(*) FROM snap_comments c WHERE c.snap_id = s.id) AS n FROM snaps s WHERE s.id = ?2 AND s.created_at >= ?3 AND ${VISIBLE}`)
+      .bind(me, id, now - SNAP_KEEP_MS)
       .first<{ n: number }>();
     if (!target) return err(404, 'That snap is gone');
     if (target.n >= COMMENT_WINDOW) return err(429, 'This snap has all the comments it can take');

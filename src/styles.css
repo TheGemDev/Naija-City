@@ -3102,3 +3102,59 @@ body.driving .placebar, body.driving .estatebar, body.driving .place-sheet { dis
   .decor-top button span { display: none; }
   .decor-top { gap: 4px; }
 }
+
+/* ── Finishes tab and colour picker (ui/Finishes.tsx) ── */
+.house-tab.tab-finishes { --tile-tint: #fdf4ff; --tile-accent: #a21caf; }
+.colour-picker { display: flex; flex-direction: column; gap: 6px; }
+.colour-picker .paint-row { gap: 6px; }
+.colour-picker .paint-row .paint-swatch { width: 30px; height: 30px; }
+.paint-swatch.custom { background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); color: #fff; font-weight: 900; font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,.5); display: grid; place-items: center; }
+.colour-name { color: var(--muted); font-size: 11px; font-weight: 700; }
+.custom-colour { display: flex; gap: 10px; align-items: stretch; padding: 8px; border-radius: 12px; background: rgba(var(--surface-rgb), 0.9); border: 1px solid rgba(var(--ink-rgb), 0.08); }
+.custom-preview { width: 54px; min-height: 54px; border-radius: 10px; border: 2px solid rgba(var(--ink-rgb), .15); flex: none; }
+.custom-sliders { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.custom-sliders label { display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.custom-sliders input[type=range] { -webkit-appearance: none; appearance: none; height: 12px; border-radius: 99px; width: 100%; margin: 0; }
+.custom-sliders input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #334155; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.custom-sliders input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #334155; }
+.custom-sliders .hex input { font: 700 13px ui-monospace, monospace; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(var(--ink-rgb), .15); background: var(--bg-ffffff); color: var(--ink); width: 100%; box-sizing: border-box; }
+.house-pane.finishes { gap: 8px; }
+.finish-parts { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.finish-parts button { flex: none; padding: 7px 12px; border-radius: 99px; font-size: 13px; font-weight: 800; background: var(--bg-f1f5f9); color: var(--ink); border: 1px solid transparent; }
+.finish-parts button.on { background: #1f2937; color: #fff; }
+.finish-hint { font-size: 13px; }
+.room-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.room-chips button { padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: rgba(var(--surface-rgb), .9); border: 1px solid rgba(var(--ink-rgb), .12); color: var(--ink); }
+.room-chips button.on { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.finish-group { display: flex; flex-direction: column; gap: 6px; }
+.finish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.finish-card { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 6px; border-radius: 12px; text-align: left; background: rgba(var(--surface-rgb), .92); border: 2px solid rgba(var(--ink-rgb), .08); color: var(--ink); cursor: pointer; min-width: 0; }
+.finish-card.on { border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,.25); }
+.finish-card.lux { background: linear-gradient(180deg, #fffbeb, rgba(var(--surface-rgb), .92)); }
+.finish-card b { font-size: 11px; line-height: 1.2; font-weight: 800; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.finish-card small { font-size: 11px; font-weight: 800; color: #15803d; }
+.finish-card em { font-size: 10px; font-style: normal; color: var(--muted); line-height: 1.2; }
+.finish-swatch { display: block; aspect-ratio: 1.4; border-radius: 8px; background-size: cover; border: 1px solid rgba(0,0,0,.08); }
+.finish-swatch.ceiling-plain { background: linear-gradient(180deg, #f4f1ea, #e8e3d8); }
+.finish-swatch.ceiling-pop { background: linear-gradient(180deg, #f7f5f0 0 22%, #e3ded2 22% 26%, #f7f5f0 26% 40%, #ffe7b8 40% 44%, #eeeae0 44%); }
+.finish-swatch.ceiling-pop_gold { background: linear-gradient(180deg, #f5efe0 0 22%, #c9a227 22% 27%, #f5efe0 27% 40%, #ffd98a 40% 44%, #ece4d0 44%); }
+.finish-reset { align-self: flex-start; }
+.finish-buy { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 14px; background: rgba(var(--surface-rgb), .97); box-shadow: 0 -4px 14px rgba(15,23,42,.12); border: 1px solid rgba(var(--ink-rgb), .08); }
+.finish-buy span { flex: 1; font-size: 13px; color: var(--ink); min-width: 0; }
+.finish-buy button { padding: 9px 14px; border-radius: 99px; font-weight: 800; font-size: 13px; background: var(--bg-f1f5f9); color: var(--ink); }
+.finish-buy button.go { background: #16a34a; color: #fff; }
+.finish-buy button:disabled { opacity: .5; }
+.mood-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.mood-card { display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; text-align: left; padding: 8px; border-radius: 12px; border: 2px solid rgba(var(--ink-rgb), .08); background: linear-gradient(135deg, rgba(var(--surface-rgb), .95), color-mix(in srgb, var(--mood) 22%, transparent)); color: var(--ink); }
+.mood-card.on { border-color: var(--mood); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mood) 35%, transparent); }
+.mood-icon { grid-row: span 2; font-size: 22px; text-align: center; }
+.mood-card b { font-size: 13px; }
+.mood-card small { font-size: 10.5px; color: var(--muted); line-height: 1.25; }
+.lamp-card .paint-row { gap: 6px; }
+.tone-chip { padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; border: 2px solid rgba(var(--ink-rgb), .12); background: linear-gradient(135deg, var(--tone), #fff 140%); color: #1f2937; }
+.tone-chip.rgb { background: linear-gradient(90deg, #ff4d4d, #ffd93d, #4dff88, #4dc3ff, #c44dff); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.tone-chip.on { border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,.25); }
+.lamp-level { display: grid; grid-template-columns: auto 1fr 38px; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.lamp-level input { width: 100%; }
+/* Keep the house in view above the Finishes tab, so a finish can be tried on live. */
+.sheet.catalogue.on-finishes { max-height: 42vh; }

@@ -11,10 +11,16 @@ import { HOUSEHOLD_STAFF, HOUSE_STAFF_ROLES, staffTheftChance, type HouseStaffRo
 import { GOV_WEEKLY_RENT } from '../game/store';
 import { leaveRental, listForRent, loadRentals, rentHouse, unlistRental, useRentals } from '../net/rentals';
 import {
-  builtOn, cityEstates, CONTRACTORS, costOf, DESIGN_BY_ID, DESIGNS, isComplete, landAuthority, LAND_RECLAIM_MINUTES, MATERIAL_BY_ID, materialPrice, PLOTS, REGION_BY_ID,
+  builtOn, cityEstates, CONTRACTORS, costOf, DESIGN_BY_ID, DESIGNS, extensionDesign, houseTitle, isComplete, landAuthority, LAND_RECLAIM_MINUTES, MATERIAL_BY_ID, materialPrice, PLOTS, REGION_BY_ID,
   PLAYER_RENT, remainingBuildMinutes, remainingStageMaterials, rentDue, rentPerDay, saleValue, weeklyRentOf, stageLabour, stageMaterials, STAGES, type Property,
   type RentalListing,
 } from '../game/property';
+import {
+  CARPORTS, EXTENSIONS, EXTERIOR_COLOURS, exteriorChangeCost, exteriorOf, extensionBlock, FENCES, GATES, layoutKey, PAVINGS, ROOFS, ROOF_FINISHES, ROOM_TYPE, ROOM_TYPES,
+  ROOM_NAME_MAX, YARD_ITEMS, exteriorPrice, type ExteriorChoice, type HouseExterior, type RoomType, type YardItem,
+} from '../game/exterior';
+import { houseLayoutForDesign } from '../game/grid';
+import { homeLines, OtherThumb, PropertyThumb, RenameHouse, useHomeStatus } from './homesKit';
 
 const ago = (at: number) => {
   const m = Math.floor((Date.now() - at) / 60_000);
@@ -34,64 +40,6 @@ export function openHouse(property: string | null = null) {
   useGame.getState().setPanel('phone');
 }
 
-/** The plot drawn as it stands: beacons on bare land, then foundation, walls, roof and a painted house. */
-export function SiteArt({ p, height = 120 }: { p: Property; height?: number }) {
-  const design = p.design ? DESIGN_BY_ID[p.design] : null;
-  const two = design?.floors === 2;
-  const wide = p.plot === 'double' ? 1.25 : p.plot === 'half' ? 0.8 : 1;
-  const w = 120 * wide;
-  const x0 = 120 - w / 2;
-  const ground = 92;
-  const wallH = two ? 52 : 30;
-  const done = p.stage;
-  const painted = done >= 4;
-  const wall = painted ? '#fde68a' : '#9ca3af';
-  return (
-    <svg viewBox="0 0 240 110" style={{ width: '100%', height, display: 'block', borderRadius: 14, background: 'linear-gradient(#bae6fd, #e0f2fe)' }} aria-hidden>
-      <rect x="0" y={ground} width="240" height="18" fill="#c98b5e" />
-      <rect x={x0 - 8} y={ground - 2} width={w + 16} height="4" fill="#b7794c" />
-      {/* Survey beacons at the corners */}
-      {[x0 - 6, x0 + w + 6].map((bx) => (
-        <rect key={bx} x={bx - 2} y={ground - 8} width="4" height="8" fill="#ef4444" />
-      ))}
-      {done >= 1 && <rect x={x0} y={ground - 5} width={w} height="5" fill="#6b7280" />}
-      {done >= 2 && (
-        <g>
-          <rect x={x0 + 4} y={ground - 5 - wallH} width={w - 8} height={wallH} fill={wall} />
-          {!painted &&
-            Array.from({ length: Math.floor(wallH / 6) }, (_, i) => (
-              <line key={i} x1={x0 + 4} x2={x0 + w - 4} y1={ground - 5 - i * 6} y2={ground - 5 - i * 6} stroke="#6b7280" strokeWidth="0.6" />
-            ))}
-          {two && <rect x={x0 + 4} y={ground - 5 - wallH / 2 - 1} width={w - 8} height="2" fill="#78716c" />}
-        </g>
-      )}
-      {done >= 2 && painted && (
-        <g>
-          <rect x={120 - 7} y={ground - 25} width="14" height="20" fill="#7c2d12" />
-          {[x0 + 14, x0 + w - 28].map((wx) => (
-            <rect key={wx} x={wx} y={ground - 24} width="14" height="10" fill="#38bdf8" stroke="#fff" strokeWidth="1.5" />
-          ))}
-          {two &&
-            [x0 + 14, 113, x0 + w - 28].map((wx) => <rect key={`u${wx}`} x={wx} y={ground - 5 - wallH + 8} width="14" height="10" fill="#38bdf8" stroke="#fff" strokeWidth="1.5" />)}
-        </g>
-      )}
-      {done >= 3 && (
-        <polygon points={`${x0 - 6},${ground - 5 - wallH} ${120},${ground - 5 - wallH - 22} ${x0 + w + 6},${ground - 5 - wallH}`} fill={painted ? '#b91c1c' : '#94a3b8'} />
-      )}
-      {done < 4 && done >= 1 && (
-        // Cement bags piled by the site while work goes on
-        <g>
-          <rect x={x0 + w + 10} y={ground - 10} width="14" height="10" fill="#d6d3d1" stroke="#a8a29e" />
-          <rect x={x0 + w + 13} y={ground - 16} width="10" height="6" fill="#d6d3d1" stroke="#a8a29e" />
-        </g>
-      )}
-      {painted && <text x={x0 - 22} y={ground - 2} fontSize="22">🌴</text>}
-      {p.building && <text x={x0 + w + 12} y={ground - 24} fontSize="16">👷🏾</text>}
-      {!design && <text x="120" y="55" textAnchor="middle" fontSize="11" fill="#475569" fontWeight="700">Bare land · pick a design</text>}
-    </svg>
-  );
-}
-
 function status(p: Property, minutes: number) {
   if (p.building) {
     const left = Math.max(0, p.building.doneAt - minutes);
@@ -108,6 +56,211 @@ function status(p: Property, minutes: number) {
     return { text: [built && `Built ${built}`, p.rented && `Rented · ${naira(rentPerDay(p))}/day`].filter(Boolean).join(' · '), pct: 100 };
   }
   return { text: `Ready for ${STAGES[p.stage].name.toLowerCase()}`, pct: (p.stage / STAGES.length) * 100 };
+}
+
+/** What is happening at the house, as the chip over its picture. */
+function StatusChip({ p }: { p: Property }) {
+  const st = useHomeStatus(p);
+  return <span className={`hm-chip ${st.tone}`}>{st.text}</span>;
+}
+
+/** One house in the list: its picture, name, address, what it is and what it's worth. */
+function HomeCard({ p, minutes, onOpen }: { p: Property; minutes: number; onOpen: () => void }) {
+  const lines = homeLines(p);
+  const st = status(p, minutes);
+  const design = p.design ? DESIGN_BY_ID[p.design] : null;
+  return (
+    <div className="hm-card" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}>
+      <div className="hm-card-pic">
+        <PropertyThumb p={p} />
+        <StatusChip p={p} />
+        <span className="hm-worth">{naira(saleValue(p))}</span>
+      </div>
+      <div className="hm-card-body">
+        <RenameHouse p={p} />
+        {lines.design && <span className="hm-sub">{lines.design}</span>}
+        <span className="hm-where">📍 {lines.estate}</span>
+        <span className="hm-sub">{lines.city}</span>
+        <div className="hm-facts">
+          {design ? <span>{design.icon} {lines.beds || design.name}</span> : <span>📜 Bare land</span>}
+          <span>📐 {PLOTS[p.plot].label}</span>
+          {design && isComplete(p) && <span>💵 {naira(rentPerDay(p))}/day</span>}
+          {(p.extensions ?? []).map((e) => <span key={e}>{EXTENSIONS.find((x) => x.id === e)?.icon} {EXTENSIONS.find((x) => x.id === e)?.name}</span>)}
+        </div>
+        {!isComplete(p) && <div className="hm-progress"><i style={{ width: `${st.pct}%` }} /></div>}
+      </div>
+    </div>
+  );
+}
+
+/** A row of choices: the one standing now marked, each with its price (nothing for what you already have). */
+function Choices<T extends string>({ list, now, pick, picked, design }: { list: ExteriorChoice<T>[]; now: T; pick: (id: T) => void; picked: T | undefined; design: string | null }) {
+  return (
+    <div className="hm-opts">
+      {list.map((c) => (
+        <button key={c.id} type="button" className={`hm-opt ${(picked ?? now) === c.id ? 'on' : ''}`} onClick={() => pick(c.id)} title={c.blurb}>
+          <b>{c.icon} {c.name}</b>
+          <small>{c.id === now ? 'Yours now' : naira(exteriorPrice(c.price, design))}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Swatches({ now, picked, pick }: { now: string; picked: string | undefined; pick: (id: string) => void }) {
+  return (
+    <div className="hm-swatches">
+      {EXTERIOR_COLOURS.map((c) => (
+        <button key={c.id} type="button" className={`hm-swatch ${(picked ?? now) === c.id ? 'on' : ''}`} style={{ background: c.hex }} aria-label={c.name} title={c.name} onClick={() => pick(c.id)} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The outside of a finished house (game/exterior.ts): pick a fence, gate, roof, trim, paving, carport and what stands in
+ * the compound; the picture above shows the result before you pay, and Apply charges for what changed.
+ */
+function OutsideSection({ p }: { p: Property }) {
+  const money = useGame((s) => s.money);
+  const change = useGame((s) => s.changeExterior);
+  const [draft, setDraft] = useState<HouseExterior>({});
+  const now = exteriorOf(p.design, p.exterior);
+  const cost = exteriorChangeCost(p.design, now, draft);
+  const items = new Set(draft.items ?? now.items);
+  const set = <K extends keyof HouseExterior>(k: K, v: HouseExterior[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const toggle = (id: YardItem) => {
+    const next = new Set(items);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    set('items', [...next]);
+  };
+  const changed = Object.keys(draft).length > 0;
+  const preview: Property = { ...p, exterior: { ...p.exterior, ...draft } };
+  return (
+    <div className="hm-section">
+      <h4>Outside</h4>
+      {changed && <div className="hm-detail-hero"><PropertyThumb p={preview} /></div>}
+      <span className="hm-row-label">Fence</span>
+      <Choices list={FENCES} now={now.fence} picked={draft.fence} pick={(v) => set('fence', v)} design={p.design} />
+      <Swatches now={now.fenceColour} picked={draft.fenceColour} pick={(v) => set('fenceColour', v)} />
+      <span className="hm-row-label">Gate</span>
+      <Choices list={GATES} now={now.gate} picked={draft.gate} pick={(v) => set('gate', v)} design={p.design} />
+      <Swatches now={now.gateColour} picked={draft.gateColour} pick={(v) => set('gateColour', v)} />
+      <span className="hm-row-label">Roof</span>
+      <Choices list={ROOFS} now={now.roof} picked={draft.roof} pick={(v) => set('roof', v)} design={p.design} />
+      <Choices list={ROOF_FINISHES} now={now.roofFinish} picked={draft.roofFinish} pick={(v) => set('roofFinish', v)} design={p.design} />
+      <Swatches now={now.roofColour} picked={draft.roofColour} pick={(v) => set('roofColour', v)} />
+      <span className="hm-row-label">Trim (windows, fascia, pillar caps)</span>
+      <Swatches now={now.trim} picked={draft.trim} pick={(v) => set('trim', v)} />
+      <span className="hm-row-label">Paving</span>
+      <Choices list={PAVINGS} now={now.paving} picked={draft.paving} pick={(v) => set('paving', v)} design={p.design} />
+      <span className="hm-row-label">Carport</span>
+      <Choices list={CARPORTS} now={now.carport} picked={draft.carport} pick={(v) => set('carport', v)} design={p.design} />
+      <Swatches now={now.carportColour} picked={draft.carportColour} pick={(v) => set('carportColour', v)} />
+      <span className="hm-row-label">In the compound</span>
+      <div className="hm-opts" style={{ flexWrap: 'wrap' }}>
+        {YARD_ITEMS.map((i) => {
+          const had = now.items.includes(i.id);
+          const blocked = i.bigPlot && p.plot === 'half';
+          return (
+            <button key={i.id} type="button" disabled={blocked} className={`hm-opt ${items.has(i.id) ? 'on' : ''}`} title={i.blurb} onClick={() => toggle(i.id)}>
+              <b>{i.icon} {i.name}</b>
+              <small>{blocked ? 'Full plot only' : had ? (items.has(i.id) ? 'Yours' : 'Remove (free)') : naira(exteriorPrice(i.price, p.design))}</small>
+            </button>
+          );
+        })}
+      </div>
+      {changed && (
+        <div className="hm-buy">
+          <span>{cost ? `Outside work: ${naira(cost)}` : 'No charge'}</span>
+          <button className="btn sm" onClick={() => setDraft({})}>Reset</button>
+          <button className="btn sm go" disabled={money < cost} onClick={() => { change(p.id, draft); setDraft({}); }}>{money < cost ? `Need ${naira(cost)}` : 'Apply'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Extensions: building work on a finished house, paid up front and built in stages like the house was. */
+function ExtensionsSection({ p }: { p: Property }) {
+  const money = useGame((s) => s.money);
+  const start = useGame((s) => s.startExtension);
+  const minutes = useGame((s) => s.minutes);
+  const [contractor, setContractor] = useState('standard');
+  const c = CONTRACTORS.find((x) => x.id === contractor)!;
+  const roof = exteriorOf(p.design, p.exterior).roof;
+  const built = p.extensions ?? [];
+  const list = EXTENSIONS.filter((e) => e.designs.includes(p.design ?? ''));
+  if (!list.length) return null;
+  return (
+    <div className="hm-section">
+      <h4>Extensions</h4>
+      <div className="hm-opts">
+        {CONTRACTORS.map((x) => (
+          <button key={x.id} type="button" className={`hm-opt ${contractor === x.id ? 'on' : ''}`} onClick={() => setContractor(x.id)}>
+            <b>{x.icon} {x.name}</b>
+            <small>{x.fee < 1 ? 'Cheaper, slower' : x.fee > 1 ? 'Dearer, faster' : 'Fair price'}</small>
+          </button>
+        ))}
+      </div>
+      {list.map((e) => {
+        const d = extensionDesign(p.design, e.id)!;
+        const total = costOf(remainingStageMaterials(d, 0), p.region, p.design) + STAGES.reduce((a, st) => a + stageLabour(d, st, c, p.region), 0);
+        const working = p.extending?.id === e.id;
+        const block = extensionBlock(e, p.design, built, roof);
+        const pct = working && p.building ? Math.round(100 * ((p.extending!.stage + Math.min(1, (minutes - p.building.startedAt) / Math.max(1, p.building.doneAt - p.building.startedAt))) / STAGES.length)) : 0;
+        return (
+          <div className="tile" key={e.id}>
+            <span className="tile-icon">{e.icon}</span>
+            <span className="tile-info">
+              <b>{e.name}{built.includes(e.id) ? ' · Built' : ''}</b>
+              <small>{e.blurb}</small>
+              {working ? <small>🚧 {STAGES[p.extending!.stage]?.name ?? 'Finishing'} · {pct}%</small> : !built.includes(e.id) && <small>{block ?? `${naira(total)} · about ${remainingBuildMinutes(d, c)} sec`}</small>}
+            </span>
+            {!built.includes(e.id) && !working && (
+              <button className="btn sm go" disabled={!!block || !!p.building || money < total} onClick={() => start(p.id, e.id, contractor)}>
+                {p.building ? 'Builders busy' : money < total ? 'Short' : 'Build'}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rooms: give each a name and a use (bedroom, study, kitchen, parlour, prayer room) for a small bonus inside. */
+function RoomsSection({ p }: { p: Property }) {
+  const setRoom = useGame((s) => s.setRoom);
+  const rooms = houseLayoutForDesign(layoutKey(p.design, p.extensions)).rooms.filter((r) => !/^(Side yard|Compound|Carport|Hallway|Main hallway|Shared corridor)$/.test(r.name));
+  return (
+    <div className="hm-section">
+      <h4>Rooms</h4>
+      <small className="muted">A room's use gives what you do in it a small edge: {ROOM_TYPES.map((t) => `${t.icon} ${t.name}: ${t.bonus.toLowerCase()}`).join('. ')}.</small>
+      {rooms.map((r) => {
+        const own = p.rooms?.[r.name];
+        return (
+          <div className="hm-room" key={r.name}>
+            <input
+              className="text-input"
+              defaultValue={own?.name ?? ''}
+              placeholder={r.name}
+              maxLength={ROOM_NAME_MAX * 2}
+              aria-label={`Name for ${r.name}`}
+              onBlur={(e) => { if ((e.target.value || '') !== (own?.name ?? '')) setRoom(p.id, r.name, { ...own, name: e.target.value }); }}
+            />
+            <select value={own?.type ?? ''} aria-label={`Use of ${r.name}`} onChange={(e) => setRoom(p.id, r.name, { ...own, type: (e.target.value || undefined) as RoomType | undefined })}>
+              <option value="">No set use</option>
+              {ROOM_TYPES.map((t) => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
+            </select>
+          </div>
+        );
+      })}
+      {Object.values(p.rooms ?? {}).some((r) => r.type) && (
+        <small className="muted">Set: {Object.entries(p.rooms ?? {}).filter(([, r]) => r.type).map(([k, r]) => `${r.name || k} → ${ROOM_TYPE[r.type!].name}`).join(', ')}</small>
+      )}
+    </div>
+  );
 }
 
 function BuyLand() {
@@ -176,30 +329,37 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
   const due = rentDue(p, minutes);
   const sale = saleValue(p);
   const hired = CONTRACTORS.find((c) => c.id === contractor)!;
+  const lines = homeLines(p);
 
   return (
     <>
       <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={back}>‹ All properties</button>
-      <div className="inv-card">
-        <SiteArt p={p} height={140} />
-        <div className="inv-meta">
-          <b>{design ? `${design.icon} ${design.name}` : '📜 Bare land'}</b>
-          <small>{PLOTS[p.plot].label} · {region.name}</small>
-          {st.text && <small>{st.text}</small>}
+      <div className="hm-detail-hero">
+        <div className="hm-card-pic">
+          <PropertyThumb p={p} />
+          <StatusChip p={p} />
+          <span className="hm-worth">{naira(sale)}</span>
         </div>
-        {!isComplete(p) && <div className="bar"><i style={{ width: `${st.pct}%` }} /></div>}
-        <div className="inv-stats">
-          <span>Put in: <b>{naira(p.spent)}</b></span>
-          <span>Worth: <b className="good">{naira(sale)}</b></span>
+        <div className="hm-card-body">
+          <RenameHouse p={p} big />
+          <span className="hm-sub">{[lines.design, design ? null : '📜 Bare land', PLOTS[p.plot].label].filter(Boolean).join(' · ')}</span>
+          <span className="hm-where">📍 {lines.estate}</span>
+          <span className="hm-sub">{lines.city}{st.text ? ` · ${st.text}` : ''}</span>
+          {!isComplete(p) && <div className="hm-progress"><i style={{ width: `${st.pct}%` }} /></div>}
+          <div className="hm-actions">
+            {isComplete(p) && (
+              <button className="btn sm go" disabled={homePropertyId === p.id} title={homePropertyId === p.id ? undefined : 'Moving in ends any current rental'} onClick={() => setHomeProperty(p.id)}>
+                {homePropertyId === p.id ? '🏠 Your home' : '🏠 Live here'}
+              </button>
+            )}
+            <button className="btn sm" title={`Go to ${region.name} (${sectionOf(p.slot ?? 0) + 1})`} onClick={() => visitEstate(p.region, sectionOf(p.slot ?? 0))}>📍 Visit</button>
+          </div>
         </div>
-        <div className="row-btns inv-actions">
-          {isComplete(p) && (
-            <button className="btn sm go" disabled={homePropertyId === p.id} title={homePropertyId === p.id ? undefined : 'Moving in ends any current rental'} onClick={() => setHomeProperty(p.id)}>
-              {homePropertyId === p.id ? '🏠 Your home' : '🏠 Live here'}
-            </button>
-          )}
-          <button className="btn sm" title={`Go to ${region.name} (${sectionOf(p.slot ?? 0) + 1})`} onClick={() => visitEstate(p.region, sectionOf(p.slot ?? 0))}>📍 Visit</button>
-        </div>
+      </div>
+      <div className="hm-stats">
+        <div className="hm-stat"><small>Put in</small><b>{naira(p.spent)}</b></div>
+        <div className="hm-stat"><small>Worth</small><b className="good">{naira(sale)}</b></div>
+        <div className="hm-stat"><small>{design ? 'Rent' : 'Plot'}</small><b>{design ? `${naira(rentPerDay(p))}/day` : PLOTS[p.plot].label}</b></div>
       </div>
 
       {!design && (
@@ -283,6 +443,10 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
         </>
       )}
 
+      {isComplete(p) && <OutsideSection p={p} />}
+      {isComplete(p) && <ExtensionsSection p={p} />}
+      {isComplete(p) && <RoomsSection p={p} />}
+
       {isComplete(p) && (
         <>
           <h4>Household staff</h4>
@@ -326,7 +490,7 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
         <button
           className="btn wide danger"
           onClick={() => {
-            if (confirm(`Sell this property for ${naira(sale)}?`)) {
+            if (confirm(`Sell ${houseTitle(p)} (${lines.estate}) for ${naira(sale)}?`)) {
               sellProperty(p.id);
               back();
             }
@@ -397,6 +561,12 @@ function RentTab() {
   const moveIntoGovHouse = useGame((st) => st.moveIntoGovHouse);
   const clearGovRent = useGame((st) => st.clearGovRent);
   const { listings, mine, loaded, busy } = useRentals();
+  const properties = useGame((st) => st.properties);
+  // Your own listings by the name you gave the house, with where it is.
+  const myTitle = (l: RentalListing) => {
+    const own = properties.find((x) => x.id === l.propertyId);
+    return own ? `${houseTitle(own)} · ${REGION_BY_ID[l.region]?.name ?? 'Kaduna'}` : `${DESIGN_BY_ID[l.design]?.name ?? 'House'} · ${REGION_BY_ID[l.region]?.name ?? 'Kaduna'}`;
+  };
   useEffect(() => { void loadRentals(); }, []);
   const govWeekly = GOV_WEEKLY_RENT[origin] ?? 0;
   const hasOwnHome = !!homePropertyId;
@@ -434,9 +604,9 @@ function RentTab() {
           <h4 style={{ padding: '0 16px' }}>Your houses for rent</h4>
           {mine.map((l) => (
             <div className="tile" key={l.propertyId}>
-              <span className="tile-icon" style={{ fontSize: 28 }}>🏠</span>
+              <OtherThumb id={l.propertyId} design={l.design} className="hm-tile-pic" />
               <span className="tile-info">
-                <b>{DESIGN_BY_ID[l.design]?.name ?? 'House'} · {REGION_BY_ID[l.region]?.name ?? 'Kaduna'}</b>
+                <b>{myTitle(l)}</b>
                 <small>{l.tenant ? tenantTitle(l) : 'Waiting for a tenant'}</small>
                 {l.tenant && <small>{tenantSince(l)}</small>}
                 <small style={{ color: '#059669', fontWeight: 600 }}>{naira(l.weekly)}/week</small>
@@ -449,7 +619,7 @@ function RentTab() {
       <h4 style={{ padding: '0 16px' }}>Houses from players</h4>
       {listings.map((l) => (
         <div className="tile" key={l.propertyId}>
-          <span className="tile-icon" style={{ fontSize: 28 }}>🏠</span>
+          <OtherThumb id={l.propertyId} design={l.design} className="hm-tile-pic" />
           <span className="tile-info">
             <b>{DESIGN_BY_ID[l.design]?.name ?? 'House'} · {REGION_BY_ID[l.region]?.name ?? 'Kaduna'}</b>
             <small>Owned by @{l.owner}</small>
@@ -487,6 +657,7 @@ export function House() {
     setTab('mine');
   }, [navWant]);
 
+  useEffect(() => { void loadRentals(); }, []);
   if (open) return <PropertyPage id={open} back={() => setOpen(null)} />;
 
   const worth = netWorthOf({ money: 0, investments: {}, properties });
@@ -536,20 +707,7 @@ export function House() {
         properties.length === 0 ? (
           <p className="muted">No land yet. Buy a plot in Kaduna, Abuja, Lagos or Kano, then build on it.</p>
         ) : (
-          properties.map((p) => {
-            const design = p.design ? DESIGN_BY_ID[p.design] : null;
-            const st = status(p, minutes);
-            return (
-              <button key={p.id} className="inv-card" style={{ textAlign: 'left' }} onClick={() => setOpen(p.id)}>
-                <SiteArt p={p} height={90} />
-                <div className="inv-meta">
-                  <b>{design ? design.name : 'Bare land'} · {REGION_BY_ID[p.region].name}</b>
-                  {st.text && <small>{st.text}</small>}
-                </div>
-                {!isComplete(p) && <div className="bar"><i style={{ width: `${st.pct}%` }} /></div>}
-              </button>
-            );
-          })
+          properties.map((p) => <HomeCard key={p.id} p={p} minutes={minutes} onOpen={() => setOpen(p.id)} />)
         )
       )}
 

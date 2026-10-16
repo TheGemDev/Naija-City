@@ -14,7 +14,7 @@ import { homeLaws } from './state';
 import { jailedUntil } from './crime';
 import {
   CROPS, DAILY_REWARDS, FARM, FREELANCE, FREELANCE_RULES, REFERRAL, cropPrice, dailyReward, dayEnd, dayNo, dayStart, freelanceBrief, freelanceEarned,
-  freelanceMinMs, freelancePay, freelanceScore, harvestValue, nextStreak, type CropId, type FreelanceKind,
+  freelanceMinMs, freelancePay, freelanceScore, harvestValue, nextStreak, publicBrief, type CropId, type FreelanceKind,
 } from '../src/game/hustles';
 
 const json = (data: unknown, status = 200) =>
@@ -105,7 +105,11 @@ async function view(db: D1Database, uid: string, now: number) {
   };
 }
 
-const taskView = (t: FreelanceRow) => ({ id: t.id, kind: t.kind, seed: t.seed, pay: t.pay, startedAt: t.started_at, minMs: freelanceMinMs(freelanceBrief(t.kind, t.seed)) });
+/** A gig as the phone sees it: the brief without its answers (the seed would give them away). */
+const taskView = (t: FreelanceRow) => {
+  const brief = freelanceBrief(t.kind, t.seed);
+  return { id: t.id, kind: t.kind, pay: t.pay, startedAt: t.started_at, minMs: freelanceMinMs(brief), expiresAt: t.started_at + FREELANCE_RULES.expireMs, brief: publicBrief(brief) };
+};
 
 /* ---------- Requests ---------- */
 

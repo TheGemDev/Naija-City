@@ -171,6 +171,8 @@ export function careTarget(care: CareId, at = serverNow()): Kid | null {
 
 /** The child each running care task is for, picked when it started. */
 const targets = new Map<string, number>();
+/** Which child a running care task is for (three/Children.tsx puts them in your arms or at the furniture). */
+export const careTargetOf = (actionId: string) => targets.get(actionId) ?? null;
 
 function canStart(actionId: string): boolean {
   const care = careOfAction(actionId);

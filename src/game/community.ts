@@ -12,7 +12,9 @@ export const weekKey = (now: number) => Math.floor(now / WEEK_MS);
 export const seasonKey = (now: number) => Math.floor(now / SEASON_MS);
 export const seasonEnds = (now: number) => (seasonKey(now) + 1) * SEASON_MS;
 
-export type QuestMetric = 'earn' | 'post' | 'message' | 'pay' | 'bet' | 'friend' | 'spend' | 'invest';
+export type QuestMetric = 'earn' | 'post' | 'message' | 'pay' | 'bet' | 'friend' | 'spend' | 'invest'
+  // Side hustles (game/hustles.ts, game/gigs.ts), counted from the ledger.
+  | 'shift' | 'rides' | 'dispatch' | 'freelance' | 'farm' | 'odd_job';
 
 export interface QuestDef {
   id: string;
@@ -27,8 +29,8 @@ export interface QuestDef {
 }
 
 export const DAILY_QUESTS: QuestDef[] = [
-  { id: 'd-earn-a', metric: 'earn', label: 'Earn ₦30,000 from work or hustle', icon: '💼', target: 30_000, reward: 8_000, points: 10 },
-  { id: 'd-earn-b', metric: 'earn', label: 'Earn ₦100,000 from work or hustle', icon: '💰', target: 100_000, reward: 20_000, points: 20 },
+  { id: 'd-earn-a', metric: 'earn', label: 'Earn ₦60,000 from work or hustle', icon: '💼', target: 60_000, reward: 12_000, points: 10 },
+  { id: 'd-earn-b', metric: 'earn', label: 'Earn ₦250,000 from work or hustle', icon: '💰', target: 250_000, reward: 35_000, points: 20 },
   { id: 'd-post', metric: 'post', label: 'Post 2 tweets on Twitter', icon: '🐦', target: 2, reward: 5_000, points: 8 },
   { id: 'd-msg', metric: 'message', label: 'Send 5 messages to your people', icon: '✉️', target: 5, reward: 5_000, points: 8 },
   { id: 'd-pay', metric: 'pay', label: 'Send money to another player', icon: '💸', target: 1, reward: 6_000, points: 10 },
@@ -36,10 +38,18 @@ export const DAILY_QUESTS: QuestDef[] = [
   { id: 'd-friend', metric: 'friend', label: 'Make a new friend', icon: '🤝', target: 1, reward: 10_000, points: 15 },
   { id: 'd-spend', metric: 'spend', label: 'Spend ₦50,000 in the city', icon: '🛍️', target: 50_000, reward: 7_000, points: 8 },
   { id: 'd-invest', metric: 'invest', label: 'Make an investment', icon: '📈', target: 1, reward: 9_000, points: 12 },
+  { id: 'd-shift', metric: 'shift', label: 'Work 2 shifts at your job', icon: '🧑🏾‍🔧', target: 2, reward: 20_000, points: 12 },
+  { id: 'd-rides', metric: 'rides', label: 'Carry 5 keke or okada passengers', icon: '🛺', target: 5, reward: 20_000, points: 12 },
+  { id: 'd-dispatch', metric: 'dispatch', label: 'Deliver 3 dispatch orders', icon: '📦', target: 3, reward: 25_000, points: 14 },
+  { id: 'd-freelance', metric: 'freelance', label: 'Finish 2 freelance gigs', icon: '💻', target: 2, reward: 20_000, points: 12 },
+  { id: 'd-farm', metric: 'farm', label: 'Harvest a crop on your farm', icon: '🌽', target: 1, reward: 15_000, points: 10 },
+  { id: 'd-odd', metric: 'odd_job', label: 'Do 2 odd jobs around town', icon: '🧺', target: 2, reward: 12_000, points: 8 },
 ];
 
 export const WEEKLY_QUESTS: QuestDef[] = [
-  { id: 'w-earn', metric: 'earn', label: 'Earn ₦600,000 this week', icon: '🏗️', target: 600_000, reward: 120_000, points: 80 },
+  { id: 'w-earn', metric: 'earn', label: 'Earn ₦2,000,000 this week', icon: '🏗️', target: 2_000_000, reward: 200_000, points: 80 },
+  { id: 'w-dispatch', metric: 'dispatch', label: 'Deliver 25 dispatch orders this week', icon: '🛵', target: 25, reward: 120_000, points: 60 },
+  { id: 'w-farm', metric: 'farm', label: 'Bring in 10 harvests this week', icon: '🚜', target: 10, reward: 100_000, points: 60 },
   { id: 'w-post', metric: 'post', label: 'Post 15 tweets this week', icon: '📣', target: 15, reward: 60_000, points: 50 },
   { id: 'w-friend', metric: 'friend', label: 'Make 3 new friends', icon: '👯', target: 3, reward: 90_000, points: 70 },
   { id: 'w-spend', metric: 'spend', label: 'Spend ₦400,000 this week', icon: '🧾', target: 400_000, reward: 70_000, points: 50 },

@@ -5,7 +5,9 @@ import type { ReactNode } from 'react';
 import { useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { CAP, sectionOf } from '../game/estate';
-import { builtOn, REGION_BY_ID } from '../game/property';
+import { builtOn, houseTitle, isComplete, REGION_BY_ID } from '../game/property';
+import { useTravel } from './TravelPicker';
+import './homes.css';
 import { getRegion } from '../game/regions';
 import { Icon } from './Icons';
 import './house-card.css';
@@ -45,18 +47,34 @@ export function HouseFacts({ title, address }: { title: ReactNode; address: Hous
   );
 }
 
-/** At home: the card for the house you are standing in. */
+/**
+ * At home: the card for the house you are standing in, by its name, with ‹ › to step to your other finished houses
+ * (in the House app's order; rented-out ones are skipped). One on the same estate is a few steps away, so you go
+ * straight in; one in another estate or city opens the going-home sheet on it, with the ride or the trip and its fare.
+ */
 export function HouseCard() {
   const visiting = useVisit((v) => !!v.current);
   // The action sheet, furnishing and the phone all use this strip of screen.
   const shown = useGame((s) => s.view === 'home' && s.mode === 'live' && !s.selectedId && !s.panel && !s.placing);
   const house = useGame((s) => s.properties.find((p) => p.id === (s.activeHouseId ?? s.homePropertyId)));
+  const properties = useGame((s) => s.properties);
+  const rentedOut = useGame((s) => s.rentedOut);
   const city = useGame((s) => s.homeState);
   if (!shown || visiting) return null;
+  const homes = properties.filter((p) => isComplete(p) && (p.id === house?.id || (!p.rented && !rentedOut.includes(p.id))));
+  const at = house ? homes.findIndex((p) => p.id === house.id) : -1;
+  const step = (d: -1 | 1) => {
+    if (at < 0) return;
+    const next = homes[(at + d + homes.length) % homes.length];
+    if (!next || next.id === house?.id) return;
+    if (!useGame.getState().hopToHouse(next.id)) useTravel.getState().ask({ kind: 'home', home: next.id });
+  };
+  const many = at >= 0 && homes.length > 1;
   return (
-    <div className="house-card" role="status">
-      <Icon name="home" size={15} />
-      <HouseFacts title="Your house" address={house ?? { city }} />
+    <div className={`house-card ${many ? 'hm-switch' : ''}`} role="status">
+      {many ? <button type="button" className="hm-arrow" aria-label="Previous house" onClick={() => step(-1)}>‹</button> : <Icon name="home" size={15} />}
+      <HouseFacts title={house ? <>{houseTitle(house)}{many && <small className="hm-count"> · {at + 1}/{homes.length}</small>}</> : 'Your house'} address={house ?? { city }} />
+      {many && <button type="button" className="hm-arrow" aria-label="Next house" onClick={() => step(1)}>›</button>}
     </div>
   );
 }
