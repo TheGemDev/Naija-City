@@ -1040,18 +1040,21 @@ function buildSquare(w: number, d: number, low: boolean) {
   }
   // Floodlight on the parade ground after dark.
   k.gquad([-gx, 0.03, gz0], [gx, 0.03, gz0], [gx, 0.03, gz1], [-gx, 0.03, gz1], scale(WARM, 0.08), scale(WARM, 0.08), scale(WARM, 0.2), scale(WARM, 0.2));
-  if (!low) {
-    // Contingents in ranks: army green, police black, navy white, and the band.
+  {
+    // Contingents in ranks: army green, police black, navy white, and the band (two small ones in low mode).
     const units = [NG_GREEN, '#111827', WHITE, '#b45309'];
-    const n = Math.min(units.length, Math.max(2, Math.floor((gx * 2 - 0.4) / 1.1)));
+    const n = low ? 2 : Math.min(units.length, Math.max(2, Math.floor((gx * 2 - 0.4) / 1.1)));
+    const g = low ? 3 : 4;
     for (let u = 0; u < n; u++) {
-      const ux = -gx + 0.55 + u * ((gx * 2 - 1.1) / Math.max(1, n - 1));
-      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
-        person(k, ux - 0.24 + c * 0.16, gz0 + 1.0 + r * 0.2, units[u], { cap: units[u] === WHITE ? WHITE : '#7f1d1d', head: SKIN[(r + c) % 3] });
+      const ux = low ? (u ? 1 : -1) * gx * 0.45 : -gx + 0.55 + u * ((gx * 2 - 1.1) / Math.max(1, n - 1));
+      for (let r = 0; r < g; r++) for (let c = 0; c < g; c++) {
+        person(k, ux - ((g - 1) / 2) * 0.16 + c * 0.16, gz0 + 1.0 + r * 0.2, units[u], { cap: units[u] === WHITE ? WHITE : '#7f1d1d', head: SKIN[(r + c) % 3] });
       }
       // The officer in front.
       person(k, ux, gz0 + 0.75, units[u], { cap: '#7f1d1d' });
     }
+  }
+  if (!low) {
     // Dignitaries in the stand.
     for (let i = 0; i < 18; i++) {
       const r = Math.floor(rand() * R);

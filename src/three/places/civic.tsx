@@ -28,8 +28,8 @@ const PAVING_DARK = '#c4bdaf';
 const KERB = '#ebe7df';
 const ASPHALT = '#4b5563';
 const LINE = '#f8fafc';
-const LAWN = '#7fb05a';
-const LAWN_DARK = '#6c9c4a';
+const LAWN = '#97c068';
+const LAWN_DARK = '#82ad57';
 const HEDGE = '#3f7d3a';
 const TREE_A = '#2f7d3b';
 const TREE_B = '#3f8f45';
@@ -530,7 +530,10 @@ function asoRock(w: number, d: number, low: boolean): Built {
   const ring = low ? 8 : 16;
   for (let i = 0; i < ring; i++) {
     const x = -w / 2 + 0.35 + (i / (ring - 1)) * (w - 0.7);
-    if (height(x, d / 2 - 0.5) < 0.02) tree(kit, rand, x + (rand() - 0.5) * 0.2, d / 2 - 0.32 - rand() * 0.25, 0.9 + rand() * 0.35);
+    if (height(x, d / 2 - 0.5) > 0.02 || rand() < 0.2) continue;
+    const z = d / 2 - 0.3 - rand() * 0.45;
+    if (i % 3 === 1) bush(kit, rand, x + (rand() - 0.5) * 0.3, z, 1.3 + rand() * 0.6, '#557f35');
+    else tree(kit, rand, x + (rand() - 0.5) * 0.3, z, 0.8 + rand() * 0.5);
   }
   return { parts: kit.build() };
 }
@@ -559,30 +562,33 @@ function zumaRock(w: number, d: number, low: boolean): Built {
     for (let i = 0; i < seg; i++) {
       const a0 = (i / seg) * TAU, a1 = ((i + 1) / seg) * TAU, t0 = ts[j], t1 = ts[j + 1];
       const am = (a0 + a1) / 2;
-      const key = t0 > 0.7 ? (i % 3 ? '#a89e8f' : '#9d9384') : (i * 7 + j * 3) % 5 === 0 ? '#8c8273' : (i + j) % 2 ? '#988d7d' : '#a09585';
+      const n = Math.sin(i * 2.3 + j * 1.7) + Math.sin(i * 0.9 - j * 2.9);
+      const key = t0 > 0.7 ? (n > 0.6 ? '#a39a8b' : '#aaa193') : n > 0.9 ? '#8e8475' : n > -0.4 ? '#9a8f7f' : '#a29786';
       const out: V3 = [Math.cos(am), t0 > 0.55 ? 0.8 : 0.1, Math.sin(am)];
       if (t1 === 1) kit.tri(key, surf(a0, t0), surf(a1, t0), surf(am, 1), out);
       else kit.quad(key, surf(a0, t0), surf(a1, t0), surf(a1, t1), surf(a0, t1), out);
     }
   }
   // A patch on the rock from angle a0..a1 and height t0..t1, lying a hair proud of it.
-  const patch = (key: string, a0: number, a1: number, t0: number, t1: number, n = 3) => {
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const A0 = a0 + ((a1 - a0) * i) / n, A1 = a0 + ((a1 - a0) * (i + 1)) / n;
-        const T0 = t0 + ((t1 - t0) * j) / n, T1 = t0 + ((t1 - t0) * (j + 1)) / n;
+  const patch = (key: string, a0: number, a1: number, t0: number, t1: number, nu = 3, nv = nu) => {
+    for (let i = 0; i < nu; i++) {
+      for (let j = 0; j < nv; j++) {
+        const A0 = a0 + ((a1 - a0) * i) / nu, A1 = a0 + ((a1 - a0) * (i + 1)) / nu;
+        const T0 = t0 + ((t1 - t0) * j) / nv, T1 = t0 + ((t1 - t0) * (j + 1)) / nv;
         const am = (A0 + A1) / 2;
         kit.quad(key, surf(A0, T0, 0.012), surf(A1, T0, 0.012), surf(A1, T1, 0.012), surf(A0, T1, 0.012), [Math.cos(am), 0.2, Math.sin(am)]);
       }
     }
   };
   // Rain streaks all round, longest on the south face.
-  const streaks = low ? 9 : 16;
+  const streaks = low ? 12 : 26;
   for (let k = 0; k < streaks; k++) {
-    const a = (k / streaks) * TAU + rand() * 0.2;
-    const wid = 0.04 + rand() * 0.05;
-    const top = 0.6 + rand() * 0.18, bot = 0.1 + rand() * 0.25;
-    patch(k % 3 ? '#5d564d' : '#534c45', a - wid, a + wid, bot, top, low ? 2 : 3);
+    const a = (k / streaks) * TAU + rand() * 0.15;
+    // Leave the face clear of streaks.
+    if (Math.abs(a - Math.PI / 2) < 0.45) continue;
+    const wid = 0.015 + rand() * 0.025;
+    const top = 0.62 + rand() * 0.2, bot = 0.06 + rand() * 0.2;
+    patch(k % 3 ? '#6f665a' : '#5f574d', a - wid, a + wid, bot, top, 1, low ? 3 : 5);
   }
   // The face, on the south side: eyes, the long nose between them, and a wide mouth.
   const s = Math.PI / 2;
@@ -595,7 +601,7 @@ function zumaRock(w: number, d: number, low: boolean): Built {
   for (let k = 0; k < (low ? 5 : 11); k++) {
     const a = rand() * TAU, t = 0.78 + rand() * 0.14;
     const p = surf(a, t, 0.01);
-    kit.shape(k % 2 ? '#6b7f45' : '#5a6f3a', ICO, p, [0.16, 0.06, 0.16], [0, rand() * 3, 0]);
+    kit.shape(k % 2 ? '#6b7448' : '#5d6a3d', ICO, p, [0.13, 0.05, 0.13], [0, rand() * 3, 0]);
   }
   for (let k = 0; k < (low ? 10 : 22); k++) {
     const a = rand() * TAU;
@@ -1299,15 +1305,16 @@ function nationalMosque(w: number, d: number, low: boolean): Built {
   const MH = 3.9;
   for (const [x, z] of [[-mx, -mz], [mx, -mz], [-mx, mz], [mx, mz]]) {
     kit.box(CREAM, [x, 0.1, z], [0.42, 0.2, 0.42]);
-    kit.post(CREAM, [x, 0.2, z], 0.15, MH * 0.62, 8, 0.85);
+    const ms = low ? 6 : 8;
+    kit.post(CREAM, [x, 0.2, z], 0.15, MH * 0.62, ms, 0.85);
     for (const [y, r] of [[MH * 0.5, 0.21], [MH * 0.78, 0.17]] as [number, number][]) {
-      kit.post(TRIM, [x, y, z], r, 0.06, 8);
-      kit.post(CREAM, [x, y + 0.06, z], r * 0.98, 0.05, 8);
-      kit.post(`lampMinaret`, [x, y + 0.11, z], r * 0.62, 0.05, 8);
+      kit.post(TRIM, [x, y, z], r, 0.06, ms);
+      if (!low) kit.post(CREAM, [x, y + 0.06, z], r * 0.98, 0.05, ms);
+      kit.post('lampMinaret', [x, y + 0.11, z], r * 0.62, 0.05, ms);
     }
-    kit.post(CREAM, [x, MH * 0.62 + 0.2, z], 0.1, MH * 0.34, 8, 0.8);
-    kit.post(TRIM, [x, MH * 0.96 + 0.2, z], 0.11, 0.05, 8);
-    kit.shape(GOLD, unitCyl(8, 0), [x, MH + 0.2 + 0.25, z], [0.1, 0.5, 0.1]);
+    kit.post(CREAM, [x, MH * 0.62 + 0.2, z], 0.1, MH * 0.34, ms, 0.8);
+    kit.post(TRIM, [x, MH * 0.96 + 0.2, z], 0.11, 0.05, ms);
+    kit.shape(GOLD, unitCyl(ms, 0), [x, MH + 0.2 + 0.25, z], [0.1, 0.5, 0.1]);
     kit.post(GOLD, [x, MH + 0.7, z], 0.012, 0.18, 4);
   }
   // Palms along the front and round the hall, worshippers in the courtyard.

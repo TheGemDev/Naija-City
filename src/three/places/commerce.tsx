@@ -1227,6 +1227,12 @@ function buildGloryDome(w: number, d: number, low: boolean) {
       const up: V3 = [out[0] * k0, Math.sin(f0) + 0.2, out[2] * k0];
       if (j === lat - 1) kit.tri(key, p(a, k0, y0), p(b, k0, y0), [0, y1, z0], up);
       else kit.quad(key, p(a, k0, y0), p(b, k0, y0), p(b, k1, y1), p(a, k1, y1), up);
+      // Floodlights wash the dome from below after dark, fading up towards the crown.
+      if (j < 3) {
+        const g = (k: number): RGB => scale([0.55, 0.6, 0.75], k);
+        const lift = (q: V3, k: number): V3 => [q[0] + out[0] * 0.012 * k, q[1] + 0.004, q[2] + out[2] * 0.012 * k];
+        c.glow.quad(lift(p(a, k0, y0), k0), lift(p(b, k0, y0), k0), lift(p(b, k1, y1), k1), lift(p(a, k1, y1), k1), g(0.3 - j * 0.1), g(0.3 - j * 0.1), g(0.2 - j * 0.1), g(0.2 - j * 0.1));
+      }
     }
   }
   kit.post(GOLD, [0, drum + band + dh - 0.06, z0], 0.2, 0.08, 12, 0.7);
@@ -1306,7 +1312,7 @@ function wheel(c: Ctx, x: number, z: number, R: number) {
   const COL = ['#dc2626', '#2563eb', '#16a34a', '#facc15', '#9333ea'];
   for (let i = 0; i < n; i += c.low ? 3 : 2) {
     const g = rim(i);
-    kit.box(COL[(i / 2) % COL.length], [g[0], g[1] - 0.09, g[2]], [0.12, 0.1, 0.12]);
+    kit.box(COL[Math.floor(i / 2) % COL.length], [g[0], g[1] - 0.09, g[2]], [0.12, 0.1, 0.12]);
   }
   for (const s of [-1, 1]) for (const k of [-1, 1]) kit.bar('#64748b', [x + s * R * 0.55, 0.04, z + k * 0.2], [x, hy, z + k * 0.05], 0.05);
   kit.post('#475569', [x, hy - 0.05, z - 0.08], 0.08, 0.16, 8);
@@ -1785,7 +1791,7 @@ function buildPark(w: number, d: number, low: boolean) {
   if (!low) {
     const MATS = ['#dc2626', '#2563eb', '#f59e0b', '#16a34a'];
     for (let i = 0; i < 3; i++) {
-      const x = (i - 1) * w * 0.28, z = d / 2 - 0.85 - (i % 2) * 0.3;
+      const x = [-0.3, -0.14, 0.3][i] * w, z = d / 2 - 0.85 - (i % 2) * 0.3;
       if (spots.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < 0.35)) continue;
       kit.flat(MATS[i], x - 0.17, z - 0.12, x + 0.17, z + 0.12, 0.047);
       person(c, x - 0.07, z, 0.047, undefined, true);
@@ -1840,8 +1846,8 @@ function buildBeach(w: number, d: number, low: boolean) {
   strip('#f8fafc', wave(zw, 0.06, 1.1), wave(zw + 0.1, 0.07, 1.2), 0.047);
   strip('#5ec4d6', wave(zw + 0.1, 0.07, 1.2), () => zf - 0.15, 0.046);
   strip('#f1f5f9', wave(zw + 0.42, 0.05, 0.9), wave(zw + 0.48, 0.05, 0.9), 0.049);
-  strip('#2b8fb8', () => zf - 0.15, () => zf + 0.8, 0.044);
-  if (!low) strip('#e0f2fe', wave(zf + 0.2, 0.06, 0.7), wave(zf + 0.25, 0.06, 0.7), 0.047);
+  strip('#2b8fb8', () => zf - 0.15, () => zf + 0.3, 0.044);
+  if (!low) strip('#e0f2fe', wave(zf + 0.05, 0.04, 0.7), wave(zf + 0.1, 0.04, 0.7), 0.047);
   // The boardwalk along the back.
   kit.flat('#a47a52', -w / 2 + 0.1, zb + 0.08, w / 2 - 0.1, zb + 0.3, 0.05);
   if (!low) for (let x = -w / 2 + 0.2; x < w / 2 - 0.1; x += 0.2) kit.flat('#8b6542', x, zb + 0.08, x + 0.012, zb + 0.3, 0.052);

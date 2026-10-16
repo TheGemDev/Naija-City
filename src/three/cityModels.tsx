@@ -289,54 +289,6 @@ function Home({ w, d }: { w: number; d: number }) {
   );
 }
 
-function Smoke() {
-  const ref = useRef<Group>(null!);
-  useFrame(({ clock }) => {
-    ref.current.children.forEach((m, i) => {
-      const t = (clock.elapsedTime * 0.5 + i / 4) % 1;
-      m.position.set(Math.sin(t * 6 + i) * 0.15, 1.1 + t * 1.6, 0);
-      m.scale.setScalar(0.12 + t * 0.25);
-      ((m as Mesh).material as MeshStandardMaterial).opacity = 0.5 * (1 - t);
-    });
-  });
-  return (
-    <group ref={ref} userData={{ dynamic: true }}>
-      {[0, 1, 2, 3].map((i) => (
-        <mesh key={i}>
-          <icosahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial color="#d1d5db" transparent opacity={0.4} depthWrite={false} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Suya({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#b77b52" />
-      <group position={[0, 0, -0.7]}>
-        <B p={[0, 0.7, 0]} s={[1.8, 1.4, 1.1]} c="#f8f1e3" />
-        <B p={[0, 1.5, 0.1]} s={[2.1, 0.1, 1.5]} c="#b91c1c" />
-        <B p={[0, 1.2, 0.58]} s={[1.4, 0.3, 0.05]} c="#facc15" />
-      </group>
-      <group position={[0.6, 0, 0.3]}>
-        <B p={[0, 0.5, 0]} s={[0.8, 0.25, 0.5]} c="#111827" />
-        <B p={[0, 0.64, 0]} s={[0.76, 0.03, 0.46]} c="#f97316" e="#ea580c" />
-        <Smoke />
-      </group>
-      {[[-0.8, 0.5], [-0.6, 1.1], [0.2, 1.2]].map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <B p={[0, 0.4, 0]} s={[0.5, 0.05, 0.5]} c="#f8fafc" />
-          <B p={[0, 0.2, 0]} s={[0.08, 0.4, 0.08]} c="#e2e8f0" />
-        </group>
-      ))}
-      <Cyl p={[-0.7, 0.9, 0.8]} r={0.03} h={1.8} c="#64748b" />
-      <Cyl p={[-0.7, 1.75, 0.8]} r={0.75} rt={0.02} h={0.3} c="#16a34a" seg={8} />
-    </group>
-  );
-}
-
 function School({ w, d }: { w: number; d: number }) {
   const bw = w - 1;
   return (
@@ -412,49 +364,6 @@ function Church({ w, d }: { w: number; d: number }) {
         <B p={[0, 4.6, 1.75]} s={[0.3, 0.06, 0.06]} c="#facc15" />
         <B p={[0, 0.5, 2.21]} s={[0.5, 1, 0.04]} c="#5a371e" />
       </group>
-    </group>
-  );
-}
-
-function Buka({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#c98b5e" />
-      {[[-1.2, -1.2], [1.2, -1.2], [-1.2, 0.6], [1.2, 0.6]].map(([x, z], i) => (
-        <B key={i} p={[x, 0.75, z]} s={[0.08, 1.5, 0.08]} c="#6b4423" />
-      ))}
-      <B p={[0, 1.55, -0.3]} s={[2.8, 0.08, 2.2]} c="#94a3b8" />
-      <B p={[0, 0.45, -0.9]} s={[2.2, 0.9, 0.5]} c="#7c2d12" />
-      {[-0.6, 0, 0.6].map((x, i) => (
-        <Cyl key={i} p={[x, 1.0, -0.9]} r={0.17} rt={0.2} h={0.2} c={['#f59e0b', '#b91c1c', '#15803d'][i]} />
-      ))}
-      <B p={[0, 0.25, 0.4]} s={[2, 0.08, 0.35]} c="#a16207" />
-      <B p={[0, 0.5, 0.2]} s={[2, 0.06, 0.6]} c="#92400e" />
-      {/* Mai shayi table and kettle */}
-      <group position={[1.0, 0, 1.0]}>
-        <B p={[0, 0.4, 0]} s={[0.7, 0.05, 0.5]} c="#1d4ed8" />
-        <B p={[0, 0.2, 0]} s={[0.6, 0.4, 0.05]} c="#1e3a8a" />
-        <Cyl p={[0.1, 0.55, 0]} r={0.1} rt={0.07} h={0.22} c="#e5e7eb" />
-      </group>
-    </group>
-  );
-}
-
-function ViewingCenter({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#92775c" />
-      <B p={[0, 1.1, -d / 2 + 0.08]} s={[w - 0.3, 2.2, 0.16]} c="#d6cfc2" />
-      <B p={[0, 2.3, 0]} s={[w + 0.25, 0.16, d + 0.25]} c="#475569" />
-      {[-w / 2 + 0.2, w / 2 - 0.2].map((x) => (
-        <Cyl key={x} p={[x, 1.1, 0.35]} r={0.06} h={2.2} c="#6b4423" seg={8} />
-      ))}
-      <B p={[0, 1.35, -d / 2 + 0.18]} s={[w * 0.48, 0.8, 0.08]} c="#111827" />
-      <B p={[0, 1.35, -d / 2 + 0.23]} s={[w * 0.42, 0.64, 0.03]} c="#2563eb" />
-      <B p={[0, 0.3, d / 2 - 0.35]} s={[w * 0.42, 0.5, 0.24]} c="#7c4a24" />
-      <B p={[0, 0.58, d / 2 - 0.35]} s={[w * 0.42, 0.08, 0.28]} c="#5b371c" />
-      <B p={[w / 2 - 0.75, 0.25, -0.1]} s={[0.65, 0.5, 0.65]} c="#334155" />
-      <B p={[w / 2 - 0.75, 0.52, -0.1]} s={[0.52, 0.06, 0.52]} c="#f59e0b" />
     </group>
   );
 }
@@ -613,35 +522,6 @@ function Airport({ w, d }: { w: number; d: number }) {
   );
 }
 
-function Market({ w, d }: { w: number; d: number }) {
-  const colours = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#9333ea', '#0d9488'];
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#b77b52" />
-      {/* Main shed */}
-      <group position={[0, 0, -1.2]}>
-        <B p={[0, 0.8, 0]} s={[w - 1, 1.6, 2]} c="#e7d3b1" />
-        <Gable p={[0, 1.6, 0]} w={w - 0.6} d={2} h={0.6} c="#8b9aa5" wall="#e7d3b1" />
-        <B p={[0, 1.25, 1.02]} s={[3, 0.4, 0.05]} c="#15803d" />
-      </group>
-      {/* Stalls with umbrellas */}
-      {Array.from({ length: 6 }, (_, i) => {
-        const x = -w / 2 + 0.9 + i * ((w - 1.8) / 5);
-        return (
-          <group key={i} position={[x, 0, 1.2 + (i % 2) * 0.4]}>
-            <B p={[0, 0.35, 0]} s={[0.8, 0.7, 0.5]} c="#7c4a24" />
-            {[0, 1, 2].map((k) => (
-              <B key={k} p={[-0.22 + k * 0.22, 0.75, 0]} s={[0.18, 0.12, 0.18]} c={colours[(i + k) % 6]} />
-            ))}
-            <Cyl p={[0, 0.9, 0]} r={0.025} h={1.4} c="#475569" />
-            <Cyl p={[0, 1.55, 0]} r={0.6} rt={0.02} h={0.25} c={colours[i % 6]} seg={8} />
-          </group>
-        );
-      })}
-    </group>
-  );
-}
-
 function Lugard({ w, d }: { w: number; d: number }) {
   return (
     <group>
@@ -690,46 +570,6 @@ function Square({ w, d }: { w: number; d: number }) {
   );
 }
 
-function Secretariat({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <group position={[0, 0, -0.3]}>
-        <Block w={w - 1.2} d={d - 1.6} h={4.2} wall="#e7e5e4" roof="#64748b" floors={5} sign="#15803d" />
-      </group>
-      <Cyl p={[w / 2 - 0.5, 1.3, d / 2 - 0.4]} r={0.03} h={2.6} c="#cbd5e1" />
-      <B p={[w / 2 - 0.28, 2.4, d / 2 - 0.4]} s={[0.4, 0.26, 0.02]} c="#15803d" />
-    </group>
-  );
-}
-
-function BankBranch({ w, d }: { w: number; d: number }) {
-  const bw = w - 0.4, bd = d - 0.8;
-  const front = -0.2 + bd / 2;
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      {/* steps up to the banking hall */}
-      <B p={[0, 0.06, front + 0.3]} s={[1.6, 0.08, 0.6]} c="#e7e5e4" />
-      <B p={[0, 0.12, front + 0.2]} s={[1.4, 0.06, 0.4]} c="#f5f5f4" />
-      <B p={[0, 1.25, -0.2]} s={[bw, 2.5, bd]} c="#f8fafc" />
-      <B p={[0, 0.12, -0.2]} s={[bw + 0.06, 0.24, bd + 0.06]} c="#9ca3af" />
-      <B p={[0, 2.5, -0.2]} s={[bw + 0.12, 0.08, bd + 0.12]} c="#e2e8f0" />
-      <Parapet w={bw + 0.12} d={bd + 0.12} y={2.54} c="#f8fafc" h={0.14} cap="#166534" />
-      <B p={[0, 2.55, d / 2 - 0.45]} s={[w - 0.3, 0.32, 0.18]} c="#166534" />
-      <B p={[0, 1.65, d / 2 - 0.36]} s={[1.25, 0.72, 0.08]} c="#d4af37" />
-      <B p={[0, 0.7, d / 2 - 0.35]} s={[0.95, 1.35, 0.1]} c="#166534" />
-      {/* glass doors in the green frame */}
-      <Glass p={[0, 0.62, d / 2 - 0.295]} s={[0.7, 1.1, 0.02]} />
-      <Bays at={spread(bw - 0.4, Math.max(4, Math.round(bw * 1.4)), 0.95)} y={[0.75, 1.75]} z={front} ww={0.34} wh={0.55} hood="#e2e8f0" />
-      {[-1, 1].map((sx) => (
-        <Bays key={sx} at={spread(bd - 0.4, Math.max(2, Math.round(bd)), 0).map((z) => z - 0.2)} y={[0.75, 1.75]} x={sx * bw / 2} side={sx as 1 | -1} ww={0.34} wh={0.55} hood="#e2e8f0" />
-      ))}
-      {[-1.25, 1.25].map((x) => <Cyl key={x} p={[x, 1.25, d / 2 - 0.15]} r={0.1} h={2.5} c="#d4af37" />)}
-    </group>
-  );
-}
-
 function Hospital({ w, d }: { w: number; d: number }) {
   const bw = w - 0.4, bd = d - 0.8;
   const front = -0.2 + bd / 2;
@@ -759,91 +599,6 @@ function Hospital({ w, d }: { w: number; d: number }) {
   );
 }
 
-function Mall({ w, d }: { w: number; d: number }) {
-  const bw = w - 0.6, bd = d - 1.6;
-  const panes = Math.max(3, Math.round((w - 1.4) / 0.5));
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#6b7280" />
-      {/* parking bay lines */}
-      {[-2.1, -0.7, 0.7, 2.1].filter((x) => Math.abs(x) < w / 2 - 0.2).map((x) => (
-        <B key={x} p={[x, 0.045, d / 2 - 0.5]} s={[0.04, 0.01, 0.8]} c="#f8fafc" />
-      ))}
-      <group position={[0, 0, -0.5]}>
-        <B p={[0, 1.2, 0]} s={[bw, 2.4, bd]} c="#f1f5f9" />
-        <B p={[0, 0.06, 0]} s={[bw + 0.04, 0.12, bd + 0.04]} c="#94a3b8" />
-        <B p={[0, 2.45, 0]} s={[bw + 0.2, 0.12, bd + 0.2]} c="#334155" />
-        <Parapet w={bw + 0.2} d={bd + 0.2} y={2.51} c="#e2e8f0" h={0.12} cap="#334155" />
-        <B p={[0, 1.95, bd / 2 + 0.03]} s={[w - 1, 0.5, 0.05]} c="#dc2626" />
-        <B p={[0, 1.95, bd / 2 + 0.06]} s={[w - 1.6, 0.18, 0.02]} c="#fef2f2" />
-        <Glass p={[0, 0.8, bd / 2 + 0.02]} s={[w - 1.4, 1.2, 0.04]} />
-        {/* mullions across the shopfront, and the canopy over the doors */}
-        {Array.from({ length: panes + 1 }, (_, i) => (
-          <B key={i} p={[-(w - 1.4) / 2 + ((w - 1.4) / panes) * i, 0.8, bd / 2 + 0.045]} s={[0.04, 1.22, 0.03]} c="#475569" />
-        ))}
-        <B p={[0, 1.42, bd / 2 + 0.045]} s={[w - 1.36, 0.05, 0.03]} c="#475569" />
-        <B p={[0, 1.55, bd / 2 + 0.35]} s={[1.8, 0.07, 0.7]} c="#334155" />
-        {/* rooftop air-conditioning plant */}
-        {[-1, 1].map((sx) => (
-          <group key={sx} position={[sx * bw * 0.25, 2.51, -bd * 0.15]}>
-            <B p={[0, 0.15, 0]} s={[0.5, 0.3, 0.4]} c="#cbd5e1" />
-            <Cyl p={[0, 0.31, 0]} r={0.12} h={0.02} c="#475569" seg={10} />
-          </group>
-        ))}
-      </group>
-      {/* Parked cars */}
-      {[-1.4, 0, 1.4].map((x, i) => (
-        <group key={x} position={[x, 0, d / 2 - 0.5]} rotation={[0, Math.PI / 2, 0]}>
-          <Car c={['#2563eb', '#f8fafc', '#111827'][i]} />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function Boutique({ w, d }: { w: number; d: number }) {
-  const bw = w - 0.6, bd = d - 1;
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#e7e5e4" />
-      <group position={[0, 0, -0.3]}>
-        <B p={[0, 0.9, 0]} s={[bw, 1.8, bd]} c="#fdf4ff" />
-        <B p={[0, 0.07, 0]} s={[bw + 0.04, 0.14, bd + 0.04]} c="#1f2937" />
-        <B p={[0, 1.85, 0]} s={[w - 0.4, 0.12, d - 0.8]} c="#1f2937" />
-        <Parapet w={w - 0.4} d={d - 0.8} y={1.91} c="#fdf4ff" h={0.12} cap="#d4af37" />
-        {/* Gold sign and a big shop window with two mannequins, framed in black */}
-        <B p={[0, 1.55, bd / 2 + 0.03]} s={[w - 1.2, 0.35, 0.05]} c="#d4af37" />
-        <B p={[0, 1.55, bd / 2 + 0.06]} s={[w - 1.6, 0.12, 0.02]} c="#1f2937" />
-        <Glass p={[0, 0.7, bd / 2 + 0.02]} s={[w - 1.4, 1, 0.04]} />
-        {[-1, 0, 1].map((k) => (
-          <B key={k} p={[k * (w - 1.4) / 2, 0.7, bd / 2 + 0.045]} s={[0.05, 1.04, 0.03]} c="#1f2937" />
-        ))}
-        <B p={[0, 1.22, bd / 2 + 0.045]} s={[w - 1.36, 0.05, 0.03]} c="#1f2937" />
-        <B p={[0, 0.18, bd / 2 + 0.045]} s={[w - 1.36, 0.05, 0.03]} c="#1f2937" />
-        {[-0.7, 0.7].map((x, i) => (
-          <group key={x} position={[x, 0, bd / 2 - 0.15]}>
-            <B p={[0, 0.45, 0]} s={[0.22, 0.7, 0.14]} c={i ? '#047857' : '#1d4ed8'} />
-            <B p={[0, 0.88, 0]} s={[0.12, 0.14, 0.12]} c="#f5f5f4" />
-          </group>
-        ))}
-      </group>
-      {/* Awning, and two potted plants by the door */}
-      <group position={[0, 1.32, d / 2 - 0.35]} rotation={[0.3, 0, 0]}>
-        <B p={[0, 0, 0]} s={[w - 0.6, 0.05, 0.55]} c="#be185d" />
-      </group>
-      {[-1, 1].map((sx) => (
-        <group key={sx} position={[sx * (w / 2 - 0.55), 0, d / 2 - 0.25]}>
-          <Cyl p={[0, 0.12, 0]} r={0.1} rt={0.13} h={0.24} c="#78350f" seg={8} />
-          <mesh position={[0, 0.38, 0]} castShadow>
-            <icosahedronGeometry args={[0.17, 1]} />
-            <meshStandardMaterial color="#15803d" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
 function Museum({ w, d }: { w: number; d: number }) {
   return (
     <group>
@@ -861,33 +616,6 @@ function Museum({ w, d }: { w: number; d: number }) {
           <meshStandardMaterial color="#b45309" flatShading />
         </mesh>
       </group>
-    </group>
-  );
-}
-
-function Park({ w, d }: { w: number; d: number }) {
-  const trees: V3[] = [[-4, 0, -1.2], [-2.6, 0, 1.1], [-0.9, 0, -1.3], [2.4, 0, -1.2], [3.9, 0, 0.9], [1.3, 0, 1.3]];
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#7fae4f" />
-      <B p={[0, 0.03, 0]} s={[w - 0.4, 0.01, 0.6]} c="#d6c4a1" />
-      {trees.map((p, i) => (
-        <Tree key={i} p={p} s={0.55 + (i % 3) * 0.1} c={i % 2 ? '#3f7d2a' : '#4d8f31'} />
-      ))}
-      {/* Gazebo */}
-      <group position={[0.6, 0, -0.3]}>
-        <Cyl p={[0, 0.06, 0]} r={0.8} h={0.12} c="#e5e7eb" seg={8} />
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <B key={i} p={[Math.cos((i * Math.PI) / 3) * 0.65, 0.65, Math.sin((i * Math.PI) / 3) * 0.65]} s={[0.07, 1.1, 0.07]} c="#fafaf9" />
-        ))}
-        <mesh position={[0, 1.45, 0]} castShadow>
-          <coneGeometry args={[1.0, 0.6, 8]} />
-          <meshStandardMaterial color="#b91c1c" flatShading />
-        </mesh>
-      </group>
-      {[-1.8, 3].map((x) => (
-        <B key={x} p={[x, 0.22, 0.6]} s={[0.9, 0.08, 0.3]} c="#92400e" />
-      ))}
     </group>
   );
 }
@@ -1121,43 +849,6 @@ function Nda({ w, d }: { w: number; d: number }) {
   );
 }
 
-function Hotel({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <group position={[-0.4, 0, -0.5]}>
-        <Block w={w - 1.6} d={d - 2} h={4.6} wall="#fbf7ef" roof="#b45309" floors={6} sign="#b45309" />
-      </group>
-      {/* Pool by the side */}
-      <B p={[w / 2 - 0.65, 0.05, 0.4]} s={[1, 0.06, 2.2]} c="#38bdf8" e="#0ea5e9" />
-      <B p={[w / 2 - 0.65, 0.03, 0.4]} s={[1.3, 0.04, 2.5]} c="#f5f5f4" />
-      {[-0.8, 0.8].map((x) => (
-        <Tree key={x} p={[x, 0, d / 2 - 0.4]} s={0.35} c="#2f7d32" />
-      ))}
-    </group>
-  );
-}
-
-function Arewa({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#9fbf5a" />
-      <group position={[0, 0, -0.4]}>
-        <B p={[0, 0.8, 0]} s={[w - 1, 1.6, d - 1.6]} c="#fbfaf6" />
-        <B p={[0, 1.66, 0]} s={[w - 0.8, 0.12, d - 1.4]} c="#15803d" />
-        <Gable p={[0, 1.72, 0]} w={2} d={1.6} h={0.5} c="#15803d" wall="#fbfaf6" eave={0.1} />
-        {/* Arched verandah */}
-        {[-1.4, -0.7, 0, 0.7, 1.4].map((x) => (
-          <B key={x} p={[x, 0.6, (d - 1.6) / 2 + 0.25]} s={[0.15, 1.2, 0.15]} c="#f5f5f4" />
-        ))}
-        <B p={[0, 1.25, (d - 1.6) / 2 + 0.25]} s={[w - 1, 0.12, 0.3]} c="#f5f5f4" />
-        <WindowRow w={w - 1} d={d - 1.6} y={0.9} n={5} />
-      </group>
-      <Tree p={[-w / 2 + 0.5, 0, d / 2 - 0.4]} s={0.4} />
-    </group>
-  );
-}
-
 function Horse({ c = '#7c2d12' }: { c?: string }) {
   return (
     <group>
@@ -1168,31 +859,6 @@ function Horse({ c = '#7c2d12' }: { c?: string }) {
         <B key={i} p={[x, 0.22, z]} s={[0.06, 0.44, 0.06]} c="#3f1d0b" />
       ))}
       <B p={[0, 0.72, -0.05]} s={[0.24, 0.05, 0.25]} c="#1d4ed8" />
-    </group>
-  );
-}
-
-function Polo({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#7fbf4f" />
-      {/* White rails round the field */}
-      {[-1, 1].map((s) => (
-        <B key={`x${s}`} p={[(s * (w - 0.3)) / 2, 0.3, 0]} s={[0.06, 0.06, d - 0.3]} c="#fff" />
-      ))}
-      {[-1, 1].map((s) => (
-        <B key={`z${s}`} p={[0, 0.3, (s * (d - 0.3)) / 2]} s={[w - 0.3, 0.06, 0.06]} c="#fff" />
-      ))}
-      {[[-1, -1.5, 0.6], [1.2, 0.5, -2.2], [-0.4, 1.8, 2.6]].map(([x, z, r], i) => (
-        <group key={i} position={[x, 0, z]} rotation={[0, r, 0]}>
-          <Horse c={['#7c2d12', '#1f2937', '#a16207'][i]} />
-        </group>
-      ))}
-      {/* Clubhouse stand */}
-      <group position={[w / 2 - 0.7, 0, -d / 2 + 1.5]}>
-        <B p={[0, 0.5, 0]} s={[1, 1, 2]} c="#fefce8" />
-        <B p={[-0.2, 1.05, 0]} s={[1.5, 0.1, 2.3]} c="#15803d" />
-      </group>
     </group>
   );
 }
@@ -1225,36 +891,6 @@ function Mill({ w, d }: { w: number; d: number }) {
 
 /* ---------- Landmarks (not enterable) ---------- */
 
-function GovHouse({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#8fbf5a" />
-      {/* Perimeter wall + gate */}
-      <B p={[0, 0.4, -d / 2 + 0.05]} s={[w, 0.8, 0.1]} c="#f5f5f4" />
-      <B p={[-w / 2 + 0.05, 0.4, 0]} s={[0.1, 0.8, d]} c="#f5f5f4" />
-      <B p={[w / 2 - 0.05, 0.4, 0]} s={[0.1, 0.8, d]} c="#f5f5f4" />
-      <B p={[-w / 4 - 0.35, 0.4, d / 2 - 0.05]} s={[w / 2 - 0.7, 0.8, 0.1]} c="#f5f5f4" />
-      <B p={[w / 4 + 0.35, 0.4, d / 2 - 0.05]} s={[w / 2 - 0.7, 0.8, 0.1]} c="#f5f5f4" />
-      <group position={[0, 0, -0.5]}>
-        <B p={[0, 0.9, 0]} s={[3.6, 1.8, 2]} c="#fbfaf6" />
-        <B p={[0, 1.86, 0]} s={[3.8, 0.12, 2.2]} c="#b45309" />
-        {[-1, -0.33, 0.33, 1].map((x) => (
-          <Cyl key={x} p={[x, 0.8, 1.15]} r={0.09} h={1.6} c="#fafaf9" seg={8} />
-        ))}
-        <B p={[0, 1.65, 1.15]} s={[2.4, 0.15, 0.4]} c="#f5f5f4" />
-        <WindowRow w={3.6} d={2} y={1.1} n={5} />
-      </group>
-      <B p={[0, 0.03, d / 2 - 1]} s={[0.8, 0.02, 2]} c="#d6d3d1" />
-      <group position={[w / 2 - 0.6, 0, d / 2 - 0.6]}>
-        <Cyl p={[0, 1.3, 0]} r={0.03} h={2.6} c="#cbd5e1" />
-        <B p={[0.15, 2.4, 0]} s={[0.12, 0.3, 0.02]} c="#15803d" />
-        <B p={[0.27, 2.4, 0]} s={[0.12, 0.3, 0.02]} c="#ffffff" />
-        <B p={[0.39, 2.4, 0]} s={[0.12, 0.3, 0.02]} c="#15803d" />
-      </group>
-    </group>
-  );
-}
-
 function Flyover({ w }: { w: number; d: number }) {
   const deckY = 1.15;
   const ramp = 2.6;
@@ -1281,169 +917,6 @@ function Flyover({ w }: { w: number; d: number }) {
   );
 }
 
-function Golf({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#6dbb4a" />
-      {[[-1.5, -1.6], [1.4, 1.2], [-0.6, 1.9]].map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[0.7, 16]} />
-            <meshStandardMaterial color="#86d65f" />
-          </mesh>
-          <B p={[0, 0.45, 0]} s={[0.03, 0.9, 0.03]} c="#f8fafc" />
-          <B p={[0.12, 0.8, 0]} s={[0.22, 0.14, 0.02]} c="#dc2626" />
-        </group>
-      ))}
-      <mesh position={[1.2, 0.03, -1.3]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.6, 12]} />
-        <meshStandardMaterial color="#e7d8a8" />
-      </mesh>
-      <Tree p={[w / 2 - 0.6, 0, -d / 2 + 0.6]} s={0.5} />
-      <Tree p={[-w / 2 + 0.6, 0, 0]} s={0.45} />
-      <group position={[-w / 2 + 1, 0, -d / 2 + 0.8]}>
-        <B p={[0, 0.5, 0]} s={[1.4, 1, 1]} c="#fefce8" />
-        <B p={[0, 1.05, 0]} s={[1.6, 0.1, 1.2]} c="#15803d" />
-      </group>
-    </group>
-  );
-}
-
-function TradeFair({ w, d }: { w: number; d: number }) {
-  const tents = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b'];
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6c4a1" />
-      {tents.map((c, i) => (
-        <group key={c} position={[-w / 2 + 1.1 + (i % 2) * 2.4, 0, -d / 2 + 1.2 + Math.floor(i / 2) * 2.4]}>
-          <B p={[0, 0.5, 0]} s={[1.6, 1, 1.6]} c="#f8fafc" />
-          <mesh position={[0, 1.3, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-            <coneGeometry args={[1.25, 0.7, 4]} />
-            <meshStandardMaterial color={c} flatShading />
-          </mesh>
-        </group>
-      ))}
-      {/* Ferris wheel */}
-      <group position={[w / 2 - 1.3, 0, 0]}>
-        <B p={[-0.25, 1.1, 0]} s={[0.08, 2.2, 0.08]} c="#64748b" />
-        <B p={[0.25, 1.1, 0]} s={[0.08, 2.2, 0.08]} c="#64748b" />
-        <mesh position={[0, 2.1, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <torusGeometry args={[1, 0.05, 6, 20]} />
-          <meshStandardMaterial color="#f59e0b" />
-        </mesh>
-        {Array.from({ length: 8 }, (_, i) => (
-          <B key={i} p={[0, 2.1 + Math.sin((i / 8) * Math.PI * 2), Math.cos((i / 8) * Math.PI * 2)]} s={[0.2, 0.18, 0.18]} c={tents[i % 4]} />
-        ))}
-      </group>
-    </group>
-  );
-}
-
-function Nightclub({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      {/* Dark luxury pavement base */}
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#0f172a" />
-
-      {/* Main Luxury Nightclub Complex Building */}
-      <group position={[0, 0, -0.6]}>
-        {/* Core club structure */}
-        <B p={[0, 1.6, 0]} s={[4.8, 3.2, 3.4]} c="#09090b" />
-        {/* Gold parapet crown trim */}
-        <B p={[0, 3.25, 0]} s={[4.96, 0.12, 3.56]} c="#eab308" e="#ca8a04" />
-
-        {/* Vertical Neon Light Fins along the facade */}
-        {[-2.1, -1.5, -0.9, 0.9, 1.5, 2.1].map((x, i) => (
-          <group key={x}>
-            <B p={[x, 1.6, 1.72]} s={[0.08, 2.8, 0.05]} c={i % 2 === 0 ? '#06b6d4' : '#ec4899'} e={i % 2 === 0 ? '#06b6d4' : '#ec4899'} />
-            <B p={[x, 1.6, 1.7]} s={[0.16, 2.86, 0.02]} c="#18181b" />
-          </group>
-        ))}
-
-        {/* Large "THE CASTLE" Neon Marquee Blade Sign */}
-        <group position={[0, 2.65, 1.75]}>
-          <B p={[0, 0, 0]} s={[3.6, 0.75, 0.08]} c="#020617" />
-          <B p={[0, 0, 0.05]} s={[3.66, 0.81, 0.02]} c="#eab308" e="#ca8a04" />
-          <B p={[0, 0.08, 0.06]} s={[3.0, 0.28, 0.02]} c="#ec4899" e="#ec4899" />
-          <B p={[0, -0.2, 0.06]} s={[1.8, 0.12, 0.02]} c="#06b6d4" e="#06b6d4" />
-        </group>
-
-        {/* VIP Entrance Canopy / Portico */}
-        <group position={[0, 1.55, 1.7]} rotation={[0, 0, 0]}>
-          <B p={[0, 0, 0.6]} s={[2.2, 0.1, 1.2]} c="#020617" />
-          <B p={[0, 0.06, 0.6]} s={[2.24, 0.04, 1.24]} c="#eab308" e="#ca8a04" />
-          <Cyl p={[-1.0, -0.75, 1.15]} r={0.05} h={1.5} c="#eab308" e="#ca8a04" />
-          <Cyl p={[1.0, -0.75, 1.15]} r={0.05} h={1.5} c="#eab308" e="#ca8a04" />
-          <Cyl p={[-0.5, -0.06, 0.6]} r={0.08} h={0.02} c="#fef08a" e="#fef08a" />
-          <Cyl p={[0.5, -0.06, 0.6]} r={0.08} h={0.02} c="#fef08a" e="#fef08a" />
-        </group>
-
-        {/* Smoked glass double doors */}
-        <B p={[0, 0.7, 1.72]} s={[1.3, 1.4, 0.04]} c="#1e293b" />
-        <B p={[-0.05, 0.7, 1.75]} s={[0.02, 0.3, 0.02]} c="#eab308" />
-        <B p={[0.05, 0.7, 1.75]} s={[0.02, 0.3, 0.02]} c="#eab308" />
-
-        {/* Roof Sky Searchlights / Lasers */}
-        <group position={[-1.6, 3.4, -0.5]} rotation={[0.4, 0.3, 0]}>
-          <Cyl p={[0, 0, 0]} r={0.16} h={0.25} c="#1e293b" />
-          <Cyl p={[0, 0.14, 0]} r={0.14} h={0.04} c="#06b6d4" e="#06b6d4" />
-        </group>
-        <group position={[1.6, 3.4, -0.5]} rotation={[0.4, -0.3, 0]}>
-          <Cyl p={[0, 0, 0]} r={0.16} h={0.25} c="#1e293b" />
-          <Cyl p={[0, 0.14, 0]} r={0.14} h={0.04} c="#ec4899" e="#ec4899" />
-        </group>
-      </group>
-
-      {/* Red Carpet VIP Entrance Runner */}
-      <B p={[0, 0.045, 1.65]} s={[1.2, 0.03, 1.7]} c="#991b1b" />
-
-      {/* Polished Brass Stanchions & Velvet Ropes */}
-      {[-0.7, 0.7].map((x) => (
-        <group key={x}>
-          {[1.0, 1.6, 2.2].map((z) => (
-            <group key={z} position={[x, 0, z]}>
-              <Cyl p={[0, 0.02, 0]} r={0.08} h={0.03} c="#ca8a04" />
-              <Cyl p={[0, 0.28, 0]} r={0.028} h={0.52} c="#eab308" e="#ca8a04" />
-              <mesh position={[0, 0.56, 0]}>
-                <sphereGeometry args={[0.045, 8, 8]} />
-                <meshStandardMaterial color="#facc15" />
-              </mesh>
-            </group>
-          ))}
-          <B p={[x, 0.45, 1.3]} s={[0.025, 0.025, 0.58]} c="#7f1d1d" />
-          <B p={[x, 0.45, 1.9]} s={[0.025, 0.025, 0.58]} c="#7f1d1d" />
-        </group>
-      ))}
-
-      {/* VIP Parked Luxury Black SUV */}
-      <group position={[2.0, 0, 1.3]}>
-        <B p={[0, 0.35, 0]} s={[0.92, 0.48, 1.7]} c="#09090b" />
-        <B p={[0, 0.72, -0.1]} s={[0.82, 0.42, 1.1]} c="#18181b" />
-        <B p={[0, 0.72, 0.46]} s={[0.76, 0.34, 0.02]} c="#020617" />
-        <B p={[0, 0.72, -0.66]} s={[0.76, 0.34, 0.02]} c="#020617" />
-        {[[-0.46, -0.55], [0.46, -0.55], [-0.46, 0.55], [0.46, 0.55]].map(([wx, wz], wi) => (
-          <group key={wi} position={[wx, 0.16, wz]} rotation={[0, 0, Math.PI / 2]}>
-            <Cyl p={[0, 0, 0]} r={0.16} h={0.12} c="#18181b" />
-            <Cyl p={[0, 0.06, 0]} r={0.09} h={0.02} c="#cbd5e1" />
-          </group>
-        ))}
-        <Cyl p={[-0.32, 0.42, 0.86]} r={0.06} h={0.02} c="#f8fafc" e="#ffffff" />
-        <Cyl p={[0.32, 0.42, 0.86]} r={0.06} h={0.02} c="#f8fafc" e="#ffffff" />
-        <B p={[-0.34, 0.42, -0.86]} s={[0.14, 0.06, 0.02]} c="#ef4444" e="#dc2626" />
-        <B p={[0.34, 0.42, -0.86]} s={[0.14, 0.06, 0.02]} c="#ef4444" e="#dc2626" />
-      </group>
-
-      {/* Decorative Nightclub Landscaping Planters on Left Side */}
-      <group position={[-2.1, 0, 1.3]}>
-        <B p={[0, 0.25, 0]} s={[0.7, 0.5, 1.6]} c="#1e293b" />
-        <B p={[0, 0.52, 0]} s={[0.74, 0.06, 1.64]} c="#eab308" />
-        <Tree p={[0, 0.5, -0.4]} s={0.35} c="#15803d" />
-        <Tree p={[0, 0.5, 0.4]} s={0.35} c="#15803d" />
-      </group>
-    </group>
-  );
-}
-
 /* ---------- Abuja ---------- */
 
 /** A lump of bare granite: a low-poly ball squashed to size. */
@@ -1453,161 +926,6 @@ function Boulder({ p, s, c = '#8d867b', yaw = 0 }: { p: V3; s: V3; c?: string; y
       <icosahedronGeometry args={[1, 1]} />
       <meshStandardMaterial color={c} flatShading roughness={0.95} />
     </mesh>
-  );
-}
-
-/** Aso Rock: the 400 m granite outcrop behind the Three Arms Zone, bush at its foot. */
-function AsoRock({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#7fae58" />
-      <Boulder p={[-0.4, 1.2, -0.3]} s={[w * 0.4, 3.9, d * 0.36]} yaw={0.3} />
-      <Boulder p={[w * 0.24, 0.9, 0.2]} s={[w * 0.24, 2.7, d * 0.3]} c="#978f83" yaw={1.1} />
-      <Boulder p={[-w * 0.3, 0.6, 0.5]} s={[w * 0.2, 1.9, d * 0.27]} c="#7f786e" yaw={2} />
-      <Boulder p={[w * 0.05, 0.3, d * 0.3]} s={[w * 0.18, 1.0, d * 0.14]} c="#9a9388" yaw={0.7} />
-      {/* Rain streaks down the bare face. */}
-      {[-1.5, -0.6, 0.5, 1.3].map((x, i) => (
-        <B key={x} p={[x - 0.4, 2.3 - i * 0.2, d * 0.2 + 0.25 - Math.abs(x) * 0.22]} s={[0.12, 2.2, 0.05]} c="#5f5a53" />
-      ))}
-      {[[-w / 2 + 0.7, d / 2 - 0.6], [-w / 2 + 1.9, d / 2 - 0.4], [w / 2 - 0.8, d / 2 - 0.7], [w / 2 - 2, d / 2 - 0.4], [0.4, d / 2 - 0.35], [-w / 2 + 0.6, -d / 2 + 0.8], [w / 2 - 0.7, -d / 2 + 0.9]].map(([x, z], i) => (
-        <Tree key={i} p={[x, 0, z]} s={0.42 + (i % 3) * 0.08} c={i % 2 ? '#2f7d3b' : '#3f8f45'} />
-      ))}
-    </group>
-  );
-}
-
-/** Zuma Rock: the lone monolith on the road to Kaduna, with the dark streaks people read as a face. */
-function ZumaRock({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#8fb963" />
-      <Cyl p={[0, 1.3, -0.1]} r={w * 0.36} rt={w * 0.31} h={2.6} c="#8a8479" seg={9} />
-      <mesh position={[0, 2.6, -0.1]} scale={[w * 0.31, 1.25, w * 0.31]} castShadow>
-        <sphereGeometry args={[1, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color="#8a8479" flatShading roughness={0.95} />
-      </mesh>
-      {/* The face: two eyes, a nose and a mouth of rain-stained rock. */}
-      {[[-0.55, 2.35, 0.3, 0.9], [0.45, 2.3, 0.28, 1.0], [-0.05, 1.7, 0.2, 1.1], [0.05, 0.95, 0.75, 0.3]].map(([x, y, sx, sy], i) => (
-        <B key={i} p={[x, y, w * 0.33 - 0.1 - Math.abs(x) * 0.25]} s={[sx, sy, 0.06]} c="#56514b" />
-      ))}
-      <Boulder p={[w * 0.36, 0.25, d * 0.2]} s={[0.7, 0.6, 0.6]} c="#9a9388" />
-      {[[-w / 2 + 0.5, d / 2 - 0.5], [w / 2 - 0.5, -d / 2 + 0.6], [-w / 2 + 0.7, -d / 2 + 0.6]].map(([x, z], i) => (
-        <Tree key={i} p={[x, 0, z]} s={0.4} c="#3f8f45" />
-      ))}
-    </group>
-  );
-}
-
-/** Abuja City Gate: twin pylons and a beam over Airport Road. The road runs through along x. */
-function CityGate({ d }: { w: number; d: number }) {
-  const span = d - 0.7;
-  return (
-    <group>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[0, 0, (s * span) / 2]}>
-          <B p={[0, 0.12, 0]} s={[1.1, 0.24, 0.7]} c="#d6d3d1" />
-          <B p={[0, 1.5, 0]} s={[0.7, 2.6, 0.42]} c="#fafaf9" />
-          <B p={[0, 1.5, s * 0.22]} s={[0.24, 2.6, 0.03]} c="#15803d" />
-          <B p={[0, 3.05, 0]} s={[0.9, 0.5, 0.56]} c="#15803d" />
-        </group>
-      ))}
-      <B p={[0, 2.62, 0]} s={[0.5, 0.36, span]} c="#fafaf9" />
-      <B p={[0, 2.86, 0]} s={[0.62, 0.12, span + 0.5]} c="#15803d" />
-      {/* Name plates, facing drivers both ways. */}
-      {[-1, 1].map((s) => (
-        <B key={s} p={[s * 0.27, 2.62, 0]} s={[0.03, 0.24, span * 0.55]} c="#facc15" />
-      ))}
-    </group>
-  );
-}
-
-/** The National Mosque: one great golden dome, four small ones, and a minaret at each corner. */
-function NationalMosque({ w, d }: { w: number; d: number }) {
-  const mx = w / 2 - 0.45;
-  const mz = d / 2 - 0.45;
-  return (
-    <group>
-      <B p={[0, 0.03, 0]} s={[w, 0.06, d]} c="#e7e5e4" />
-      <B p={[0, 0.85, -0.2]} s={[3.6, 1.6, 2.8]} c="#f3ead7" />
-      <B p={[0, 1.7, -0.2]} s={[3.8, 0.12, 3]} c="#d9c9a3" />
-      <Cyl p={[0, 2.0, -0.2]} r={1.2} h={0.5} c="#f3ead7" seg={16} />
-      <Dome p={[0, 2.25, -0.2]} r={1.2} c="#d4a017" />
-      <B p={[0, 3.6, -0.2]} s={[0.06, 0.4, 0.06]} c="#facc15" />
-      {[[-1.35, -1.15], [1.35, -1.15], [-1.35, 0.75], [1.35, 0.75]].map(([x, z], i) => (
-        <Dome key={i} p={[x, 1.76, z]} r={0.38} c="#d4a017" />
-      ))}
-      {[[-mx, -mz], [mx, -mz], [-mx, mz], [mx, mz]].map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <Cyl p={[0, 2.1, 0]} r={0.17} rt={0.12} h={4.2} c="#f8f1e0" seg={8} />
-          <Cyl p={[0, 2.9, 0]} r={0.24} h={0.1} c="#d9c9a3" seg={8} />
-          <Cyl p={[0, 3.7, 0]} r={0.21} h={0.1} c="#d9c9a3" seg={8} />
-          <mesh position={[0, 4.5, 0]} castShadow>
-            <coneGeometry args={[0.15, 0.6, 8]} />
-            <meshStandardMaterial color="#d4a017" flatShading />
-          </mesh>
-        </group>
-      ))}
-      {/* Arched entrance and windows. */}
-      <B p={[0, 0.6, 1.22]} s={[0.7, 1.1, 0.06]} c="#5a371e" />
-      {[-1.3, -0.75, 0.75, 1.3].map((x) => (
-        <Win key={x} p={[x, 0.95, 1.21]} s={[0.3, 0.7, 0.04]} />
-      ))}
-    </group>
-  );
-}
-
-/** The National Assembly: the long white complex under its green dome. */
-function NationalAssembly({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      {/* The two chambers, either side of the dome. */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * (w / 2 - 1.15), 0, -0.5]}>
-          <B p={[0, 0.75, 0]} s={[1.9, 1.5, d - 1.8]} c="#f5f5f4" />
-          <B p={[0, 1.56, 0]} s={[2.05, 0.12, d - 1.65]} c="#15803d" />
-          <WindowRow w={1.9} d={d - 1.8} y={0.9} n={3} inset={0.2} />
-        </group>
-      ))}
-      <B p={[0, 1.0, -0.5]} s={[2.4, 2.0, d - 1.4]} c="#fafaf9" />
-      <B p={[0, 2.06, -0.5]} s={[2.6, 0.12, d - 1.2]} c="#e7e5e4" />
-      <Cyl p={[0, 2.3, -0.5]} r={1.1} h={0.4} c="#f5f5f4" seg={16} />
-      <Dome p={[0, 2.5, -0.5]} r={1.1} c="#15803d" />
-      <Cyl p={[0, 3.75, -0.5]} r={0.03} h={0.5} c="#e5e7eb" seg={6} />
-      {/* Portico */}
-      <B p={[0, 1.75, 1.25]} s={[2.4, 0.18, 0.8]} c="#e7e5e4" />
-      {[-0.95, -0.32, 0.32, 0.95].map((x) => (
-        <Cyl key={x} p={[x, 0.85, 1.5]} r={0.09} h={1.7} c="#fafaf9" seg={8} />
-      ))}
-      <B p={[0, 0.5, 1.12]} s={[0.7, 1.0, 0.05]} c="#3b2a1a" />
-      {/* Flags along the forecourt. */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * (w / 2 - 0.4), 0, d / 2 - 0.4]}>
-          <Cyl p={[0, 1.1, 0]} r={0.03} h={2.2} c="#cbd5e1" seg={6} />
-          <B p={[0.14, 2.05, 0]} s={[0.1, 0.26, 0.02]} c="#15803d" />
-          <B p={[0.24, 2.05, 0]} s={[0.1, 0.26, 0.02]} c="#ffffff" />
-          <B p={[0.34, 2.05, 0]} s={[0.1, 0.26, 0.02]} c="#15803d" />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/** The Supreme Court: a square white hall behind a colonnade. */
-function SupremeCourt({ w, d }: { w: number; d: number }) {
-  const n = 6;
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <B p={[0, 0.15, 0]} s={[w - 0.6, 0.3, d - 0.6]} c="#e7e5e4" />
-      <B p={[0, 1.15, -0.2]} s={[w - 1.4, 1.7, d - 1.6]} c="#fafaf9" />
-      <B p={[0, 2.1, 0]} s={[w - 0.5, 0.22, d - 0.5]} c="#f5f5f4" />
-      <B p={[0, 2.3, 0]} s={[w - 1.2, 0.18, d - 1.2]} c="#a8a29e" />
-      {Array.from({ length: n }, (_, i) => (
-        <Cyl key={i} p={[-(w - 1.2) / 2 + ((w - 1.2) / (n - 1)) * i, 1.15, d / 2 - 0.55]} r={0.1} h={1.7} c="#fafaf9" seg={8} />
-      ))}
-      <B p={[0, 0.75, d / 2 - 1.0]} s={[0.7, 1.2, 0.05]} c="#3b2a1a" />
-    </group>
   );
 }
 
@@ -1622,35 +940,6 @@ function Tower({ p, s, c, cap = '#e5e7eb' }: { p: V3; s: V3; c: string; cap?: st
       {Array.from({ length: floors }, (_, f) => (
         <Win key={f} p={[0, (sy / floors) * (f + 0.55), sz / 2 + 0.01]} s={[sx * 0.82, (sy / floors) * 0.5, 0.03]} />
       ))}
-    </group>
-  );
-}
-
-/** Central Bank of Nigeria headquarters: a tall glass slab between two stone wings. */
-function CbnHq({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <B p={[0, 0.35, 0]} s={[w - 0.6, 0.7, d - 0.9]} c="#e7e5e4" />
-      <Tower p={[0, 0.7, -0.1]} s={[1.5, 3.9, 1.3]} c="#3f6f8f" cap="#d4af37" />
-      {[-1, 1].map((s) => (
-        <Tower key={s} p={[s * 1.15, 0.7, -0.1]} s={[0.7, 2.8, 1.5]} c="#efe9dc" />
-      ))}
-      <B p={[0, 0.4, d / 2 - 0.42]} s={[0.8, 0.8, 0.05]} c="#3b2a1a" />
-    </group>
-  );
-}
-
-/** NNPC Towers: four identical blue-glass towers round one podium. */
-function NnpcTowers({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <B p={[0, 0.3, 0]} s={[w - 0.5, 0.6, d - 0.5]} c="#cbd5e1" />
-      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
-        <Tower key={i} p={[sx * (w / 2 - 0.95), 0.6, sz * (d / 2 - 0.85)]} s={[0.95, sz < 0 ? 3.6 : 3.2, 0.8]} c="#4f7fa3" />
-      ))}
-      <B p={[0, 0.95, d / 2 - 0.2]} s={[1.3, 0.3, 0.06]} c="#15803d" />
     </group>
   );
 }
@@ -1705,52 +994,6 @@ function Fountain({ w }: { w: number; d: number }) {
       <Cyl p={[0, 0.27, 0]} r={w / 2 - 0.3} h={0.04} c="#5fb3d9" seg={20} />
       <Cyl p={[0, 0.5, 0]} r={0.12} h={0.5} c="#e7e5e4" seg={8} />
       <Cyl p={[0, 1.0, 0]} r={0.05} h={0.9} c="#bfe6f5" rt={0.14} seg={8} />
-    </group>
-  );
-}
-
-/** World Trade Centre: one very tall glass tower beside a shorter one, on a retail podium. */
-function Wtc({ w, d }: { w: number; d: number }) {
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <B p={[0, 0.3, 0]} s={[w - 0.4, 0.6, d - 0.5]} c="#cbd5e1" />
-      <Tower p={[-0.45, 0.6, -0.5]} s={[1.1, 5.2, 1.1]} c="#35607f" cap="#94a3b8" />
-      <Tower p={[0.6, 0.6, 0.7]} s={[0.9, 3.4, 0.9]} c="#4f7fa3" cap="#94a3b8" />
-    </group>
-  );
-}
-
-/** ECOWAS Secretariat: a long white office block with a row of member-state flags in front. */
-function Ecowas({ w, d }: { w: number; d: number }) {
-  const flags = ['#15803d', '#dc2626', '#f59e0b', '#2563eb', '#15803d', '#f8fafc'];
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <Tower p={[0, 0.04, -0.3]} s={[w - 0.8, 2.0, d - 1.4]} c="#f8fafc" cap="#15803d" />
-      {flags.map((c, i) => (
-        <group key={i} position={[-w / 2 + 0.5 + i * ((w - 1) / (flags.length - 1)), 0, d / 2 - 0.3]}>
-          <Cyl p={[0, 0.6, 0]} r={0.025} h={1.2} c="#e5e7eb" seg={6} />
-          <B p={[0.14, 1.08, 0]} s={[0.26, 0.16, 0.02]} c={c} />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/** Dunamis Glory Dome: one enormous low dome over a round auditorium. */
-function GloryDome({ w, d }: { w: number; d: number }) {
-  const r = Math.min(w, d) / 2 - 0.3;
-  return (
-    <group>
-      <B p={[0, 0.02, 0]} s={[w, 0.04, d]} c="#d6d3d1" />
-      <Cyl p={[0, 0.45, 0]} r={r} h={0.9} c="#f1f5f9" seg={24} />
-      <group position={[0, 0.9, 0]} scale={[1, 0.55, 1]}>
-        <Dome p={[0, 0, 0]} r={r} c="#e2e8f0" />
-      </group>
-      <Cyl p={[0, 0.9 + r * 0.55 + 0.2, 0]} r={0.05} h={0.5} c="#d4af37" seg={6} />
-      <B p={[0, 0.45, r + 0.25]} s={[1.6, 0.9, 0.5]} c="#e2e8f0" />
-      <B p={[0, 0.35, r + 0.51]} s={[0.7, 0.7, 0.03]} c="#3b2a1a" />
     </group>
   );
 }
@@ -1843,35 +1086,6 @@ function CompVillage({ w, d }: { w: number; d: number }) {
       <Cyl p={[w / 2 - 0.4, 1.2, -d / 2 + 0.35]} r={0.05} h={2.4} c="#52525b" seg={6} />
       <B p={[w / 2 - 0.4, 2.3, -d / 2 + 0.35]} s={[0.9, 0.6, 0.08]} c="#111827" />
       <Win p={[w / 2 - 0.4, 2.3, -d / 2 + 0.4]} s={[0.76, 0.46, 0.02]} />
-    </group>
-  );
-}
-
-/** Landmark Beach: sand, umbrellas and loungers, a bar hut, and the Atlantic rolling in on the +z side. */
-function Beach({ w, d }: { w: number; d: number }) {
-  const shades = ['#f97316', '#0ea5e9', '#facc15', '#ef4444', '#22c55e'];
-  const n = Math.max(3, Math.floor(w / 2));
-  return (
-    <group>
-      <B p={[0, 0.015, 0]} s={[w, 0.03, d]} c="#f0dca8" />
-      <B p={[0, 0.02, d / 2 + 0.5]} s={[w, 0.03, 1]} c="#f8fafc" />
-      <B p={[0, 0.012, d / 2 + 1.6]} s={[w + 1, 0.02, 1.4]} c="#38a3c9" />
-      {Array.from({ length: n }, (_, i) => {
-        const x = -w / 2 + 1 + i * ((w - 2) / (n - 1));
-        return (
-          <group key={i} position={[x, 0, (i % 2 ? 0.25 : -0.15) * d]}>
-            <Cyl p={[0, 0.4, 0]} r={0.02} h={0.8} c="#78716c" seg={6} />
-            <Cyl p={[0, 0.84, 0]} r={0.45} rt={0.02} h={0.2} c={shades[i % shades.length]} seg={8} />
-            <B p={[0.3, 0.1, 0.15]} s={[0.22, 0.06, 0.6]} c="#f8fafc" />
-          </group>
-        );
-      })}
-      <group position={[-w / 2 + 0.7, 0, -d / 2 + 0.6]}>
-        <B p={[0, 0.3, 0]} s={[1.0, 0.6, 0.7]} c="#b88b49" />
-        <Cyl p={[0, 0.82, 0]} r={0.85} rt={0.05} h={0.45} c="#a16207" seg={8} />
-      </group>
-      <Tree p={[w / 2 - 0.5, 0.03, -d / 2 + 0.5]} s={0.5} c="#3f8f4a" />
-      <Tree p={[w / 2 - 1.6, 0.03, -d / 2 + 0.4]} s={0.42} c="#4a9a52" />
     </group>
   );
 }
