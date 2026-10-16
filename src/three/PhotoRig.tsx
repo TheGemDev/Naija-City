@@ -12,6 +12,7 @@ import { regionOf } from '../game/regions';
 import { REGION_BY_ID } from '../game/property';
 import { activeDesignOf, dayOf, flightOf, useGame } from '../game/store';
 import { FLIGHT_SEAT } from './FlightCabin';
+import { rideClass, TRAIN_SEAT } from './TrainRide';
 import { useVisit } from '../game/visits';
 import { MAP_SCALE, onMap } from './Avatar';
 
@@ -32,7 +33,10 @@ function photoFrame(camera: PerspectiveCamera) {
   const s = useGame.getState();
   // In the air I am the one in the seat (three/FlightCabin.tsx): the avatar is still standing, unseen, at the airport.
   const flight = flightOf(s);
-  if (flight) return { me: { x: FLIGHT_SEAT[flight].x, y: 0, z: FLIGHT_SEAT[flight].z }, size: 1, house: null, seated: true };
+  if (flight) {
+    const seat = flight === 'train' ? TRAIN_SEAT[rideClass()] : FLIGHT_SEAT[flight];
+    return { me: { x: seat.x, y: 0, z: seat.z }, size: 1, house: null, seated: true };
+  }
   const visit = useVisit.getState().current;
   const at = visit ? { origin: visit.save.origin, design: visit.save.design } : s.view === 'home' ? { origin: s.origin, design: activeDesignOf(s) } : null;
   // Out in town or inside a place there is no house to frame: the shots are all about me.
@@ -56,7 +60,7 @@ function placeName() {
   const visit = useVisit.getState().current;
   return visit
     ? visit.ownerName ? `${visit.ownerName}'s house` : 'Visiting'
-    : flightOf(s) ? (flightOf(s) === 'jet' ? 'On the private jet' : 'In the air')
+    : flightOf(s) ? (flightOf(s) === 'jet' ? 'On the private jet' : flightOf(s) === 'train' ? 'On the train' : 'In the air')
     : s.view === 'home' ? 'At home'
     : s.view === 'place' ? (s.insideId && placeHere(s.insideId)?.name) || regionOf(s.destinationId).name
     : s.view === 'estate' ? (s.estateId && REGION_BY_ID[s.estateId]?.name) || regionOf(s.destinationId).name

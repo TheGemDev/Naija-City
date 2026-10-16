@@ -8,6 +8,7 @@ import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, ty
 import { B, Keke } from './models';
 import { Airliner } from './aircraft';
 import { Stadium } from './Stadium';
+import { AsoRockModel, CbnModel, CityGateModel, EcowasModel, GovHouseModel, NassModel, NationalMosqueModel, NnpcModel, SecretariatModel, SupremeCourtModel, WtcModel, ZumaRockModel } from './places/civic';
 
 type V3 = [number, number, number];
 
@@ -2051,21 +2052,21 @@ function Pyramids({ w, d }: { w: number; d: number }) {
 
 export function LandmarkModel({ model, w, d }: { model: string; w: number; d: number }) {
   switch (model) {
-    case 'govhouse': return <GovHouse w={w} d={d} />;
+    case 'govhouse': return <GovHouseModel w={w} d={d} />;
     case 'flyover': return <Flyover w={w} d={d} />;
     case 'golf': return <Golf w={w} d={d} />;
     case 'tradefair': return <TradeFair w={w} d={d} />;
-    case 'asorock': return <AsoRock w={w} d={d} />;
-    case 'zumarock': return <ZumaRock w={w} d={d} />;
-    case 'citygate': return <CityGate w={w} d={d} />;
-    case 'supremecourt': return <SupremeCourt w={w} d={d} />;
-    case 'cbn': return <CbnHq w={w} d={d} />;
-    case 'nnpc': return <NnpcTowers w={w} d={d} />;
+    case 'asorock': return <AsoRockModel w={w} d={d} />;
+    case 'zumarock': return <ZumaRockModel w={w} d={d} />;
+    case 'citygate': return <CityGateModel w={w} d={d} />;
+    case 'supremecourt': return <SupremeCourtModel w={w} d={d} />;
+    case 'cbn': return <CbnModel w={w} d={d} />;
+    case 'nnpc': return <NnpcModel w={w} d={d} />;
     case 'milltower': return <MillenniumTower w={w} d={d} />;
     case 'campus': return <Campus w={w} d={d} />;
     case 'fountain': return <Fountain w={w} d={d} />;
-    case 'wtc': return <Wtc w={w} d={d} />;
-    case 'ecowas': return <Ecowas w={w} d={d} />;
+    case 'wtc': return <WtcModel w={w} d={d} />;
+    case 'ecowas': return <EcowasModel w={w} d={d} />;
     case 'glorydome': return <GloryDome w={w} d={d} />;
     case 'nationaltheatre': return <NationalTheatre w={w} d={d} />;
     case 'port': return <Port w={w} d={d} />;
@@ -2097,7 +2098,7 @@ export function PlaceModel({ model, w, d }: { model: string; w: number; d: numbe
     case 'market': return <Market {...props} />;
     case 'lugard': return <Lugard {...props} />;
     case 'square': return <Square {...props} />;
-    case 'secretariat': return <Secretariat {...props} />;
+    case 'secretariat': return <SecretariatModel {...props} />;
     case 'bank': return <BankBranch {...props} />;
     case 'hospital': return <Hospital {...props} />;
     case 'mall': return <Mall {...props} />;
@@ -2116,9 +2117,9 @@ export function PlaceModel({ model, w, d }: { model: string; w: number; d: numbe
     case 'mill': return <Mill {...props} />;
     case 'airport': return <Airport {...props} />;
     case 'club': return <Nightclub {...props} />;
-    case 'nationalmosque': return <NationalMosque {...props} />;
-    case 'nass': return <NationalAssembly {...props} />;
-    case 'govhouse': return <GovHouse {...props} />;
+    case 'nationalmosque': return <NationalMosqueModel {...props} />;
+    case 'nass': return <NassModel {...props} />;
+    case 'govhouse': return <GovHouseModel {...props} />;
     default: return <B p={[0, 0.5, 0]} s={[w, 1, d]} c="#f0f" />;
   }
 }

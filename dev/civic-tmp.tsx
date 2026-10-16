@@ -26,12 +26,14 @@ function Info() {
   });
   useEffect(() => {
     (window as never as Record<string, unknown>).__tris = () => {
+      // The model's own meshes are the ones StaticBatch hid; the glow is the additive one.
       let meshes = 0, tris = 0, glow = 0;
       scene.traverse((o) => {
-        const m = o as unknown as { isMesh?: boolean; name: string; material: { blending?: number }; geometry: { index: { count: number } | null; attributes: { position: { count: number } } }; userData: Record<string, unknown> };
+        const m = o as unknown as { isMesh?: boolean; visible: boolean; material: { blending?: number }; geometry: { index: { count: number } | null; attributes: { position: { count: number } } }; userData: Record<string, unknown> };
         if (!m.isMesh || m.userData.ground) return;
         const t = (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
         if (m.material.blending === 2) { glow += t; return; }
+        if (m.visible) return;
         meshes++; tris += t;
       });
       return { meshes, tris, glow, calls: gl.info.render.calls };
@@ -44,7 +46,7 @@ const L = Math.hypot(0, 1, 0.38);
 const pos: [number, number, number] = cam === 'close'
   ? [Math.sin(yaw) * dist * 0.75, dist * 0.45, Math.cos(yaw) * dist * 0.75]
   : [0, dist / L, (0.38 * dist) / L];
-const target: [number, number, number] = [0, cam === 'close' ? 1 : 0, 0];
+const target: [number, number, number] = [0, cam === 'close' ? Number(q.get('ty') ?? 1) : 0, 0];
 function App() {
   const M = LANDMARKS.has(model) ? LandmarkModel : PlaceModel;
   return (

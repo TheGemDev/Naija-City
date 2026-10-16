@@ -297,7 +297,9 @@ function buildLand(seed: number, low: boolean, climate: number, geo: Shapes, mat
   const roadEdge = (x: number, z: number) => Math.min(...roads.map((c) => edge(c, x, z, 20)));
 
   // The ground: a grid of heights, with the plains flattened towards the water and the runway, and the river beds cut in.
-  const step = low ? 6 : 4;
+  // The step must divide the tile both ways (640 × 600): at 6 the grid came out a fraction of a row short, and the
+  // farm plots and roads laid over it were all NaN on a low-power device.
+  const step = low ? 8 : 4;
   const cols = TILE_W / step + 1, rows = TILE_D / step + 1;
   const hts = new Float32Array(cols * rows);
   const pos: number[] = [], kinds: number[] = [], shades: number[] = [], index: number[] = [];

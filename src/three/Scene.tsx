@@ -19,6 +19,10 @@ import { City } from './City';
 import { Disasters } from './Disasters';
 import { Interior } from './Interior';
 import { CABIN_LENGTH, FlightCabin } from './FlightCabin';
+import { TRAIN_LENGTH, TrainRide } from './TrainRide';
+
+/** How long the cabin or the coach you are riding in is, for the camera. */
+const RIDE_LENGTH = { ...CABIN_LENGTH, train: TRAIN_LENGTH };
 import { RemotePlayers } from './RemotePlayers';
 import { Estate, estateRowsNow } from './Estate';
 import { estateH, estateW } from '../game/estate';
@@ -271,7 +275,7 @@ function framing(s: GameState): { target: [number, number, number]; pos: [number
   const flight = flightOf(s);
   if (flight) {
     const target: [number, number, number] = [0, 0.8, 0];
-    return { target, pos: offset(target, ISO_DIR, fitDistance(CABIN_LENGTH[flight] * 0.8, 14)) };
+    return { target, pos: offset(target, ISO_DIR, fitDistance(RIDE_LENGTH[flight] * 0.8, 14)) };
   }
   if (s.view === 'city') {
     // A visitor's tour of a city (game/tour.ts) opens on the whole map, not on where a player would be standing.
@@ -314,7 +318,7 @@ function bounds(s: GameState) {
     return { x0: -1, x1: l.gridW + 1, z0: -1, z1: l.gridH + 1.5 };
   }
   const flight = flightOf(s);
-  if (flight) return { x0: -4, x1: 4, z0: -CABIN_LENGTH[flight] / 2, z1: CABIN_LENGTH[flight] / 2 };
+  if (flight) return { x0: -4, x1: 4, z0: -RIDE_LENGTH[flight] / 2, z1: RIDE_LENGTH[flight] / 2 };
   if (s.view === 'city') return { x0: -8, x1: activeMap().w + 8, z0: -8, z1: activeMap().h + 8 };
   if (s.view === 'estate' && s.estateId) return { x0: -1, x1: estateW() + 1, z0: -1, z1: estateH(estateRowsNow(s.estateId)) + 1 };
   const it = s.view === 'place' && s.insideId ? INTERIORS[s.insideId] : null;
@@ -396,7 +400,7 @@ function Area() {
   const homeStaff = useMemo(() => (staff ?? []).filter((member) => member.paidThrough >= today), [staff, today]);
   const visit = useVisit((s) => s.current);
   const flight = useGame(flightOf);
-  if (flight) return <FlightCabin kind={flight} />;
+  if (flight) return flight === 'train' ? <TrainRide /> : <FlightCabin kind={flight} />;
   if (visit) return (
     <>
       <World readOnly items={visit.save.items} origin={visit.save.origin} design={visit.save.design} walls={visit.save.walls} paint={visit.save.paint} visitCars={visit.save.ownedCars} />
