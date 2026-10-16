@@ -173,9 +173,9 @@ function batch(list: Item[], geometry: BufferGeometry, material: MeshStandardMat
 
 /**
  * A ground-hugging mesh whose colours follow the climate. Each vertex carries its colour twice, as it is in the dry
- * north (`color`) and in the wet south (`wetColor`), both already lit or shaded, and the shader blends between them
- * (greening). Repainting the whole ground on the CPU and sending it to the GPU again, a few dozen times a flight, was
- * a hitch each time on a phone.
+ * north (`color`) and in the wet south (`wetColor`), each already darkened or lightened by its shade, and the shader
+ * blends between them (greening). Repainting the whole ground on the CPU and sending it to the GPU again, a few dozen
+ * times a flight, was a hitch each time on a phone.
  */
 function painted(pos: number[], index: number[], kinds: number[], shades: number[], tones: Tone[], normals?: number[]) {
   const geometry = new BufferGeometry();

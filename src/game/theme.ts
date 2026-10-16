@@ -56,6 +56,8 @@ let daylight = false;
 export const holdDaylight = (on: boolean) => {
   daylight = on;
 };
+/** True while a city tour holds the map at noon: it gets a clear sky too (game/weather.ts). */
+export const daylightHeld = () => daylight;
 
 /** The hour the 3D world is lit at: the game clock's, except dark appearance is always night and a city tour is always day. */
 export const sceneHour = (clock: number) => (daylight ? 12 : useTheme.getState().mode === 'dark' ? 21 : clock);
