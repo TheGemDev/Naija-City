@@ -8,6 +8,8 @@ import { auth, cachedToken, idToken, signOut, watchUser } from './firebase';
 import { clearLocal, hydrate, saveLocal, serialize, type SaveData } from '../game/save';
 import { useGame } from '../game/store';
 import { isComplete } from '../game/property';
+import { ITEMS } from '../game/catalog';
+import { CAR_BY_ID } from '../game/cars';
 import { clearWallet, flushOnExit, flushWallet, flushWalletNow, initWallet, walletExitEvents } from './wallet';
 import { useVisit } from '../game/visits';
 
@@ -145,11 +147,11 @@ export async function pushSaveNow(): Promise<void> {
       if (reason) console.warn(`Save rejected (${res.status}): ${reason}`);
       throw new Error(`${res.status}`);
     }
-    const { savedAt, corrected } = (await res.json()) as { savedAt: number; corrected?: Corrections };
+    const { savedAt, corrected, why } = (await res.json()) as { savedAt: number; corrected?: Corrections; why?: CorrectionWhy };
     lastPushed = body;
     setBase(savedAt);
     useSession.setState({ cloud: 'saved', cloudAt: savedAt });
-    if (corrected) applyCorrections(corrected);
+    if (corrected) applyCorrections(corrected, why);
   } catch {
     useSession.setState({ cloud: 'error' });
   }
@@ -182,8 +184,29 @@ interface Corrections {
   investments?: SaveData['investments'];
 }
 
+/** What the server undid, and why (worker/index.ts PUT /api/save). */
+interface CorrectionWhy { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; investments?: string[] }
+
+/** Says what was undone in words: which furniture or car wasn't paid for, knowledge not earned yet, and so on. */
+function correctionMessage(why?: CorrectionWhy): string {
+  if (!why) return '⚠️ Some progress couldn’t be verified and was undone';
+  const parts: string[] = [];
+  if (why.items?.length) {
+    const counts = new Map<string, number>();
+    for (const t of why.items) counts.set(t, (counts.get(t) ?? 0) + 1);
+    const names = [...counts].map(([t, n]) => `${n > 1 ? `${n} × ` : ''}${ITEMS[t]?.name ?? t}`);
+    parts.push(`${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} wasn’t paid for, so it was taken back`);
+  }
+  if (why.cars?.length) parts.push(`${why.cars.map((id) => CAR_BY_ID[id]?.name ?? id).join(', ')} wasn’t paid for`);
+  if (why.knowledge) parts.push(`knowledge set back to ${why.knowledge[1]} (not earned yet)`);
+  if (why.investments?.length) parts.push('some investment units weren’t bought');
+  if (why.seized) parts.push(why.seized > 1 ? `${why.seized} houses were seized` : 'a house was seized');
+  if (why.houses && !parts.length) return '';
+  return parts.length ? `⚠️ ${parts.join(' · ')}` : '⚠️ Some progress couldn’t be verified and was undone';
+}
+
 /** The server refused progress it couldn't verify (unearned knowledge, unpaid furniture, cars or investments). */
-function applyCorrections(c: Corrections) {
+function applyCorrections(c: Corrections, why?: CorrectionWhy) {
   const g = useGame.getState();
   if (c.knowledge !== undefined) useGame.setState({ knowledge: c.knowledge });
   if (c.items) {
@@ -242,7 +265,9 @@ function applyCorrections(c: Corrections) {
       investments: Object.fromEntries(Object.entries(s.investments).map(([id, h]) => [id, { ...h, units: Math.min(h.units, fixed[id]?.units ?? 0) }])),
     }));
   }
-  g.toast('⚠️ Some progress couldn’t be verified and was undone');
+  // A house name or outside choice tidied up isn't worth alarming anyone over: no toast for that alone.
+  const message = correctionMessage(why);
+  if (message) g.toast(message);
 }
 
 /** In-flight exit upload; the next normal save waits for it so it builds on the savedAt it got. */

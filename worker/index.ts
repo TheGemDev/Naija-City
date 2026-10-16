@@ -369,6 +369,8 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
     ]);
     advance(state, Date.now());
     const corrected: Corrections = {};
+    // What was undone and why, for the player's toast and for save_corrections (migrations/0109).
+    const why: { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; investments?: string[] } = {};
     const seized = new Map<string, { id: string; items?: SaveFurniture[] }>();
     for (const row of seizedRows.results) {
       const property = JSON.parse(row.seized_property_json) as { id?: string; items?: SaveFurniture[] };
@@ -380,6 +382,7 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       const activeWasSeized = !!save.activeHouseId && seized.has(save.activeHouseId);
       const homeWasSeized = !!save.homePropertyId && seized.has(save.homePropertyId);
       corrected.confiscatedProperties = [...seized.keys()];
+      why.seized = seized.size;
       if (fixedProperties.length !== properties.length) save.properties = corrected.properties = fixedProperties;
       const fallback = fixedProperties.find((property) => property.id === save.homePropertyId && (property.stage ?? 0) >= STAGES.length)
         ?? fixedProperties.find((property) => (property.stage ?? 0) >= STAGES.length)
@@ -393,16 +396,24 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       }
     }
     // House names, outsides, extensions and rooms (game/exterior.ts): only clean, known values are kept.
-    if (cleanHouses(save)) corrected.properties = save.properties;
+    if (cleanHouses(save)) {
+      corrected.properties = save.properties;
+      why.houses = true;
+    }
     const knowledge = verifyKnowledge(state, save.knowledge);
-    if (knowledge < save.knowledge) corrected.knowledge = save.knowledge = knowledge;
+    if (knowledge < save.knowledge) {
+      why.knowledge = [save.knowledge, knowledge];
+      corrected.knowledge = save.knowledge = knowledge;
+    }
     const properties = save.properties ?? [];
     const otherHouseItems = properties
       .filter((property) => property.id !== save.activeHouseId)
       .flatMap((property) => property.items ?? []);
-    const combined = trimItems([...save.items, ...otherHouseItems, ...(save.furnitureInventory ?? [])], owned);
+    const everything = [...save.items, ...otherHouseItems, ...(save.furnitureInventory ?? [])];
+    const combined = trimItems(everything, owned);
     if (combined.removed) {
       const kept = new Set(combined.items);
+      why.items = everything.filter((item) => !kept.has(item)).map((item) => item.type);
       const items = save.items.filter((item) => kept.has(item));
       const fixedProperties = properties.map((property) =>
         property.id === save.activeHouseId || !property.items
@@ -422,6 +433,7 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
     if (Array.isArray(save.ownedCars)) {
       const cars = save.ownedCars.filter((id) => typeof id === 'string' && ownsCar(owned, id));
       if (cars.length !== save.ownedCars.length) {
+        why.cars = save.ownedCars.filter((id) => !cars.includes(id));
         save.ownedCars = corrected.ownedCars = cars;
         if (save.selectedCar && !cars.includes(save.selectedCar)) save.selectedCar = cars[0] ?? null;
         corrected.selectedCar = save.selectedCar ?? null;
@@ -432,7 +444,10 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       const fixed: Save['investments'] = {};
       for (const [id, h] of Object.entries(save.investments)) {
         const units = Math.min(Math.max(0, Number(h?.units) || 0), unitsOf(state, id));
-        if (units !== h?.units) changed = true;
+        if (units !== h?.units) {
+          changed = true;
+          (why.investments ??= []).push(id);
+        }
         if (h) fixed[id] = { ...h, units };
       }
       if (changed) save.investments = corrected.investments = fixed;
@@ -449,9 +464,14 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       // First upload ever (e.g. a guest signing in): seed the wallet from it, capped.
       ensureWallet(env.DB, user.uid),
     ]));
+    if (Object.keys(why).length) {
+      const text = JSON.stringify(why);
+      console.warn(`Save corrected for ${user.uid}: ${text}`);
+      ctx.waitUntil(env.DB.prepare('INSERT INTO save_corrections (uid, at, why) VALUES (?, ?, ?)').bind(user.uid, Date.now(), text).run().catch(() => {}));
+    }
     // Crib scores (worker/cribs.ts) are worked out from the house just stored, off the request path.
     ctx.waitUntil(refreshCribs(env.DB, user.uid, save as SaveJson).catch((e) => console.error('Crib score refresh failed', e)));
-    return json({ ok: true, savedAt, corrected: Object.keys(corrected).length ? corrected : undefined });
+    return json({ ok: true, savedAt, corrected: Object.keys(corrected).length ? corrected : undefined, why: Object.keys(why).length ? why : undefined });
   }
 
   if (path === '/api/save' && req.method === 'DELETE') {

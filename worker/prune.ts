@@ -33,6 +33,8 @@ export async function pruneOldData(db: D1Database, now: number) {
   const record = now - RECORD_KEEP_MS;
   const oldElection = `(SELECT id FROM civic_elections WHERE status = 'closed' AND ends_at < ?)`;
   await db.batch([
+    /* ----- Save corrections (why "progress couldn't be verified"): two weeks is enough to trace a cause. ----- */
+    db.prepare('DELETE FROM save_corrections WHERE at < ?').bind(now - 14 * 24 * 3600_000),
     /* ----- Chats: keep the newest few per conversation. Money still waiting to be claimed is never dropped. ----- */
     db.prepare(
       `DELETE FROM messages WHERE id IN (
