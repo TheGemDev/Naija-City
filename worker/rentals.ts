@@ -17,6 +17,8 @@ import {
   npcMoveInChance, npcStaysAfterRaise, npcTenantName, remainingStageMaterials, stageLabour, weeklyRentOf, type RentalListing,
 } from '../src/game/property';
 import { propertyBooks } from './progress';
+import { headcounts } from './npcs';
+import { crowdFactor } from '../src/game/npcs';
 import { followHost, notifyPlayer, roomOf } from './shards';
 
 
@@ -219,8 +221,10 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
   const { results: open } = await db
     .prepare('SELECT * FROM rentals WHERE tenant_uid IS NULL ORDER BY RANDOM() LIMIT 200')
     .all<RentalRow>();
+  // Houses fill faster in a state with more NPC citizens looking for a room (worker/npcs.ts).
+  const heads = open.length ? await headcounts(db) : {};
   for (const r of open) {
-    if (emptied.has(r.property_id) || rand() >= npcMoveInChance(r.design, r.region, r.weekly)) continue;
+    if (emptied.has(r.property_id) || rand() >= npcMoveInChance(r.design, r.region, r.weekly) * crowdFactor(heads, REGION_BY_ID[r.region]?.city)) continue;
     if (typeof (await ownedHouse(db, r.owner_uid, r.property_id, true)) === 'string') {
       await db.prepare('DELETE FROM rentals WHERE property_id = ? AND tenant_uid IS NULL').bind(r.property_id).run();
       continue;

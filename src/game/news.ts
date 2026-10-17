@@ -2,8 +2,8 @@
 // and what they do with it, elections, the roads, the season, the cup final. News about one player or another
 // (who robbed whom, who is dating whom) stays on the Friends tab, where you know the names.
 
-/** The feed kinds the News tab shows (worker/fun.ts). */
-export const NEWS_KINDS = ['politics', 'election', 'roads', 'season', 'final', 'disaster'] as const;
+/** The feed kinds the News tab shows (worker/fun.ts). 'citizen' is what the NPC citizens post (worker/npcs.ts), under their own names (feed.author). */
+export const NEWS_KINDS = ['politics', 'election', 'roads', 'season', 'final', 'disaster', 'citizen'] as const;
 
 /** VDM's posts about the government, told apart from his crime exposés by their icon: these are national news too. */
 export const VDM_GOV_ICON = '🎤';

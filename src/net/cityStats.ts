@@ -3,7 +3,8 @@
 
 import { create } from 'zustand';
 
-export interface CityStats { online: number; visitsTotal: number }
+/** `npcs`: NPC citizens who ever arrived (worker/npcs.ts), counted in the phone's "plays". */
+export interface CityStats { online: number; visitsTotal: number; npcs: number }
 
 export const useCityStats = create<{ stats: CityStats | null }>(() => ({ stats: null }));
 
@@ -12,8 +13,8 @@ const PUSH_WINS_MS = 3000;
 let pushedAt = 0;
 
 // Visits only ever go up, so an older answer arriving late never takes the number back down.
-const set = (online: number, visitsTotal: number) =>
-  useCityStats.setState((s) => ({ stats: { online, visitsTotal: Math.max(visitsTotal, s.stats?.visitsTotal ?? 0) } }));
+const set = (online: number, visitsTotal: number, npcs?: number) =>
+  useCityStats.setState((s) => ({ stats: { online, visitsTotal: Math.max(visitsTotal, s.stats?.visitsTotal ?? 0), npcs: Math.max(npcs ?? 0, s.stats?.npcs ?? 0) } }));
 
 /** The room sends the totals whenever someone joins or leaves it (worker/room.ts), so the online count moves at once. */
 export function onCityEvent(m: { online: number; visits?: number }) {
@@ -28,7 +29,7 @@ async function loadCityStats() {
     if (!res.ok) return;
     const d = (await res.json()) as CityStats;
     const shown = useCityStats.getState().stats;
-    set(shown && pushedAt > asked - PUSH_WINS_MS ? shown.online : d.online, d.visitsTotal);
+    set(shown && pushedAt > asked - PUSH_WINS_MS ? shown.online : d.online, d.visitsTotal, d.npcs);
   } catch { /* offline: keep the last numbers */ }
 }
 

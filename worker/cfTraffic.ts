@@ -86,8 +86,14 @@ export async function readCfVisits(env: Env, now = Date.now()): Promise<CfVisits
   return v;
 }
 
-/** What /api/stats serves: players online and the visit counts (zero until the cron has stored Cloudflare's numbers). */
-export async function readLiveStats(env: Env): Promise<{ online: number; rooms: number; visitsToday: number; visitsTotal: number }> {
-  const { online, rooms, visits } = await onlineEverywhere(env);
-  return { online, rooms, visitsToday: visits?.today ?? 0, visitsTotal: visits?.total ?? 0 };
+/**
+ * What /api/stats serves: players online, the visit counts (zero until the cron has stored Cloudflare's numbers), and
+ * how many NPC citizens have ever arrived (worker/npcs.ts), which the phone adds to its "plays".
+ */
+export async function readLiveStats(env: Env): Promise<{ online: number; rooms: number; visitsToday: number; visitsTotal: number; npcs: number }> {
+  const [{ online, rooms, visits }, npcs] = await Promise.all([
+    onlineEverywhere(env),
+    env.DB.prepare('SELECT npc_total AS n FROM civic_policies WHERE id = 1').first<{ n: number }>().then((r) => r?.n ?? 0).catch(() => 0),
+  ]);
+  return { online, rooms, visitsToday: visits?.today ?? 0, visitsTotal: visits?.total ?? 0, npcs };
 }

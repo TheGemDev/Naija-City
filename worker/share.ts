@@ -101,11 +101,11 @@ async function cardFor(db: D1Database, path: string): Promise<Card | null> {
   const t = path.match(/^\/t\/(\d{1,12})\/?$/);
   if (t) {
     const tweet = await db
-      .prepare('SELECT f.kind, f.text, p.username FROM feed f LEFT JOIN players p ON p.uid = f.uid WHERE f.id = ? AND f.parent_id IS NULL AND f.created_at >= ?')
+      .prepare('SELECT f.kind, f.text, f.author, p.username FROM feed f LEFT JOIN players p ON p.uid = f.uid WHERE f.id = ? AND f.parent_id IS NULL AND f.created_at >= ?')
       .bind(Number(t[1]), Date.now() - FEED_KEEP_MS)
-      .first<{ kind: string; text: string; username: string | null }>();
+      .first<{ kind: string; text: string; author: string | null; username: string | null }>();
     if (!tweet) return null;
-    return { title: `${tweetAuthor(tweet.kind, tweet.username, Number(t[1]))} on Naija Twitter`, description: tweet.text, imageUrl: `/api/og/t/${t[1]}` };
+    return { title: `${tweetAuthor(tweet.kind, tweet.username, Number(t[1]), tweet.author)} on Naija Twitter`, description: tweet.text, imageUrl: `/api/og/t/${t[1]}` };
   }
   const shop = path.match(/^\/shop\/(\d{1,10})\/?$/);
   if (shop) {

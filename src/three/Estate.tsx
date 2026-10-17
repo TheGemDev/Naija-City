@@ -38,6 +38,8 @@ export interface Lot extends EstateLot {
   mine: boolean;
   building: boolean;
   uid: string | null;
+  /** An NPC citizen's house: their children. */
+  kids?: number | null;
   /** Your own houses: the name you gave it, the outside, the extensions, the paint and the cars parked there. */
   name?: string;
   exterior?: HouseExterior;
@@ -67,7 +69,7 @@ export function useLots(region: string): Lot[] {
     const taken = new Set(mine.map((l) => l.slot));
     const others: Lot[] = (neighbours ?? [])
       .filter((n) => n.uid !== uid && !taken.has(n.slot) && sectionOf(n.slot) === no)
-      .map((n) => ({ key: n.pid, slot: n.slot, plot: n.plot, stage: n.stage, design: n.design, owner: n.owner, mine: false, building: n.building, uid: n.uid }));
+      .map((n) => ({ key: n.pid, slot: n.slot, plot: n.plot, stage: n.stage, design: n.design, owner: n.owner, mine: false, building: n.building, uid: n.uid, kids: n.kids }));
     return [...mine, ...others];
   }, [properties, housePaint, home, cars, no, neighbours, uid, region]);
 }

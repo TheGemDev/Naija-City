@@ -1927,7 +1927,7 @@ function Wallpaper({ device }: { device: PhoneDef }) {
 
 /** Players-online count on the phone's home screen. Switched off for now; set true to show it again. */
 const SHOW_ONLINE = false;
-/** Added to the real page views in the phone's "plays" count only; the stats page shows the real number. */
+/** Added to the real page views in the phone's "plays" count only, with every NPC citizen who ever arrived; the stats page shows the real number. */
 const PLAYS_BOOST = 5000;
 
 /** The four apps that stay in the dock at the bottom of the home screen. */
@@ -1941,7 +1941,7 @@ function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
   // The server total covers the other rooms too, so show whichever is bigger.
   const inRoom = useNet((s) => (s.connected ? Object.keys(s.players).length + 1 : 0));
   const online = Math.max(stats?.online ?? 0, inRoom);
-  const plays = stats ? `${(stats.visitsTotal + PLAYS_BOOST).toLocaleString('en-NG')} plays` : '';
+  const plays = stats ? `${(stats.visitsTotal + PLAYS_BOOST + (stats.npcs ?? 0)).toLocaleString('en-NG')} plays` : '';
   const minutes = useGame((s) => Math.floor(s.minutes));
   const destinationId = useGame((s) => s.destinationId);
   const day = dayOf(minutes);

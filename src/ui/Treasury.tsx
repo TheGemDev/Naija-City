@@ -4,7 +4,7 @@
 // The header card (TreasuryHero) shows the federal balance and, tapped open, every state's.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
+import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
 import { lampCity, LAMPS, ROADWORK } from '../game/roads';
 import { naira, nairaShort } from '../game/store';
 import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, lawText, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
@@ -15,6 +15,7 @@ import { potholeCity } from '../game/city';
 import { left, useNow } from './Career';
 import { Emoji } from './Icons';
 import { LootCases } from './LootCases';
+import { crazeOf, populationOf, type StatePeople } from '../game/npcs';
 import './treasury.css';
 import './laws.css';
 
@@ -257,6 +258,34 @@ function AssetRow({ city, asset, condition, level, canEdit, busy, balance, onLev
 }
 
 /** A state's money and property. The governor of the state gets the controls. */
+/** Who lives in the state, how they feel about it, and who came, went and japa'd today (src/game/npcs.ts). */
+function PeopleCard({ city, people }: { city: CivicCity; people: StatePeople }) {
+  const t = people.today;
+  const moved = t.movedIn - t.movedOut;
+  const mood = people.mood ?? people.life;
+  const craze = crazeOf(people.craze?.id);
+  const feel = mood >= 70 ? '😄 Happy' : mood >= 50 ? '🙂 Managing' : mood >= 35 ? '😒 Fed up' : '😡 Angry';
+  const today = [
+    t.arrived && `🧳 ${t.arrived} arrived`, t.born && `🍼 ${t.born} born`, t.adopted && `👶🏾 ${t.adopted} adopted`,
+    moved && `🚚 ${moved > 0 ? '+' : ''}${moved} moved`, t.japa && `✈️ ${t.japa} japa’d`, t.arrested && `🚔 ${t.arrested} arrested`,
+  ].filter(Boolean);
+  return (
+    <div className="tr-people">
+      <b><Emoji char="👥" size={14} /> {populationOf(people).toLocaleString('en-NG')} people in {CITY_NAME[city]}</b>
+      <div className="tr-state-facts">
+        <span><b>{people.adults.toLocaleString('en-NG')}</b><small>adults</small></span>
+        <span><b>{people.kids.toLocaleString('en-NG')}</b><small>children</small></span>
+        <span><b>{people.players.toLocaleString('en-NG')}</b><small>players</small></span>
+      </div>
+      <small className="tr-note">{feel} · life here scores <b>{people.life}/100</b>. Good roads, hospitals and police bring people in; high taxes and unpaid bills drive them away, or abroad.</small>
+      <small className="tr-note">Today: {today.length ? today.join(' · ') : 'nobody came or went yet.'}</small>
+      {craze && (
+        <small className="tr-note tr-warn"><Emoji char={craze.icon} size={12} /> {craze.label} in {CITY_NAME[city]} right now, for about {left((people.craze?.until ?? 0) - Date.now())}.</small>
+      )}
+    </div>
+  );
+}
+
 function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAsk, onLaw, onPay }: {
   city: CivicCity;
   state: StateInfo | undefined;
@@ -289,6 +318,7 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
         <span><b>{nairaShort(state.incoming)}</b><small>came in this hour</small></span>
         <span><b>{cut}%</b><small>goes federal</small></span>
       </div>
+      {state.people && <PeopleCard city={city} people={state.people} />}
       {isHead && (() => {
         // What the governor is paid: their share of the president's maximum, held to a slice of the state's money.
         const max = data?.salaries?.[CITY_HEAD[city]] ?? 0;
@@ -691,7 +721,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
                 shady
                 icon="🐍"
                 title="Let a snake swallow some money"
-                blurb={`Take ${naira(snakeTake)} from ${myCity ? 'your state’s' : 'the federal'} treasury. The EFCC chair decides: refuse and you are out of office, with a ${naira(snake.fine)} fine and jail.`}
+                blurb={`Take ${naira(snakeTake)} from ${myCity ? 'your state’s' : 'the federal'} treasury. The EFCC chair decides: refuse and you get a ${naira(snake.fine)} fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office, and in jail.`}
                 who="Office holders only"
                 status={snakeWait > 0 ? `Lie low for ${left(snakeWait)}` : snakeTake < 1_000 ? 'Nothing to take' : 'Nobody is looking'}
               >
@@ -742,7 +772,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
                 shady
                 icon="🧳"
                 title="Ghana Must Go"
-                blurb={`Fly ${naira(bagsTake)} of ${potName} out in bags on the state jet. ${odds(bags.search)} of the time customs search the plane: you are out of office, fined and jailed.`}
+                blurb={`Fly ${naira(bagsTake)} of ${potName} out in bags on the state jet. ${odds(bags.search)} of the time customs search the plane: the bags go back, and you get a fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office.`}
                 who="President · Governors"
                 status={bagsWait > 0 ? `Lie low for ${left(bagsWait)}` : bagsTake < 1_000 ? 'Nothing to pack' : `${odds(bags.search)} search odds`}
               >
@@ -761,7 +791,7 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
                 shady
                 icon="👻"
                 title="Ghost workers"
-                blurb={`Put workers nobody has met on ${CITY_NAME[myCity]}’s payroll. Every hour they pay you ${odds(ghost.share)} of the state’s money, up to ${nairaShort(ghost.cap)}. Every hour the audit odds rise: caught, it all goes back and you are out of office.`}
+                blurb={`Put workers nobody has met on ${CITY_NAME[myCity]}’s payroll. Every hour they pay you ${odds(ghost.share)} of the state’s money, up to ${nairaShort(ghost.cap)}. Every hour the audit odds rise: caught, it all goes back and you get a fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office.`}
                 who="Governors"
                 status={mine ? `${mine.rounds} round${mine.rounds === 1 ? '' : 's'} · ${naira(mine.taken)} · next audit ${odds(ghost.audit(mine.rounds))}` : `First audit ${odds(ghost.audit(0))}`}
               >

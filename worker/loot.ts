@@ -4,7 +4,7 @@
 // may be found out and lose the job. A chair who does nothing, offline or not, leaves it to the old odds when the
 // window (hours, so an absent chair has time to come back) runs out.
 
-import { CITY_NAME, LOOT, lootBribe, OFFICE_RULES, TREASURY, type CivicCity, type LootCase, type PoliticalOffice } from '../src/game/civic';
+import { CITY_NAME, LOOT, lootBribe, OFFICE_RULES, OFFICE_STRIKES, TREASURY, type CivicCity, type LootCase, type PoliticalOffice } from '../src/game/civic';
 import { loadLaws, rand, transfer, usernames } from './crime';
 import { jail } from './fun';
 import { feedStmt, handle, naira } from './feed';
@@ -54,29 +54,51 @@ export async function lootBoard(db: D1Database, uid: string, now: number): Promi
 }
 
 /**
- * Take a seat away from whoever holds it, lock them up, and tell everyone. Returns the minutes served. `chair`: the EFCC
- * chair who turned down the looter's bribe, whom VDM may credit in the same post.
+ * A money crime by whoever holds a seat: a strike against them (OFFICE_STRIKES). Before the last one it is a fine and
+ * a public warning, and they keep the seat. The last takes the seat away, locks them up and tells everyone (`news`).
+ * `chair`: the EFCC chair who turned down the looter's bribe, whom VDM may credit in the same post. Returns whether
+ * they lost the seat, and the strikes against them.
  */
-export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number, taken: ExhibitItem[] = [], chair?: string) {
+export async function removeFromOffice(env: Env, ctx: Ctx, uid: string, office: PoliticalOffice, why: string, now: number, news: string, amount: number, taken: ExhibitItem[] = [], chair?: string): Promise<{ removed: boolean; strikes: number }> {
   const db = env.DB;
-  const laws = await loadLaws(db);
   const names = await usernames(db, [uid, chair ?? null]);
   const who = names.get(uid);
   const fine = await transfer(db, uid, null, TREASURY.embezzle.fine, 'efcc_fine', '', `case:${office}:${uid}:${now}`);
   // The exhibit book: the fine, and whatever the caller took back (the loot, the bags, the ghosts' pay).
   await recordExhibits(db, uid, `office:${office}:${now}`, why, [...taken, fineItem(fine)], now);
+  // The strike, counted only while they still hold the seat (it may have changed hands since the crime).
+  const row = await db
+    .prepare(`UPDATE civic_policies SET ${office}_strikes = ${office}_strikes + 1, updated_at = ?1 WHERE id = 1 AND ${office}_uid = ?2 RETURNING ${office}_strikes AS strikes`)
+    .bind(now, uid)
+    .first<{ strikes: number }>();
+  const strikes = row?.strikes ?? OFFICE_STRIKES;
+  if (strikes < OFFICE_STRIKES) {
+    const left = OFFICE_STRIKES - strikes;
+    const text = `⚠️ STRIKE ${strikes} OF ${OFFICE_STRIKES}: ${OFFICE_RULES[office].title} ${handle(who)}. ${why}. ${naira(fine)} fine and a warning from the EFCC. ${left === 1 ? 'One more and they are out of office.' : `${left} more and they are out of office.`}`;
+    await db.batch([
+      feedStmt(db, uid, 'politics', '⚠️', text, OFFICE_RULES[office].city),
+      ...(await vdmGov(db, uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city, false, {
+        but: chair ? { about: 'efccCatch', matter: { who: official('efcc', names.get(chair)), amount: naira(amount), chair: true }, uid: chair } : null,
+        seed: `office:${office}:${uid}:${now}`,
+      })),
+    ]);
+    await gazette(env, ctx, [{ uid, office, kind: 'scandal', icon: '⚠️', text: `${official(office, who)} got strike ${strikes} of ${OFFICE_STRIKES}: ${why.toLowerCase()}. Fined ${naira(fine)}.` }]);
+    return { removed: false, strikes };
+  }
+  const laws = await loadLaws(db);
   await jail(db, uid, laws.jailMinutes * 2, why);
   await searchPhone(env, uid, 'efcc', laws.jailMinutes * 2);
   await db.batch([
-    db.prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, updated_at = ? WHERE id = 1 AND ${office}_uid = ?`).bind(now, uid),
-    feedStmt(db, uid, 'politics', '🐍', news.replace('{who}', handle(who)).replace('{fine}', naira(fine)), OFFICE_RULES[office].city),
+    db.prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, ${office}_strikes = 0, updated_at = ? WHERE id = 1 AND ${office}_uid = ?`).bind(now, uid),
+    feedStmt(db, uid, 'politics', '🐍', `${news.replace('{who}', handle(who)).replace('{fine}', naira(fine))} Strike ${OFFICE_STRIKES} of ${OFFICE_STRIKES}.`, OFFICE_RULES[office].city),
     ...(await vdmGov(db, uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city, false, {
       but: chair ? { about: 'efccCatch', matter: { who: official('efcc', names.get(chair)), amount: naira(amount), chair: true }, uid: chair } : null,
       seed: `office:${office}:${uid}:${now}`,
     })),
   ]);
   await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
-  await gazette(env, ctx, [{ uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} is out of office, ${why.toLowerCase()}.` }]);
+  await gazette(env, ctx, [{ uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} is out of office after ${OFFICE_STRIKES} strikes, the last for ${why.toLowerCase()}.` }]);
+  return { removed: true, strikes };
 }
 
 /** The loot goes back where it came from: straight from the case when it was frozen there, else out of the looter's wallet. */
@@ -114,7 +136,7 @@ async function convict(env: Env, ctx: Ctx, c: CaseRow, now: number, refused = fa
 export type LootAction = { action: 'lootOffer'; caseId: number; pct: number } | { action: 'lootDecide'; caseId: number; accept: boolean };
 
 /** The looter makes an offer, or the chair decides. Returns an error message, or null when it worked. */
-export async function lootAction(env: Env, ctx: Ctx, uid: string, body: LootAction, now: number): Promise<{ error: string; status: number } | { done: string }> {
+export async function lootAction(env: Env, ctx: Ctx, uid: string, body: LootAction, now: number): Promise<{ error: string; status: number } | { done: string; strikes?: number }> {
   const db = env.DB;
   const c = await db.prepare("SELECT * FROM loot_cases WHERE id = ? AND status = 'open'").bind(body.caseId).first<CaseRow>();
   if (!c) return { error: 'That case is closed', status: 409 };
@@ -156,15 +178,15 @@ export async function lootAction(env: Env, ctx: Ctx, uid: string, body: LootActi
   await release(env, c, c.amount - c.offer);
   await sendCaseNote(env, ctx, uid, c.looter_uid, '🤝 Understood. It never happened.');
   if (rand() < LOOT.chairCaught) {
-    // Found out: the chair loses the job and the bribe goes to the state.
+    // Found out: a strike against the chair (the job, on the last one), and the bribe goes to the state.
     const bribe = await transfer(db, uid, null, c.offer, 'efcc_fine', '', `bribe-back:${c.id}:${now}`);
-    await removeFromOffice(
+    const hit = await removeFromOffice(
       env, ctx, uid, 'efcc', 'Took a bribe to look away from a looted treasury', now,
       `SCANDAL: EFCC chair {who} was caught taking a bribe to look away from a looted treasury. Out of office, {fine} fine, and a cell. 🕵🏾`,
       c.offer,
       [{ kind: 'loot', icon: '💼', label: 'The bribe, taken back', value: bribe }],
     );
-    return { done: 'accepted-caught' };
+    return { done: hit.removed ? 'accepted-caught' : 'accepted-struck', strikes: hit.strikes };
   }
   return { done: 'accepted' };
 }

@@ -32,6 +32,8 @@ export interface FeedPost {
   icon: string;
   text: string;
   at: number;
+  /** An NPC citizen's name, on their posts (kind 'citizen'). */
+  author?: string | null;
   likes: number;
   liked: number | boolean;
   replies?: number;

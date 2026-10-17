@@ -9,6 +9,7 @@ import {
 } from '../game/city';
 import { hourOf, nairaShort, useGame } from '../game/store';
 import { PRODUCES } from '../game/trade';
+import { crazeOf, populationOf } from '../game/npcs';
 import { STAGES } from '../game/property';
 import { photoHour } from '../game/photo';
 import { LIGHTS_ON, sceneHour } from '../game/theme';
@@ -1124,14 +1125,18 @@ function Leaders({ city }: { city: keyof typeof CITY_HEAD }) {
   return <div className="region-leaders">{chip('president', 'President')}{chip(head, head === 'minister' ? 'FCT Minister' : 'Governor')}</div>;
 }
 
-/** What this state makes, as icons, and how much its treasury holds (once the civic snapshot is in). */
+/** What this state makes, as icons, how many people live there and how much its treasury holds (once the civic snapshot is in). */
 function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
   const balance = useCivic((s) => s.data?.states?.[city]?.balance);
+  const people = useCivic((s) => s.data?.states?.[city]?.people);
+  const craze = crazeOf(people?.craze?.id);
   return (
     <div className="region-facts">
       <span className="region-goods" title={`Makes ${PRODUCES[city].map((p) => p.label).join(', ')}`}>
         {PRODUCES[city].map((p) => <Emoji key={p.label} char={p.icon} size={14} />)}
       </span>
+      {craze && <span className="region-fact" title={`${craze.label} in this state right now`}><Emoji char={craze.icon} size={12} /> {craze.label}</span>}
+      {people && <span className="region-fact" title={`Population: ${people.adults.toLocaleString('en-NG')} adults, ${people.kids.toLocaleString('en-NG')} children, ${people.players} players`}><Emoji char="👥" size={12} /> {populationOf(people).toLocaleString('en-NG')}</span>}
       {balance !== undefined && <span className="region-fact" title="State treasury"><Emoji char="💰" size={12} /> {nairaShort(balance)}</span>}
     </div>
   );

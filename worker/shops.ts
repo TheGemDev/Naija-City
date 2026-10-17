@@ -17,6 +17,8 @@ import { rand } from './crime';
 import { naira } from './feed';
 import { sendPush } from './push';
 import { lawsOf } from './state';
+import { headcounts } from './npcs';
+import { crowdFactor } from '../src/game/npcs';
 
 /** Orders (or restocks) per D1 batch: one bad row then only loses its own few. */
 const CHUNK = 8;
@@ -64,6 +66,8 @@ async function npcSales(env: Env, ctx: ExecutionContext, now: number) {
   if (!results.length) return;
   const visitors = await visitorsAt(db, results, now);
   const laws = lawCache(db);
+  // A state full of NPC citizens has more customers (worker/npcs.ts).
+  const heads = await headcounts(db);
 
   const sales: (Sale & { businessId: number; product: string; unit: number; tax: number })[] = [];
   for (const r of results) {
@@ -71,7 +75,7 @@ async function npcSales(env: Env, ctx: ExecutionContext, now: number) {
     const product = MARKET_PRODUCT_BY_ID[r.product];
     if (!def || !product || product.business !== def.id || !(r.place_id in STALLS)) continue;
     const gross = hourlyOf(def, r.level, r.staff, skillLevel(r.xp), demandAt(r.place_id, visitors.get(spot(r.city, r.place_id)) ?? 0));
-    const quantity = Math.min(r.stock, NPC_SHOP.maxUnits, poisson(npcExpected(gross, sizeOf(r.size), r.lines, product.price, r.price, npcHourFactor(def.id, now))));
+    const quantity = Math.min(r.stock, NPC_SHOP.maxUnits, poisson(npcExpected(gross, sizeOf(r.size), r.lines, product.price, r.price, npcHourFactor(def.id, now)) * crowdFactor(heads, r.city)));
     if (quantity < 1) continue;
     const total = r.price * quantity;
     // Customers walk in, so there is no delivery fee: only the shop's state sales tax, taken from the seller as for a player.

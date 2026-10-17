@@ -125,7 +125,9 @@ function Badge({ kind, title }: { kind: 'blue' | 'gov' | 'gold'; title: string }
 type Who =
   | { kind: 'player'; username: string; uid?: string | null }
   | { kind: 'vdm' } | { kind: 'police' } | { kind: 'city' } | { kind: 'alerts' } | { kind: 'gazette' }
-  | { kind: 'blog'; name: string };
+  | { kind: 'blog'; name: string }
+  /** An NPC citizen (worker/npcs.ts): no account behind it, just their name. */
+  | { kind: 'citizen'; name: string };
 
 type Tone = 'player' | 'vdm' | 'crime' | 'alert' | 'gov' | 'gold' | 'legacy' | 'news' | 'gazette';
 
@@ -145,7 +147,7 @@ interface Author {
 
 const BLOG_COLORS = ['#e11d48', '#7c3aed', '#0891b2', '#16a34a', '#ea580c', '#0f766e'];
 const blogHandle = (name: string) => name.replace(/[^A-Za-z0-9]/g, '');
-const SYSTEM: Record<Exclude<Who['kind'], 'player' | 'blog'>, Omit<Author, 'who'>> = {
+const SYSTEM: Record<Exclude<Who['kind'], 'player' | 'blog' | 'citizen'>, Omit<Author, 'who'>> = {
   vdm: { name: 'VDM', handle: 'VDM', badge: 'blue', badgeTitle: 'Verified whistleblower', emoji: '🎤', bg: 'linear-gradient(135deg, #111827, #b91c1c)' },
   police: { name: 'Nigeria Police', handle: 'NgPoliceHQ', badge: 'gold', badgeTitle: 'Official: Nigeria Police', emoji: '👮🏾', bg: 'linear-gradient(135deg, #1e3a8a, #0f172a)' },
   city: { name: 'Naija City', handle: 'NaijaCity', badge: 'gold', badgeTitle: 'Official: Naija City', emoji: '🇳🇬', bg: 'linear-gradient(135deg, #15803d, #064e3b)' },
@@ -159,6 +161,7 @@ const BIO: Record<Exclude<Who['kind'], 'player'>, string> = {
   alerts: 'Floods, fires and storms as they happen. Stay safe.',
   gazette: 'What the people in office did, as the law requires it to be published. Read it all in the Civic app.',
   blog: 'Naija news blog. Politics, roads, elections and gist from every state.',
+  citizen: 'Just a regular Naija person. Working, paying tax, and saying what everybody is thinking.',
 };
 
 /** Players who hold an office now, by uid. */
@@ -174,6 +177,11 @@ function useOfficials() {
   }, [policies]);
 }
 
+/** An NPC citizen: their initial on a colour their name always picks. */
+const citizenAuthor = (name: string): Author => ({
+  name, handle: blogHandle(name), badge: null, badgeTitle: '', who: { kind: 'citizen', name }, bg: BLOG_COLORS[[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % BLOG_COLORS.length],
+});
+
 function authorOf(p: FeedPost, officials: Record<string, string>): Author {
   if (p.kind === 'post') {
     const username = p.username ?? 'someone';
@@ -182,13 +190,14 @@ function authorOf(p: FeedPost, officials: Record<string, string>): Author {
   }
   const sys = p.kind === 'vdm' ? 'vdm' : p.kind === 'mugshot' ? 'police' : p.kind === 'disaster' ? 'alerts' : ['achievement', 'legacy', 'season', 'final'].includes(p.kind) ? 'city' : null;
   if (sys) return { ...SYSTEM[sys], emoji: sys === 'city' ? p.icon : SYSTEM[sys].emoji, who: { kind: sys } };
+  if (p.kind === 'citizen') return citizenAuthor(p.author ?? 'A citizen');
   const name = blogOf(p.id);
   return { name, handle: blogHandle(name), badge: 'blue', badgeTitle: 'Verified news blog', who: { kind: 'blog', name }, bg: BLOG_COLORS[BLOGS.indexOf(name) % BLOG_COLORS.length] };
 }
 
 function toneOf(p: FeedPost): Tone {
   switch (p.kind) {
-    case 'post': return 'player';
+    case 'post': case 'citizen': return 'player';
     case 'vdm': return 'vdm';
     case 'mugshot': case 'arrest': case 'crime': case 'underworld': case 'scam': case 'vice': return 'crime';
     case 'disaster': return 'alert';
@@ -472,7 +481,7 @@ function matches(it: Item, q: string) {
   const s = q.trim().toLowerCase();
   if (!s) return false;
   if (s.startsWith('tone:')) return it.k === 'post' && toneOf(it.p) === s.slice(5);
-  const text = (it.k === 'post' ? `${it.p.text} @${it.p.username ?? ''}` : it.k === 'snap' ? `${it.s.caption} @${it.s.username ?? ''}` : it.n.text).toLowerCase();
+  const text = (it.k === 'post' ? `${it.p.text} @${it.p.username ?? it.p.author ?? ''}` : it.k === 'snap' ? `${it.s.caption} @${it.s.username ?? ''}` : it.n.text).toLowerCase();
   return text.includes(s);
 }
 
@@ -959,7 +968,7 @@ function Profile({ who }: { who: Who }) {
   if (who.kind !== 'player') {
     const a: Author = who.kind === 'blog'
       ? { name: who.name, handle: blogHandle(who.name), badge: 'blue', badgeTitle: 'Verified news blog', who, bg: BLOG_COLORS[BLOGS.indexOf(who.name) % BLOG_COLORS.length] }
-      : { ...SYSTEM[who.kind], who };
+      : who.kind === 'citizen' ? citizenAuthor(who.name) : { ...SYSTEM[who.kind], who };
     return (
       <div className="tw-profile">
         <SubHead title={<>{a.name} {a.badge && <Badge kind={a.badge} title={a.badgeTitle} />}</>} sub={`${sysItems.length} ${sysItems.length === 1 ? 'post' : 'posts'} today`} />

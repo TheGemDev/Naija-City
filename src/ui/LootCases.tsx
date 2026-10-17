@@ -25,7 +25,7 @@ function Case({ c, uid }: { c: LootCase; uid: string }) {
     const line = c.status === 'accepted'
       ? looter ? 'The chair took the money. The case is closed.' : 'You took the offer. The case is closed.'
       : c.status === 'refused'
-        ? looter ? 'The chair refused. You are out of office.' : 'You sent the looter to court.'
+        ? looter ? 'The chair refused. The loot went back, you were fined and got a strike.' : 'You sent the looter to court.'
         : 'Time ran out. The old odds decided.';
     return <div className="loot-case closed"><Emoji char="📁" size={16} /><small>{naira(c.amount)} from {where(c)}. {line}</small></div>;
   }

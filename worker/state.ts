@@ -9,6 +9,7 @@ import {
 } from '../src/game/treasury';
 import { CIVIC_CITIES, CITY_NAME, type CivicCity } from '../src/game/civic';
 import { REGION_BY_ID } from '../src/game/property';
+import { crowdFactor } from '../src/game/npcs';
 import { whereIs } from './shards';
 
 /** SQL for the city a player's money goes to: the state they live in (where their life began), Kaduna if unknown. `uid` is a bound placeholder. */
@@ -126,6 +127,9 @@ export async function runStateRound(db: D1Database, now: number): Promise<RoundN
   if (!claim) return [];
   const { states, assets } = await loadStates(db);
   const notices: RoundNotice[] = [];
+  // More people in a state, more stall levies and gate money (worker/npcs.ts). Nothing extra before migration 0116.
+  const { results: heads } = await db.prepare('SELECT city, COUNT(*) AS n FROM npcs GROUP BY city').all<{ city: string; n: number }>().catch(() => ({ results: [] as { city: string; n: number }[] }));
+  const crowd = Object.fromEntries(heads.map((h) => [h.city, h.n]));
 
   for (const city of CIVIC_CITIES) {
     const state = states.find((s) => s.city === city);
@@ -171,7 +175,7 @@ export async function runStateRound(db: D1Database, now: number): Promise<RoundN
       const next = Math.max(0, Math.min(100, row.condition + drift - (damage.get(asset) ?? 0)));
       if (next !== row.condition) stmts.push(db.prepare('UPDATE state_assets SET condition = ?1 WHERE city = ?2 AND asset = ?3').bind(next, city, asset));
       if (next === 0 && row.condition > 0) dark.push(ASSET_INFO[asset].label);
-      earned += earningOf(asset, city, next);
+      earned += Math.round(earningOf(asset, city, next) * crowdFactor(crowd, city));
     }
     if (dark.length) notices.push({ icon: '🏚️', city, text: `${dark.join(' and ')} in ${CITY_NAME[city]} ${dark.length === 1 ? 'has' : 'have'} collapsed. The state could not keep ${dark.length === 1 ? 'it' : 'them'} up.` });
     cash += earned;

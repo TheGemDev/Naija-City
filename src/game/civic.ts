@@ -47,6 +47,12 @@ export const BALLOT_SIZE = 20;
 
 /** Every office, in the order the Civic app lists them. */
 export const OFFICES: PoliticalOffice[] = ['president', 'governor', 'minister', 'lagosgov', 'kanogov', 'igp', 'efcc'];
+/**
+ * Money crimes in office (looting, embezzling, ghost workers, bags on the jet, a chair's bribe) are strikes against
+ * whoever holds the seat (worker/loot.ts removeFromOffice): each one is a fine and a public warning, and this many costs
+ * the seat (and a cell). A new holder starts with none. Rigging the election that put you there still unseats you at once.
+ */
+export const OFFICE_STRIKES = 3;
 export const OFFICE_ICON: Record<PoliticalOffice, string> = { president: '🇳🇬', governor: '🏛️', minister: '🏙️', lagosgov: '🌊', kanogov: '🐎', igp: '👮🏾', efcc: '🕵🏾' };
 
 export const OFFICE_RULES: Record<PoliticalOffice, {

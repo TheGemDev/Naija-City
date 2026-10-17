@@ -235,7 +235,7 @@ async function settleElection(db: D1Database, row: CaseRow, now: number) {
     if (next !== row.target_uid) {
       // Only the seat they still hold from this race: a term that has since moved on is left alone.
       const moved = await db.prepare(
-        `UPDATE civic_policies SET ${race.office}_uid = ?1, updated_at = ?3 WHERE id = 1 AND ${race.office}_uid = ?2`,
+        `UPDATE civic_policies SET ${race.office}_uid = ?1, ${race.office}_strikes = 0, updated_at = ?3 WHERE id = 1 AND ${race.office}_uid = ?2`,
       ).bind(next, row.target_uid, now).run();
       if (moved.meta.changes) {
         unseated = true;

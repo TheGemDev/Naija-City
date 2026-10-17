@@ -151,3 +151,7 @@
 .tr-state-money > small { color: var(--muted); font-size: 11.5px; font-weight: 700; }
 .tr-state-money > b { font-size: 24px; font-variant-numeric: tabular-nums; }
 .tr-hero .tr-hero-own { font-weight: 800; opacity: 1; }
+
+/* Who lives in the state (PeopleCard): the NPC citizens and the players. */
+.tr-people { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-people > b { display: flex; align-items: center; gap: 6px; font-size: 13px; }

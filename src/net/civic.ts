@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type DisqualifyReason, type LootCase, type GazetteKind, type PoliticalOffice } from '../game/civic';
+import { CITY_HEAD, CIVIC_CITIES, OFFICE_RULES, OFFICE_STRIKES, OFFICES, OKADA_BAN_LAW, POLLS_CLOSE_AT, type Allocation, type Salaries, type ExecutiveOffice, type StateVehicle, type CampaignEvent, type CivicCooldown, type CivicNews, type DisqualifyReason, type LootCase, type GazetteKind, type PoliticalOffice } from '../game/civic';
 import { setGovRents, setOkadaBan } from '../game/cityLaws';
 import { DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, type StateAsset, type StateCaps, type StateLawKey, type StateLaws } from '../game/treasury';
 import { refreshBalance, setServerBalance } from './wallet';
 import { api, useSession } from './session';
 import { naira, useGame } from '../game/store';
 import { loadPolice } from './crime';
+import type { StatePeople } from '../game/npcs';
 
 export interface CivicCandidate {
   uid: string;
@@ -13,6 +14,8 @@ export interface CivicCandidate {
   name: string | null;
   support: number;
   votes: number;
+  /** Of those, the NPC citizens' votes. */
+  npcVotes?: number;
   lastActionAt: number;
 }
 
@@ -37,6 +40,8 @@ export interface CivicHolder {
   termEnds: number | null;
   /** Impeached by the president until then (a state's head only): the president runs the state meanwhile. */
   suspendedUntil?: number | null;
+  /** Money crimes in office this term: OFFICE_STRIKES of them cost the seat (worker/loot.ts). */
+  strikes?: number;
 }
 
 /** Whether the president has impeached this office holder, right now. */
@@ -91,6 +96,8 @@ export interface StateInfo {
   laws?: StateLaws;
   /** The share (percent) of the president's maximum pay its governor takes. */
   payShare?: number;
+  /** Who lives there (src/game/npcs.ts). Null before the NPC citizens have arrived. */
+  people?: StatePeople | null;
 }
 
 export interface CivicSnapshot {
@@ -198,6 +205,9 @@ interface CivicResult {
   people?: number;
   diverted?: number;
   exposed?: boolean;
+  /** Caught at a money crime in office: whether it cost the seat, and the strikes now (OFFICE_STRIKES). */
+  removed?: boolean;
+  strikes?: number;
 }
 
 /** The election opening or closing, pushed to everyone online (worker/civic.ts). */
@@ -269,6 +279,12 @@ function apply(snapshot: CivicSnapshot) {
 /** The last pay round this page has seen. */
 let payRound = 0;
 
+/** "strike 1 of 3: two more and you are out", for a toast. */
+const strikeText = (strikes = 1) => {
+  const left = OFFICE_STRIKES - strikes;
+  return `that is strike ${strikes} of ${OFFICE_STRIKES}: ${left === 1 ? 'one more' : `${left} more`} and you are out of office`;
+};
+
 /** What happened, in a toast. */
 function report(body: Record<string, unknown>, r: CivicResult) {
   const g = useGame.getState();
@@ -290,7 +306,7 @@ function report(body: Record<string, unknown>, r: CivicResult) {
   if (body.action === 'pardon') g.toast('🕊️ Pardon signed. They are walking out of the cell now.');
   if (body.action === 'stateLaw') g.toast('🏛️ Signed. The new rate is law.');
   if (body.action === 'lootOffer') g.toast('💼 Offer sent. The money is held until the chair decides.');
-  if (body.action === 'lootDecide') g.toast(r.outcome === 'refused' ? '⚖️ Refused. The looter goes to court.' : r.outcome === 'accepted-caught' ? '🕵🏾 You took the money, but you were found out. You are out of office.' : '🤝 You took the offer. The case is closed.');
+  if (body.action === 'lootDecide') g.toast(r.outcome === 'refused' ? '⚖️ Refused. The looter goes to court.' : r.outcome === 'accepted-caught' ? '🕵🏾 You took the money, but you were found out. That was your last strike: you are out of office.' : r.outcome === 'accepted-struck' ? `🕵🏾 You took the money, but you were found out. Fined, and ${strikeText(r.strikes)}.` : '🤝 You took the offer. The case is closed.');
   if (body.action === 'impeach') g.toast(`⚖️ Impeached for ${body.hours} hours. You run the state until then.`);
   if (body.action === 'reinstate') g.toast('🤝🏾 Reinstated. The state is theirs to run again.');
   if (body.action === 'allocate') g.toast('📊 New budget signed. The departments have their shares.');
@@ -311,17 +327,24 @@ function report(body: Record<string, unknown>, r: CivicResult) {
       washed: `💱 Mallam changed it. ${sum} is yours, clean as a whistle.`,
       vanished: '💱 Mallam’s shop is locked and his phone is off. The money is gone, and you can’t exactly report him.',
       flown: `🧳 Wheels up. ${sum} in Ghana Must Go bags landed safely in your account.`,
-      searched: '🧳 CAUGHT! Customs opened the bags on the tarmac. You are out of office and in a cell.',
+      searched: '🧳 CAUGHT! Customs opened the bags on the tarmac. That was your last strike: you are out of office and in a cell.',
+      'searched-struck': `🧳 CAUGHT! Customs opened the bags on the tarmac. The money went back, you were fined, and ${strikeText(r.strikes)}.`,
       ghosts: '👻 The ghosts are on the payroll. They get paid every hour, and so do you. The auditors will come eventually.',
       noGhosts: `👻 The ghosts are gone. They paid you ${sum} in all.`,
     };
     if (r.outcome && line[r.outcome]) g.toast(line[r.outcome]);
     if (r.outcome === 'searched') void loadPolice();
+    if (r.outcome === 'searched-struck') void refreshBalance();
   }
   if (body.action === 'embezzle') {
     if (r.caught) {
-      g.toast('🐍 CAUGHT! The EFCC traced the money. You are out of office and in a cell.');
-      void loadPolice();
+      if (r.removed === false) {
+        g.toast(`🐍 CAUGHT! The EFCC traced the money. Fined, and ${strikeText(r.strikes)}.`);
+        void refreshBalance();
+      } else {
+        g.toast('🐍 CAUGHT! The EFCC traced the money. That was your last strike: you are out of office and in a cell.');
+        void loadPolice();
+      }
     } else if (r.caseId) g.toast(`🐍 ${naira(r.amount ?? 0)} is out of the treasury, but frozen: the EFCC chair has a case on you. Offer them a share, or wait it out.`);
     else if (r.amount) g.toast(`🐍 ${naira(r.amount)} quietly moved to your account. A snake swallowed it, officially.`);
   }

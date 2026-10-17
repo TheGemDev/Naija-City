@@ -30,6 +30,7 @@ import { runShops } from './shops';
 import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
 import { runDisasters } from './disasters';
+import { runNpcs } from './npcs';
 
 export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
@@ -38,6 +39,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     ['npc-tenants', () => settleNpcTenants(env, ctx)],
     ['bets', () => settleBets(env, ctx)],
     ['games', () => sweepGames(env, ctx, now)],
+    // NPC citizens: arrivals and japa, work and taxes, land, crime, and their votes, before the polls are counted.
+    ['npcs', () => runNpcs(env, now)],
     ['elections', () => settleElections(env, now, ctx)],
     // After the elections, so a seat won this minute is paid from this round.
     ['salaries', () => paySalaries(env.DB, now)],

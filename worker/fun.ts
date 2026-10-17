@@ -231,7 +231,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
     const before = Number(url.searchParams.get('before')) || Number.MAX_SAFE_INTEGER;
     const { results } = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
@@ -271,7 +271,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
     if (!who) return err(404, 'No such player');
     const { results } = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
@@ -297,7 +297,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
     const news = city ? `${NEWS_SQL} AND (f.city = ?6 OR f.city IS NULL)` : NEWS_SQL;
     const { results } = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
@@ -316,7 +316,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
   if (path === '/api/feed/vdm' && req.method === 'GET') {
     const { results } = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,
@@ -336,7 +336,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
     if (url.searchParams.has('view')) ctx.waitUntil(db.prepare('UPDATE feed SET views = views + 1 WHERE id = ? AND parent_id IS NULL').bind(Number(replies[1])).run().catch(() => {}));
     const { results } = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.parent_id AS parent, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, f.parent_id AS parent, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked
          FROM feed f LEFT JOIN players p ON p.uid = f.uid
@@ -401,7 +401,7 @@ export async function handleFun(req: Request, env: Env, ctx: ExecutionContext, u
   if (delPost && req.method === 'GET') {
     const post = await db
       .prepare(
-        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, p.username,
+        `SELECT f.id, f.uid, f.kind, f.icon, f.text, f.created_at AS at, f.author, p.username,
                 (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
                 EXISTS (SELECT 1 FROM feed_likes l WHERE l.post_id = f.id AND l.uid = ?1) AS liked,
                 (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies,

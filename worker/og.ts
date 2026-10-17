@@ -390,20 +390,20 @@ function mugshotPicture({ svg, labels }: ReturnType<typeof mugshotParts>): El {
 }
 
 /** Who a tweet is from, the way Twitter in the game names them (TweetCard in src/ui/LiveApps.tsx). */
-export const tweetAuthor = (kind: string, username: string | null, id: number) =>
-  kind === 'post' ? `@${username ?? 'someone'}` : kind === 'vdm' ? 'VDM' : kind === 'mugshot' ? 'Nigeria Police' : kind === 'achievement' ? 'Achievement' : blogOf(id);
+export const tweetAuthor = (kind: string, username: string | null, id: number, author?: string | null) =>
+  kind === 'post' ? `@${username ?? 'someone'}` : kind === 'citizen' ? author ?? 'A citizen' : kind === 'vdm' ? 'VDM' : kind === 'mugshot' ? 'Nigeria Police' : kind === 'achievement' ? 'Achievement' : blogOf(id);
 
 export async function ogTweetImage(env: Env, id: number): Promise<Response> {
   const row = await env.DB
     .prepare(
-      `SELECT f.kind, f.icon, f.text, f.uid, f.created_at AS at, p.username, json_extract(sv.data, '$.look') AS look,
+      `SELECT f.kind, f.icon, f.text, f.uid, f.created_at AS at, f.author, p.username, json_extract(sv.data, '$.look') AS look,
               (SELECT COUNT(*) FROM feed_likes l WHERE l.post_id = f.id) AS likes,
               (SELECT COUNT(*) FROM feed r WHERE r.parent_id = f.id) AS replies
        FROM feed f LEFT JOIN players p ON p.uid = f.uid LEFT JOIN saves sv ON sv.uid = f.uid
        WHERE f.id = ? AND f.parent_id IS NULL AND f.created_at >= ?`,
     )
     .bind(id, Date.now() - FEED_KEEP_MS)
-    .first<{ kind: string; icon: string; text: string; uid: string | null; at: number; username: string | null; look: string | null; likes: number; replies: number }>();
+    .first<{ kind: string; icon: string; text: string; uid: string | null; at: number; author: string | null; username: string | null; look: string | null; likes: number; replies: number }>();
   if (!row) return new Response('Not found', { status: 404 });
   const byPlayer = row.kind === 'post';
   // The police picture, drawn the way the game draws it under the tweet (src/ui/Mugshot.tsx).
@@ -413,7 +413,7 @@ export async function ogTweetImage(env: Env, id: number): Promise<Response> {
     'div',
     { display: 'flex', alignItems: 'center', gap: '20px' },
     byPlayer ? face(row.look, 96) : el('div', { display: 'flex', fontSize: mugshot ? '56px' : '72px' }, row.icon),
-    el('div', { display: 'flex', fontSize: '40px', fontWeight: 700 }, tweetAuthor(row.kind, row.username, id)),
+    el('div', { display: 'flex', fontSize: '40px', fontWeight: 700 }, tweetAuthor(row.kind, row.username, id, row.author)),
   );
   const card = el(
     'div',

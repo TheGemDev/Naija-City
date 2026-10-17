@@ -1,6 +1,6 @@
 // Estates: who owns which plot in each region (src/game/estate.ts). Players send their property list;
 // only properties they actually paid for this life (ledger refs `p:<id>:…`) get a slot, and sold ones
-// are dropped. Anyone can read a region to see the neighbours.
+// are dropped. Anyone can read a region to see the neighbours. NPC citizens own plots here too (worker/npcs.ts).
 
 import { CAP } from '../src/game/estate';
 import { DESIGN_BY_ID, PLOTS, REGION_BY_ID, STAGES } from '../src/game/property';
@@ -11,7 +11,8 @@ const json = (data: unknown, status = 200) =>
 
 const MAX_PROPERTIES = 40;
 
-interface PlotRow { slot: number; pid: string; uid: string; owner: string | null; plot: string; design: string | null; stage: number; building: number }
+/** `kids` is set on an NPC citizen's house (worker/npcs.ts): their children. */
+interface PlotRow { slot: number; pid: string; uid: string; owner: string | null; plot: string; design: string | null; stage: number; building: number; kids: number | null }
 
 /** GET /api/estate/<region>?n=<estate>: the plots in one estate (CAP slots) of a region, plus how many slots exist in all. Public. */
 export async function readEstate(db: D1Database, region: string, n = 0): Promise<Response> {
@@ -20,8 +21,8 @@ export async function readEstate(db: D1Database, region: string, n = 0): Promise
   const total = (await db.prepare('SELECT COALESCE(MAX(slot) + 1, 0) AS total FROM estate_plots WHERE region = ?').bind(region).first<{ total: number }>())?.total ?? 0;
   const { results } = await db
     .prepare(
-      `SELECT e.slot, e.pid, e.uid, SUBSTR(COALESCE(p.username, p.name, 'Someone'), 1, 20) AS owner, e.plot, e.design, e.stage, e.building
-       FROM estate_plots e LEFT JOIN players p ON p.uid = e.uid
+      `SELECT e.slot, e.pid, e.uid, SUBSTR(COALESCE(p.username, p.name, n.name, 'Someone'), 1, 24) AS owner, e.plot, e.design, e.stage, e.building, n.kids
+       FROM estate_plots e LEFT JOIN players p ON p.uid = e.uid LEFT JOIN npcs n ON n.id = e.uid
        WHERE e.region = ? AND e.slot >= ? AND e.slot < ? ORDER BY e.slot`,
     )
     .bind(region, no * CAP, (no + 1) * CAP)

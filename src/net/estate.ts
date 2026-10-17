@@ -14,6 +14,8 @@ export interface Neighbour extends EstateLot {
   uid: string;
   owner: string;
   building: boolean;
+  /** An NPC citizen's house (src/game/npcs.ts): how many children live there. */
+  kids?: number | null;
 }
 
 interface EstateState {

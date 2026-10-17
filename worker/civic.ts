@@ -13,11 +13,12 @@ import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, lawText, REPAIR
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
 import { FARE_SUBSIDY } from '../src/game/transport';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
-import { lootAction, lootBoard, openLootCase, settleLoot, type LootAction } from './loot';
+import { lootAction, lootBoard, openLootCase, removeFromOffice, settleLoot, type LootAction } from './loot';
 import { myGhosts, potStmt, runScheme, setGhosts } from './schemes';
 import { fineItem, recordExhibits } from './exhibits';
 import { gazette, OFFICE_NAME, official, recentNews, type Notice } from './gazette';
 import { syncForum } from './groups';
+import { peopleBoard } from './npcs';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
 import { GOV_RANT } from '../src/game/news';
 
@@ -33,6 +34,8 @@ interface CandidateRow {
   name: string | null;
   support: number;
   votes: number;
+  /** Of those, the NPC citizens' (worker/npcs.ts). */
+  npcVotes?: number;
   lastActionAt: number;
 }
 
@@ -70,7 +73,7 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
   for (const election of expired.results) {
     const candidates = await db
       .prepare(
-        `SELECT c.uid, c.support, COUNT(v.voter_uid) AS votes
+        `SELECT c.uid, c.support, COUNT(v.voter_uid) + (SELECT COUNT(*) FROM npc_votes nv WHERE nv.election_id = c.election_id AND nv.candidate_uid = c.uid) AS votes
          FROM civic_candidates c
          LEFT JOIN civic_votes v ON v.election_id = c.election_id AND v.candidate_uid = c.uid
          WHERE c.election_id = ?
@@ -100,7 +103,7 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
         ? [
             db
               // A new term starts clean: whoever wins a state's seat is not impeached.
-              .prepare(`UPDATE civic_policies SET ${election.office}_uid = ?, ${election.office}_term_ends = ?, ${OFFICE_RULES[election.office].city ? `${election.office}_suspended_until = NULL, ` : ''}updated_at = ? WHERE id = 1`)
+              .prepare(`UPDATE civic_policies SET ${election.office}_uid = ?, ${election.office}_term_ends = ?, ${election.office}_strikes = 0, ${OFFICE_RULES[election.office].city ? `${election.office}_suspended_until = NULL, ` : ''}updated_at = ? WHERE id = 1`)
               // In office until the polls next close.
               .bind(candidates.uid, nextElectionEnds(now), now),
           ]
@@ -261,8 +264,10 @@ export async function paySalaries(db: D1Database, now: number): Promise<void> {
 /** Every state's treasury, its bills and how its assets are holding up. Empty until migration 0085 has run. */
 async function stateBoard(db: D1Database) {
   try {
-    const { states, assets } = await loadStates(db);
+    const [{ states, assets }, people] = await Promise.all([loadStates(db), peopleBoard(db, Date.now())]);
     return Object.fromEntries(states.map((s) => [s.city, {
+      // Who lives there (NPC citizens and players), how they feel about it, and today's comings and goings.
+      people: people[s.city] ?? null,
       balance: s.balance,
       incoming: s.incoming,
       arrears: s.arrears,
@@ -290,6 +295,8 @@ async function snapshot(db: D1Database, uid: string) {
           termEnds: pollsCloseAt(Date.now()),
           /** Impeached by the president until then: the president runs the state. */
           suspendedUntil: suspendedUntil(policies, o) || null,
+          /** Money crimes in office so far this term (OFFICE_STRIKES costs the seat). */
+          strikes: Number(policies[`${o}_strikes`] ?? 0),
         }
       : null;
   const races = await db
@@ -299,7 +306,8 @@ async function snapshot(db: D1Database, uid: string) {
 
   for (const race of races.results) {
     const tally = (where: string) =>
-      `SELECT c.uid, p.username, p.name, c.support, c.last_action_at AS lastActionAt, COUNT(v.voter_uid) AS votes
+      `SELECT c.uid, p.username, p.name, c.support, c.last_action_at AS lastActionAt, COUNT(v.voter_uid) + (SELECT COUNT(*) FROM npc_votes nv WHERE nv.election_id = c.election_id AND nv.candidate_uid = c.uid) AS votes,
+              (SELECT COUNT(*) FROM npc_votes nv WHERE nv.election_id = c.election_id AND nv.candidate_uid = c.uid) AS npcVotes
        FROM civic_candidates c
        JOIN players p ON p.uid = c.uid
        LEFT JOIN civic_votes v ON v.election_id = c.election_id AND v.candidate_uid = c.uid
@@ -316,6 +324,8 @@ async function snapshot(db: D1Database, uid: string) {
         .prepare(
           `SELECT (SELECT COUNT(*) FROM civic_candidates WHERE election_id = ?1) AS running,
                   (SELECT COUNT(*) FROM civic_votes v JOIN civic_candidates c ON c.election_id = v.election_id AND c.uid = v.candidate_uid
+                   WHERE v.election_id = ?1)
+                  + (SELECT COUNT(*) FROM npc_votes v JOIN civic_candidates c ON c.election_id = v.election_id AND c.uid = v.candidate_uid
                    WHERE v.election_id = ?1) AS votes`,
         )
         .bind(race.id)
@@ -845,28 +855,19 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       : (policy.treasury as number);
     const amount = Math.min(e.cap, Math.floor(pot * e.share));
     if (amount < 1_000) return err(402, 'There is nothing in the treasury to “borrow”');
-    const who = (await usernames(db, [user.uid])).get(user.uid);
     await db.prepare('UPDATE players SET embezzled_at = ? WHERE uid = ?').bind(now, user.uid).run();
     // The EFCC chair rarely investigates themselves; a different chair is extra keen.
     const chance = office === 'efcc' ? 0.15 : Math.max(0.05, e.catchChance + (policy.efcc_uid ? 0.2 : 0) + ALLOCATION.efccEdge(allocationOf(policy).efcc));
     // With an EFCC chair in office, they decide (worker/loot.ts); without one it is down to the odds.
     const chairUid = policy.efcc_uid && policy.efcc_uid !== user.uid ? (policy.efcc_uid as string) : null;
     if (!chairUid && rand() < chance) {
-      const laws = await loadLaws(db);
-      const fine = await transfer(db, user.uid, null, e.fine, 'efcc_fine', '', `embezzle:${user.uid}:${now}`);
-      await recordExhibits(db, user.uid, `embezzle:${now}`, `Caught taking ${naira(amount)} from the treasury`, [fineItem(fine)], now);
-      await jail(db, user.uid, laws.jailMinutes * 2, `Embezzlement · ${naira(amount)} from the treasury as ${OFFICE_RULES[office].title}`);
-      const { until } = await searchPhone(env, user.uid, 'efcc', laws.jailMinutes * 2);
-      await db.batch([
-        db.prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, updated_at = ? WHERE id = 1 AND ${office}_uid = ?`).bind(now, user.uid),
-        feedStmt(db, user.uid, 'politics', '🐍', `SCANDAL: ${OFFICE_RULES[office].title} ${handle(who)} was caught trying to move ${naira(amount)} from the treasury. Removed from office, ${naira(fine)} fine, and EFCC custody. The office is now vacant!`, OFFICE_RULES[office].city),
-        ...(await vdmGov(db, user.uid, 'looter', { who: official(office, who), amount: naira(amount) }, OFFICE_RULES[office].city, false, {
-          but: rand() < GOV_RANT.mixedChance ? { about: 'efccCatch', matter: { who: 'the EFCC', amount: naira(amount) } } : null,
-        })),
-      ]);
-      await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
-      await gazette(env, ctx, [{ uid: user.uid, office, kind: 'scandal', icon: '🐍', text: `${official(office, who)} was caught taking ${naira(amount)} from the treasury and is out of office.` }]);
-      return json({ caught: true, until, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+      // A strike (worker/loot.ts): a fine and a warning, and the seat and a cell on the last one.
+      const hit = await removeFromOffice(
+        env, ctx, user.uid, office, `Caught trying to move ${naira(amount)} from the treasury`, now,
+        `SCANDAL: ${OFFICE_RULES[office].title} {who} was caught trying to move ${naira(amount)} from the treasury. Removed from office, {fine} fine, and EFCC custody. The office is now vacant!`,
+        amount,
+      );
+      return json({ caught: true, removed: hit.removed, strikes: hit.strikes, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
     }
     const taken = stateCity
       ? await spendState(db, stateCity, amount, { allowArrears: true })
@@ -912,14 +913,14 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       await db.prepare('DELETE FROM civic_cooldowns WHERE uid = ? AND action = ? AND at = ?').bind(user.uid, scheme, now).run();
       return err(out.status, out.error);
     }
-    return json({ outcome: out.outcome, amount: out.amount, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+    return json({ outcome: out.outcome, amount: out.amount, strikes: 'strikes' in out ? out.strikes : undefined, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
   }
 
   // The looter offers the EFCC chair a share of the loot, or the chair decides (worker/loot.ts).
   if (body.action === 'lootOffer' || body.action === 'lootDecide') {
     const result = await lootAction(env, ctx, user.uid, body as unknown as LootAction, now);
     if ('error' in result) return err(result.status, result.error);
-    return json({ outcome: result.done, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+    return json({ outcome: result.done, strikes: 'strikes' in result ? result.strikes : undefined, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
   }
 
   // The governor sets how much of an asset's full bill the state pays to keep it up.

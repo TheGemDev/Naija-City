@@ -15,6 +15,7 @@ import { enterHouseVisit, startBreakIn } from '../net/visit';
 import { useVisit } from '../game/visits';
 import { plotLink, shareLink } from '../net/deeplink';
 import { requestHomeVisit } from '../net/social';
+import { isNpc } from '../game/npcs';
 
 /** Enter a neighbour's house directly; the server checks the plot and estate. */
 function breakIn(lot: { slot: number; uid: string | null; owner: string }, region: string) {
@@ -85,6 +86,8 @@ export function EstateBar() {
   // Only your own houses carry a build date; the estate list from the server doesn't.
   const built = lot?.mine ? builtOn(useGame.getState().properties.find((p) => p.region === region && p.slot === lot.slot)) : null;
   const design = lot?.design ? DESIGN_BY_ID[lot.design] : null;
+  // NPC citizens (src/game/npcs.ts) own houses here too, but nobody is home to knock for, and there's no house to break into.
+  const npc = isNpc(lot?.uid);
   const mine = lots.filter((l) => l.mine).length;
   const neighbours = lots.length - mine;
   const stops = [...new Map(properties.filter((p) => p.stage >= STAGES.length).map((p) => [`${p.region}:${sectionOf(p.slot ?? 0)}`, { region: p.region, no: sectionOf(p.slot ?? 0) }])).values()]
@@ -124,7 +127,7 @@ export function EstateBar() {
               <ScrollName text={lot ? (lot.mine ? 'Your house' : `${lot.owner}'s house`) : 'Empty plot'} />
               <small>
                 {lot
-                  ? [design ? design.name : 'Bare land', PLOTS[lot.plot].label, lot.stage >= STAGES.length ? built && `Built ${built}` : lot.building ? `Building: ${STAGES[lot.stage].name.toLowerCase()}` : `${lot.stage}/${STAGES.length} stages`].filter(Boolean).join(' · ')
+                  ? [npc && (lot.kids ? `NPC family · ${lot.kids} ${lot.kids === 1 ? 'child' : 'children'}` : 'NPC citizen'), design ? design.name : 'Bare land', PLOTS[lot.plot].label, lot.stage >= STAGES.length ? built && `Built ${built}` : lot.building ? `Building: ${STAGES[lot.stage].name.toLowerCase()}` : `${lot.stage}/${STAGES.length} stages`].filter(Boolean).join(' · ')
                   : `${r.name} · ${PLOTS.full.label}`}
               </small>
             </div>
@@ -145,7 +148,7 @@ export function EstateBar() {
             {lot?.mine && lot.stage >= STAGES.length && <button onClick={() => openHouse(lot.key)}><Icon name="upgrade" size={16} /> Upgrade</button>}
             {lot?.mine && lot.stage < STAGES.length && !lot.building && <button className="primary" onClick={() => openHouse(lot.key)}><Icon name="build" size={16} /> Build</button>}
             {lot?.mine && lot.building && <button className="primary" onClick={() => openHouse(lot.key)}><Icon name="build" size={16} /> View build</button>}
-            {lot && !lot.mine && lot.uid && lot.design && lot.stage >= STAGES.length && (
+            {lot && !lot.mine && lot.uid && !npc && lot.design && lot.stage >= STAGES.length && (
               <>
                 <button disabled={busy} onClick={() => knock(lot)}><Icon name="knock" size={16} /> Knock</button>
                 <button className="danger" disabled={busy} onClick={() => breakIn(lot, region)}><Icon name="break-in" size={16} /> Break in</button>

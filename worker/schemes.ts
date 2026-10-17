@@ -24,7 +24,8 @@ export interface Schemer {
   office: PoliticalOffice;
   city: CivicCity | null;
 }
-export type SchemeResult = { error: string; status: number } | { outcome: string; amount: number };
+/** `strikes`: caught in office, the strikes against them now (OFFICE_STRIKES); `searched` means it cost them the seat, `searched-struck` that it did not. */
+export type SchemeResult = { error: string; status: number } | { outcome: string; amount: number; strikes?: number };
 
 /** Money going back into a treasury: a state's, or the federal one (null). */
 export const potStmt = (db: D1Database, city: CivicCity | null, amount: number) =>
@@ -110,13 +111,13 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
   if (rand() < g.search) {
     // Searched on the tarmac: the bags go back where they came from, and so does the office.
     await db.batch([potStmt(db, s.city, haul)]);
-    await removeFromOffice(
+    const hit = await removeFromOffice(
       env, ctx, s.uid, s.office, `Caught at the airport with ${naira(haul)} in Ghana Must Go bags`, now,
       `CAUGHT AT THE AIRPORT: customs opened the “diplomatic baggage” on ${me}’s jet and found ${naira(haul)} from ${where(s.city)} in Ghana Must Go bags. Out of office, {fine} fine, and a cell. 🧳`,
       haul,
       [{ kind: 'loot', icon: '🧳', label: 'Ghana Must Go bags', value: haul }],
     );
-    return { outcome: 'searched', amount: haul };
+    return { outcome: hit.removed ? 'searched' : 'searched-struck', amount: haul, strikes: hit.strikes };
   }
   await pay(haul, 'bags');
   await feedStmt(db, null, 'politics', '🛩️', `A state jet left the airport overnight with “diplomatic baggage”. No passenger list. No flight plan. Customs say they saw nothing. 🛩️`, s.city).run().catch(() => {});

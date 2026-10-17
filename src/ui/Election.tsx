@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
+import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { isSuspended, useCivic, type CivicCandidate } from '../net/civic';
@@ -137,6 +137,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
           {holder ? <b>{nameOf(holder)}{holder.uid === uid ? ' (you)' : ''}</b> : <span className="muted">Vacant</span>}
           {holder?.termEnds ? <small> · {left(holder.termEnds - Date.now())} left</small> : null}
           {isSuspended(holder) ? <small className="ev-impeached"> · ⚖️ Impeached for {left(holder!.suspendedUntil! - Date.now())}</small> : null}
+          {holder?.strikes ? <small className="ev-impeached" title={`${OFFICE_STRIKES} strikes for money crimes and they are out of office`}> · ⚠️ {holder.strikes}/{OFFICE_STRIKES} strikes</small> : null}
         </span>
         {pot && <span className="ev-pot"><b>{nairaShort(pot.amount)}</b><small>{pot.label}</small></span>}
       </div>

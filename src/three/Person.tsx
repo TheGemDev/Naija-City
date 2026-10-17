@@ -1128,16 +1128,18 @@ function headRows(f: boolean): HeadRow[] {
     rows.push([HEAD_TOP * Math.cos(t), 0.129 * k, 0.134 * k, -0.139 * k, 2]);
   }
   const jaw = f ? 0.94 : 1;
+  // The front eases back from brow to mouth with no ledge (a ridge across the whole width shades as a dark band),
+  // and the back of the skull carries on down to the nape before the underside turns in to the neck.
   rows.push(
-    [0.028, 0.127, f ? 0.128 : 0.1295, -0.136, 2.2],
-    [0.008, 0.125, 0.1245, -0.136, 2.4],
-    [-0.022, 0.126, 0.123, -0.13, 2.6],
-    [-0.052, 0.113 * (f ? 0.96 : 1), 0.12, -0.113, 2.7],
-    [-0.082, 0.1 * jaw, 0.114, -0.084, f ? 2.5 : 3.2],
-    [-0.108, (f ? 0.082 : 0.086) * jaw, 0.109, -0.052, f ? 2.4 : 3.2],
-    [-0.13, f ? 0.054 : 0.06, f ? 0.103 : 0.107, -0.014, f ? 2.4 : 3],
-    [-0.145, f ? 0.03 : 0.032, f ? 0.09 : 0.095, 0.028, 2.2],
-    [-0.15, 0, 0.068, 0.068, 2],
+    [0.028, 0.1265, f ? 0.1285 : 0.129, -0.137, 2.15],
+    [0.008, 0.1262, 0.1275, -0.138, 2.3],
+    [-0.022, 0.1245, 0.1255, -0.134, 2.45],
+    [-0.052, 0.113 * (f ? 0.96 : 1), 0.1215, -0.122, 2.6],
+    [-0.082, 0.1 * jaw, 0.1155, -0.1, f ? 2.5 : 3],
+    [-0.108, (f ? 0.082 : 0.086) * jaw, 0.11, -0.072, f ? 2.4 : 3],
+    [-0.13, f ? 0.054 : 0.06, f ? 0.103 : 0.107, -0.03, f ? 2.4 : 2.8],
+    [-0.145, f ? 0.03 : 0.032, f ? 0.09 : 0.095, 0.022, 2.2],
+    [-0.15, 0, 0.066, 0.066, 2],
   );
   return rows;
 }
@@ -1152,7 +1154,7 @@ const headSlices = (f: boolean) => {
   if (s) return s;
   const rows = headRows(f);
   s = [];
-  const per = 3;
+  const per = 4;
   for (let i = 0; i < rows.length - 1; i++) {
     const a = rows[Math.max(0, i - 1)], b = rows[i], c = rows[i + 1], d = rows[Math.min(rows.length - 1, i + 2)];
     for (let j = 0; j < per; j++) s.push(b.map((_, k) => cr(a[k], b[k], c[k], d[k], j / per)) as HeadRow);
@@ -1171,17 +1173,22 @@ function slicePoint([, half, front, back, square]: HeadRow, t: number): [number,
   return [half * Math.sign(s) * Math.abs(s) ** (2 / n), mid + depth * Math.sign(c) * Math.abs(c) ** (2 / n)];
 }
 
-/**
- * How far forward the face's surface is at (x, y), so eyes, brows and lips can be set into it rather than
- * hovering in front of it or sinking in.
- */
-function faceZ(f: boolean, x: number, y: number) {
+/** The head's slice at height `y`, between the two it falls between. */
+function sliceAt(f: boolean, y: number): HeadRow {
   const s = headSlices(f);
   let i = 1;
   while (i < s.length - 1 && s[i][0] > y) i++;
   const a = s[i - 1], b = s[i];
   const k = Math.min(1, Math.max(0, (a[0] - y) / (a[0] - b[0] || 1)));
-  const row = a.map((v, j) => v + (b[j] - v) * k) as HeadRow;
+  return a.map((v, j) => v + (b[j] - v) * k) as HeadRow;
+}
+
+/**
+ * How far forward the face's surface is at (x, y), so eyes, brows and lips can be set into it rather than
+ * hovering in front of it or sinking in.
+ */
+function faceZ(f: boolean, x: number, y: number) {
+  const row = sliceAt(f, y);
   const [, half, , , square] = row;
   const sx = Math.min(1, Math.abs(x) / Math.max(1e-4, half)) ** (square / 2);
   return slicePoint(row, Math.asin(sx))[1];
@@ -1194,7 +1201,7 @@ function faceZ(f: boolean, x: number, y: number) {
 const headGeo = (f: boolean) =>
   geo(`head:${f}`, () => {
     const s = headSlices(f);
-    const cols = 36;
+    const cols = 48;
     const pos: number[] = [];
     for (const row of s)
       for (let c = 0; c < cols; c++) {
@@ -1282,9 +1289,13 @@ function noseGeo(f: boolean) {
 
 const EYE_X = 0.047;
 const EYE_Y = 0.01;
-/** The eye whites' half width, half height and depth. */
-const EYE_R: [number, number, number] = [0.0215, 0.0145, 0.0095];
-const IRIS = 0.0108;
+/** The eye opening: half its width, how far the upper lid arches above the middle and the lower lid dips below it. */
+const EYE_R = { half: 0.0205, up: 0.0128, low: 0.0085 };
+/** How far the eyeball swells out of the opening, at its middle. */
+const EYE_BULGE = 0.0028;
+const IRIS = 0.0102;
+/** The iris sits a little high, so the upper lid covers its top the way it does on a relaxed eye. */
+const IRIS_UP = 0.0028;
 /**
  * Where the lips meet, mid-mouth: about a third of the way from the base of the nose (-0.046) down to the chin
  * (-0.14), leaving a philtrum above and a chin below rather than a mouth tucked under the nose.
@@ -1333,19 +1344,67 @@ function strand(pts: Vector3[], r: (t: number) => number, flat = 1, n = 14, m = 
   return g;
 }
 
-/** Where each eye sits: proud enough of the socket that most of the white shows, not a slit. */
-const eyeCentre = (f: boolean, s: number) => new Vector3(s * EYE_X, EYE_Y, faceZ(f, EYE_X, EYE_Y) - 0.0064);
+/** The middle of each eye opening, on the face. */
+const eyeCentre = (s: number) => new Vector3(s * EYE_X, EYE_Y, 0);
 
-/** The edge of the eye where it meets the face, `t` from the inner corner (0) over the top to the outer corner (1). */
+/**
+ * How far out from the middle of the eye opening (s's side) the point (x, y) is: 0 in the middle, 1 on the lids. The
+ * opening is almond shaped, arched higher above than below, with the outer corner lifted a touch.
+ */
+function eyeR(s: number, x: number, y: number) {
+  const u = (x - s * EYE_X) / EYE_R.half;
+  const dy = y - EYE_Y - 0.0018 * s * u;
+  return Math.hypot(u, dy / (dy > 0 ? EYE_R.up : EYE_R.low));
+}
+
+/** The eyeball's surface at (x, y): the face itself at the lids, swelling gently out of it towards the middle. */
+const eyeZ = (f: boolean, s: number, x: number, y: number) => faceZ(f, x, y) + 0.0003 + EYE_BULGE * Math.sqrt(Math.max(0, 1 - eyeR(s, x, y) ** 2));
+
+/** The edge of the eye opening, `t` from the inner corner (0) over the top to the outer corner (1). */
 function eyeRim(f: boolean, s: number, t: number) {
-  const c = eyeCentre(f, s);
-  const th = s > 0 ? Math.PI * (1 - t) : Math.PI * t;
-  for (let k = 1; k > 0; k -= 0.01) {
-    const x = c.x + EYE_R[0] * k * Math.cos(th), y = c.y + EYE_R[1] * k * Math.sin(th);
-    const z = faceZ(f, x, y);
-    if (c.z + EYE_R[2] * Math.sqrt(1 - k * k) >= z) return new Vector3(x, y, z);
-  }
-  return c.clone();
+  const a = Math.PI * t;
+  const x = s * (EYE_X - EYE_R.half * Math.cos(a));
+  const y = EYE_Y + EYE_R.up * Math.sin(a) + 0.0018 * (-Math.cos(a));
+  return new Vector3(x, y, faceZ(f, x, y));
+}
+
+/**
+ * A patch laid over the eye, like the lips and nose are laid over the face: a disc of `rings` × `segs` round (cx, cy)
+ * of radius `r`, each point pulled in along its spoke until it is inside the eye opening, so the lids trim it, and
+ * lifted `lift` off the eyeball.
+ */
+function eyePatch(f: boolean, s: number, cx: number, cy: number, r: (a: number) => number, lift: number, rings = 6, segs = 24) {
+  const pos: number[] = [cx, cy, eyeZ(f, s, cx, cy) + lift];
+  for (let i = 1; i <= rings; i++)
+    for (let j = 0; j < segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      const k = (i / rings) * r(a);
+      let x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
+      if (eyeR(s, x, y) > 1) {
+        // Walk back along the spoke to where it crosses the lid.
+        let lo = 0, hi = k;
+        for (let n = 0; n < 16; n++) {
+          const m = (lo + hi) / 2;
+          if (eyeR(s, cx + Math.cos(a) * m, cy + Math.sin(a) * m) > 1) hi = m;
+          else lo = m;
+        }
+        x = cx + Math.cos(a) * lo;
+        y = cy + Math.sin(a) * lo;
+      }
+      pos.push(x, y, eyeZ(f, s, x, y) + lift);
+    }
+  const index: number[] = [];
+  for (let j = 0; j < segs; j++) index.push(0, 1 + j, 1 + ((j + 1) % segs));
+  for (let i = 1; i < rings; i++)
+    for (let j = 0; j < segs; j++) {
+      const a = 1 + (i - 1) * segs + j, b = 1 + (i - 1) * segs + ((j + 1) % segs);
+      index.push(a, a + segs, b, b, a + segs, b + segs);
+    }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
 }
 
 const SIDES = [-1, 1] as const;
@@ -1355,21 +1414,19 @@ const eyeWhitesGeo = (f: boolean) =>
   geo(`whites:${f}`, () =>
     mergeGeometries(
       SIDES.flatMap((s) => {
-        const c = eyeCentre(f, s);
-        const iz = irisZ(c);
+        const c = eyeCentre(s);
         // The light catches both eyes on the same side, up and to the right.
-        const hx = 0.0034, hy = 0.0042;
-        const hz = iz + IRIS * 0.35 * Math.sqrt(Math.max(0, 1 - (hx * hx + hy * hy) / (IRIS * IRIS)));
-        return [blob(c, EYE_R), blob(new Vector3(c.x + hx, c.y + hy, hz), [0.0022, 0.0022, 0.0009], 10, 8)];
+        const hx = c.x + 0.0032, hy = c.y + IRIS_UP + 0.0036;
+        return [
+          eyePatch(f, s, c.x, c.y, () => EYE_R.half * 1.05, 0, 7, 28),
+          eyePatch(f, s, hx, hy, () => 0.0019, 0.0009, 2, 10),
+        ];
       }),
     )!,
   );
-/** The iris's middle sits just under the white's surface, so it reads as a disc on the eye rather than a bead stuck on. */
-const irisZ = (c: Vector3) => c.z + EYE_R[2] * Math.sqrt(1 - (IRIS / EYE_R[0]) ** 2) - 0.0006;
+/** The irises: dark discs lying on the eyeballs, their tops tucked under the upper lids. */
 const irisGeo = (f: boolean) =>
-  geo(`irises:${f}`, () =>
-    mergeGeometries(SIDES.map((s) => { const c = eyeCentre(f, s); return blob(new Vector3(c.x, c.y + 0.0004, irisZ(c)), [IRIS, IRIS, IRIS * 0.35]); }))!,
-  );
+  geo(`irises:${f}`, () => mergeGeometries(SIDES.map((s) => { const c = eyeCentre(s); return eyePatch(f, s, c.x, c.y + IRIS_UP, () => IRIS, 0.0004, 5, 24); }))!);
 
 /** Brows following the ridge over each eye, thickest at the inner end. Men's are heavier and straighter; women's finer, with more arch. */
 const browGeo = (f: boolean) =>
@@ -1483,7 +1540,7 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
       <M color={lips} geometry={lipsGeo(f)} rough={f ? 0.38 : 0.62} />
       <M color={shade(lips, 0.42)} geometry={mouthLineGeo(f)} />
       {f && !coversHair && <M color="#d4af37" geometry={earringGeo} metal={0.8} rough={0.3} />}
-      {!coversHair && <Hair style={a.hair} color={hairColor} skin={skin} capped={!!head} />}
+      {!coversHair && <Hair style={a.hair} color={hairColor} skin={skin} capped={!!head} f={f} />}
       {head && <HeadWear g={head} />}
       {a.outfit.eyes && <Eyes g={GARMENT_BY_ID[a.outfit.eyes]} />}
     </group>
@@ -1493,13 +1550,64 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
 /** Upper half of a sphere, for scalps and caps. */
 const dome = (r: number, cut = 0.5) => geo(`dome:${r}:${cut}`, () => new SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI * cut));
 
-/** A cap of hair over the skull. `cut` is how far down it comes; it is tipped back so the hairline is high on the forehead and low on the nape. */
-const scalp = (r: number, cut: number) => geo(`scalp:${r}:${cut}`, () => new SphereGeometry(r, 36, 20, 0, Math.PI * 2, 0, Math.PI * cut));
+/** Tipped back this far, a cap's rim runs from high on the forehead to low on the nape (cornrows and crests follow it). */
 const HAIRLINE = 0.6;
 
-function Hair({ style, color, skin, capped }: { style: Appearance['hair']; color: string; skin: string; capped: boolean }) {
-  // Always a little bigger than the skull all round, or the forehead cuts a jagged fringe into it.
-  const cap = (r = 0.15, cut = 0.52, c = color) => <M color={c} geometry={scalp(r, cut)} scale={[0.92, 1.04, 1]} rotation={[-HAIRLINE, 0, 0]} rough={0.95} />;
+/**
+ * Where hair starts, by angle round the head from the nose (0) to the nape (π): high on the forehead, easing back at the
+ * temples, a sideburn down in front of the ear, up and over the ear, then down behind it to the nape. A `top` cut keeps
+ * only the hair over the crown.
+ */
+const HAIRLINE_AT: [number, number][] = [[0, 0.078], [0.55, 0.07], [0.95, 0.052], [1.17, 0.024], [1.34, 0.016], [1.56, 0.04], [1.85, 0.034], [2.2, -0.03], [2.7, -0.082], [Math.PI, -0.095]];
+const TOP_AT: [number, number][] = [[0, 0.088], [1.0, 0.075], [1.6, 0.07], [2.4, 0.055], [Math.PI, 0.05]];
+function hairline(top: boolean, a: number) {
+  const P = top ? TOP_AT : HAIRLINE_AT;
+  let k = 0;
+  while (k < P.length - 2 && P[k + 1][0] < a) k++;
+  const t = (a - P[k][0]) / (P[k + 1][0] - P[k][0]);
+  return cr(P[Math.max(0, k - 1)][1], P[k][1], P[k + 1][1], P[Math.min(P.length - 1, k + 2)][1], t);
+}
+
+/**
+ * A cap of hair grown off the skull itself, `thick` proud of it, down to the hairline. It thins to nothing at its edge,
+ * so it melts into the skin instead of standing off it like a swimming cap.
+ */
+const scalp = (f: boolean, thick: number, top = false) =>
+  geo(`scalp:${f}:${thick}:${top}`, () => {
+    const rows = 18, cols = 48;
+    const pos: number[] = [];
+    const p = new Vector3(), mid = new Vector3(0, 0, -0.004);
+    for (let i = 0; i <= rows; i++) {
+      const v = i / rows;
+      for (let c = 0; c < cols; c++) {
+        const a = (c / cols) * Math.PI * 2;
+        const y = HEAD_TOP - (HEAD_TOP - hairline(top, Math.min(a, Math.PI * 2 - a))) * v;
+        const [x, z] = slicePoint(sliceAt(f, y), a);
+        p.set(x, y, z);
+        const t = 0.0008 + (thick - 0.0008) * smoothstep(1, 0.8, v);
+        p.addScaledVector(p.clone().sub(mid).normalize(), t);
+        pos.push(p.x, p.y, p.z);
+      }
+    }
+    const index: number[] = [];
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        const a = r * cols + c, b = a + cols, d = r * cols + ((c + 1) % cols), e = d + cols;
+        index.push(a, b, d, b, e, d);
+      }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    g.setIndex(index);
+    g.computeVertexNormals();
+    // The crown is one spot drawn as a ring of copies; point them all straight up.
+    const nrm = g.getAttribute('normal');
+    for (let c = 0; c < cols; c++) nrm.setXYZ(c, 0, 1, 0);
+    return g;
+  });
+
+function Hair({ style, color, skin, capped, f }: { style: Appearance['hair']; color: string; skin: string; capped: boolean; f: boolean }) {
+  // `r` is the old sphere cap's radius, kept so each style reads as before: the further past the skull's 0.141, the thicker.
+  const cap = (r = 0.15, cut = 0.52, c = color) => <M color={c} geometry={scalp(f, r - 0.141, cut < 0.4)} rough={0.95} />;
   // Hair cut so short the scalp shows through it.
   const stubble = (k: number) => '#' + new Color(color).lerp(new Color(skin), k).getHexString();
   switch (style) {
