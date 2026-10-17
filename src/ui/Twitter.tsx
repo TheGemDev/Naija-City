@@ -944,12 +944,14 @@ const bannerOf = (seed: string) => {
   return `linear-gradient(135deg, hsl(${a} 70% 45%), hsl(${(a + 50) % 360} 75% 32%))`;
 };
 
-function Profile({ who }: { who: Who }) {
+function Profile({ who: asked }: { who: Who }) {
   const me = useSession((s) => s.user);
   const all = useAllItems();
   const officials = useOfficials();
-  const username = who.kind === 'player' ? who.username.toLowerCase() : '';
+  const username = asked.kind === 'player' ? asked.username.toLowerCase() : '';
   const prof = useTw((s) => (username ? s.profiles[username] : undefined));
+  // An @name that is no player's is an NPC citizen's (worker/npcs.ts): show them, with their posts.
+  const who: Who = asked.kind === 'player' && prof?.missing ? { kind: 'citizen', name: username } : asked;
   const alias = useGame((s) => (prof?.player ? s.aliases[prof.player.uid] : undefined));
   const vdmFeed = useLive((s) => s.vdmFeed);
   useEffect(() => {

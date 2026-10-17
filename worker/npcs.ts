@@ -17,7 +17,7 @@ import { potholeCity } from '../src/game/city';
 import {
   ARRIVE_FROM, CRIME_TEXT, JAPA_TO, MOOD_BUMPS, NPC_CRAZE_CHANCE, NPC_CRAZE_IDS, NPC_CRAZES, NPC_CRIME, NPC_CRIMES, NPC_FAMILY, NPC_GOOD, NPC_HOUSE,
   NPC_JOB_BY_ID, NPC_JOBS, NPC_LEAVE, NPC_MONEY, NPC_POP, NPC_PREFIX, NPC_REPLIES, NPC_VOTE, NPC_WILD, NPC_WILD_CHANCE, REPLY_LINES, RETURN_FROM,
-  crazeOf, fillLine, hash01, lifeScore, nextMood, npcLine, pickJob, pickTrait, targetPopulation, traitOf, wageOf, type NpcCraze, type NpcCrime, type NpcWild,
+  crazeOf, fillLine, hash01, lifeScore, nextMood, npcLine, npcUsername, pickJob, pickTrait, targetPopulation, traitOf, wageOf, type NpcCraze, type NpcCrime, type NpcWild,
   type StatePeople,
 } from '../src/game/npcs';
 import { NEWS_KINDS } from '../src/game/news';
@@ -39,6 +39,8 @@ interface NpcRow {
   arrived_at: number; acted_at: number; next_at: number;
   /** Their quirk (NPC_TRAITS). */
   trait: string;
+  /** What they go by on Twitter and in the estates (npcUsername); null until the next population round gives them one. */
+  username: string | null;
 }
 
 interface World {
@@ -86,8 +88,37 @@ async function loadWorld(db: D1Database): Promise<World> {
 const crazeMult = (w: World, city: CivicCity, key: keyof Pick<NpcCraze, 'crime' | 'japa' | 'buy' | 'spend' | 'baby' | 'arrive' | 'returnee' | 'good' | 'wild'>) =>
   crazeOf(w.crazes[city]?.id)?.[key] ?? 1;
 
-/** A first name to answer someone by: "Alhaji Musa Bello" is Musa. */
-const firstName = (name: string) => name.replace(/^(Mr|Mrs|Mallam|Alhaji|Hajiya|Pastor|Dr|Engr|Barrister|Madam|Chief|Corper) /, '').split(' ')[0];
+/** What an NPC posts as: their username (their name until they have one). */
+const nick = (n: { username: string | null; name: string }) => n.username ?? n.name;
+/** How a post names them: @username (their name until they have one). */
+const tag = (n: { username: string | null; name: string }) => (n.username ? `@${n.username}` : n.name);
+/** How a reply names a post's author: @username, or the first name of an old post signed with a full name ("Alhaji Musa Bello" is Musa). */
+const answer = (author: string) =>
+  /^[a-z0-9_]{3,15}$/.test(author) ? `@${author}` : author.replace(/^(Mr|Mrs|Mallam|Alhaji|Hajiya|Pastor|Dr|Engr|Barrister|Madam|Chief|Corper) /, '').split(' ')[0];
+
+/** Usernames for these NPCs that no player or other NPC has: a few tries each, with digits on the later ones. */
+async function uniqueUsernames(db: D1Database, people: { id: string; name: string }[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const taken = new Set<string>();
+  let todo = people;
+  for (let round = 0; round < 4 && todo.length; round++) {
+    const tries = todo.map((p) => ({ p, u: round === 0 ? npcUsername(p.name, rand) : `${npcUsername(p.name, rand).slice(0, 12)}${Math.floor(rand() * 1000)}` }));
+    const { results } = await db
+      .prepare('SELECT username FROM players WHERE username IN (SELECT value FROM json_each(?1)) UNION SELECT username FROM npcs WHERE username IN (SELECT value FROM json_each(?1))')
+      .bind(JSON.stringify(tries.map((t) => t.u)))
+      .all<{ username: string }>();
+    const clash = new Set(results.map((r) => r.username));
+    todo = [];
+    for (const t of tries) {
+      if (clash.has(t.u) || taken.has(t.u)) todo.push(t.p);
+      else {
+        taken.add(t.u);
+        out.set(t.p.id, t.u);
+      }
+    }
+  }
+  return out;
+}
 
 /* ---------- Writing ---------- */
 
@@ -204,7 +235,7 @@ async function actAll(db: D1Database, w: World, now: number) {
   /** Something wild happens to them (NPC_WILD). Returns the mood it moves. */
   const happen = (n: NpcRow, ev: NpcWild, wage: number): number => {
     const city = n.city;
-    const vars: Record<string, string> = { city: CITY_NAME[city], name: n.name, job: NPC_JOB_BY_ID[n.job]?.label ?? 'worker', region: REGION_BY_ID[n.region ?? '']?.name ?? '', to: '' };
+    const vars: Record<string, string> = { city: CITY_NAME[city], name: tag(n), job: NPC_JOB_BY_ID[n.job]?.label ?? 'worker', region: REGION_BY_ID[n.region ?? '']?.name ?? '', to: '' };
     let amount = 0;
     let mood = 0;
     const lose = (share: readonly [number, number]) => {
@@ -292,7 +323,7 @@ async function actAll(db: D1Database, w: World, now: number) {
     vars.amount = naira(amount);
     // Someone else tells it when it happened to them (a kidnapping is not tweeted from the bush).
     const teller = ev.byOther ? due.find((o) => o !== n && o.city === city) : n;
-    if (teller) say(teller.name, ev.id === 'prophecy' ? city : teller.city, ev.icon, fillLine(pick(ev.lines), vars), ev.post);
+    if (teller) say(nick(teller), ev.id === 'prophecy' ? city : teller.city, ev.icon, fillLine(pick(ev.lines), vars), ev.post);
     return mood;
   };
 
@@ -352,7 +383,7 @@ async function actAll(db: D1Database, w: World, now: number) {
           w.balance[t.city] -= haul;
         }
         const witness = victim ?? due.find((o) => o.city === t.city && o !== t);
-        if (witness && crime.id !== 'evade') say(witness.name, t.city, crime.icon, npcLine('unsolved', { city: CITY_NAME[t.city], crimeDid: words.did }, rand), 0.15);
+        if (witness && crime.id !== 'evade') say(nick(witness), t.city, crime.icon, npcLine('unsolved', { city: CITY_NAME[t.city], crimeDid: words.did }, rand), 0.15);
         return 0;
       }
       // Caught: the victim keeps their money, the thief pays a fine to the federal treasury and goes to a cell.
@@ -363,7 +394,7 @@ async function actAll(db: D1Database, w: World, now: number) {
       t.honesty = clamp(t.honesty + NPC_CRIME.lesson, 0, 100);
       count(census, t.city, 'arrested');
       const witness = due.find((o) => o.city === t.city && o !== t);
-      say(witness?.name ?? 'Concerned citizen', t.city, '🚔', npcLine(victim ? 'caughtRobber' : 'caught', { city: CITY_NAME[t.city], name: t.name, crime: words.name, fine: naira(fine) }, rand), 0.35);
+      say(witness ? nick(witness) : 'concerned_citizen', t.city, '🚔', npcLine(victim ? 'caughtRobber' : 'caught', { city: CITY_NAME[t.city], name: tag(t), crime: words.name, fine: naira(fine) }, rand), 0.35);
       return MOOD_BUMPS.jailed;
     };
 
@@ -386,13 +417,13 @@ async function actAll(db: D1Database, w: World, now: number) {
         filled.add(city);
         holes = holes!.filter((s) => s !== hole);
         extra.push(db.prepare('DELETE FROM potholes WHERE site = ?').bind(hole));
-        say(n.name, city, '🛣️', npcLine('pothole', { city: CITY_NAME[city] }, rand), 0.8);
+        say(nick(n), city, '🛣️', npcLine('pothole', { city: CITY_NAME[city] }, rand), 0.8);
         bump += MOOD_BUMPS.gave;
       } else if (deed < 0.7) {
         const amount = Math.min(NPC_GOOD.donateMax, Math.round(n.balance * between(...NPC_GOOD.donateShare)));
         n.balance -= amount;
         credit(stateIn, city, amount);
-        say(n.name, city, '🙏🏾', npcLine('donate', { name: n.name, amount: naira(amount), city: CITY_NAME[city] }, rand), 0.6);
+        say(nick(n), city, '🙏🏾', npcLine('donate', { name: tag(n), amount: naira(amount), city: CITY_NAME[city] }, rand), 0.6);
         bump += MOOD_BUMPS.gave;
       } else {
         const poorest = due.filter((o) => o !== n && o.city === city).sort((a, b) => a.balance - b.balance)[0];
@@ -433,7 +464,7 @@ async function actAll(db: D1Database, w: World, now: number) {
           credit(stateIn, city, land.price * STATE_CUT.land);
           buys.push(n);
           bump += MOOD_BUMPS.plot;
-          say(n.name, city, '📜', npcLine('plot', { region: REGION_BY_ID[land.region].name, plot: PLOTS[land.plot].label.toLowerCase() }, rand), 0.25);
+          say(nick(n), city, '📜', npcLine('plot', { region: REGION_BY_ID[land.region].name, plot: PLOTS[land.plot].label.toLowerCase() }, rand), 0.25);
         }
       } else if (n.stage < STAGES.length) {
         if (!n.design) {
@@ -449,7 +480,7 @@ async function actAll(db: D1Database, w: World, now: number) {
           builds.add(n);
           if (n.stage >= STAGES.length) {
             bump += MOOD_BUMPS.house;
-            say(n.name, city, '🔑', npcLine('house', { design: DESIGN_BY_ID[n.design].name, region: REGION_BY_ID[n.region].name }, rand), 0.5);
+            say(nick(n), city, '🔑', npcLine('house', { design: DESIGN_BY_ID[n.design].name, region: REGION_BY_ID[n.region].name }, rand), 0.5);
           }
         }
       } else if (n.kids < NPC_FAMILY.maxKids && n.balance >= NPC_FAMILY.adoptFee * 2 && rand() < NPC_FAMILY.adoptChance * crazeMult(w, city, 'baby')) {
@@ -458,7 +489,7 @@ async function actAll(db: D1Database, w: World, now: number) {
         credit(stateIn, city, NPC_FAMILY.adoptFee);
         count(census, city, 'adopted');
         bump += MOOD_BUMPS.adopted;
-        say(n.name, city, '👶🏾', npcLine('adopted', { city: CITY_NAME[city] }, rand), 0.4);
+        say(nick(n), city, '👶🏾', npcLine('adopted', { city: CITY_NAME[city] }, rand), 0.4);
       }
     }
 
@@ -486,7 +517,7 @@ async function actAll(db: D1Database, w: World, now: number) {
         w.presidentTax + w.laws[city].incomeTax >= 15 && 'taxBad', w.arrears[city] > 0 && 'arrears',
       ].filter(Boolean) as ('roadsBad' | 'lightsBad' | 'hospitalBad' | 'taxBad' | 'arrears')[];
       const topic = gripes.length ? pick(gripes) : w.life[city] >= 65 ? 'good' : null;
-      if (topic) say(n.name, city, topic === 'good' ? '👏🏾' : '😤', npcLine(topic, vars, rand), 1);
+      if (topic) say(nick(n), city, topic === 'good' ? '👏🏾' : '😤', npcLine(topic, vars, rand), 1);
     }
   }
 
@@ -575,11 +606,11 @@ async function castVotes(db: D1Database, w: World, now: number) {
     const [{ results: candidates }, { results: voters }] = await db.batch([
       db.prepare('SELECT uid, support FROM civic_candidates WHERE election_id = ?').bind(race.id),
       db.prepare(
-        `SELECT n.id, n.name, n.city, n.mood, n.honesty FROM npcs n
+        `SELECT n.id, n.name, n.username, n.city, n.mood, n.honesty FROM npcs n
          WHERE ${city ? 'n.city = ?2 AND' : '?2 IS NULL AND'} n.jailed_until <= ?3
            AND NOT EXISTS (SELECT 1 FROM npc_votes v WHERE v.election_id = ?1 AND v.npc_id = n.id)`,
       ).bind(race.id, city ?? null, now),
-    ]) as unknown as [{ results: { uid: string; support: number }[] }, { results: { id: string; name: string; city: CivicCity; mood: number; honesty: number }[] }];
+    ]) as unknown as [{ results: { uid: string; support: number }[] }, { results: { id: string; name: string; username: string | null; city: CivicCity; mood: number; honesty: number }[] }];
     if (!candidates.length || !voters.length) continue;
     const incumbent = w.policy[`${race.office}_uid`] as string | null | undefined;
     const record = (((city ? w.life[city] : national) - 50) / 50) * NPC_VOTE.record;
@@ -596,14 +627,14 @@ async function castVotes(db: D1Database, w: World, now: number) {
       ballots.push({ n: v.id, c: choice.uid });
     }
     if (!ballots.length) continue;
-    const loud: { name: string; city: CivicCity } | undefined = !shouted && rand() < 0.15 ? voters.find((v) => v.id === ballots[0].n) : undefined;
+    const loud: { name: string; username: string | null; city: CivicCity } | undefined = !shouted && rand() < 0.15 ? voters.find((v) => v.id === ballots[0].n) : undefined;
     shouted ||= !!loud;
     await db.batch([
       db.prepare(
         `INSERT OR IGNORE INTO npc_votes (election_id, npc_id, candidate_uid, at)
          SELECT ?1, json_extract(value, '$.n'), json_extract(value, '$.c'), ?2 FROM json_each(?3)`,
       ).bind(race.id, now, JSON.stringify(ballots)),
-      ...(loud && isCity(loud.city) ? [citizenPost(db, loud.name, loud.city, '🗳️', npcLine('vote', { city: CITY_NAME[loud.city] }, rand), now)] : []),
+      ...(loud && isCity(loud.city) ? [citizenPost(db, nick(loud), loud.city, '🗳️', npcLine('vote', { city: CITY_NAME[loud.city] }, rand), now)] : []),
     ]);
   }
 }
@@ -637,12 +668,12 @@ async function chatter(db: D1Database, now: number) {
     if (target) {
       const city = isCity(target.city) ? target.city : null;
       const who = await db
-        .prepare('SELECT name, city FROM npcs WHERE (?1 IS NULL OR city = ?1) AND (?2 IS NULL OR name != ?2) ORDER BY RANDOM() LIMIT 1')
+        .prepare('SELECT name, username, city FROM npcs WHERE (?1 IS NULL OR city = ?1) AND (?2 IS NULL OR COALESCE(username, name) != ?2) ORDER BY RANDOM() LIMIT 1')
         .bind(city, target.author)
-        .first<{ name: string; city: CivicCity }>();
+        .first<{ name: string; username: string | null; city: CivicCity }>();
       // Under an NPC's post that someone else already answered, the author may fire back at them instead.
       const clap = target.kind === 'citizen' && target.author && target.lastNpc && target.lastNpc !== target.author && rand() < NPC_REPLIES.clapback;
-      const author = clap ? target.author! : who?.name;
+      const author = clap ? target.author! : who && nick(who);
       const lines =
         clap ? REPLY_LINES.clapback
           : target.kind === 'citizen' ? REPLY_LINES.citizen
@@ -651,7 +682,7 @@ async function chatter(db: D1Database, now: number) {
           : target.kind === 'disaster' ? REPLY_LINES.disaster
           : REPLY_LINES.gov;
       if (author) {
-        const text = fillLine(pick(lines), { name: firstName(clap ? target.lastNpc! : target.author ?? 'you') });
+        const text = fillLine(pick(lines), { name: answer(clap ? target.lastNpc! : target.author ?? 'you') });
         stmts.push(
           db.prepare("INSERT INTO feed (uid, kind, icon, text, created_at, city, author, parent_id) VALUES (NULL, 'citizen', '💬', ?, ?, ?, ?, ?)")
             .bind(text.slice(0, 280), now, city ?? who?.city ?? null, author.slice(0, 40), target.id),
@@ -681,7 +712,7 @@ function newcomer(city: CivicCity, life: number, now: number, returnees = 1): Np
     balance: Math.round(wageOf(job.id, city) * between(lo, hi)),
     honesty: job.crooked ? Math.min(honesty, 25) : honesty, ambition: Math.round(rand() * 100), mood: Math.max(55, life), kids: 0,
     region: null, plot: null, design: null, stage: 0, house_spent: 0, jailed_until: 0, arrived_at: now, acted_at: now,
-    next_at: now + Math.round(rand() * NPC_POP.actGapMs[1]), trait: pickTrait(rand), returnee, from: pick(returnee ? RETURN_FROM : ARRIVE_FROM),
+    next_at: now + Math.round(rand() * NPC_POP.actGapMs[1]), trait: pickTrait(rand), username: null, returnee, from: pick(returnee ? RETURN_FROM : ARRIVE_FROM),
   };
 }
 
@@ -693,12 +724,12 @@ async function populationRound(db: D1Database, w: World, now: number) {
     .first();
   if (!claim) return;
   const [{ results: people }, { results: residents }] = (await db.batch([
-    db.prepare('SELECT id, name, city, mood, balance, kids, region, stage, house_spent, trait FROM npcs'),
+    db.prepare('SELECT id, name, username, city, mood, balance, kids, region, stage, house_spent, trait FROM npcs'),
     db.prepare(
       `SELECT w.state AS city, COUNT(*) AS n FROM wallets w JOIN players p ON p.uid = w.uid
        WHERE p.last_seen >= ? AND w.state IN (${CIVIC_CITIES.map((c) => `'${c}'`).join(', ')}) GROUP BY w.state`,
     ).bind(now - NPC_POP.activeMs),
-  ])) as unknown as [{ results: Pick<NpcRow, 'id' | 'name' | 'city' | 'mood' | 'balance' | 'kids' | 'region' | 'stage' | 'house_spent' | 'trait'>[] }, { results: { city: CivicCity; n: number }[] }];
+  ])) as unknown as [{ results: Pick<NpcRow, 'id' | 'name' | 'username' | 'city' | 'mood' | 'balance' | 'kids' | 'region' | 'stage' | 'house_spent' | 'trait'>[] }, { results: { city: CivicCity; n: number }[] }];
   const players = Object.fromEntries(residents.map((r) => [r.city, r.n])) as Partial<Record<CivicCity, number>>;
   const heads = Object.fromEntries(CIVIC_CITIES.map((c) => [c, people.filter((p) => p.city === c).length])) as Record<CivicCity, number>;
   const target = Object.fromEntries(CIVIC_CITIES.map((c) => [c, targetPopulation(c, w.life[c], players[c] ?? 0)])) as Record<CivicCity, number>;
@@ -720,7 +751,7 @@ async function populationRound(db: D1Database, w: World, now: number) {
       gone.push(p.id);
       heads[city] -= 1;
       count(census, city, 'japa');
-      posts.push({ author: p.name, city, icon: '🧳', text: npcLine(p.mood < NPC_LEAVE.japaMood[1] ? 'japaAngry' : 'japa', { city: CITY_NAME[city], to: pick(JAPA_TO) }, rand), weight: 0.2 });
+      posts.push({ author: nick(p), city, icon: '🧳', text: npcLine(p.mood < NPC_LEAVE.japaMood[1] ? 'japaAngry' : 'japa', { city: CITY_NAME[city], to: pick(JAPA_TO) }, rand), weight: 0.2 });
       continue;
     }
     if (p.mood < NPC_LEAVE.moveMood && best !== city && w.life[best] - w.life[city] >= NPC_LEAVE.moveGap && heads[best] < target[best] && rand() < NPC_LEAVE.moveChance) {
@@ -731,13 +762,13 @@ async function populationRound(db: D1Database, w: World, now: number) {
       heads[best] += 1;
       count(census, city, 'moved_out');
       count(census, best, 'moved_in');
-      posts.push({ author: p.name, city: best, icon: '🚚', text: npcLine('move', { from: CITY_NAME[city], city: CITY_NAME[best] }, rand), weight: 0.4 });
+      posts.push({ author: nick(p), city: best, icon: '🚚', text: npcLine('move', { from: CITY_NAME[city], city: CITY_NAME[best] }, rand), weight: 0.4 });
       continue;
     }
     if (p.region && p.stage >= STAGES.length && p.kids < NPC_FAMILY.maxKids && rand() < NPC_FAMILY.babyChance * crazeMult(w, city, 'baby')) {
       babies.push(p.id);
       count(census, city, 'born');
-      posts.push({ author: p.name, city, icon: '🍼', text: npcLine('baby', {}, rand), weight: 0.3 });
+      posts.push({ author: nick(p), city, icon: '🍼', text: npcLine('baby', {}, rand), weight: 0.3 });
     }
   }
 
@@ -766,12 +797,18 @@ async function populationRound(db: D1Database, w: World, now: number) {
     // The crash itself happens at once: the tech bros, the "forex traders" and the gamblers lose most of what they hold.
     if (id === 'cryptoCrash') crazes.push(db.prepare("UPDATE npcs SET balance = CAST(balance * 0.35 AS INTEGER) WHERE city = ? AND (job IN ('techbro', 'yahoo') OR trait = 'gambler')").bind(city));
     const voice = people.find((p) => p.city === city && !gone.includes(p.id));
-    if (voice) posts.unshift({ author: voice.name, city, icon: craze.icon, text: fillLine(pick(craze.lines), { city: CITY_NAME[city] }), weight: 1 });
+    if (voice) posts.unshift({ author: nick(voice), city, icon: craze.icon, text: fillLine(pick(craze.lines), { city: CITY_NAME[city] }), weight: 1 });
   }
+  // Everyone gets a username: the newcomers, and anyone who arrived before there were usernames (migration 0118).
+  const unnamed = people.filter((p) => !p.username && !gone.includes(p.id));
+  const names = await uniqueUsernames(db, [...arrivals, ...unnamed]);
+  for (const a of arrivals) a.username = names.get(a.id) ?? null;
+  const renamed = unnamed.filter((p) => names.has(p.id)).map((p) => ({ id: p.id, username: names.get(p.id)! }));
+
   // A few of them say so: a whole seed of thirty would bury the news.
   for (const a of arrivals.filter(() => rand() < 0.1).slice(0, 2)) {
     const job = NPC_JOB_BY_ID[a.job];
-    posts.push({ author: a.name, city: a.city, icon: a.returnee ? '✈️' : '🧳', text: npcLine(a.returnee ? 'returnee' : 'arrive', { city: CITY_NAME[a.city], from: a.from, job: job.label }, rand), weight: 0.5 });
+    posts.push({ author: nick(a), city: a.city, icon: a.returnee ? '✈️' : '🧳', text: npcLine(a.returnee ? 'returnee' : 'arrive', { city: CITY_NAME[a.city], from: a.from, job: job.label }, rand), weight: 0.5 });
   }
 
   const ids = (list: string[]) => JSON.stringify(list);
@@ -789,14 +826,20 @@ async function populationRound(db: D1Database, w: World, now: number) {
         ).bind(JSON.stringify(moved))]
       : []),
     ...(babies.length ? [db.prepare('UPDATE npcs SET kids = kids + 1 WHERE id IN (SELECT value FROM json_each(?1))').bind(ids(babies))] : []),
+    ...(renamed.length
+      ? [db.prepare(
+          `UPDATE npcs SET username = j.username FROM (SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.username') AS username FROM json_each(?1)) AS j
+           WHERE npcs.id = j.id`,
+        ).bind(JSON.stringify(renamed))]
+      : []),
     ...(arrivals.length
       ? [db.prepare(
-          `INSERT INTO npcs (id, name, city, job, balance, honesty, ambition, mood, kids, stage, house_spent, jailed_until, arrived_at, acted_at, next_at, trait)
+          `INSERT INTO npcs (id, name, city, job, balance, honesty, ambition, mood, kids, stage, house_spent, jailed_until, arrived_at, acted_at, next_at, trait, username)
            SELECT json_extract(value, '$.id'), json_extract(value, '$.name'), json_extract(value, '$.city'), json_extract(value, '$.job'),
                   json_extract(value, '$.balance'), json_extract(value, '$.honesty'), json_extract(value, '$.ambition'), json_extract(value, '$.mood'),
-                  0, 0, 0, 0, ?2, ?2, json_extract(value, '$.next_at'), json_extract(value, '$.trait')
+                  0, 0, 0, 0, ?2, ?2, json_extract(value, '$.next_at'), json_extract(value, '$.trait'), json_extract(value, '$.username')
            FROM json_each(?1)`,
-        ).bind(JSON.stringify(arrivals.map(({ id, name, city, job, balance, honesty, ambition, mood, next_at, trait }) => ({ id, name, city, job, balance, honesty, ambition, mood, next_at, trait }))), now)]
+        ).bind(JSON.stringify(arrivals.map(({ id, name, city, job, balance, honesty, ambition, mood, next_at, trait, username }) => ({ id, name, city, job, balance, honesty, ambition, mood, next_at, trait, username }))), now)]
       : []),
     ...crazes,
     // Every arrival counts towards the phone's "plays" (worker/cfTraffic.ts).

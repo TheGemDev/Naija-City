@@ -21,7 +21,7 @@ export async function readEstate(db: D1Database, region: string, n = 0): Promise
   const total = (await db.prepare('SELECT COALESCE(MAX(slot) + 1, 0) AS total FROM estate_plots WHERE region = ?').bind(region).first<{ total: number }>())?.total ?? 0;
   const { results } = await db
     .prepare(
-      `SELECT e.slot, e.pid, e.uid, SUBSTR(COALESCE(p.username, p.name, n.name, 'Someone'), 1, 24) AS owner, e.plot, e.design, e.stage, e.building, n.kids
+      `SELECT e.slot, e.pid, e.uid, SUBSTR(COALESCE(p.username, p.name, n.username, n.name, 'Someone'), 1, 24) AS owner, e.plot, e.design, e.stage, e.building, n.kids
        FROM estate_plots e LEFT JOIN players p ON p.uid = e.uid LEFT JOIN npcs n ON n.id = e.uid
        WHERE e.region = ? AND e.slot >= ? AND e.slot < ? ORDER BY e.slot`,
     )

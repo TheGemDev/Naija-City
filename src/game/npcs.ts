@@ -597,3 +597,23 @@ export const REPLY_LINES = {
   clapback: ['Mind your business 🙄', 'Na you dey owe me money, abeg free me 😂', 'Who invited you to my mentions? 🙄', 'Your village people are calling you 📞', 'Chai. Envy is a disease 🤡'],
   vdm: ['VDM no dey carry last 😂🎤', 'Daddy Freeze where are you?? 😂', 'VDM for president!!! 🎤', 'He is always shouting but he is right this time 💯'],
 };
+
+/* ---------- Usernames ---------- */
+
+const TITLES = /^(Mr|Mrs|Mallam|Alhaji|Hajiya|Pastor|Dr|Engr|Barrister|Madam|Chief|Corper) /;
+
+/**
+ * A username for an NPC citizen, the way a Naija person would pick one: "chidi_okafor", "realzainab", "tunde4real",
+ * "bigmusa_kd"... Player rules (3 to 15 of a-z, 0-9, _). The server makes sure no player or NPC already has it.
+ */
+export function npcUsername(name: string, rand: () => number): string {
+  const [first = 'naija', last = 'person'] = name.replace(TITLES, '').toLowerCase().replace(/[^a-z ]/g, '').split(' ').filter(Boolean);
+  const n = () => String(Math.floor(rand() * 100)).padStart(2, '0');
+  const styles = [
+    () => `${first}_${last}`, () => `${first}${last}`, () => `${first}_${n()}`, () => `real${first}`, () => `iam${first}`,
+    () => `${first}4real`, () => `the${first}`, () => `${first}_ng`, () => `big${first}`, () => `${first}x${last.slice(0, 3)}`,
+    () => `${last}${n()}`, () => `${first}_official`, () => `${first}baby`, () => `${first}_${last.slice(0, 1)}${n()}`, () => `naija${first}`,
+  ];
+  const name_ = styles[Math.floor(rand() * styles.length)]().slice(0, 15);
+  return name_.length >= 3 ? name_ : `${name_}_ng`;
+}

@@ -150,6 +150,8 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
     const username = (b?.username ?? '').trim().toLowerCase();
     if (!USERNAME_RE.test(username)) return err(400, 'Use 3–15 letters, numbers or _');
     if (RESERVED.has(username)) return err(409, 'That username is taken');
+    // NPC citizens have usernames too (worker/npcs.ts); a player can't take one of theirs. Before migration 0118 there are none.
+    if (await db.prepare('SELECT 1 AS x FROM npcs WHERE username = ?').bind(username).first().catch(() => null)) return err(409, 'That username is taken');
     try {
       await db
         .prepare(
