@@ -186,6 +186,9 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
   // No npc_until column: the migration hasn't been applied yet.
   if (!living) return;
   const emptied = new Set<string>();
+  // One note per landlord a tick, however many of their houses NPC households moved into or out of.
+  const news = new Map<string, { left: string[]; came: string[]; rent: number }>();
+  const note = (owner: string) => news.get(owner) ?? news.set(owner, { left: [], came: [], rent: 0 }).get(owner)!;
   const where = (r: RentalRow) => `${DESIGN_BY_ID[r.design]?.name ?? 'house'} in ${REGION_BY_ID[r.region]?.name ?? 'Kaduna'}`;
 
   for (const r of living.results) {
@@ -215,7 +218,7 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
     }
     if (!leave || !(await npcLeaves(db, r, gone))) continue;
     emptied.add(r.property_id);
-    if (!gone) tell(env, ctx, r.owner_uid, '🔑 Tenant moved out', `${r.npc_name ?? 'Your NPC tenant'} moved out of your ${where(r)}. It's back on the market.`);
+    if (!gone) note(r.owner_uid).left.push(`${r.npc_name ?? 'Your NPC tenant'} moved out of your ${where(r)}`);
   }
 
   const { results: open } = await db
@@ -250,7 +253,18 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
       await npcLeaves(db, { ...r, tenant_uid: npc });
       continue;
     }
-    tell(env, ctx, r.owner_uid, '🔑 New tenant', `${name} rented your ${where(r)}. ${naira(r.weekly)} is in your account.`);
+    const n = note(r.owner_uid);
+    n.came.push(`${name} rented your ${where(r)}`);
+    n.rent += r.weekly;
+  }
+
+  for (const [owner, { left, came, rent }] of news) {
+    const lines = [...came, ...left];
+    const paid = rent ? ` ${naira(rent)} is in your account.` : '';
+    const back = left.length ? ` ${left.length === 1 ? "It's" : "They're"} back on the market.` : '';
+    const title = lines.length > 1 ? `🔑 ${lines.length} tenant updates` : came.length ? '🔑 New tenant' : '🔑 Tenant moved out';
+    const shown = lines.slice(0, 3).join('. ') + (lines.length > 3 ? `. And ${lines.length - 3} more` : '');
+    tell(env, ctx, owner, title, `${shown}.${paid}${back}`);
   }
 }
 

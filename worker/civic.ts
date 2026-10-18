@@ -39,12 +39,23 @@ interface CandidateRow {
   lastActionAt: number;
 }
 
-/** An election opening or closing is a live event: everyone online sees it now, everyone with push gets a notification. */
-async function announceElection(env: Env, ctx: ExecutionContext | undefined, event: { phase: 'open' | 'result'; office: PoliticalOffice; endsAt?: number; winner?: string | null; votes?: number }, title: string, body: string) {
-  await announceAll(env, { t: 'election', ...event });
+/** One race in an election announcement. */
+type RaceNews = { office: PoliticalOffice; endsAt?: number; winner?: string | null; votes?: number };
+
+/**
+ * Elections opening or closing are a live event: everyone online sees it now, everyone with push gets a notification.
+ * All the races that open (or close) in one tick go out together, as one toast and one notification, not one per seat.
+ */
+async function announceElections(env: Env, ctx: ExecutionContext | undefined, phase: 'open' | 'result', races: RaceNews[], title: string, body: string) {
+  if (!races.length) return;
+  // `office` and the rest of the first race are for clients still running the build from before races were grouped.
+  await announceAll(env, { t: 'election', phase, ...races[0], races });
   if (!ctx) return;
-  ctx.waitUntil(broadcastPush(env, { title, body, tag: `election-${event.phase}-${event.office}`, category: 'news', app: 'civic' }));
+  ctx.waitUntil(broadcastPush(env, { title, body: body.slice(0, 240), tag: `election-${phase}`, category: 'news', app: 'civic' }));
 }
+
+/** "Governor of Kaduna, Governor of Lagos and President" */
+const listOf = (items: string[]) => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
 export async function settleElections(env: Env, now: number, ctx?: ExecutionContext) {
   const db = env.DB;
@@ -57,12 +68,13 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
     .prepare("UPDATE civic_elections SET started_at = ends_at - ?1 WHERE status = 'open' AND ends_at - ?1 <= ?2 AND ends_at > ?2 AND started_at != ends_at - ?1 RETURNING office, ends_at")
     .bind(ELECTION_DURATION_MS, now)
     .all<{ office: PoliticalOffice; ends_at: number }>();
-  for (const race of opened.results) {
-    await announceElection(
-      env, ctx,
-      { phase: 'open', office: race.office, endsAt: race.ends_at },
-      `🗳️ Polls open: ${OFFICE_RULES[race.office].title}`,
-      `Voting is open for one hour, until ${POLLS_CLOSE_AT}. Tap Vote at the top of your screen.`,
+  if (opened.results.length) {
+    const seats = opened.results.map((race) => OFFICE_RULES[race.office].title);
+    await announceElections(
+      env, ctx, 'open',
+      opened.results.map((race) => ({ office: race.office, endsAt: race.ends_at })),
+      seats.length === 1 ? `🗳️ Polls open: ${seats[0]}` : `🗳️ Polls open for ${seats.length} seats`,
+      `${listOf(seats)}: voting is open for one hour, until ${POLLS_CLOSE_AT}. Tap Vote at the top of your screen.`,
     ).catch(() => {});
   }
   const expired = await db
@@ -70,6 +82,7 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
     .bind(now)
     .all<{ id: number; office: PoliticalOffice }>();
 
+  const results: RaceNews[] = [];
   for (const election of expired.results) {
     const candidates = await db
       .prepare(
@@ -114,11 +127,14 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
     if (candidates) {
       await gazette(env, ctx, [{ uid: candidates.uid, office: election.office, kind: 'elected', icon: '🗳️', text: `${handle(winner?.username)} is the new ${title}, elected with ${candidates.votes} vote${candidates.votes === 1 ? '' : 's'}.` }], false);
     }
-    await announceElection(
-      env, ctx,
-      { phase: 'result', office: election.office, winner: winner?.username ?? null, votes: candidates?.votes ?? 0 },
-      `🗳️ ${title} election result`,
-      candidates ? `${handle(winner?.username)} won with ${candidates.votes} vote${candidates.votes === 1 ? '' : 's'}.` : 'Nobody ran. The seat stays empty.',
+    results.push({ office: election.office, winner: winner?.username ?? null, votes: candidates?.votes ?? 0 });
+  }
+  if (results.length) {
+    const lines = results.map((r) => r.winner ? `${handle(r.winner)} is ${OFFICE_RULES[r.office].title} (${r.votes} vote${r.votes === 1 ? '' : 's'})` : `nobody ran for ${OFFICE_RULES[r.office].title}`);
+    await announceElections(
+      env, ctx, 'result', results,
+      results.length === 1 ? `🗳️ ${OFFICE_RULES[results[0].office].title} election result` : '🗳️ Election results',
+      `${listOf(lines)}.`.replace(/^./, (c) => c.toUpperCase()),
     ).catch(() => {});
   }
   // The winners take their seats in the Government Forum and whoever they replaced leaves it.

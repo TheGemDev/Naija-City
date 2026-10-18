@@ -109,7 +109,7 @@ Run `npm run db:migrate` (including migration 0027 for the player marketplace an
 
 ## Browser notifications
 
-Players can opt in from Phone → Settings. Web Push alerts are limited to incoming payments and house, visit, or owambe invitations; direct messages and public lobby activity do not trigger device notifications. Notifications require HTTPS (localhost works for development), browser permission, and a configured VAPID key pair.
+Players can opt in from Phone → Settings. Web Push alerts are limited to incoming payments and house, visit, or owambe invitations; direct messages and public lobby activity do not trigger device notifications. Notifications require HTTPS (localhost works for development), browser permission, and a configured VAPID key pair. Alerts that land together are grouped: every race opening (or closing) in a tick is one election push and one toast; government notices push at most once every two hours (`GAZETTE_PUSH_GAP_MS` in `worker/gazette.ts`, migration 0119) with a count of the ones in between; NPC tenants moving in or out are one note per landlord a tick, and children's alerts one push per parent a sweep. In the game, one gazette banner waits behind the one showing (with "+N more") and a toast already on screen isn't repeated.
 
 Generate a VAPID key pair locally and configure the Worker secrets (use a real contact email for the subject):
 

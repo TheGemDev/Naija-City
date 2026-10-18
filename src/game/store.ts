@@ -1654,6 +1654,8 @@ export const useGame = create<GameState>((set, get) => {
     },
 
     toast(text, chatUid) {
+      // The same line twice in a row is one toast.
+      if (get().toasts.some((t) => t.text === text)) return;
       const id = toastId++;
       set((s) => ({ toasts: [...s.toasts.slice(-2), { id, text, chatUid }] }));
       setTimeout(() => get().dismissToast(id), 8000);

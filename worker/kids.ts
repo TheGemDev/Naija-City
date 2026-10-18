@@ -506,9 +506,9 @@ export async function handleKids(req: Request, env: Env, ctx: ExecutionContext, 
 /* ---------- Cron ---------- */
 
 /**
- * Children whose next check has come: settle them, and tell a parent who is away what is wrong. One push per child
- * per alert (a need that drops, recovers and drops again is a new one), never closer than pushGapMs apart unless it is
- * urgent (sick, a Social Welfare warning or visit). Players who are in the game see it there instead. The
+ * Children whose next check has come: settle them, and tell a parent who is away what is wrong, in one push for all of
+ * their children that sweep. Each child alerts once per alert (a need that drops, recovers and drops again is a new
+ * one), never closer than pushGapMs apart unless it is urgent (sick, a Social Welfare warning or visit). Players who are in the game see it there instead. The
  * category is 'family', so the switch in the profile sheet turns these off.
  */
 export async function sweepKids(env: Env, ctx: ExecutionContext, now: number) {
@@ -522,6 +522,7 @@ export async function sweepKids(env: Env, ctx: ExecutionContext, now: number) {
      WHERE c.next_check_at IS NOT NULL AND c.next_check_at <= ? AND c.status IN ('home', 'taken')
      ORDER BY c.next_check_at LIMIT 50`,
   ).bind(now).all<ChildRow & { nanny_until: number; last_seen: number; reset_at: number }>();
+  const pushes = new Map<string, { title: string; body: string; tag: string }[]>();
   for (const r of results) {
     if (r.applied_at < r.reset_at) {
       await archivePastLives(db, r.uid);
@@ -563,6 +564,17 @@ export async function sweepKids(env: Env, ctx: ExecutionContext, now: number) {
     const res = await saveStmt(db, r, old.at, old.status).run();
     if (!res.meta.changes) continue;
     await announce(db, r, ev);
-    if (push) sendPush(env, ctx, r.uid, { ...push, category: 'family', app: push.tag.endsWith('-taken') ? 'adopt' : 'family' });
+    if (push) pushes.set(r.uid, [...(pushes.get(r.uid) ?? []), push]);
+  }
+  // A parent with several children gets one push for all of them, the worst news first.
+  for (const [uid, list] of pushes) {
+    const taken = list.some((p) => p.tag.endsWith('-taken'));
+    const one = list.length === 1 ? list[0] : null;
+    sendPush(env, ctx, uid, {
+      title: one?.title ?? `👶🏾 ${list.length} of your children need you`,
+      body: one?.body ?? list.sort((a, b) => Number(b.tag.endsWith('-taken')) - Number(a.tag.endsWith('-taken'))).map((p) => p.title).join(' · ').slice(0, 240),
+      tag: one?.tag ?? 'kids',
+      category: 'family', app: taken ? 'adopt' : 'family',
+    });
   }
 }

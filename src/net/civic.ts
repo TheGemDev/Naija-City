@@ -211,16 +211,25 @@ interface CivicResult {
 }
 
 /** The election opening or closing, pushed to everyone online (worker/civic.ts). */
-export type ElectionEvent = { t: 'election'; phase: 'open' | 'result'; office: PoliticalOffice; endsAt?: number; winner?: string | null; votes?: number };
+type RaceNews = { office: PoliticalOffice; endsAt?: number; winner?: string | null; votes?: number };
+/** Every race that opened (or closed) in the same tick (worker/civic.ts announceElections). `office` etc. are the first's. */
+export type ElectionEvent = { t: 'election'; phase: 'open' | 'result'; races?: RaceNews[] } & RaceNews;
+
+const listOf = (items: string[]) => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
 export function onElectionEvent(e: ElectionEvent) {
-  const title = OFFICE_RULES[e.office].title;
+  const races = (e.races ?? [e]).filter((r) => OFFICE_RULES[r.office]);
   const g = useGame.getState();
-  g.toast(e.phase === 'open'
-    ? `🗳️ The polls for ${title} are open until ${POLLS_CLOSE_AT}. Tap Vote at the top of your screen.`
-    : e.winner
-      ? `🗳️ ELECTION RESULT: @${e.winner} is the new ${title} with ${e.votes ?? 0} vote${e.votes === 1 ? '' : 's'}! 🎉`
-      : `🗳️ The ${title} election ended with no candidates.`);
+  if (e.phase === 'open') {
+    g.toast(`🗳️ The polls for ${listOf(races.map((r) => OFFICE_RULES[r.office].title))} are open until ${POLLS_CLOSE_AT}. Tap Vote at the top of your screen.`);
+  } else if (races.length === 1) {
+    const [r] = races;
+    g.toast(r.winner
+      ? `🗳️ ELECTION RESULT: @${r.winner} is the new ${OFFICE_RULES[r.office].title} with ${r.votes ?? 0} vote${r.votes === 1 ? '' : 's'}! 🎉`
+      : `🗳️ The ${OFFICE_RULES[r.office].title} election ended with no candidates.`);
+  } else if (races.length) {
+    g.toast(`🗳️ ELECTION RESULTS: ${listOf(races.map((r) => r.winner ? `@${r.winner} is ${OFFICE_RULES[r.office].title}` : `nobody ran for ${OFFICE_RULES[r.office].title}`))}. 🎉`);
+  }
   // Anyone looking at the board sees it change straight away.
   if (useCivic.getState().data) void useCivic.getState().refresh();
 }
@@ -238,10 +247,15 @@ export function onImpeachedEvent(e: ImpeachedEvent) {
 export type GazetteEvent = { t: 'gazette'; kind: GazetteKind; office: PoliticalOffice | null; icon: string; text: string; at: number };
 
 /** Notices waiting their turn on the banner (ui/Gazette.tsx shows the first). */
-export const useGazette = create<{ queue: (GazetteEvent & { key: number })[]; push(e: GazetteEvent): void; shift(): void }>((set) => ({
+export const useGazette = create<{ queue: (GazetteEvent & { key: number; more: number })[]; push(e: GazetteEvent): void; shift(): void }>((set) => ({
   queue: [],
-  // A burst of new laws must not hold the screen for a minute: only the latest few wait.
-  push: (e) => set((s) => ({ queue: [...s.queue, { ...e, key: Date.now() + Math.random() }].slice(-4) })),
+  // A burst of notices must not hold the screen for a minute: one waits behind the one showing, the latest, with a
+  // count of the others it stands for (they are all in Civic → News).
+  push: (e) => set((s) => {
+    const [showing, waiting] = s.queue;
+    const next = { ...e, key: Date.now() + Math.random(), more: waiting ? waiting.more + 1 : 0 };
+    return { queue: showing ? [showing, next] : [next] };
+  }),
   shift: () => set((s) => ({ queue: s.queue.slice(1) })),
 }));
 

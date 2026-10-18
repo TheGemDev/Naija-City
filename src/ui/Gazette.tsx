@@ -48,7 +48,7 @@ export function GazetteBanner() {
           <i className="gz-kind">{KIND_LABEL[cur.kind]}</i>
         </span>
         <span className="gz-text">{cur.text}</span>
-        <small className="gz-foot">Just now · Tap for the full record ›</small>
+        <small className="gz-foot">Just now{cur.more ? ` · +${cur.more} more` : ''} · Tap for the full record ›</small>
       </span>
       <span className="gz-gavel" aria-hidden><Gavel /></span>
     </button>
