@@ -93,7 +93,9 @@
         .boot i { width: 22px; height: 22px; margin-top: 18px; border-radius: 50%; border: 3px solid rgba(15, 107, 58, 0.18); border-top-color: #0f6b3a; animation: boot-spin 0.8s linear infinite; }
         .boot nav { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 12px; opacity: 0.7; }
         .boot a { color: inherit; }
-        .boot .seo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        .boot h2 { margin: 16px 0 0; font-size: 16px; font-weight: 800; color: #0f172a; }
+        .boot .about { max-width: 440px; margin-top: 14px; font-size: 13px; font-weight: 500; line-height: 1.5; }
+        .boot h2 + .about { margin-top: 4px; }
         @keyframes boot-spin { to { transform: rotate(360deg); } }
       </style>
       <main class="boot">
@@ -101,8 +103,8 @@
         <h1>Naija<span>City</span></h1>
         <p>Naija life. Real people. Zero chill.</p>
         <i aria-hidden="true"></i>
-        <span class="seo">Naija City is the Nigerian life sim. Start with nothing and hustle for naira. Buy land and build your house, open a shop and sell to other players, buy cars, raise a family, go to owambe, and run for governor or president. Free to play in your browser with players across Kaduna, Lagos and other cities.</span>
-        <nav><a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></nav>
+        <p class="about">Naija City is a free Nigerian life sim in your browser. Start with nothing and hustle for naira. Buy land and build your house, open a shop and sell to other players, buy cars, raise a family, go to owambe, and run for governor or president, with real players in Kaduna, Abuja, Lagos and Kano.</p>
+        <nav><a href="/guide">How to play</a> · <a href="/cities">Cities</a> · <a href="/faq">FAQ</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></nav>
       </main>
     </div>
     <script type="module" src="/src/main.tsx"></script>

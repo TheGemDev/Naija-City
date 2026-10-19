@@ -184,7 +184,7 @@ export function AuthSheet() {
 
       <p className="auth-foot">Your player will live in the same Naija City as everyone else who signs up.</p>
       <p className="auth-foot">
-        <a href="/terms" target="_blank" rel="noreferrer">Terms</a> · <a href="/privacy" target="_blank" rel="noreferrer">Privacy</a>
+        <a href="/guide" target="_blank" rel="noreferrer">How to play</a> · <a href="/faq" target="_blank" rel="noreferrer">FAQ</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms</a> · <a href="/privacy" target="_blank" rel="noreferrer">Privacy</a>
       </p>
     </div>
   );

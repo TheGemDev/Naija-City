@@ -28,7 +28,10 @@
 			"/p/*",
 			"/s/*",
 			"/shop/*",
-			"/t/*"
+			"/t/*",
+			"/sitemap.xml",
+			"/cities",
+			"/cities/*"
 		]
 	},
 	// Production domains: naija.city is the main one, kaduna.life the old one that still works. Both zones must be on

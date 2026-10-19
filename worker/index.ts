@@ -49,6 +49,7 @@ import { handleShop, handleShopWebhook } from './shop';
 import { handleAds, readLiveAds } from './ads';
 import { readMarket } from './market';
 import { readPlot, readProfile, readShop, shareLinkPage } from './share';
+import { seoPage, wwwRedirect } from './seo';
 import { ogPlaceImage, ogPlotImage, ogProfileImage, ogShopImage, ogSnapImage, ogTweetImage } from './og';
 import { STAGES } from '../src/game/property';
 
@@ -163,7 +164,18 @@ const handler = {
 
     // ADMIN_HOST (dash.naija.city) is the owner dashboard (worker/admin.ts). "/" runs the Worker so the host can be checked; every other host's "/" is the game.
     if (env.ADMIN_HOST && url.hostname === env.ADMIN_HOST) return handleAdmin(req, env);
-    if (path === '/') return env.ASSETS.fetch(req);
+    const www = wwwRedirect(req);
+    if (www) return www;
+    if (path === '/') {
+      const home = await env.ASSETS.fetch(req);
+      // The stats page is the same file with its own screen: not a second copy of the home page for search engines.
+      if (!url.hostname.startsWith('stats.')) return home;
+      const page = new Response(home.body, home);
+      page.headers.set('x-robots-tag', 'noindex');
+      return page;
+    }
+    const seo = seoPage(req);
+    if (seo) return seo;
 
     if (path === '/api/health') return json({ ok: true });
     if (path === '/api/shop/webhook' && req.method === 'POST') return handleShopWebhook(req, env);

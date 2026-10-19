@@ -13,6 +13,7 @@ import { SNAP_KEEP_MS } from './snaps';
 import { FEED_KEEP_MS } from './feed';
 import { shopRow, tweetAuthor } from './og';
 import { profileKidsSql } from './kids';
+import { SITE } from './seo';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -145,14 +146,17 @@ export async function shareLinkPage(req: Request, env: Env): Promise<Response | 
   const image = card.imageUrl ? `${url.origin}${card.imageUrl}` : `${url.origin}/og.jpg`;
   const tags = [
     ['og:type', 'website'], ['og:site_name', 'Naija City'], ['og:title', card.title], ['og:description', card.description],
-    ['og:url', url.origin + url.pathname], ['og:image', image], ['og:image:width', '1200'], ['og:image:height', '630'],
+    ['og:url', SITE + url.pathname], ['og:image', image], ['og:image:width', '1200'], ['og:image:height', '630'],
   ].map(([k, v]) => `<meta property="${k}" content="${esc(v)}" />`).join('\n')
     + `\n<meta name="twitter:card" content="summary_large_image" />\n<meta name="twitter:image" content="${esc(image)}" />`
-    + `\n<meta name="description" content="${esc(card.description)}" />\n<link rel="canonical" href="${esc(url.origin + url.pathname)}" />`;
+    // The canonical address is always naija.city, whichever of the game's hosts served it.
+    + `\n<meta name="description" content="${esc(card.description)}" />\n<link rel="canonical" href="${esc(SITE + url.pathname.replace(/\/$/, ''))}" />`;
   return new HTMLRewriter()
     .on('title', { element: (e) => { e.setInnerContent(card.title); } })
     // The home page's own search tags would win over this link's card: drop them.
     .on('meta[property^="og:"], meta[name^="twitter:"], meta[name="description"], link[rel="canonical"], script[type="application/ld+json"]', { element: (e) => { e.remove(); } })
     .on('head', meta(tags))
+    // What a visitor (or a search engine) reads before the game loads: this link's own card instead of the home page's.
+    .on('#root .boot .about', { element: (e) => { e.replace(`<h2>${esc(card.title)}</h2><p class="about">${esc(card.description)}</p>`, { html: true }); } })
     .transform(page);
 }

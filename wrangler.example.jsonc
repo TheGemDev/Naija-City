@@ -28,7 +28,10 @@
 			"/p/*",
 			"/s/*",
 			"/shop/*",
-			"/t/*"
+			"/t/*",
+			"/sitemap.xml",
+			"/cities",
+			"/cities/*"
 		]
 	},
 	// Your own domains (each zone must be on this Cloudflare account). Leave this out to use the workers.dev URL only.
