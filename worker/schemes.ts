@@ -69,7 +69,7 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
     // Raided: the money goes back, a fine on top, and every shelf they own is carried off as evidence.
     const back = await transfer(db, s.uid, null, amount, 'loot_return', '', `front-back:${s.uid}:${now}`);
     const fine = await transfer(db, s.uid, null, f.fine, 'efcc_fine', '', `front-fine:${s.uid}:${now}`);
-    // Everything on the shelves goes as evidence: written down shelf by shelf before it is carried off.
+    // Everything on the shelves goes as evidence: written down shelf by shelf before it is carried off and auctioned.
     const { results: shelves } = await db
       .prepare('SELECT b.name AS shop, bp.product, bp.price, bp.stock FROM business_products bp JOIN businesses b ON b.id = bp.business_id WHERE b.uid = ? AND bp.stock > 0')
       .bind(s.uid)
@@ -79,13 +79,21 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
       ...shelves.map((r) => ({ kind: 'stock' as const, icon: MARKET_PRODUCT_BY_ID[r.product]?.icon ?? '🏷️', label: `${MARKET_PRODUCT_BY_ID[r.product]?.name ?? r.product} · ${r.shop}`, value: r.price * r.stock, qty: r.stock })),
       fineItem(fine),
     ], now);
+    const seized = shelves.reduce((sum, r) => sum + r.price * r.stock, 0);
     await db.batch([
       potStmt(db, s.city, back),
+      // The seized stock is auctioned and the EFCC remits what it fetches to the federal treasury: valued as the shelves
+      // stand at this moment, in the same batch that clears them, so nothing sold meanwhile is counted.
+      db.prepare(
+        `UPDATE civic_policies SET treasury = treasury + (
+           SELECT COALESCE(SUM(bp.price * bp.stock), 0) FROM business_products bp JOIN businesses b ON b.id = bp.business_id WHERE b.uid = ?1 AND bp.stock > 0
+         ) WHERE id = 1`,
+      ).bind(s.uid),
       db.prepare('UPDATE business_products SET stock = 0 WHERE business_id IN (SELECT id FROM businesses WHERE uid = ?)').bind(s.uid),
-      feedStmt(db, s.uid, 'politics', '🚨', `EFCC RAID: operatives stormed ${biz.name}, a company owned by ${me}, over ${naira(amount)} of “supplies” paid from ${where(s.city)}. Shelves emptied, ${naira(back)} recovered, ${naira(fine)} fine. 🚨`, s.city),
+      feedStmt(db, s.uid, 'politics', '🚨', `EFCC RAID: operatives stormed ${biz.name}, a company owned by ${me}, over ${naira(amount)} of “supplies” paid from ${where(s.city)}. Shelves emptied, ${naira(back)} recovered, ${naira(fine)} fine.${seized ? ` The seized goods go under the hammer: ${naira(seized)} to the federal treasury.` : ''} 🚨`, s.city),
       ...(await vdmGov(db, s.uid, 'contract', { who: me, amount: naira(amount), other: biz.name }, s.city, true)),
     ]);
-    await gazette(env, ctx, [{ uid: s.uid, office: s.office, kind: 'scandal', icon: '🚨', text: `The EFCC raided ${biz.name}, owned by ${me}: ${naira(back)} back to ${where(s.city)} and the stock seized.` }]);
+    await gazette(env, ctx, [{ uid: s.uid, office: s.office, kind: 'scandal', icon: '🚨', text: `The EFCC raided ${biz.name}, owned by ${me}: ${naira(back)} back to ${where(s.city)}${seized ? `, and the stock seized and auctioned for ${naira(seized)} to the federal treasury` : ''}.` }]);
     return { outcome: 'raided', amount };
   }
 

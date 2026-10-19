@@ -36,7 +36,7 @@ import { drainScale, genBurn, generatorOf, GENERATORS, houseLoad, modeOf, onGrid
 import { billShare, inspect, meterOn, METER, NO_METER, REASON_TEXT, rollInspection, type InspectionReason, type MeterLevel, type MeterState } from './meterBypass';
 import { blockerOf, conditionOf, damage, newCondition, PART_IDS, PARTS, repairCost, resaleOf, valueOf, wear, type CarCondition, type CarPart } from './carCare';
 import {
-  CONTRACTOR_BY_ID, DESIGN_BY_ID, costOf, LAND_RECLAIM_MINUTES, landAuthority, landPrice, MATERIAL_BY_ID, materialPrice, missingMaterials, PLOTS, propRef, estateCity, REGION_BY_ID, remainingStageMaterials, rentDue, saleValue, STAGES,
+  CONTRACTOR_BY_ID, DAY_MINUTES, DESIGN_BY_ID, costOf, LAND_RECLAIM_MINUTES, landAuthority, landPrice, MATERIAL_BY_ID, materialPrice, missingMaterials, PLOTS, propRef, estateCity, REGION_BY_ID, remainingStageMaterials, rentDue, saleValue, STAGES,
   stageLabour, stageMinutes, houseTitle, extensionDesign, type PlotSize, type Property,
 } from './property';
 import { estateExit } from './estateRoads';
@@ -1969,7 +1969,7 @@ export const useGame = create<GameState>((set, get) => {
         // A plot that comes back (failed save, other device) is dropped again without a repeat notice.
         for (const p of reclaimed) if (!announcedReclaims.has(p.id)) {
           announcedReclaims.add(p.id);
-          toast(`📜 ${landAuthority(p.region)} reclaimed your unused plot in ${REGION_BY_ID[p.region]?.name ?? 'Kaduna'} after 30 days without building. No refund.`);
+          toast(`📜 ${landAuthority(p.region)} reclaimed your unused plot in ${REGION_BY_ID[p.region]?.name ?? 'Kaduna'} after ${LAND_RECLAIM_MINUTES / DAY_MINUTES} days without building. No refund.`);
         }
         properties = properties.filter((p) => !reclaimed.some((expired) => expired.id === p.id));
       }

@@ -6,7 +6,7 @@
 import { EXTENSION_BY_ID } from './exterior';
 
 export const DAY_MINUTES = 24 * 60;
-export const LAND_RECLAIM_MINUTES = 30 * DAY_MINUTES;
+export const LAND_RECLAIM_MINUTES = 24 * DAY_MINUTES;
 
 export interface RegionDef {
   id: string;
