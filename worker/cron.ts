@@ -31,6 +31,7 @@ import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
 import { runDisasters } from './disasters';
 import { runNpcs } from './npcs';
+import { sweepLoans } from './loans';
 
 export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
@@ -62,6 +63,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
     // Adopted children whose next alert has come: a push for a parent who is away (worker/kids.ts).
     ['kids', () => sweepKids(env, ctx, now)],
     ['efcc', () => settleDueCases(env.DB)],
+    // Bank loans: a warning when one falls due, and foreclosure a day after.
+    ['loans', () => sweepLoans(env, ctx, now)],
     ['manhunts', () => sweepManhunts(env, ctx)],
     ['rackets', () => settleRackets(env, ctx, now)],
     ['contracts', () => settleContracts(env, ctx, now)],

@@ -37,7 +37,7 @@ const steps = ([lo, hi]: readonly [number, number], list: number[]) => list.filt
 export const LAWS: Record<PoliticalOffice, Law[]> = {
   president: [
     { key: 'taxRate', title: 'Income tax', unit: '%', options: [0, 5, 10, 15, 20], hint: 'Taken from every wage and side hustle. Keke, okada, cab and helicopter fares rise by the same percentage.', treasury: true },
-    { key: 'loanRate', title: 'Bank loan rate', unit: '% / week', options: [0, 5, 10, 15, 20, 30], hint: 'Interest on every bank loan, per game week.', treasury: true },
+    { key: 'loanRate', title: 'Bank loan rate', unit: '% / day', options: [0, 1, 2, 3, 5, 7, 10], hint: 'Interest on every bank loan, per real day.', treasury: true },
     { key: 'transferFee', title: 'Transfer fee', unit: '%', options: steps(TRANSFER_FEE_LIMITS, [0, 1, 2, 3, 5, 10]), hint: 'Charged to the sender on money sent between players.', treasury: true },
     ...STATE_LAW_KEYS.map((k): Law => ({
       key: STATE_LAWS[k].capField as keyof PolicyChange,

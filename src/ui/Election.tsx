@@ -1,11 +1,11 @@
 // The secretariat's election desk (the State Secretariat in Kaduna, the Federal Secretariat in Abuja): a sheet listing every post, who holds it, who is running, and
 // a button to run (or vote). Opens from the floating button or the building's activity list. The same board is in the phone's
-// Civic app, and you can file to run from either. While the polls are open (one hour every evening:
+// Civic app, and you can file to run from either. While the polls are open (one evening hour every third day:
 // game/civic.ts) it is also the polling unit, and opens from the Vote pill in the top bar wherever you are.
 
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsOpen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
+import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, POLLS_CLOSE_AT, pollsOpen, pollsWhen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { isSuspended, useCivic, type CivicCandidate } from '../net/civic';
@@ -121,7 +121,7 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
     : office === 'igp' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.police) }
     : office === 'efcc' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.efcc) }
     : null;
-  const status = voting ? `Vote · ${left(race.endsAt - Date.now())} left` : race ? `Polls ${POLLS_OPEN_AT}` : 'No race';
+  const status = voting ? `Vote · ${left(race.endsAt - Date.now())} left` : race ? `Polls ${pollsWhen(Date.now())}` : 'No race';
   const blocked = out ? 'Disqualified from this race' : elsewhere ? `Running for ${OFFICE_SHORT[elsewhere]}` : !me && voting ? 'Ballot closed' : null;
   return (
     <section className="ev-card" title={rules.powers}>
@@ -210,7 +210,7 @@ export function ElectionBoard() {
       {error && <div className="civic-notice civic-error" role="alert">{error}</div>}
       {loading && !data && <p className="muted">Loading the election board…</p>}
       {data && OFFICES.map((office) => <OfficeCard key={office} office={office} />)}
-      {data && <small className="ev-foot">Anyone can file. Voting is {POLLS_OPEN_AT} to {POLLS_CLOSE_AT}.</small>}
+      {data && <small className="ev-foot">Anyone can file. Elections are every 3 days; the next polls open {pollsWhen(Date.now())} and close at {POLLS_CLOSE_AT}.</small>}
       {data && (
         <button type="button" className="ev-inec" onClick={() => { useElection.setState({ open: false }); useGame.setState({ panel: 'phone', openApp: 'inec' }); }}>
           <Emoji char="🗳️" size={14} /> Seen fake votes? Report them to INEC

@@ -481,7 +481,7 @@ function DebtPill() {
   const owed = useGame((s) => s.debtOwed + s.bankLoanOwed);
   const short = useGame((s) => s.money < s.debtOwed + s.bankLoanOwed);
   const overdue = useLoans((s) => !!s.data?.overdue);
-  // Interest is added every game week, so what is owed keeps moving while you play.
+  // Interest is added every day, so what is owed keeps moving while you play.
   useEffect(() => {
     if (!signedIn || !hasLoan) return;
     const timer = window.setInterval(() => void loadLoans(), 5 * 60_000);

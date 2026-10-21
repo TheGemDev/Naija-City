@@ -56,7 +56,7 @@ export const TIPS: Tip[] = [
     '🏷️ Stalls at each place are limited. Grab a good spot before someone else does.',
     '📈 The Invest app lets you grow savings. Check each venture\'s risk tag before you put money in.',
     '🏦 The Bank app keeps your money safe. Interest adds up over time.',
-    '🏦 Need capital? The Bank gives loans. Interest is added every game week and a loan falls due after 4 weeks. Overdue loans cost more.',
+    '🏦 Need capital? The Bank lends against what you own: cash, savings, houses, cars and jets. Interest is added every day and a loan falls due after 7 days. Miss it by a day and the bank takes your things.',
     '🧾 Income tax goes to the treasury and the president sets the rate. When tax goes up, every fare goes up with it.',
     '👛 Keep a little cash on hand for rides and food. Don\'t invest everything.',
     '👑 Made it big? The Forbes app ranks the richest players by age group.',
@@ -122,7 +122,7 @@ export const TIPS: Tip[] = [
 
   ...group('politics', [
     '🏛️ Vote in elections for president, Kaduna governor, FCT Minister, Lagos governor, Kano governor, IGP and EFCC chair. Your vote shapes the server.',
-    '🗳️ Voting stays open for 1 hour and the winner holds office for 24 hours. Don\'t miss it.',
+    '🗳️ Elections come every 3 days. Voting stays open for 1 hour and the winner holds office for 3 days. Don\'t miss it.',
     '📝 Want a post? File to run in the Civic app on your phone.',
     '🪧 Running for office? Campaign with rallies, posters and crowds.',
     '🚨 Buying votes works until the EFCC catches you. Then you are disqualified, fined and jailed.',

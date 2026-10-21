@@ -11,11 +11,11 @@ import { CIVIC_CITIES, type CivicCity } from '../src/game/civic';
 import { ITEMS, JOBS } from '../src/game/catalog';
 import { CAR_BY_ID, CAR_RESALE_FACTOR, JET_BY_ID, jetResale } from '../src/game/cars';
 import { PHONE_BY_ID, PHONE_RESALE_FACTOR } from '../src/game/phones';
-import { currentPrices, tradable } from './market';
+import { currentPrices, houseIndex, tradable, type HouseIndex } from './market';
 import { INVESTMENT_BY_ID, LIQUIDATION_FACTOR, MAX_TRADE_UNITS } from '../src/game/investments';
 import { advance, changeUnits, checkWork, loadState, saveStateStmts, taskEnd, taskStart, unitsOf, type PlayerState } from './clock';
 import { bookProperty, ownedCounts, propertyBooks, type PropertyBook } from './progress';
-import { GAME_MINUTES_PER_REAL_MS_MAX, MAX_PROPERTY_COST, RENT_CAP_PER_DAY, SALE_FACTOR, DAY_MINUTES } from '../src/game/property';
+import { GAME_MINUTES_PER_REAL_MS_MAX, HOUSE_MARKET, MAX_PROPERTY_COST, RENT_CAP_PER_DAY, SALE_FACTOR, DAY_MINUTES } from '../src/game/property';
 import { firstInstallment, NEW_LIFE_ORIGIN, originOf, ORIGINS, STARTER_INSTALLMENT, starterDay } from '../src/game/origins';
 import { REGION_IDS } from '../src/game/regions';
 import { GIGS, isGig, maxShiftBonus } from '../src/game/gigs';
@@ -206,8 +206,7 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
   const paid = new Map<string, number>();
   const extra: ((gate: string) => D1PreparedStatement)[] = [];
   const owned = await ownedCounts(db, uid);
-  const market = await currentPrices(db);
-  const books = await propertyBooks(db, uid);
+  const [market, books, houses] = await Promise.all([currentPrices(db), propertyBooks(db, uid), houseIndex(db)]);
   const now = Date.now();
   // Side-hustle earnings in the last real hour, per gig (src/game/gigs.ts caps them).
   const { results: recentGigs } = await db
@@ -240,7 +239,8 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
     // The dearest cars and jets cost more than the cap: buying or selling one may go up to its own price.
     const showroom = (e.kind === 'buy' || e.kind === 'sell') && typeof e.ref === 'string' ? (JET_BY_ID[e.ref] ?? CAR_BY_ID[e.ref])?.price ?? 0 : 0;
     // So does land in the big estates, and building on it (a refused land payment leaves the plot unpaid and off the estate).
-    const property = typeof e.ref === 'string' && e.ref.startsWith('p:') ? MAX_PROPERTY_COST : 0;
+    // A sale can fetch more than the house cost, when that state's house prices are up (HOUSE_MARKET).
+    const property = typeof e.ref === 'string' && e.ref.startsWith('p:') ? Math.ceil(MAX_PROPERTY_COST * HOUSE_MARKET.max * HOUSE_MARKET.slack) : 0;
     // A trade in a venture can carry several units, and cost that many times the cap.
     const qty = typeof e.ref === 'string' && INVESTMENT_BY_ID[e.ref] && e.qty !== undefined ? e.qty : 1;
     if (!Number.isInteger(qty) || qty < 1 || qty > MAX_TRADE_UNITS || !Number.isInteger(e.amount) || Math.abs(e.amount!) > Math.max(MAX_EVENT_AMOUNT * qty, showroom, property)) {
@@ -357,7 +357,7 @@ async function process(db: D1Database, uid: string, state: PlayerState, events: 
       else if (unitsOf(state, ref) < qty) problem = 'Not owned';
       else changeUnits(state, ref, -qty);
     } else if (e.kind === 'property' && ref?.startsWith('p:')) {
-      problem = checkProperty(books, ref, amount, now);
+      problem = checkProperty(books, ref, amount, now, houses);
       if (!problem) bookProperty(books, ref, amount, now);
     } else {
       problem = 'Not an earning';
@@ -423,12 +423,13 @@ function spendStmts(db: D1Database, uid: string, clientId: string, kind: string,
 const taxStmts = (db: D1Database, uid: string, eventId: string, tax: number, gate: string, city?: CivicCity) => treasuryStmts(db, uid, `tax:${eventId}`, 'tax', 'state', tax, gate, 'state', city);
 
 /** Rent and sale payouts must come from a property the player actually paid for. */
-function checkProperty(books: Map<string, PropertyBook>, ref: string, amount: number, now: number): string | null {
+function checkProperty(books: Map<string, PropertyBook>, ref: string, amount: number, now: number, houses: HouseIndex): string | null {
   const [, id, what] = ref.split(':');
   const b = books.get(id);
   if (!b || b.spent <= 0) return 'Not owned';
   if (b.sold) return 'Already sold';
-  if (what === 'sell') return amount > Math.ceil(b.spent * SALE_FACTOR.complete) ? 'Wrong price' : null;
+  // At the state's house prices now or a tick ago, whichever is higher. A plot the estate doesn't know yet is held to the dearest state.
+  if (what === 'sell') return amount > Math.ceil(b.spent * SALE_FACTOR.complete * houses.ceiling(b.region) * HOUSE_MARKET.slack) ? 'Wrong price' : null;
   if (what === 'rent') {
     const days = ((now - b.firstAt) * GAME_MINUTES_PER_REAL_MS_MAX) / DAY_MINUTES;
     return b.rent + amount > b.spent * RENT_CAP_PER_DAY * days ? 'Too much rent' : null;

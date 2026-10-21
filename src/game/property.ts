@@ -279,9 +279,41 @@ export function rentDue(p: Property, minutes: number): { days: number; amount: n
   return days > 0 ? { days, amount: days * rentPerDay(p) } : { days: 0, amount: 0 };
 }
 
-/** Selling gets back most of what you put in. Finished houses keep more of their value than a half-built site. */
+/** Selling gets back most of what you put in, at today's house prices in that state. Finished houses keep more of their value than a half-built site. */
 export const SALE_FACTOR = { complete: 0.95, unfinished: 0.75 };
-export const saleValue = (p: Property) => Math.round(p.spent * (isComplete(p) ? SALE_FACTOR.complete : SALE_FACTOR.unfinished));
+
+/**
+ * House prices in each state (worker/market.ts moves them every 5 minutes): a multiple of what a house cost to put up.
+ * They drift towards a fair price set by how the state is run (its life score, src/game/npcs.ts lifeScore: roads,
+ * hospitals, police, taxes, unpaid bills), with a little wobble. A well-run state's houses sell for more than they cost;
+ * a neglected one's for less.
+ */
+export const HOUSE_MARKET = {
+  /** Prices never go outside these. */
+  min: 0.6,
+  max: 1.8,
+  /** At this life score the fair price is what the house cost. */
+  fairLife: 55,
+  /** Each point of life above or below moves the fair price this much. */
+  perLife: 0.012,
+  /** Share of the gap to the fair price closed each tick: a big change takes most of a day to show. */
+  pull: 0.004,
+  /** Random wobble per tick. */
+  wobble: 0.002,
+  /** The wallet allows a sale this much above the server's price, for a client a tick behind. */
+  slack: 1.01,
+};
+export const fairHousePrice = (life: number) =>
+  Math.min(HOUSE_MARKET.max, Math.max(HOUSE_MARKET.min, 1 + (life - HOUSE_MARKET.fairLife) * HOUSE_MARKET.perLife));
+/** market_now row for a state's house prices. */
+export const houseMarketId = (city: string) => `house:${city}`;
+
+/** Today's house prices per state on the client, from GET /api/stocks (src/net/stocks.ts). 1 until they load. */
+let houseIndex: Record<string, number> = {};
+export const setHouseIndex = (index: Record<string, number>) => { houseIndex = index; };
+export const houseIndexOf = (region?: string | null) => houseIndex[estateCity(region)] ?? 1;
+export const saleValue = (p: Property, index = houseIndexOf(p.region)) =>
+  Math.round(p.spent * (isComplete(p) ? SALE_FACTOR.complete : SALE_FACTOR.unfinished) * index);
 
 /** Ledger ref for money tied to a property: `p:<id>:<what>`. The server groups by the id. */
 export const propRef = (id: string, what: string) => `p:${id}:${what}`;

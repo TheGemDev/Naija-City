@@ -6,32 +6,44 @@ export type CampaignEvent = 'rally' | 'townHall' | 'crowd' | 'posters' | 'buyVot
 /** The offices a local (guest) campaign can go for. Shared elections cover every office. */
 export const LOCAL_OFFICES: PoliticalOffice[] = ['governor', 'president'];
 
-// Politics runs on a real daily clock, the same for every office. Anyone can file to run at any time of day; nobody can
-// vote until the polls open, for one hour every evening in Nigeria. Whoever wins is in office until the polls next
-// close: 23 hours in office, and the 24th at the polls.
+// Politics runs on a real three-day clock, the same for every office. Anyone can file to run at any time; nobody can
+// vote until the polls open, for one hour in the evening in Nigeria every third day. Whoever wins is in office until the
+// polls next close: 71 hours in office, and the 72nd at the polls.
 const HOUR_MS = 3600_000;
 const DAY_MS = 24 * HOUR_MS;
 /** Nigeria is an hour ahead of UTC all year, so its days start an hour before UTC's. */
 const NIGERIA_MS = HOUR_MS;
-/** The hour the polls open every day, on a Nigerian clock: 8 in the evening, when the most players are on. */
+/** The hour the polls open on election day, on a Nigerian clock: 8 in the evening, when the most players are on. */
 const POLLS_HOUR = 20;
-/** How long a winner holds any office (real time), and how long the polls stay open. */
-export const TERM_MS = DAY_MS;
+/** How long a winner holds any office (real time): three days, from one election to the next. */
+export const TERM_MS = 3 * DAY_MS;
+/** How long the polls stay open. */
 export const ELECTION_DURATION_MS = HOUR_MS;
+/** One election day the cycle counts from: the polls of Wednesday 21 October 2026, 8 pm in Nigeria. Every one after is TERM_MS later. */
+const FIRST_POLLS = Date.UTC(2026, 9, 21, POLLS_HOUR) - NIGERIA_MS;
 const clock = (hour: number) => `${hour % 12 || 12} ${hour % 24 < 12 ? 'am' : 'pm'}`;
 /** The polling hour in words, on a Nigerian clock: "8 pm" and "9 pm". */
 export const POLLS_OPEN_AT = clock(POLLS_HOUR);
 export const POLLS_CLOSE_AT = clock(POLLS_HOUR + ELECTION_DURATION_MS / HOUR_MS);
 
-/** When the polls open: today's opening until they have closed for the day, then tomorrow's. */
+/** When the polls open: the current election day's opening until they have closed, then the next one's. */
 export function electionDayStart(now: number): number {
-  const midnight = Math.floor((now + NIGERIA_MS) / DAY_MS) * DAY_MS - NIGERIA_MS;
-  const opens = midnight + POLLS_HOUR * HOUR_MS;
-  return now < opens + ELECTION_DURATION_MS ? opens : opens + DAY_MS;
+  const opens = FIRST_POLLS + Math.floor((now - FIRST_POLLS) / TERM_MS) * TERM_MS;
+  return now < opens + ELECTION_DURATION_MS ? opens : opens + TERM_MS;
 }
+/** The day of the next polls in words, on a Nigerian clock: "today", "tomorrow" or "on Saturday". */
+export function pollsDay(now: number): string {
+  const day = (t: number) => Math.floor((t + NIGERIA_MS) / DAY_MS);
+  const ahead = day(electionDayStart(now)) - day(now);
+  if (ahead <= 0) return 'today';
+  if (ahead === 1) return 'tomorrow';
+  return `on ${new Date(electionDayStart(now) + NIGERIA_MS).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })}`;
+}
+/** When the next polls open, in words: "today at 8 pm", "on Saturday at 8 pm". */
+export const pollsWhen = (now: number) => `${pollsDay(now)} at ${POLLS_OPEN_AT}`;
 /** Whether the polls are open right now. */
 export const isElectionDay = (now: number) => electionDayStart(now) <= now;
-/** When the polls close on the election someone filing at `now` stands in: the coming polls, or tomorrow's if they are open now (that ballot is already set). */
+/** When the polls close on the election someone filing at `now` stands in: the coming polls, or the next ones if they are open now (that ballot is already set). */
 export function nextElectionEnds(now: number): number {
   const start = electionDayStart(now);
   return (start <= now ? start + TERM_MS : start) + ELECTION_DURATION_MS;

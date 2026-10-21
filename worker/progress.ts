@@ -7,6 +7,7 @@ import { BUSINESS_BY_ID, type BusinessType } from '../src/game/career';
 import { forbesItems, type ForbesAssets, type ForbesItem } from '../src/game/forbes';
 import { DESIGN_BY_ID, SALE_FACTOR, STAGES } from '../src/game/property';
 import { starterCounts } from '../src/game/origins';
+import { houseIndex } from './market';
 
 /**
  * How many of each item type (and car) the player owns in their current life: starter + bought − sold.
@@ -30,16 +31,18 @@ export const ownsCar = (owned: Map<string, number>, id: string) => !!CAR_BY_ID[i
 
 /** What the Forbes list shows a player owns (GET /api/forbes): businesses, finished houses, cars and jets, counted and by name. */
 export async function forbesAssets(db: D1Database, uid: string): Promise<ForbesAssets> {
-  const [owned, biz, plots, books] = await Promise.all([
+  const [owned, biz, plots, books, houses] = await Promise.all([
     ownedCounts(db, uid),
     db.prepare('SELECT type FROM businesses WHERE uid = ?').bind(uid).all<{ type: BusinessType }>(),
-    db.prepare('SELECT pid, design FROM estate_plots WHERE uid = ?1 AND stage >= ?2').bind(uid, STAGES.length).all<{ pid: string; design: string | null }>(),
+    db.prepare('SELECT pid, design, region FROM estate_plots WHERE uid = ?1 AND stage >= ?2').bind(uid, STAGES.length).all<{ pid: string; design: string | null; region: string }>(),
     propertyBooks(db, uid),
+    houseIndex(db),
   ]);
   const things: Omit<ForbesItem, 'n'>[] = [];
   for (const { type } of biz.results) things.push({ kind: 'businesses', name: BUSINESS_BY_ID[type]?.name ?? 'Business', value: BUSINESS_BY_ID[type]?.cost ?? 0 });
-  for (const { pid, design } of plots.results) {
-    things.push({ kind: 'houses', name: DESIGN_BY_ID[design ?? '']?.name ?? 'House', value: Math.round((books.get(pid)?.spent ?? 0) * SALE_FACTOR.complete) });
+  // At what it would sell for today, in its state's house market.
+  for (const { pid, design, region } of plots.results) {
+    things.push({ kind: 'houses', name: DESIGN_BY_ID[design ?? '']?.name ?? 'House', value: Math.round((books.get(pid)?.spent ?? 0) * SALE_FACTOR.complete * houses.of(region)) });
   }
   let cars = 0;
   let jets = 0;
@@ -69,11 +72,12 @@ export function trimItems<T extends { type: string }>(items: T[], owned: Map<str
 }
 
 /** Money tied to one property (ledger refs `p:<id>:<what>`, see src/game/property.ts). */
-export interface PropertyBook { spent: number; firstAt: number; rent: number; sold: boolean }
+/** `region` is the estate the plot sits in (estate_plots), once the estate knows it. */
+export interface PropertyBook { spent: number; firstAt: number; rent: number; sold: boolean; region?: string }
 
-/** Every property the player has paid into this life: what went in, rent taken out, and whether it was sold. */
+/** Every property the player has paid into this life: what went in, rent taken out, whether it was sold, and where it is. */
 export async function propertyBooks(db: D1Database, uid: string): Promise<Map<string, PropertyBook>> {
-  const [ledger, seizures] = await Promise.all([
+  const [ledger, seizures, plots] = await Promise.all([
     // A range, not LIKE: LIKE can't use the (uid, ref) index, and this runs on every wallet sync.
     db.prepare(
       `SELECT ref, amount, created_at FROM ledger
@@ -83,14 +87,21 @@ export async function propertyBooks(db: D1Database, uid: string): Promise<Map<st
     )
     .bind(uid)
     .all<{ ref: string; amount: number; created_at: number }>(),
+    // Taken by the EFCC and not bought back, or by the bank for a loan in default (worker/loans.ts).
     db.prepare(
       `SELECT json_extract(seized_property_json, '$.id') AS id FROM efcc_cases
-       WHERE target_uid = ? AND status = 'convicted' AND bought_back_at IS NULL AND seized_property_json IS NOT NULL`,
+       WHERE target_uid = ?1 AND status = 'convicted' AND bought_back_at IS NULL AND seized_property_json IS NOT NULL
+       UNION ALL SELECT ref AS id FROM foreclosures WHERE uid = ?1 AND kind = 'house'`,
     ).bind(uid).all<{ id: string | null }>(),
+    db.prepare('SELECT pid, region FROM estate_plots WHERE uid = ?').bind(uid).all<{ pid: string; region: string }>(),
   ]);
   const books = new Map<string, PropertyBook>();
   for (const r of ledger.results) bookProperty(books, r.ref, r.amount, r.created_at);
   for (const { id } of seizures.results) if (id) books.delete(id);
+  for (const { pid, region } of plots.results) {
+    const book = books.get(pid);
+    if (book) book.region = region;
+  }
   return books;
 }
 

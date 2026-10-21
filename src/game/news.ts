@@ -29,7 +29,7 @@ export const GOV_RANT = {
   /** Unprovoked: on each 5-minute tick he may go after whoever is in office for the state of things, about twice an hour. */
   grumble: { chance: 0.34, gapMs: 15 * 60_000 },
   /** The treasury is "sleeping" at this much with no palliatives shared in a day; a tax, loan rate or transfer fee is "too high" from these. */
-  idleTreasury: 2_000_000, highTax: 15, highLoan: 20, highFee: 5, lowFunding: 25,
+  idleTreasury: 2_000_000, highTax: 15, highLoan: 6, highFee: 5, lowFunding: 25,
   /**
    * He gives credit too, more rarely than he drags (src/game/vdm.ts). Palliatives from this much each are generous; a
    * state with this much, no arrears and its assets at this condition on average is well run; an asset repaired from

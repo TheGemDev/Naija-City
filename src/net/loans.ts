@@ -2,9 +2,10 @@
 
 import { create } from 'zustand';
 import { api } from './session';
-import { setServerBalance } from './wallet';
+import { refreshBalance, setServerBalance } from './wallet';
+import { applyForeclosure } from './session';
 import { naira, useGame } from '../game/store';
-import type { LoanSnapshot } from '../game/loans';
+import type { Foreclosure, LoanSnapshot } from '../game/loans';
 
 interface LoanState {
   data: LoanSnapshot | null;
@@ -25,6 +26,28 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 function setData(data: LoanSnapshot | null) {
   useLoans.setState({ data });
   useGame.setState({ bankLoanOwed: data?.owed ?? 0 });
+  if (data?.foreclosed.length) void applyForeclosed(data.foreclosed);
+}
+
+/** Take out of the game what the bank took for a loan in default (worker/loans.ts), then tell the server, once. */
+let applying = false;
+async function applyForeclosed(items: Foreclosure[]) {
+  if (applying) return;
+  applying = true;
+  try {
+    const of = (kind: Foreclosure['kind']) => items.filter((f) => f.kind === kind).map((f) => f.ref);
+    applyForeclosure(of('house'), of('car'), of('jet'));
+    await call('/api/loans/ack', { ids: items.map((f) => f.id) });
+  } catch { /* asked again on the next snapshot */ } finally {
+    applying = false;
+  }
+}
+
+/** A live note from the bank (worker/loans.ts tellBorrower): overdue, or foreclosed. */
+export function onLoanEvent(e: { kind: 'overdue' | 'default'; text: string }) {
+  useGame.getState().toast(`🏦 ${e.text}`);
+  void loadLoans();
+  if (e.kind === 'default') refreshBalance();
 }
 
 export const loadLoans = () => call<LoanSnapshot>('/api/loans').then(setData).catch(() => {});

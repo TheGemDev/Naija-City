@@ -8,6 +8,9 @@
 // `usd:<id>` row in market_now holds the dollar price its launch price stands for (mult) and the newest one (prev).
 
 import { INVESTMENTS, INVESTMENT_BY_ID, PRICE_BOUNDS, REAL_PRICE_STALE_MS, TICK_MS, USD_NGN, VOLATILITY, type InvestmentDef } from '../src/game/investments';
+import { CIVIC_CITIES } from '../src/game/civic';
+import { HOUSE_MARKET, estateCity, fairHousePrice, houseMarketId } from '../src/game/property';
+import { stateLife } from './npcs';
 
 /** Only the 24-hour chart is shown; keep a little extra so pruning hourly never clips it. */
 const KEEP_MS = 26 * 3_600_000;
@@ -143,10 +146,52 @@ export async function tickMarket(db: D1Database, now: number): Promise<void> {
       setNow(next);
     }
   }
+  stmts.push(...(await tickHouses(db, t)));
   // Pruning scans the old end of the table; once an hour is plenty.
   if (t % 3_600_000 === 0) stmts.push(db.prepare('DELETE FROM market_ticks WHERE t < ?').bind(t - KEEP_MS));
   // D1 batches stay small; a first-run back-fill of several new ventures is a couple of thousand statements.
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+}
+
+/** Each state's house prices take one step towards the fair price its life score sets (HOUSE_MARKET). */
+async function tickHouses(db: D1Database, t: number): Promise<D1PreparedStatement[]> {
+  const [life, index] = await Promise.all([stateLife(db), houseIndex(db)]);
+  return CIVIC_CITIES.flatMap((city) => {
+    const was = index.now[city];
+    const fair = fairHousePrice(life[city] ?? HOUSE_MARKET.fairLife);
+    const next = roundMult(Math.min(HOUSE_MARKET.max, Math.max(HOUSE_MARKET.min, was + (fair - was) * HOUSE_MARKET.pull + gauss() * HOUSE_MARKET.wobble * was)));
+    const id = houseMarketId(city);
+    return [
+      db.prepare('INSERT OR IGNORE INTO market_ticks (inv_id, t, mult) VALUES (?, ?, ?)').bind(id, t, next),
+      // A state's first tick starts at 1; after that `t < ?` keeps a cron that runs twice in one tick from stepping twice.
+      db.prepare('INSERT INTO market_now (inv_id, mult, prev, t) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(inv_id) DO UPDATE SET prev = mult, mult = ?2, t = ?4 WHERE t < ?4').bind(id, next, was, t),
+    ];
+  });
+}
+
+/** House prices per state: now and a tick ago (1 before the first tick). */
+export interface HouseIndex {
+  now: Record<string, number>;
+  prev: Record<string, number>;
+  /** Today's price in the state an estate is in. */
+  of: (region?: string | null) => number;
+  /** The higher of now and a tick ago there, so a sale priced a tick late still goes through. Unknown estate: the dearest state. */
+  ceiling: (region?: string | null) => number;
+}
+
+export async function houseIndex(db: D1Database): Promise<HouseIndex> {
+  const { results } = await db.prepare("SELECT inv_id, mult, prev FROM market_now WHERE inv_id LIKE 'house:%'").all<{ inv_id: string; mult: number; prev: number }>();
+  const now: Record<string, number> = {};
+  const prev: Record<string, number> = {};
+  for (const city of CIVIC_CITIES) { now[city] = 1; prev[city] = 1; }
+  for (const r of results) { now[r.inv_id.slice(6)] = r.mult; prev[r.inv_id.slice(6)] = r.prev; }
+  const top = (city: string) => Math.max(now[city] ?? 1, prev[city] ?? 1);
+  return {
+    now,
+    prev,
+    of: (region) => now[estateCity(region)] ?? 1,
+    ceiling: (region) => (region ? top(estateCity(region)) : Math.max(...CIVIC_CITIES.map(top))),
+  };
 }
 
 /** Per coin id: the dollar price its stored prices are multiples of (baseUsd when they were written). */
@@ -179,6 +224,10 @@ export async function readMarket(db: D1Database) {
   for (const inv of INVESTMENTS) points[inv.id] = [];
   for (const r of results) points[r.inv_id]?.push([r.t, Math.round(INVESTMENT_BY_ID[r.inv_id].costPerUnit * r.mult)]);
   const now = await currentPrices(db);
+  const houses = await houseIndex(db);
+  // A state's house prices a day ago: the oldest tick in the window.
+  const dayAgo: Record<string, number> = {};
+  for (const r of results) if (r.inv_id.startsWith('house:') && dayAgo[r.inv_id.slice(6)] === undefined) dayAgo[r.inv_id.slice(6)] = r.mult;
   const usd = COINS.length
     ? Object.fromEntries((await db.prepare("SELECT inv_id, prev FROM market_now WHERE inv_id LIKE 'usd:%'").all<{ inv_id: string; prev: number }>()).results.map((r) => [r.inv_id.slice(4), r.prev]))
     : {};
@@ -191,5 +240,7 @@ export async function readMarket(db: D1Database) {
       // Coins only: the real dollar price, and whether trading is shut because that price stopped coming in.
       ...(inv.symbol ? { usd: usd[inv.id] ?? null, closed: !tradable(inv, now[inv.id], at) } : {}),
     }])),
+    // House prices per state (HOUSE_MARKET): a multiple of what a house cost, and what it was a day ago.
+    houses: Object.fromEntries(CIVIC_CITIES.map((city) => [city, { mult: houses.now[city], dayAgo: dayAgo[city] ?? houses.now[city] }])),
   };
 }

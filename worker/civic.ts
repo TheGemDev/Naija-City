@@ -1,6 +1,6 @@
 import { announceAll, notifyPlayer } from './shards';
 import { broadcastPush } from './push';
-import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, SCHEMES, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, DISQUALIFY_REASON, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, POLLS_OPEN_AT, pollsCloseAt, pollsOpen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type DisqualifyReason, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
+import { ALLOCATION, ARREST_BAN_MS, VOTER_MIN_AGE_MS, governorPay, banLeft, IMPEACH, SCHEMES, suspendedUntil, BALLOT_SIZE, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, CITY_HEAD, CITY_NAME, CIVIC_CITIES, DISQUALIFY_REASON, ELECTION_DURATION_MS, nextElectionEnds, OFFICE_RULES, POLLS_CLOSE_AT, pollsCloseAt, pollsOpen, pollsWhen, OFFICES as OFFICE_LIST, OKADA_BAN_LAW, STATE_TRIP_MAX, SALARY, TREASURY, wageBill, withdrawalFee, type Allocation, type Salaries, type CampaignEvent, type CivicCity, type CivicCooldown, type DisqualifyReason, type ExecutiveOffice, type PoliticalOffice, type StateVehicle } from '../src/game/civic';
 import { applyStmts, ensureWallet, getBalance, treasuryStmts } from './wallet';
 import { LAW_LIMITS } from '../src/game/crime';
 import { LOAN } from '../src/game/loans';
@@ -59,9 +59,12 @@ const listOf = (items: string[]) => items.length < 2 ? items.join('') : `${items
 
 export async function settleElections(env: Env, now: number, ctx?: ExecutionContext) {
   const db = env.DB;
-  // No race is further off than the polls a candidate filing now would stand in. Races opened under the old weekly
-  // calendar were: this brings them onto the daily one.
-  await db.prepare("UPDATE civic_elections SET ends_at = ?1 WHERE status = 'open' AND ends_at > ?1").bind(nextElectionEnds(now)).run();
+  // Every race not being voted on yet closes on the polls a candidate filing now would stand in. Races opened under an
+  // older calendar (weekly, then daily) didn't: this brings them onto the three-day one, earlier or later.
+  await db
+    .prepare("UPDATE civic_elections SET ends_at = ?1 WHERE status = 'open' AND ends_at != ?1 AND ends_at - ?2 > ?3")
+    .bind(nextElectionEnds(now), ELECTION_DURATION_MS, now)
+    .run();
   // The polls have opened for these races: tell everyone, once. A race's started_at is when its
   // first candidate filed until then; moving it to the minute the polls opened is what marks it as announced.
   const opened = await db
@@ -531,7 +534,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
         .first<{ reason: DisqualifyReason }>();
       if (out) return err(403, `You were disqualified from this race for ${DISQUALIFY_REASON[out.reason]}. INEC bars you from running in this election`);
       // The ballot is fixed once the polls open: nobody joins a race while it is being voted on.
-      if (pollsOpen(race.ends_at, now)) return err(409, `Voting for ${OFFICE_RULES[office].title} has started, so its ballot is closed. File after the result to run in tomorrow’s election`);
+      if (pollsOpen(race.ends_at, now)) return err(409, `Voting for ${OFFICE_RULES[office].title} has started, so its ballot is closed. File after the result to run in the next election`);
     }
     const other = await db
       .prepare("SELECT e.office FROM civic_candidates c JOIN civic_elections e ON e.id = c.election_id AND e.status = 'open' WHERE c.uid = ? AND e.office != ? LIMIT 1")
@@ -563,7 +566,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       // A new race is news; the polls opening on election day is what gets the announcement (settleElections).
       if (opening) {
         const who = (await usernames(db, [user.uid])).get(user.uid);
-        await postFeed(db, user.uid, 'election', '🗳️', `${handle(who)} has filed to run for ${OFFICE_RULES[office].title}. The race is open: anyone can file until the polls open at ${POLLS_OPEN_AT}.`, OFFICE_RULES[office].city).catch(() => {});
+        await postFeed(db, user.uid, 'election', '🗳️', `${handle(who)} has filed to run for ${OFFICE_RULES[office].title}. The race is open: anyone can file until the polls open ${pollsWhen(now)}.`, OFFICE_RULES[office].city).catch(() => {});
       }
     }
     return json({ snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
@@ -675,7 +678,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       .bind(body.office)
       .first<{ id: number; ends_at: number }>();
     if (!race) return err(409, 'There is no open election for this office');
-    if (!pollsOpen(race.ends_at, now)) return err(409, `The polls open at ${POLLS_OPEN_AT}. Until then candidates can only campaign`);
+    if (!pollsOpen(race.ends_at, now)) return err(409, `The polls open ${pollsWhen(now)}. Until then candidates can only campaign`);
     if (body.candidateUid === user.uid) return err(400, 'You cannot vote for yourself');
     const voter = await db.prepare('SELECT created_at FROM players WHERE uid = ?').bind(user.uid).first<{ created_at: number }>();
     const voteFrom = (voter?.created_at ?? now) + VOTER_MIN_AGE_MS;

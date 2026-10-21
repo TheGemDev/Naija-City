@@ -17,6 +17,7 @@ import { cityNow } from './state';
 import { applyEvents, ensureWallet, handleWallet } from './wallet';
 import { advance, loadState, saveStateStmts, unitsOf, verifyKnowledge } from './clock';
 import { forbesAssets, ownedCounts, ownsCar, trimItems } from './progress';
+import { JET_BY_ID } from '../src/game/cars';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
 import { cleanHouses } from './houses';
 import { readEstate, syncEstate } from './estate';
@@ -101,6 +102,7 @@ type Save = {
   homePropertyId?: string | null;
   ownedCars?: string[];
   selectedCar?: string | null;
+  ownedJets?: string[];
   investments?: Record<string, { units: number; [k: string]: unknown }>;
   [k: string]: unknown;
 };
@@ -114,6 +116,7 @@ interface Corrections {
   confiscatedProperties?: string[];
   ownedCars?: string[];
   selectedCar?: string | null;
+  ownedJets?: string[];
   investments?: Save['investments'];
 }
 
@@ -379,13 +382,15 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
       loadState(env.DB, user.uid),
       ownedCounts(env.DB, user.uid),
       env.DB.prepare(
-        "SELECT seized_property_json FROM efcc_cases WHERE target_uid = ? AND status = 'convicted' AND bought_back_at IS NULL AND seized_property_json IS NOT NULL",
+        // Houses the EFCC took and weren't bought back, and the ones the bank took for a loan in default (worker/loans.ts).
+        `SELECT seized_property_json FROM efcc_cases WHERE target_uid = ?1 AND status = 'convicted' AND bought_back_at IS NULL AND seized_property_json IS NOT NULL
+         UNION ALL SELECT property_json FROM foreclosures WHERE uid = ?1 AND kind = 'house' AND property_json IS NOT NULL`,
       ).bind(user.uid).all<{ seized_property_json: string }>(),
     ]);
     advance(state, Date.now());
     const corrected: Corrections = {};
     // What was undone and why, for the player's toast and for save_corrections (migrations/0109).
-    const why: { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; investments?: string[] } = {};
+    const why: { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; jets?: string[]; investments?: string[] } = {};
     const seized = new Map<string, { id: string; items?: SaveFurniture[] }>();
     for (const row of seizedRows.results) {
       const property = JSON.parse(row.seized_property_json) as { id?: string; items?: SaveFurniture[] };
@@ -452,6 +457,14 @@ export async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u
         save.ownedCars = corrected.ownedCars = cars;
         if (save.selectedCar && !cars.includes(save.selectedCar)) save.selectedCar = cars[0] ?? null;
         corrected.selectedCar = save.selectedCar ?? null;
+      }
+    }
+    // Jets go through the ledger the same way (bought, sold, or taken by the bank).
+    if (Array.isArray(save.ownedJets)) {
+      const jets = save.ownedJets.filter((id) => typeof id === 'string' && !!JET_BY_ID[id] && (owned.get(id) ?? 0) > 0);
+      if (jets.length !== save.ownedJets.length) {
+        why.jets = save.ownedJets.filter((id) => !jets.includes(id));
+        save.ownedJets = corrected.ownedJets = jets;
       }
     }
     if (save.investments && typeof save.investments === 'object') {

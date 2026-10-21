@@ -84,6 +84,9 @@ async function loadWorld(db: D1Database): Promise<World> {
   return w;
 }
 
+/** How life feels in each state right now (0 to 100). House prices follow it (worker/market.ts). */
+export const stateLife = async (db: D1Database) => (await loadWorld(db)).life;
+
 /** What the state's craze does to one thing (1 with none). */
 const crazeMult = (w: World, city: CivicCity, key: keyof Pick<NpcCraze, 'crime' | 'japa' | 'buy' | 'spend' | 'baby' | 'arrive' | 'returnee' | 'good' | 'wild'>) =>
   crazeOf(w.crazes[city]?.id)?.[key] ?? 1;

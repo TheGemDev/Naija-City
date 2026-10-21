@@ -10,7 +10,7 @@ import { clearLocal, hydrate, saveLocal, serialize, type SaveData } from '../gam
 import { useGame } from '../game/store';
 import { isComplete } from '../game/property';
 import { ITEMS } from '../game/catalog';
-import { CAR_BY_ID } from '../game/cars';
+import { CAR_BY_ID, JET_BY_ID } from '../game/cars';
 import { clearWallet, flushOnExit, flushWallet, flushWalletNow, initWallet, walletExitEvents } from './wallet';
 import { useVisit } from '../game/visits';
 
@@ -184,11 +184,12 @@ interface Corrections {
   confiscatedProperties?: string[];
   ownedCars?: string[];
   selectedCar?: string | null;
+  ownedJets?: string[];
   investments?: SaveData['investments'];
 }
 
 /** What the server undid, and why (worker/index.ts PUT /api/save). */
-interface CorrectionWhy { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; investments?: string[] }
+interface CorrectionWhy { seized?: number; houses?: boolean; knowledge?: [number, number]; items?: string[]; cars?: string[]; jets?: string[]; investments?: string[] }
 
 /** Says what was undone in words: which furniture or car wasn't paid for, knowledge not earned yet, and so on. */
 function correctionMessage(why?: CorrectionWhy): string {
@@ -201,6 +202,7 @@ function correctionMessage(why?: CorrectionWhy): string {
     parts.push(`${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} wasn’t paid for, so it was taken back`);
   }
   if (why.cars?.length) parts.push(`${why.cars.map((id) => CAR_BY_ID[id]?.name ?? id).join(', ')} wasn’t paid for`);
+  if (why.jets?.length) parts.push(`${why.jets.map((id) => JET_BY_ID[id]?.name ?? id).join(', ')} is no longer yours`);
   if (why.knowledge) parts.push(`knowledge set back to ${why.knowledge[1]} (not earned yet)`);
   if (why.investments?.length) parts.push('some investment units weren’t bought');
   if (why.seized) parts.push(why.seized > 1 ? `${why.seized} houses were seized` : 'a house was seized');
@@ -208,8 +210,28 @@ function correctionMessage(why?: CorrectionWhy): string {
   return parts.length ? `⚠️ ${parts.join(' · ')}` : '⚠️ Some progress couldn’t be verified and was undone';
 }
 
+/** Things the bank took for a loan in default (src/net/loans.ts): houses go as a confiscation does, cars and jets one each. */
+export function applyForeclosure(houses: string[], cars: string[], jets: string[]) {
+  const g = useGame.getState();
+  const less = (list: string[], gone: string[]) => {
+    const left = [...gone];
+    return list.filter((id) => {
+      const i = left.indexOf(id);
+      if (i < 0) return true;
+      left.splice(i, 1);
+      return false;
+    });
+  };
+  const ownedCars = less(g.ownedCars, cars);
+  applyCorrections({
+    ...(houses.length ? { confiscatedProperties: houses } : {}),
+    ...(cars.length ? { ownedCars, selectedCar: g.selectedCar && ownedCars.includes(g.selectedCar) ? g.selectedCar : ownedCars[0] ?? null } : {}),
+    ...(jets.length ? { ownedJets: less(g.ownedJets, jets) } : {}),
+  }, undefined, true);
+}
+
 /** The server refused progress it couldn't verify (unearned knowledge, unpaid furniture, cars or investments). */
-function applyCorrections(c: Corrections, why?: CorrectionWhy) {
+function applyCorrections(c: Corrections, why?: CorrectionWhy, quiet = false) {
   const g = useGame.getState();
   if (c.knowledge !== undefined) useGame.setState({ knowledge: c.knowledge });
   if (c.items) {
@@ -262,6 +284,7 @@ function applyCorrections(c: Corrections, why?: CorrectionWhy) {
     }));
   }
   if (c.ownedCars) useGame.setState({ ownedCars: c.ownedCars, selectedCar: c.selectedCar ?? null });
+  if (c.ownedJets) useGame.setState({ ownedJets: c.ownedJets });
   if (c.investments) {
     const fixed = c.investments;
     useGame.setState((s) => ({
@@ -269,7 +292,7 @@ function applyCorrections(c: Corrections, why?: CorrectionWhy) {
     }));
   }
   // A house name or outside choice tidied up isn't worth alarming anyone over: no toast for that alone.
-  const message = correctionMessage(why);
+  const message = quiet ? '' : correctionMessage(why);
   if (message) g.toast(message);
 }
 

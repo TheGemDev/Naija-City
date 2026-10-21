@@ -1,7 +1,8 @@
-// The Bank app's Loans tab: what you owe on top, paying back next, borrowing last. The going rate is set by the president.
+// The Bank app's Loans tab: what you owe on top, paying back next, borrowing last, and what you can borrow against.
+// The going rate is set by the president.
 
 import { useEffect, useState } from 'react';
-import { LOAN, grow, type LoanRow, type LoanSnapshot } from '../game/loans';
+import { LOAN, collateralTotal, grow, type LoanRow, type LoanSnapshot } from '../game/loans';
 import { naira, useGame } from '../game/store';
 import { useSession } from '../net/session';
 import { loadLoans, repayLoan, takeLoan, useLoans } from '../net/loans';
@@ -9,6 +10,7 @@ import './loans.css';
 
 const timeLeft = (ms: number) => {
   const m = Math.max(0, Math.ceil(ms / 60_000));
+  if (m >= 24 * 60) return `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 };
 
@@ -37,8 +39,8 @@ function LoanCard({ loan: l, rate, now, busy }: { loan: LoanRow; rate: number; n
   const [amount, setAmount] = useState(canClear ? l.owed : 0);
   const short = amount > cash;
   const left = l.owed - amount;
-  const weekly = l.overdue ? rate * LOAN.overdueFactor : rate;
-  // Interest lands once a game week, counted from the moment the loan was taken.
+  const daily = l.overdue ? rate * LOAN.overdueFactor : rate;
+  // Interest lands once a day, counted from the moment the loan was taken.
   const nextHit = l.takenAt + Math.ceil((now - l.takenAt) / LOAN.periodMs) * LOAN.periodMs;
   const term = Math.min(100, Math.max(0, ((now - l.takenAt) / (l.dueAt - l.takenAt)) * 100));
   const picks = [0.25, 0.5]
@@ -50,20 +52,21 @@ function LoanCard({ loan: l, rate, now, busy }: { loan: LoanRow; rate: number; n
     <div className="loan-card">
       <div className="loan-card-top">
         <b>Loan of {naira(l.borrowed)}</b>
-        <span className={`loan-pill ${l.overdue ? 'overdue' : ''}`}>{l.overdue ? '⚠️ Overdue' : `Due in ${timeLeft(l.dueAt - now)}`}</span>
+        <span className={`loan-pill ${l.overdue ? 'overdue' : ''}`}>{l.overdue ? `⚠️ Bank seizes in ${timeLeft(l.seizeAt - now)}` : `Due in ${timeLeft(l.dueAt - now)}`}</span>
       </div>
       <div className="bar"><i className={l.overdue ? 'late' : ''} style={{ width: `${l.overdue ? 100 : term}%` }} /></div>
       <dl className="loan-rows">
         <div><dt>Loan left to repay</dt><dd>{naira(l.principal)}</dd></div>
         <div><dt>Interest so far</dt><dd>{naira(l.interest)}</dd></div>
-        {weekly > 0 && (
+        {daily > 0 && (
           <div className={l.overdue ? 'warn' : ''}>
-            <dt>Next interest in {timeLeft(nextHit - now)} ({weekly}%)</dt>
-            <dd>+{naira(grow(l.owed, weekly, 1) - l.owed)}</dd>
+            <dt>Next interest in {timeLeft(nextHit - now)} ({daily}%)</dt>
+            <dd>+{naira(grow(l.owed, daily, 1) - l.owed)}</dd>
           </div>
         )}
         <div className="total"><dt>You owe</dt><dd>{naira(l.owed)}</dd></div>
       </dl>
+      {l.overdue && <p className="loan-note bad">Pay it all before then, or the bank takes your cash, savings, cars and houses to cover it, and you go to a cell.</p>}
       <MoneyInput value={amount} onChange={(n) => setAmount(Math.min(n, l.owed))} label="Amount to pay back" />
       <div className="loan-chips">
         {picks.map((p) => (
@@ -84,6 +87,7 @@ function LoanCard({ loan: l, rate, now, busy }: { loan: LoanRow; rate: number; n
 function Borrow({ data, busy }: { data: LoanSnapshot; busy: boolean }) {
   const { available, rate } = data;
   const [amount, setAmount] = useState(() => Math.min(available, 50_000));
+  if (data.bannedUntil) return <p className="loan-locked"><span>⛔</span> You defaulted on a loan. The bank will lend to you again in {timeLeft(data.bannedUntil - Date.now())}.</p>;
   if (data.overdue) return <p className="loan-locked"><span>🔒</span> Clear your overdue loan and the bank will lend to you again.</p>;
   if (available < LOAN.min) {
     return <p className="loan-locked"><span>🏦</span> You have used your credit limit of {naira(data.limit)}. Pay some back to borrow again.</p>;
@@ -114,9 +118,9 @@ function Borrow({ data, busy }: { data: LoanSnapshot; busy: boolean }) {
       <dl className="loan-rows">
         <div><dt>Bank fee ({LOAN.feePct}%)</dt><dd>−{naira(fee)}</dd></div>
         <div><dt>You receive now</dt><dd>{naira(Math.max(0, amount - fee))}</dd></div>
-        <div><dt>Interest</dt><dd>{rate}% a game week</dd></div>
-        <div><dt>Pay back within</dt><dd>{LOAN.termWeeks} game weeks ({timeLeft(LOAN.termWeeks * LOAN.periodMs)})</dd></div>
-        <div className="total"><dt>Owed on the due date</dt><dd>about {naira(grow(amount, rate, LOAN.termWeeks))}</dd></div>
+        <div><dt>Interest</dt><dd>{rate}% a day</dd></div>
+        <div><dt>Pay back within</dt><dd>{LOAN.termDays} days</dd></div>
+        <div className="total"><dt>Owed on the due date</dt><dd>about {naira(grow(amount, rate, LOAN.termDays))}</dd></div>
       </dl>
       <button className="loan-go" disabled={busy || tooLittle || tooMuch} onClick={() => void takeLoan(amount)}>
         Borrow {naira(amount)}
@@ -124,9 +128,33 @@ function Borrow({ data, busy }: { data: LoanSnapshot; busy: boolean }) {
       <p className={`loan-note ${tooLittle || tooMuch ? 'bad' : ''}`}>
         {tooMuch ? `The bank will lend you at most ${naira(available)}`
           : tooLittle ? `The smallest loan is ${naira(LOAN.min)}`
-          : `Pay late and interest doubles to ${rate * LOAN.overdueFactor}% a week`}
+          : `Pay late and interest doubles to ${rate * LOAN.overdueFactor}% a day. A day after that, the bank takes your things`}
       </p>
     </div>
+  );
+}
+
+/** What the bank lends against: what you own that it could take, at today's prices, and the share it counts. */
+function Security({ data }: { data: LoanSnapshot }) {
+  const c = data.collateral;
+  const rows = [
+    ['💵', 'Cash', c.cash],
+    ['🏦', 'Savings', c.savings],
+    ['🏠', 'Houses (today’s prices)', c.houses],
+    ['🚗', 'Cars', c.cars],
+    ['🛩️', 'Jets', c.jets],
+  ] as const;
+  return (
+    <>
+      <h4>What you can borrow against</h4>
+      <div className="loan-card">
+        <dl className="loan-rows">
+          {rows.filter(([, , v]) => v > 0).map(([icon, label, v]) => <div key={label}><dt>{icon} {label}</dt><dd>{naira(v)}</dd></div>)}
+          <div className="total"><dt>Security</dt><dd>{naira(collateralTotal(c))}</dd></div>
+          <div><dt>The bank lends {Math.round(data.share * 100)}% of it{data.repaidOnTime ? ` (${data.repaidOnTime} loan${data.repaidOnTime === 1 ? '' : 's'} repaid on time)` : ''}, plus {naira(LOAN.baseLimit)}</dt><dd>{naira(data.limit)}</dd></div>
+        </dl>
+      </div>
+    </>
   );
 }
 
@@ -153,9 +181,9 @@ export function LoansPanel() {
         <small>{owing ? 'You owe the bank' : 'Community Bank loans'}</small>
         <strong>{owing ? naira(data.owed) : 'You owe nothing'}</strong>
         <p>
-          {state === 'overdue' ? `Overdue. Interest is now ${data.rate * LOAN.overdueFactor}% every game week until you pay.`
-            : state === 'owing' ? `Interest is ${data.rate}% every game week. Pay before it falls due.`
-            : `Borrow up to ${naira(data.available)} at ${data.rate}% a game week.`}
+          {state === 'overdue' ? `Overdue. Interest is now ${data.rate * LOAN.overdueFactor}% a day, and the bank seizes your things a day after the due date.`
+            : state === 'owing' ? `Interest is ${data.rate}% a day. Pay before it falls due.`
+            : `Borrow up to ${naira(data.available)} at ${data.rate}% a day.`}
         </p>
         <div className="loan-credit">
           <div className="bar"><i style={{ width: `${data.limit ? Math.min(100, (data.owed / data.limit) * 100) : 0}%` }} /></div>
@@ -168,15 +196,16 @@ export function LoansPanel() {
       {data.loans.map((l) => <LoanCard key={`${l.id}:${l.owed}`} loan={l} rate={data.rate} now={now} busy={busy} />)}
       <h4>{owing ? 'Borrow more' : 'Borrow'}</h4>
       {/* Keyed so the amount starts afresh once the bank will lend again. */}
-      <Borrow key={data.overdue || data.available < LOAN.min ? 'shut' : 'open'} data={data} busy={busy} />
+      <Borrow key={data.bannedUntil || data.overdue || data.available < LOAN.min ? 'shut' : 'open'} data={data} busy={busy} />
+      <Security data={data} />
       <details className="loan-how">
         <summary>How loans work</summary>
         <ul>
-          <li>Interest is added once every game week ({timeLeft(LOAN.periodMs)} of real time). The president sets the rate: {data.rate}% now.</li>
-          <li>A loan falls due {LOAN.termWeeks} game weeks after you take it ({timeLeft(LOAN.termWeeks * LOAN.periodMs)}).</li>
-          <li>Miss that and the rate is {LOAN.overdueFactor}× until the loan is cleared, and the bank stops lending to you.</li>
+          <li>Interest is added once a day (real time). The president sets the rate: {data.rate}% a day now.</li>
+          <li>A loan falls due {LOAN.termDays} days after you take it. Miss that and the rate is {LOAN.overdueFactor}× until the loan is cleared.</li>
+          <li>A day after the due date, the bank takes your cash, then savings, then cars and jets, then houses (your home last) until the loan is covered, and pays you back anything a sale fetched beyond it. You go to a cell for {LOAN.jailMinutes / 60} hours ({LOAN.shortJailMinutes / 60} if it still wasn’t enough) and it won’t lend to you for a week.</li>
           <li>What you pay goes to the interest first, then to the loan itself.</li>
-          <li>Your credit limit is {naira(LOAN.baseLimit)} plus half of your cash and savings, up to {naira(LOAN.maxLimit)}.</li>
+          <li>Your credit limit is {naira(LOAN.baseLimit)} plus {Math.round(LOAN.share.base * 100)}% of what you own that the bank could take, up to {naira(LOAN.maxLimit)}. Businesses don’t count. Each loan cleared on time adds {Math.round(LOAN.share.perRepaid * 100)}%, up to {Math.round(LOAN.share.max * 100)}%.</li>
         </ul>
       </details>
     </div>

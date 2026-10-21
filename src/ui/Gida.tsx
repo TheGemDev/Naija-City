@@ -11,8 +11,9 @@ import { HOUSE_LAYOUTS } from '../game/grid';
 import { HOUSEHOLD_STAFF, HOUSE_STAFF_ROLES, staffTheftChance, type HouseStaffRole } from '../game/staff';
 import { GOV_WEEKLY_RENT } from '../game/store';
 import { leaveRental, listForRent, loadRentals, rentHouse, unlistRental, useRentals } from '../net/rentals';
+import { useStocks } from '../net/stocks';
 import {
-  builtOn, cityEstates, CONTRACTORS, costOf, DESIGN_BY_ID, DESIGNS, extensionDesign, houseTitle, isComplete, landAuthority, LAND_RECLAIM_MINUTES, MATERIAL_BY_ID, materialPrice, PLOTS, REGION_BY_ID,
+  builtOn, cityEstates, CONTRACTORS, costOf, DESIGN_BY_ID, DESIGNS, estateCity, extensionDesign, houseTitle, isComplete, landAuthority, LAND_RECLAIM_MINUTES, MATERIAL_BY_ID, materialPrice, PLOTS, REGION_BY_ID,
   PLAYER_RENT, remainingBuildMinutes, remainingStageMaterials, rentDue, rentPerDay, saleValue, weeklyRentOf, stageLabour, stageMaterials, STAGES, type Property,
   type RentalListing,
 } from '../game/property';
@@ -335,6 +336,9 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
   const st = status(p, minutes);
   const due = rentDue(p, minutes);
   const sale = saleValue(p);
+  // The state's house market (HOUSE_MARKET): how today's prices compare with a day ago.
+  const market = useStocks((s) => s.houses[estateCity(p.region)]);
+  const trend = market && market.dayAgo ? Math.round(((market.mult - market.dayAgo) / market.dayAgo) * 1000) / 10 : 0;
   const hired = CONTRACTORS.find((c) => c.id === contractor)!;
   const lines = homeLines(p);
 
@@ -365,7 +369,10 @@ function PropertyPage({ id, back }: { id: string; back: () => void }) {
       </div>
       <div className="hm-stats">
         <div className="hm-stat"><small>Put in</small><b>{naira(p.spent)}</b></div>
-        <div className="hm-stat"><small>Worth</small><b className="good">{naira(sale)}</b></div>
+        <div className="hm-stat" title={`House prices in ${regionOf(estateCity(p.region)).name} follow how the state is run: roads, hospitals, police, taxes.`}>
+          <small>Worth{trend ? ` · ${trend > 0 ? '▲' : '▼'} ${Math.abs(trend)}% today` : ''}</small>
+          <b className={sale >= p.spent ? 'good' : 'bad'}>{naira(sale)}</b>
+        </div>
         <div className="hm-stat"><small>{design ? 'Rent' : 'Plot'}</small><b>{design ? `${naira(rentPerDay(p))}/day` : PLOTS[p.plot].label}</b></div>
       </div>
 
