@@ -140,8 +140,37 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
       `${listOf(lines)}.`.replace(/^./, (c) => c.toUpperCase()),
     ).catch(() => {});
   }
-  // The winners take their seats in the Government Forum and whoever they replaced leaves it.
-  if (expired.results.length) await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
+  const vacated = await vacateSeats(db, now);
+  // The winners take their seats in the Government Forum and whoever they replaced (or left an empty seat) leaves it.
+  if (expired.results.length || vacated) await syncForum(db, now).catch((error) => console.error('forum sync failed', error));
+}
+
+/**
+ * A term ends when the polls next close. Whoever nobody beat at those polls doesn't stay on: if nobody ran (or nobody
+ * filed at all, so there was no race), the seat is empty until the next election. Returns how many were emptied.
+ */
+async function vacateSeats(db: D1Database, now: number): Promise<number> {
+  const close = pollsCloseAt(now);
+  // Terms won under the old daily calendar end on the next close of the three-day one, not on a day with no polls.
+  await db.batch(OFFICE_LIST.map((office) =>
+    db.prepare(`UPDATE civic_policies SET ${office}_term_ends = ?1 WHERE id = 1 AND ${office}_term_ends > ?2 AND ${office}_term_ends != ?1`).bind(close, now)));
+  const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+  const over = OFFICE_LIST.filter((office) => policy?.[`${office}_uid`] && Number(policy[`${office}_term_ends`] ?? 0) <= now);
+  let emptied = 0;
+  for (const office of over) {
+    const uid = policy![`${office}_uid`] as string;
+    const out = await db
+      .prepare(`UPDATE civic_policies SET ${office}_uid = NULL, ${office}_term_ends = NULL, ${office}_strikes = 0, ${OFFICE_RULES[office].city ? `${office}_suspended_until = NULL, ` : ''}updated_at = ?1 WHERE id = 1 AND ${office}_uid = ?2 AND COALESCE(${office}_term_ends, 0) <= ?1 RETURNING id`)
+      .bind(now, uid)
+      .first();
+    if (!out) continue;
+    emptied++;
+    const who = (await usernames(db, [uid])).get(uid);
+    await postFeed(db, uid, 'election', '🪑',
+      `${handle(who)}’s term as ${OFFICE_RULES[office].title} is over and nobody ran for the seat. It stays empty until the next election, ${pollsWhen(now)}.`,
+      OFFICE_RULES[office].city);
+  }
+  return emptied;
 }
 
 type PolicyRow = Record<string, string | number | null>;
