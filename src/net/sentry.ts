@@ -27,6 +27,8 @@ export function startErrorReporting(): void {
           /Importing a module script failed/,
           /error loading dynamically imported module/,
           /Unable to preload CSS/,
+          // The player's network dropped mid sign-in or token refresh; the session retries on its own.
+          'auth/network-request-failed',
         ],
       });
       return Sentry;

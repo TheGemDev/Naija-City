@@ -57,7 +57,12 @@ export let cachedToken: string | null = null;
 
 export function watchUser(cb: (u: User | null) => void) {
   return onIdTokenChanged(auth, async (u) => {
-    cachedToken = u ? await u.getIdToken() : null;
+    try {
+      cachedToken = u ? await u.getIdToken() : null;
+    } catch {
+      // Offline with an expired token: carry on signed in. The first API call fails, and the session shows offline and retries.
+      cachedToken = null;
+    }
     cb(u);
   });
 }
