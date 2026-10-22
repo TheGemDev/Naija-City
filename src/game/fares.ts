@@ -13,6 +13,8 @@ export const FARE_SCARCITY = 1.5;
 export const CELL_METRES = 15;
 /** Used where a trip has no map position (estates, or before a place is picked). */
 export const DEFAULT_KM = 1.5;
+/** Closer than this to a door or an estate gate (about 100 m), the travel card just offers to walk in. */
+export const NEAR_KM = 0.1;
 
 const RATES: Record<PaidMode, { base: number; perKm: number }> = {
   okada: { base: 150, perKm: 100 },

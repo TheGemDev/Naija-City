@@ -7,7 +7,8 @@ import { CAP, sectionOf } from '../game/estate';
 import { useRentals } from '../net/rentals';
 import { cityState, OtherThumb, PropertyThumb } from './homesKit';
 import { avatarCell } from '../game/avatar';
-import { kmBetween } from '../game/fares';
+import { kmBetween, NEAR_KM } from '../game/fares';
+import { estateExit } from '../game/estateRoads';
 import { startHomeTrip, tripFlight, type Via } from '../game/trip';
 import { roomParent } from '../game/villa';
 import { Chevron, Emoji } from './Icons';
@@ -130,8 +131,14 @@ export function TravelPicker() {
     )) : []),
   ].sort((a, b) => Number(a.disabled) - Number(b.disabled)); // the ones you can't go to sit at the far end
   const home = homes.find((h) => h.id === homeId && !h.disabled) ?? homes.find((h) => h.id === (usual ?? (lease ? 'lease' : 'gov'))) ?? homes.find((h) => !h.disabled) ?? null;
-  // Trekking isn't an option to another estate, so don't leave it selected.
-  const current: TravelMode = !isHome && mode === 'walk' ? 'keke' : mode;
+  // Standing at the estate's gate on the map (the one picked, or the one your home is in): no ride, you walk in.
+  const gateRegion = isHome
+    ? (home?.id === 'lease' ? lease?.region : properties.find((p) => p.id === home?.id)?.region)
+    : regionId;
+  const gate = view === 'city' && gateRegion && !home?.away ? estateExit(city, gateRegion)?.cell : undefined;
+  const near = !!gate && kmBetween(avatarCell(), gate) < NEAR_KM;
+  // Trekking isn't otherwise an option to another estate, so don't leave it selected.
+  const current: TravelMode = near ? 'walk' : !isHome && mode === 'walk' ? 'keke' : mode;
   const km = isHome ? home?.km ?? homeTripKm(useGame.getState()) : estateKm(section);
   const fare = fareOf(current, km);
   const here = !isHome && regionId === hereRegion && section === hereNo;
@@ -165,7 +172,9 @@ export function TravelPicker() {
       ) : homes.length > 0 && (
         <HomeStrip homes={homes} selected={home?.id ?? null} onPick={setHomeId} />
       )}
-      route={legs && home && <TripRoute fromId={city} toId={home.city} end="home" legs={legs} mode={tripMode} setMode={setTripMode} setVia={setVia} />}
+      route={near
+        ? <p className="muted small travel-near"><Emoji char="🚶🏾" size="1em" /> You’re right at the gate.</p>
+        : legs && home && <TripRoute fromId={city} toId={home.city} end="home" legs={legs} mode={tripMode} setMode={setTripMode} setVia={setVia} />}
       km={km}
       allowWalk={isHome}
       mode={current}
@@ -174,7 +183,7 @@ export function TravelPicker() {
       setCarId={setCarId}
       goLabel={legs
         ? money < legs.total ? `You need ${naira(legs.total)}` : <>Go home · {naira(legs.total)}</>
-        : here ? 'Already here' : <>Go · {tripCost(current, carId, km)}</>}
+        : here ? 'Already here' : near ? 'Go in' : <>Go · {tripCost(current, carId, km)}</>}
       goDisabled={legs ? money < legs.total : !ready}
       onGo={go}
       onCancel={close}

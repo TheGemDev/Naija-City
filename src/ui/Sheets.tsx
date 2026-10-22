@@ -9,7 +9,7 @@ import { employment } from '../game/jobs';
 import { INTERIORS } from '../game/interiors';
 import { WALL_BUILD_COST, WALL_KNOCK_COST, edgeKey, houseLayout, wallBuildError } from '../game/grid';
 import { avatarCell } from '../game/avatar';
-import { kmBetween } from '../game/fares';
+import { kmBetween, NEAR_KM } from '../game/fares';
 import { useTravel } from './TravelPicker';
 import { WorkNote } from './WorkChip';
 import { PlaceHappening } from './LiveApps';
@@ -411,9 +411,6 @@ export function StreetStorySheet() {
     </div>
   );
 }
-
-/** Closer than this to a door (about 100 m), the card just offers to walk in. */
-const NEAR_KM = 0.1;
 
 /** Town map: tap a building → this card. */
 export function PlaceSheet() {
