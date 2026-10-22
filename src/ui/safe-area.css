@@ -1,6 +1,6 @@
 /* Added to the home screen, the game draws under the status bar and the notch (viewport-fit=cover in index.html).
    The world fills that space and the HUD pinned to the top steps down below it. The insets are 0 in a browser tab. */
-.topbar, .left-stack, .toasts, .estate-top, .drive-hud, .place-events, .jail-strip { margin-top: env(safe-area-inset-top, 0px); }
+.topbar, .left-stack, .toasts, .drive-hud, .place-events, .jail-strip { margin-top: env(safe-area-inset-top, 0px); }
 .left-stack > .toasts { margin-top: 0; }
 
 /* Sideways on a notched phone: keep the HUD clear of the notch and the rounded corners. */

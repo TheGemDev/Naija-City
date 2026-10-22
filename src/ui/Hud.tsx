@@ -1139,8 +1139,8 @@ function Nav() {
         <button className="leave" onClick={() => { setPanel(null); setPlaceHubOpen(false); useGame.getState().leaveHome(); }}>
           <span><Emoji char="🚪" size={24} /></span>Go outside
         </button>
-      ) : view === 'place' ? (
-        // Inside a building on the map: the way out, where Home and Activities were (Activities moves to Map's spot).
+      ) : view === 'place' || view === 'estate' ? (
+        // Inside a building, or walking an estate: just the way out (in a building Activities moves to Map's spot).
         <button className="leave" onClick={() => { setPanel(null); setPlaceHubOpen(false); openMap(); }}>
           <span><Emoji char="🚪" size={24} /></span>Leave
         </button>
@@ -1158,7 +1158,7 @@ function Nav() {
           <span><Emoji char={streetStart ? '🚶🏾' : '🏠'} size={24} /></span>{streetStart ? 'Street' : 'Home'}
         </button>
       )}
-      {view === 'place' ? null : view === 'city' || view === 'estate' ? (
+      {view === 'place' || view === 'estate' ? null : view === 'city' ? (
         <button className={tab === 'estate' ? 'on' : ''} onClick={() => {
           const property = properties[0];
           setPanel(null);
@@ -1177,11 +1177,7 @@ function Nav() {
         <button data-k="map" className={placeHubOpen ? 'on' : ''} onClick={() => setPlaceHubOpen(!placeHubOpen)}>
           <span><Emoji char="🎯" size={24} /></span>Activities
         </button>
-      ) : view === 'estate' ? (
-        <button className="leave" onClick={() => { setPanel(null); setPlaceHubOpen(false); openMap(); }}>
-          <span><Emoji char="🚪" size={24} /></span>Leave
-        </button>
-      ) : (
+      ) : view === 'estate' ? null : (
         <button
           data-k="map"
           className={tab === 'map' ? 'on' : ''}

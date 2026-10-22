@@ -1030,7 +1030,7 @@ body.map-far .river-name { opacity: 0.9; }
 .estatebar .estate-pick { flex-basis: 100%; background: var(--bg-f1f5f9); border-radius: 12px; padding: 6px 10px; }
 .estatebar .estate-pick small { color: var(--muted); }
 .estatebar button { background: var(--inverse); color: #fff; }
-.estate-top { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); width: min(360px, calc(100% - 24px)); display: flex; align-items: center; gap: 8px; background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 8px; box-shadow: var(--shadow); backdrop-filter: blur(10px); pointer-events: auto; z-index: 20; }
+.estate-top { position: absolute; bottom: calc(100px + var(--safe-b)); left: 50%; transform: translateX(-50%); width: min(360px, calc(100% - 24px)); display: flex; align-items: center; gap: 8px; background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 8px; box-shadow: var(--shadow); backdrop-filter: blur(10px); pointer-events: auto; z-index: 20; }
 .estate-top button { display: grid; place-items: center; padding: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--inverse); color: #fff; font-size: 20px; font-weight: 800; line-height: 1; flex-shrink: 0; }
 .estate-top button:disabled { background: var(--bg-e2e8f0); color: #94a3b8; cursor: default; }
 .estate-title { flex: 1; text-align: center; display: flex; flex-direction: column; min-width: 0; }
@@ -2027,8 +2027,6 @@ a.lchip, a.settings-option { color: inherit; text-decoration: none; }
   }
   .placehub-drawer.placehub-catalogue { max-height: min(36dvh, 300px, calc(100dvh - 180px)); }
   .estatebar { max-height: calc(100dvh - 180px - env(safe-area-inset-bottom, 0px)); }
-  .ui:has(.estate-top) .left-stack,
-  .ui:has(.estate-top) .toasts { top: 148px; }
   /* The venue catalogue already names the place; the floating 3D sign just collides with the top bar. */
   .building-map-badge { display: none; }
 }
