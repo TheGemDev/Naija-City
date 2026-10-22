@@ -14,7 +14,8 @@ const timeLeft = (ms: number) => {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 };
 
-const BORROW_PICKS = [50_000, 100_000, 250_000, 500_000, 1_000_000];
+/** A slider's value, snapped to its maximum in the last step (a step size rarely lands on the maximum itself). */
+const snapTop = (v: number, max: number, step: number) => (max - v < step ? max : v);
 
 /** One big naira field: digits only, shown with commas. */
 function MoneyInput({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
@@ -43,11 +44,9 @@ function LoanCard({ loan: l, rate, now, busy }: { loan: LoanRow; rate: number; n
   // Interest lands once a day, counted from the moment the loan was taken.
   const nextHit = l.takenAt + Math.ceil((now - l.takenAt) / LOAN.periodMs) * LOAN.periodMs;
   const term = Math.min(100, Math.max(0, ((now - l.takenAt) / (l.dueAt - l.takenAt)) * 100));
-  const picks = [0.25, 0.5]
-    .map((f) => ({ label: `${f * 100}%`, value: Math.round(l.owed * f) }))
-    .filter((p) => p.value >= 1 && p.value <= cash);
-  if (canClear) picks.push({ label: 'All of it', value: l.owed });
-  else if (cash > 0) picks.push({ label: 'All my cash', value: cash });
+  // The slider runs to whatever is less: the whole debt, or all the cash you have.
+  const most = Math.max(1, Math.min(l.owed, cash));
+  const payStep = most > 500_000 ? 10_000 : most > 10_000 ? 1_000 : 1;
   return (
     <div className="loan-card">
       <div className="loan-card-top">
@@ -68,11 +67,16 @@ function LoanCard({ loan: l, rate, now, busy }: { loan: LoanRow; rate: number; n
       </dl>
       {l.overdue && <p className="loan-note bad">Pay it all before then, or the bank takes your cash, savings, cars and houses to cover it, and you go to a cell.</p>}
       <MoneyInput value={amount} onChange={(n) => setAmount(Math.min(n, l.owed))} label="Amount to pay back" />
-      <div className="loan-chips">
-        {picks.map((p) => (
-          <button key={p.label} type="button" className={amount === p.value ? 'on' : ''} onClick={() => setAmount(p.value)}>{p.label}</button>
-        ))}
-      </div>
+      <input
+        className="loan-range"
+        type="range"
+        aria-label="Amount to pay back"
+        min={0}
+        max={most}
+        step={payStep}
+        value={Math.min(amount, most)}
+        onChange={(e) => setAmount(snapTop(Number(e.target.value), most, payStep))}
+      />
       <button className="loan-go" disabled={busy || amount < 1 || short} onClick={() => void repayLoan(l.id, amount)}>
         {amount < 1 ? 'Choose an amount to pay' : left <= 0 ? `Pay ${naira(amount)} and clear it` : `Pay ${naira(amount)}`}
       </button>
@@ -95,7 +99,7 @@ function Borrow({ data, busy }: { data: LoanSnapshot; busy: boolean }) {
   const fee = Math.round((amount * LOAN.feePct) / 100);
   const tooLittle = amount < LOAN.min;
   const tooMuch = amount > available;
-  const picks = BORROW_PICKS.filter((n) => n < available).slice(-3);
+  const borrowStep = available > 500_000 ? 10_000 : 1_000;
   return (
     <div className="loan-card">
       <MoneyInput value={amount} onChange={setAmount} label="Amount to borrow" />
@@ -105,16 +109,10 @@ function Borrow({ data, busy }: { data: LoanSnapshot; busy: boolean }) {
         aria-label="Amount to borrow"
         min={LOAN.min}
         max={available}
-        step={available > 500_000 ? 10_000 : 1_000}
+        step={borrowStep}
         value={Math.min(Math.max(amount, LOAN.min), available)}
-        onChange={(e) => setAmount(Number(e.target.value))}
+        onChange={(e) => setAmount(snapTop(Number(e.target.value), available, borrowStep))}
       />
-      <div className="loan-chips">
-        {picks.map((n) => (
-          <button key={n} type="button" className={amount === n ? 'on' : ''} onClick={() => setAmount(n)}>{naira(n)}</button>
-        ))}
-        <button type="button" className={amount === available ? 'on' : ''} onClick={() => setAmount(available)}>Max {naira(available)}</button>
-      </div>
       <dl className="loan-rows">
         <div><dt>Bank fee ({LOAN.feePct}%)</dt><dd>−{naira(fee)}</dd></div>
         <div><dt>You receive now</dt><dd>{naira(Math.max(0, amount - fee))}</dd></div>
