@@ -886,6 +886,9 @@ body.map-far .place-label.on b, body.map-far .place-label.home b { display: inli
 body.map-far .place-label.on, body.map-far .place-label.home { padding: 3px 8px 3px 4px; }
 body.map-far .place-label.home { flex-direction: row !important; }
 body.map-far .place-label.home b { display: inline !important; }
+/* Estate houses: icons only from afar, your own too, unless one is picked. */
+body.map-far .place-label.lot:not(.on) b { display: none !important; }
+body.map-far .place-label.lot:not(.on) { padding: 4px; }
 /* River name painted on the water. */
 .river-name { font-size: 64px; font-weight: 700; font-style: italic; letter-spacing: 0.3em; color: rgba(224, 242, 254, 0.85); text-shadow: 0 2px 6px rgba(30, 58, 138, 0.6); white-space: nowrap; user-select: none; }
 body.map-far .river-name { opacity: 0.9; }

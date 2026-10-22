@@ -7,7 +7,7 @@
 // Your own houses wear the outside you chose (game/exterior.ts) and your paint; neighbours' get a look picked from
 // their plot so the street isn't forty copies of one house. Windows and gate lamps light up after dark (EstateNight).
 
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { hourOf, useGame } from '../game/store';
@@ -21,6 +21,8 @@ import { LIGHTS_ON, sceneHour } from '../game/theme';
 import { gridOn } from '../game/live';
 import { useEstate } from '../net/estate';
 import { useSession } from '../net/session';
+import { isNpc } from '../game/npcs';
+import { Emoji } from '../ui/Icons';
 import { Slab } from './Slab';
 import { B, Tree } from './models';
 import { EstateBillboards } from './Billboard';
@@ -137,10 +139,12 @@ function Label({ lot }: { lot: Lot }) {
     <Html position={[o.x + PLOT / 2, tall, o.z + PLOT / 2]} center zIndexRange={[8, 1]} style={{ pointerEvents: 'auto' }}>
       <button
         type="button"
-        className={`place-label ${picked ? 'on' : ''} ${lot.mine ? 'home' : ''}`}
+        className={`place-label lot ${picked ? 'on' : ''} ${lot.mine ? 'home' : ''}`}
         onClick={() => useEstate.setState({ picked: picked ? null : lot.slot })}
       >
-        {lot.mine ? `⭐ ${lot.name || 'You'}` : `👤 ${lot.owner}`}
+        {/* The icon alone until the camera comes in close (body.map-far, EstateNight), then the name beside it. */}
+        <span><Emoji char={lot.mine ? '⭐' : isNpc(lot.uid) ? '🏠' : '👤'} size="1em" /></span>
+        <b>{lot.mine ? lot.name || 'You' : lot.owner}</b>
       </button>
     </Html>
   );
@@ -180,7 +184,7 @@ function EstateGate({ region, rows }: { region: string; rows: number }) {
         }}
       />
       <Html position={[1, 1.95, z]} center zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="place-label landmark"><b>{name} Estate</b></div>
+        <div className="place-label landmark"><span><Emoji char="🏘️" size="1em" /></span><b>{name} Estate</b></div>
       </Html>
     </group>
   );
@@ -188,13 +192,21 @@ function EstateGate({ region, rows }: { region: string; rows: number }) {
 
 /** Windows and lamps glow after dark here too (on the map City.tsx's MapEffects does it). */
 function EstateNight() {
-  useFrame(() => {
+  const far = useRef(false);
+  useFrame(({ camera }) => {
     const h = photoHour() ?? sceneHour(hourOf(useGame.getState().minutes));
     const night = h < 6.3 || h >= LIGHTS_ON ? 1 : 0;
     windowMat.emissiveIntensity = night * 0.9;
     windowsLit.value = (h >= LIGHTS_ON ? 0.8 : h < 4 ? 0.8 - (h / 4) * 0.6 : 0.35) * (gridOn() ? 1 : 0.4);
     lampMat.emissiveIntensity = night * 2.5;
+    // Icons only over the houses (styles.css body.map-far) until the camera is in closer than the estate's opening view.
+    const isFar = camera.position.y > 24;
+    if (isFar !== far.current) {
+      far.current = isFar;
+      document.body.classList.toggle('map-far', isFar);
+    }
   });
+  useLayoutEffect(() => () => document.body.classList.remove('map-far'), []);
   return null;
 }
 
