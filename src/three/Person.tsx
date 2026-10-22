@@ -39,11 +39,12 @@ export const seatDrop = (seatY: number) => Math.min(HIP_Y - 0.08, Math.max(0, se
 /* ---------- Shared geometry and materials ---------- */
 
 const materials = new Map<string, MeshStandardMaterial>();
-function mat(color: string, rough = 0.78, metal = 0, double = false, pat?: Pat) {
-  const k = `${color}|${rough}|${metal}|${double}|${pat ? pat.join(':') : ''}`;
+/** `vc`: the geometry carries its own shading as vertex colours, multiplied into `color` (a face's sockets, a pupil). */
+function mat(color: string, rough = 0.78, metal = 0, double = false, pat?: Pat, vc = false) {
+  const k = `${color}|${rough}|${metal}|${double}|${pat ? pat.join(':') : ''}|${vc}`;
   let m = materials.get(k);
   if (!m) {
-    const options = { color: pat ? '#ffffff' : color, roughness: rough, metalness: metal, ...(double ? { side: DoubleSide } : {}), ...(pat ? { map: patternTexture(pat[0], color, pat[1]) } : {}) };
+    const options = { color: pat ? '#ffffff' : color, roughness: rough, metalness: metal, vertexColors: vc, ...(double ? { side: DoubleSide } : {}), ...(pat ? { map: patternTexture(pat[0], color, pat[1]) } : {}) };
     materials.set(k, (m = new MeshStandardMaterial(options)));
   }
   return m;
@@ -202,9 +203,9 @@ const sidePanel = (body: Body, s: number) =>
 const shade = (c: string, k: number) => '#' + new Color(c).multiplyScalar(k).getHexString();
 
 /** Shorthand for a shadow-casting mesh. */
-function M({ children, color, rough, metal, double, pat, ...rest }: { children?: ReactNode; color: string; rough?: number; metal?: number; double?: boolean; pat?: Pat } & ThreeElements['mesh']) {
+function M({ children, color, rough, metal, double, pat, vc, ...rest }: { children?: ReactNode; color: string; rough?: number; metal?: number; double?: boolean; pat?: Pat; vc?: boolean } & ThreeElements['mesh']) {
   return (
-    <mesh castShadow material={mat(color, rough, metal, double, pat)} {...rest}>
+    <mesh castShadow material={mat(color, rough, metal, double, pat, vc)} {...rest}>
       {children}
     </mesh>
   );
@@ -792,7 +793,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
   const shortsLen = !full && bottom?.shape === 'shorts' ? THIGH * 0.55 : !full && bottom?.shape === 'bermuda' ? THIGH * 0.82 : 0;
   const thighSkin = full || !bottom || shortsLen > 0 || thighColor === skin;
   // Shoulder, elbow and wrist thickness.
-  const arm: [number, number, number] = f ? [0.05, 0.04, 0.032] : [0.058, 0.046, 0.037];
+  const arm: [number, number, number] = f ? [0.05, 0.038, 0.027] : [0.058, 0.044, 0.031];
 
   useLayoutEffect(() => {
     rig.root.current.traverse((o) => {
@@ -818,10 +819,12 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
           {/* Arms (pivot at the shoulder): they hang off the torso, so they follow it when it leans or turns. */}
           {([-1, 1] as const).map((side) => (
             <group key={side} ref={side < 0 ? rig.armL : rig.armR} position={[side * shoulderX, SHOULDER_Y, 0]}>
-              <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[0]} rBot={arm[1]} len={ARM_U} />
-              {sleeve === 'short' && <M color={topColor} pat={topPat} geometry={sleeveGeo(arm[0], arm[1], ARM_U, 0.12, 0.01)} />}
+              {/* Upper arm: full through the shoulder and biceps, slimming to the elbow. */}
+              <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[0]} rBot={arm[1]} mid={[arm[0] * 0.92, 0.4]} len={ARM_U} />
+              {sleeve === 'short' && <M color={topColor} pat={topPat} geometry={sleeveGeo(arm[0], arm[1], ARM_U, 0.12, 0.006)} />}
               <group ref={side < 0 ? rig.elbowL : rig.elbowR} position={[0, -ARM_U, 0]}>
-                <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[1]} rBot={arm[2]} mid={[arm[1] * 1.08, 0.24]} len={WRIST} />
+                {/* Forearm: the muscle swells just below the elbow, then it narrows to the wrist. */}
+                <Seg color={sleeve === 'long' ? topColor : skin} pat={sleeve === 'long' ? topPat : undefined} rTop={arm[1]} rBot={arm[2]} mid={[arm[1] * 1.05, 0.28]} len={WRIST} />
                 <HandModel skin={skin} f={f} side={side} />
                 {side < 0 && a.outfit.wrist && <Wrist g={GARMENT_BY_ID[a.outfit.wrist]} />}
                 {side > 0 && bagG && HAND_BAGS.has(bagG.shape) && <HandBag g={bagG} />}
@@ -838,7 +841,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
       {/* Legs (pivot at the hip). Under an abaya or wrapper only the feet show, but the rig stays. */}
       {([-1, 1] as const).map((side) => (
         <group key={side} ref={side < 0 ? rig.legL : rig.legR} position={[side * hipX, HIP_Y, 0]}>
-          {!legsHidden && <Seg color={thighSkin ? skin : thighColor} pat={thighSkin ? undefined : botPat} rTop={legR(THIGH_R[+f], !thighSkin)} rBot={legR(KNEE_R, !thighSkin)} len={THIGH} />}
+          {!legsHidden && <Seg color={thighSkin ? skin : thighColor} pat={thighSkin ? undefined : botPat} rTop={legR(THIGH_R[+f], !thighSkin)} rBot={legR(KNEE_R, !thighSkin)} mid={[legR((THIGH_R[+f] + KNEE_R) / 2 + 0.009, !thighSkin), 0.5]} len={THIGH} />}
           {!legsHidden && shortsLen > 0 && <M color={thighColor} pat={botPat} geometry={sleeveGeo(THIGH_R[+f] - 0.008, KNEE_R, THIGH, shortsLen, 0.014)} />}
           <group ref={side < 0 ? rig.kneeL : rig.kneeR} position={[0, -THIGH, 0]}>
             {!legsHidden && <Seg color={full ? skin : shinColor} pat={full ? undefined : longBottom ? botPat : undefined} rTop={legR(KNEE_R, !!longBottom)} rBot={legR(0.038, !!longBottom)} mid={[legR(CALF[0], !!longBottom), CALF[1]]} len={SHIN} />}
@@ -850,7 +853,7 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
             {/* Ankle */}
             <group ref={side < 0 ? rig.footL : rig.footR} position={[0, -SHIN, 0]}>
               <group position={[0, SHIN, 0]}>
-                <Shoe g={shoes} skin={skin} />
+                <Shoe g={shoes} skin={skin} side={side} />
               </group>
             </group>
           </group>
@@ -862,11 +865,13 @@ export function Person({ look, clipRef, seatedRef, headScale = 1 }: {
 
 /** Each finger, index to little: how far forward it sits on the palm, its length, thickness, and how it fans out. */
 const FINGERS: [z: number, len: number, r: number, fan: number][] = [
-  [0.0158, 0.035, 0.0074, -0.05],
-  [0.0053, 0.039, 0.0077, -0.015],
-  [-0.0053, 0.036, 0.0074, 0.025],
-  [-0.0155, 0.029, 0.0066, 0.07],
+  [0.0152, 0.044, 0.0064, -0.06],
+  [0.0051, 0.049, 0.0067, -0.015],
+  [-0.0051, 0.046, 0.0064, 0.03],
+  [-0.0148, 0.037, 0.0057, 0.085],
 ];
+/** A finger's three bones, as shares of its length, and how far each joint curls in a relaxed hand. */
+const PHALANGES: [share: number, curl: number, thin: number][] = [[0.47, 0.2, 1], [0.31, 0.62, 0.9], [0.22, 0.95, 0.8]];
 
 /**
  * A relaxed hand in one mesh (one draw call): a palm, four fingers of two joints each curling in towards the body,
@@ -886,18 +891,18 @@ const handGeo = (side: -1 | 1) =>
       parts.push(g.applyMatrix4(new Matrix4().compose(start.clone().addScaledVector(dir, len / 2), new Quaternion().setFromEuler(euler), one)));
       return start.clone().addScaledVector(dir, len);
     };
-    // The palm: a rounded slab, thin across and wide from front to back.
-    const palm = new CapsuleGeometry(0.023, 0.03, 4, 12);
+    // The palm: a rounded slab, thin across and wide from front to back, broadest at the knuckles.
+    const palm = new CapsuleGeometry(0.022, 0.026, 4, 12);
     palm.deleteAttribute('uv');
-    parts.push(palm.applyMatrix4(new Matrix4().compose(new Vector3(m * 0.002, -0.037, 0.001), new Quaternion(), new Vector3(0.56, 1, 1.12))));
-    // Fingers from the knuckles: nearly straight at first, then the last joint curls in.
+    parts.push(palm.applyMatrix4(new Matrix4().compose(new Vector3(m * 0.002, -0.034, 0.001), new Quaternion(), new Vector3(0.52, 1, 1.12))));
+    // Fingers from the knuckles in three bones, each joint curling in a little more than the last.
     for (const [z, len, r, fan] of FINGERS) {
-      const mid = bone(new Vector3(m * 0.001, -0.062, z), new Euler(fan, 0, m * 0.28), len * 0.55, r);
-      bone(mid, new Euler(fan * 1.3, 0, m * 0.9), len * 0.45, r * 0.88);
+      let at = new Vector3(m * 0.001, -0.056, z);
+      for (const [share, curl, thin] of PHALANGES) at = bone(at, new Euler(fan * (1 + curl * 0.4), 0, m * curl), len * share, r * thin);
     }
     // The thumb, from the heel of the palm in front: down, forward and in.
-    const thumb = bone(new Vector3(m * 0.007, -0.034, 0.019), new Euler(-0.38, 0, m * 0.28), 0.02, 0.0085);
-    bone(thumb, new Euler(-0.12, 0, m * 0.5), 0.016, 0.0078);
+    const thumb = bone(new Vector3(m * 0.007, -0.03, 0.019), new Euler(-0.42, 0, m * 0.25), 0.022, 0.0084);
+    bone(thumb, new Euler(-0.16, 0, m * 0.55), 0.018, 0.0074);
     return mergeGeometries(parts)!;
   });
 
@@ -905,7 +910,7 @@ const handGeo = (side: -1 | 1) =>
 function HandModel({ skin, f, side }: { skin: string; f: boolean; side: -1 | 1 }) {
   return (
     // Hands are about a ninth of a person's height: scaled up from the model's own size so they read at a distance.
-    <group position={[0, -WRIST, 0]} scale={f ? 1.32 : 1.45}>
+    <group position={[0, -WRIST, 0]} scale={f ? 1.26 : 1.38}>
       <M color={skin} geometry={handGeo(side)} />
     </group>
   );
@@ -924,7 +929,7 @@ function Torso({ a, top, color, skin, bag }: { a: Appearance; top?: Garment; col
       <M color={skin} geometry={capsule(f ? 0.046 : 0.056, 0.06)} position={[0, NECK_Y + 0.04, 0]} scale={[1, 1, 0.92]} />
       {/* Open neckline on tops that have one */}
       {(shape === 'tee' || shape === 'tank' || shape === 'blouse' || shape === 'dress' || shape === 'jersey' || shape === 'polo' || shape === 'shirt') && (
-        <M color={skin} geometry={sphere(0.05)} position={[0, NECK_Y - 0.03, 0.04]} scale={[1, 0.75, 0.34]} />
+        <M color={skin} geometry={sphere(0.05)} position={[0, NECK_Y - 0.03, 0.04]} scale={[1, 0.75, 0.26]} />
       )}
       {(shape === 'polo' || shape === 'shirt') && (
         <>
@@ -1060,15 +1065,41 @@ function SkirtOrRobe({ top, bottom, f }: { top?: Garment; bottom?: Garment; f: b
 /** A rounded sole, flattened from a capsule so it has no hard box corners. */
 const sole = capsule(0.05, 0.13);
 
-function Shoe({ g, skin }: { g?: Garment; skin: string }) {
+/**
+ * A bare foot in one mesh, for its own side (the big toe on the inside): a heel, the foot narrowing a little at the
+ * arch and spreading to the ball, and five toes stepping down in size and back from the big toe.
+ */
+const bareFootGeo = (side: -1 | 1) =>
+  geo(`barefoot:${side}`, () => {
+    const inner = -side;
+    const piece = (g: BufferGeometry, p: [number, number, number], sc: [number, number, number], r: [number, number, number] = [0, 0, 0]) => {
+      g.deleteAttribute('uv');
+      return g.applyMatrix4(new Matrix4().compose(new Vector3(...p), new Quaternion().setFromEuler(new Euler(...r)), new Vector3(...sc)));
+    };
+    const parts = [
+      // Heel, then the body of the foot, lower and wider towards the ball.
+      piece(new SphereGeometry(0.034, 14, 10), [0, 0.004, -0.032], [0.92, 0.88, 1.05]),
+      piece(new CapsuleGeometry(0.036, 0.075, 4, 12), [inner * 0.003, 0.002, 0.035], [1.05, 1, 0.66], [Math.PI / 2, 0, inner * 0.04]),
+      piece(new SphereGeometry(0.036, 14, 10), [inner * 0.004, -0.004, 0.083], [1.14, 0.58, 0.9]),
+      // The instep rising to the ankle.
+      piece(new SphereGeometry(0.03, 12, 10), [0, 0.022, 0.012], [1, 0.9, 1.4]),
+      // Toes: the big toe, then four more, each smaller and set further back.
+      ...([[0.02, 0.0118, 0.122], [0.005, 0.0088, 0.121], [-0.0075, 0.0082, 0.116], [-0.019, 0.0076, 0.109], [-0.029, 0.007, 0.099]] as const).map(([x, r, z]) =>
+        piece(new SphereGeometry(r, 10, 8), [inner * x, -0.011, z], [1, 0.8, 1.25])),
+    ];
+    return mergeGeometries(parts)!;
+  });
+
+function Shoe({ g, skin, side }: { g?: Garment; skin: string; side: -1 | 1 }) {
   const y = -SHIN - 0.045;
   const foot = (color: string, r = 0.044, sx = 1.1) => <M color={color} geometry={capsule(r, 0.12)} position={[0, y, 0.045]} rotation={[Math.PI / 2, 0, 0]} scale={[sx, 1, 0.75]} />;
-  if (!g) return foot(skin, 0.04);
+  const bare = <M color={skin} geometry={bareFootGeo(side)} position={[0, y, 0]} />;
+  if (!g) return bare;
   switch (g.shape) {
     case 'slippers':
       return (
         <>
-          {foot(skin, 0.038)}
+          {bare}
           <M color={g.color} geometry={sole} position={[0, y - 0.03, 0.045]} rotation={[Math.PI / 2, 0, 0]} scale={[0.95, 1, 0.19]} />
           <M color={g.color} geometry={capsule(0.03, 0.06)} position={[0, y + 0.01, 0.07]} rotation={[0, 0, Math.PI / 2]} scale={[1, 1, 0.6]} />
         </>
@@ -1130,15 +1161,18 @@ function headRows(f: boolean): HeadRow[] {
   const jaw = f ? 0.94 : 1;
   // The front eases back from brow to mouth with no ledge (a ridge across the whole width shades as a dark band),
   // and the back of the skull carries on down to the nape before the underside turns in to the neck.
+  // The face is rounder than it is flat (low squareness), so the eyes sit back in it and the cheeks turn away towards
+  // the ears instead of the features standing on a plate. The jaw keeps its width to an angle under the ears (firmer
+  // on men), then narrows to a chin.
   rows.push(
-    [0.028, 0.1265, f ? 0.1285 : 0.129, -0.137, 2.15],
-    [0.008, 0.1262, 0.1275, -0.138, 2.3],
-    [-0.022, 0.1245, 0.1255, -0.134, 2.45],
-    [-0.052, 0.113 * (f ? 0.96 : 1), 0.1215, -0.122, 2.6],
-    [-0.082, 0.1 * jaw, 0.1155, -0.1, f ? 2.5 : 3],
-    [-0.108, (f ? 0.082 : 0.086) * jaw, 0.11, -0.072, f ? 2.4 : 3],
-    [-0.13, f ? 0.054 : 0.06, f ? 0.103 : 0.107, -0.03, f ? 2.4 : 2.8],
-    [-0.145, f ? 0.03 : 0.032, f ? 0.09 : 0.095, 0.022, 2.2],
+    [0.028, 0.1265, f ? 0.1285 : 0.129, -0.137, 2.05],
+    [0.008, 0.1262, 0.1275, -0.138, 2.1],
+    [-0.022, 0.1255, 0.1255, -0.134, 2.2],
+    [-0.052, 0.113 * (f ? 0.965 : 1), 0.1215, -0.122, 2.3],
+    [-0.082, (f ? 0.097 : 0.102) * jaw, 0.1155, -0.1, f ? 2.4 : 2.6],
+    [-0.108, (f ? 0.082 : 0.089) * jaw, 0.11, -0.072, f ? 2.45 : 2.9],
+    [-0.13, f ? 0.055 : 0.063, f ? 0.103 : 0.106, -0.03, f ? 2.35 : 2.6],
+    [-0.145, f ? 0.031 : 0.037, f ? 0.09 : 0.095, 0.022, f ? 2.2 : 2.3],
     [-0.15, 0, 0.066, 0.066, 2],
   );
   return rows;
@@ -1236,11 +1270,81 @@ const headGeo = (f: boolean) =>
     };
     const parts = [
       noseGeo(f),
-      // Ears: flat ovals standing off the side of the head, tipped back a little at the top.
-      ...([-1, 1] as const).map((sd) => part(new SphereGeometry(0.032, 12, 10), [sd * 0.127, -0.006, -0.01], [-0.15, sd * -0.35, 0], [0.4, 1.2, 0.66])),
+      lidsGeo(f),
+      // Ears lying back against the head, tipped back a little at the top: the outer ear, and a softer lobe below it.
+      ...([-1, 1] as const).flatMap((sd) => [
+        part(new SphereGeometry(0.03, 14, 10), [sd * 0.124, -0.001, -0.012], [-0.15, sd * -0.5, 0], [0.32, 1.15, 0.72]),
+        part(new SphereGeometry(0.013, 10, 8), [sd * 0.12, -0.026, -0.006], [0, sd * -0.5, 0], [0.45, 1.1, 0.85]),
+      ]),
     ];
-    return mergeGeometries([skull, ...parts])!;
+    const head = mergeGeometries([skull, ...parts])!;
+    head.setAttribute('color', new Float32BufferAttribute(headShading(head), 3));
+    return head;
   });
+
+/** A soft spot: 1 at (cx, cy), falling to 0 at distance r. */
+const spot = (x: number, y: number, cx: number, cy: number, r: number) => 1 - smoothstep(0, 1, Math.hypot(x - cx, y - cy) / r);
+
+/**
+ * Light the skin can't reach, painted into the head as vertex colours (multiplied into the skin colour, so it suits
+ * every tone): the eye sockets and the crease over each lid, the nostrils, under the nose and down to the mouth's
+ * corners, under the jaw, and the hollow of each ear; with a little warmth over the cheeks. Without it a face is one
+ * flat colour and reads as plastic.
+ */
+function headShading(g: BufferGeometry) {
+  const pos = g.getAttribute('position'), nrm = g.getAttribute('normal');
+  const out = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), ny = nrm.getY(i), ax = Math.abs(x);
+    const front = smoothstep(0.06, 0.11, z);
+    let k = 1;
+    // Sockets, deepest at the inner corner under the brow, and the lid crease.
+    for (const sd of SIDES) k -= 0.16 * front * spot(x, y, sd * (EYE_X - 0.008), EYE_Y + 0.006, 0.03);
+    k -= 0.1 * front * smoothstep(0.012, 0.02, ax) * (1 - smoothstep(0.06, 0.075, ax)) * spot(0, y, 0, EYE_Y + 0.016, 0.007);
+    // The lids themselves, a shade deeper than the cheek.
+    for (const sd of SIDES) k -= 0.12 * front * (1 - smoothstep(1.05, 1.5, eyeR(sd, x, y)));
+    // Nostrils and the shade under the nose.
+    for (const sd of SIDES) k -= 0.55 * smoothstep(-0.2, -0.7, ny) * spot(x, y, sd * 0.0105, -0.044, 0.0075);
+    k -= 0.1 * front * spot(x * 0.6, y, 0, -0.054, 0.012);
+    // The folds from the nose's wings down to the corners of the mouth.
+    k -= 0.07 * front * spot(ax, y + (ax - 0.028) * 0.9, 0.028, -0.058, 0.012);
+    // Under the jaw and chin, back to the neck.
+    k -= 0.22 * smoothstep(-0.1, -0.15, y) * (1 - smoothstep(0.03, 0.1, z));
+    k -= 0.08 * smoothstep(-0.12, -0.15, y) * smoothstep(-0.2, -0.8, ny);
+    // The hollow of the ear, on its outer face.
+    k -= 0.12 * smoothstep(0.124, 0.135, ax) * spot(0, y, 0, -0.006, 0.03);
+    // Cheekbones catch the light; the cheek under them falls away.
+    k += 0.04 * front * spot(ax, y, 0.078, -0.024, 0.022);
+    k -= 0.06 * front * spot(ax, y, 0.083, -0.07, 0.024);
+    // A touch of warmth over the cheeks.
+    const warm = 0.05 * front * spot(ax, y, 0.072, -0.03, 0.03);
+    out[i * 3] = k * (1 + warm);
+    out[i * 3 + 1] = k * (1 - warm * 0.3);
+    out[i * 3 + 2] = k * (1 - warm * 0.5);
+  }
+  return out;
+}
+
+/**
+ * The eyelids, in skin: a soft roll along each upper lid that sits over the top of the eyeball, and a finer one under
+ * the eye, so the eyes look set into the face rather than stuck on it.
+ */
+const lidsGeo = (f: boolean) =>
+  mergeGeometries(
+    SIDES.flatMap((s) => {
+      const upper = Array.from({ length: 9 }, (_, i) => eyeRim(f, s, i / 8).add(new Vector3(0, 0.0014, 0.0016)));
+      const lower = Array.from({ length: 9 }, (_, i) => {
+        const a = Math.PI * (i / 8);
+        const x = s * (EYE_X - EYE_R.half * Math.cos(a));
+        const y = EYE_Y - EYE_R.low * Math.sin(a) - 0.0018 * Math.cos(a) - 0.0006;
+        return new Vector3(x, y, faceZ(f, x, y) + 0.0009);
+      });
+      return [
+        strand(upper, (t) => 0.0026 * Math.sin(Math.PI * t) ** 0.5, 0.75, 18),
+        strand(lower, (t) => 0.0013 * Math.sin(Math.PI * t) ** 0.6, 0.7, 16),
+      ];
+    }),
+  )!;
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -1253,25 +1357,29 @@ const smoothstep = (a: number, b: number, x: number) => {
  * the face's own surface, so it has no seam where it meets it.
  */
 function noseGeo(f: boolean) {
-  const k = f ? 0.88 : 1;
-  const top = 0.016, bot = -0.046;
+  const k = f ? 0.9 : 1;
+  // The bridge starts low between the eyes and is short and soft; the base is broad.
+  const top = 0.006, bot = -0.046;
   /** Where the tip sticks out furthest, as a share of the way down. */
-  const TIP = 0.8;
+  const TIP = 0.74;
   const rows = 16, cols = 14;
   const pos: number[] = [];
   for (let i = 0; i <= rows; i++) {
     const t = i / rows;
     const y = top + (bot - top) * t;
     // Out from the face: nothing at the bridge's top, the most at the tip, back to nothing underneath.
-    const out = 0.021 * k * (t <= TIP ? Math.sin((t / TIP) * (Math.PI / 2)) ** 1.25 : Math.cos(((t - TIP) / (1 - TIP)) * (Math.PI / 2)) ** 0.6);
+    const out = 0.02 * k * (t <= TIP ? Math.sin((t / TIP) * (Math.PI / 2)) ** 1.25 : Math.cos(((t - TIP) / (1 - TIP)) * (Math.PI / 2)) ** 0.9);
+    // The nostril wings: a rounded swell either side of the tip, low on the nose, that turns under with it.
+    const wing = 0.0085 * k * smoothstep(0.45, 0.8, t) * (t <= 0.86 ? 1 : Math.cos(((t - 0.86) / 0.14) * (Math.PI / 2)) ** 0.7);
     // Half its width: a narrow bridge, then the wings flaring at the base.
-    const half = (0.0078 + 0.0182 * smoothstep(0.32, 0.9, t)) * k;
+    const half = (0.0085 + 0.0225 * smoothstep(0.3, 0.9, t)) * k;
     // The wings are fuller at the base, so the sides stand out there rather than sloping away.
     const p = 1.7 - 0.9 * smoothstep(0.55, 1, t);
     for (let j = 0; j <= cols; j++) {
       const a = -Math.PI / 2 + (j / cols) * Math.PI;
       const x = half * Math.sin(a);
-      pos.push(x, y, faceZ(f, x, y) - 0.0025 + out * Math.cos(a) ** p);
+      const side = Math.abs(Math.sin(a));
+      pos.push(x, y, faceZ(f, x, y) - 0.0025 + out * Math.cos(a) ** p * (1 - 0.35 * smoothstep(0.5, 0.95, t) * side) + wing * Math.exp(-(((side - 0.78) / 0.24) ** 2)));
     }
   }
   const index: number[] = [];
@@ -1290,10 +1398,10 @@ function noseGeo(f: boolean) {
 const EYE_X = 0.047;
 const EYE_Y = 0.01;
 /** The eye opening: half its width, how far the upper lid arches above the middle and the lower lid dips below it. */
-const EYE_R = { half: 0.0205, up: 0.0128, low: 0.0085 };
+const EYE_R = { half: 0.0205, up: 0.0106, low: 0.008 };
 /** How far the eyeball swells out of the opening, at its middle. */
 const EYE_BULGE = 0.0028;
-const IRIS = 0.0102;
+const IRIS = 0.011;
 /** The iris sits a little high, so the upper lid covers its top the way it does on a relaxed eye. */
 const IRIS_UP = 0.0028;
 /**
@@ -1409,7 +1517,23 @@ function eyePatch(f: boolean, s: number, cx: number, cy: number, r: (a: number) 
 
 const SIDES = [-1, 1] as const;
 
-/** Both eye whites, with a catch-light on each iris (it is the same white). */
+/** Vertex colours for a patch, from each point's position: `k(x, y)` grey, or `[r, g, b]`. */
+function tint(g: BufferGeometry, k: (x: number, y: number, i: number) => number | [number, number, number]) {
+  const pos = g.getAttribute('position');
+  const out = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const v = k(pos.getX(i), pos.getY(i), i);
+    const [r, gr, b] = typeof v === 'number' ? [v, v, v] : v;
+    out[i * 3] = r; out[i * 3 + 1] = gr; out[i * 3 + 2] = b;
+  }
+  g.setAttribute('color', new Float32BufferAttribute(out, 3));
+  return g;
+}
+
+/**
+ * Both eye whites, with a catch-light on each iris (it is the same white). The white is never paper white: it greys
+ * and warms towards the corners and lies in the upper lid's shadow at the top.
+ */
 const eyeWhitesGeo = (f: boolean) =>
   geo(`whites:${f}`, () =>
     mergeGeometries(
@@ -1418,15 +1542,29 @@ const eyeWhitesGeo = (f: boolean) =>
         // The light catches both eyes on the same side, up and to the right.
         const hx = c.x + 0.0032, hy = c.y + IRIS_UP + 0.0036;
         return [
-          eyePatch(f, s, c.x, c.y, () => EYE_R.half * 1.05, 0, 7, 28),
-          eyePatch(f, s, hx, hy, () => 0.0019, 0.0009, 2, 10),
+          tint(eyePatch(f, s, c.x, c.y, () => EYE_R.half * 1.05, 0, 7, 28), (x, y) => {
+            const k = 1 - 0.3 * smoothstep(0.45, 1, eyeR(s, x, y)) - 0.18 * smoothstep(0, EYE_R.up, y - EYE_Y);
+            return [k, k * 0.96, k * 0.92];
+          }),
+          tint(eyePatch(f, s, hx, hy, () => 0.0019, 0.0009, 2, 10), () => 1.15),
         ];
       }),
     )!,
   );
-/** The irises: dark discs lying on the eyeballs, their tops tucked under the upper lids. */
+/**
+ * The irises: discs lying on the eyeballs, their tops tucked under the upper lids. Each has a black pupil, a lighter
+ * brown round it and a dark ring at its edge, which is most of what makes an eye look alive.
+ */
 const irisGeo = (f: boolean) =>
-  geo(`irises:${f}`, () => mergeGeometries(SIDES.map((s) => { const c = eyeCentre(s); return eyePatch(f, s, c.x, c.y + IRIS_UP, () => IRIS, 0.0004, 5, 24); }))!);
+  geo(`irises:${f}`, () =>
+    mergeGeometries(SIDES.map((s) => {
+      const c = eyeCentre(s);
+      const cy = c.y + IRIS_UP;
+      return tint(eyePatch(f, s, c.x, cy, () => IRIS, 0.0004, 6, 24), (x, y) => {
+        const r = Math.hypot(x - c.x, y - cy) / IRIS;
+        return r < 0.38 ? 0.08 : 1.05 - 0.55 * smoothstep(0.7, 1, r) - 0.25 * smoothstep(0.5, 0.38, r);
+      });
+    }))!);
 
 /** Brows following the ridge over each eye, thickest at the inner end. Men's are heavier and straighter; women's finer, with more arch. */
 const browGeo = (f: boolean) =>
@@ -1458,8 +1596,8 @@ const linerGeo = (f: boolean) =>
 
 /** The mouth's shape: its half width, how far the corners lift into a smile, the upper and lower lips' heights and how far each stands out. */
 const MOUTH = {
-  m: { half: 0.031, lift: 0.0034, up: 0.0118, low: 0.0138, upOut: 0.0085, lowOut: 0.0095 },
-  f: { half: 0.0295, lift: 0.0036, up: 0.013, low: 0.0158, upOut: 0.0095, lowOut: 0.011 },
+  m: { half: 0.0335, lift: 0.0032, up: 0.0126, low: 0.015, upOut: 0.0092, lowOut: 0.0104 },
+  f: { half: 0.031, lift: 0.0036, up: 0.0136, low: 0.0164, upOut: 0.0094, lowOut: 0.0108 },
 };
 /** The line where the lips meet, `u` from one corner (-1) to the other (1): lowest in the middle, the corners lifted. */
 const mouthLine = (f: boolean, u: number) => MOUTH_Y + (f ? MOUTH.f : MOUTH.m).lift * u * u;
@@ -1530,10 +1668,10 @@ function Head({ a, skin }: { a: Appearance; skin: string }) {
   return (
     <group>
       {/* Skull, face, nose and ears in one smooth piece */}
-      <M color={skin} geometry={headGeo(f)} />
-      {/* Eyes: whites (with their catch-lights), dark brown irises, the lid line and the brows, each pair one mesh */}
-      <M color="#f4f1ea" geometry={eyeWhitesGeo(f)} rough={0.3} />
-      <M color="#2a170e" geometry={irisGeo(f)} rough={0.2} />
+      <M color={skin} geometry={headGeo(f)} rough={0.62} vc />
+      {/* Eyes: whites (with their catch-lights), brown irises with their pupils, the lid line and the brows, each pair one mesh */}
+      <M color="#f1ebe0" geometry={eyeWhitesGeo(f)} rough={0.25} vc />
+      <M color="#4a2a16" geometry={irisGeo(f)} rough={0.15} vc />
       <M color={f ? '#1a1210' : shade(skin, 0.42)} geometry={linerGeo(f)} />
       <M color={hairColor} geometry={browGeo(f)} rough={0.9} />
       {/* Lips, with a soft sheen on women's, and the mouth line between them */}
@@ -1558,7 +1696,7 @@ const HAIRLINE = 0.6;
  * temples, a sideburn down in front of the ear, up and over the ear, then down behind it to the nape. A `top` cut keeps
  * only the hair over the crown.
  */
-const HAIRLINE_AT: [number, number][] = [[0, 0.078], [0.55, 0.07], [0.95, 0.052], [1.17, 0.024], [1.34, 0.016], [1.56, 0.04], [1.85, 0.034], [2.2, -0.03], [2.7, -0.082], [Math.PI, -0.095]];
+const HAIRLINE_AT: [number, number][] = [[0, 0.076], [0.5, 0.072], [0.86, 0.06], [1.08, 0.04], [1.26, 0.022], [1.4, 0.02], [1.58, 0.038], [1.85, 0.034], [2.2, -0.03], [2.7, -0.082], [Math.PI, -0.095]];
 const TOP_AT: [number, number][] = [[0, 0.088], [1.0, 0.075], [1.6, 0.07], [2.4, 0.055], [Math.PI, 0.05]];
 function hairline(top: boolean, a: number) {
   const P = top ? TOP_AT : HAIRLINE_AT;
@@ -2082,7 +2220,7 @@ function Wrist({ g }: { g?: Garment }) {
   if (!g) return null;
   return (
     <M color={g.color} rough={0.25} metal={0.85} position={[0, -FOREARM + 0.035, 0]}>
-      <cylinderGeometry args={[0.046, 0.046, 0.035, 12]} />
+      <cylinderGeometry args={[0.04, 0.04, 0.032, 16]} />
     </M>
   );
 }
