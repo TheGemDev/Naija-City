@@ -18,6 +18,8 @@ interface RoadsState {
   error: string | null;
   refresh(): Promise<void>;
   fix(site: number, from: 'treasury' | 'pocket', what?: 'pothole' | 'lamp'): Promise<void>;
+  /** Every dark street light in the city, from its treasury, in one go. */
+  fixAllLamps(city: string): Promise<void>;
   /** Back to every site open (signed out). */
   reset(): void;
 }
@@ -44,6 +46,20 @@ export const useRoads = create<RoadsState>((set) => ({
     set({ busy: true, error: null });
     try {
       const res = await api(what === 'lamp' ? '/api/roads/lamp' : '/api/roads/fix', { method: 'POST', body: JSON.stringify({ site, from }) });
+      const result = (await res.json()) as { snapshot?: RoadsSnapshot; balance?: number; error?: string };
+      if (!res.ok) throw new Error(result.error ?? `Roads service returned ${res.status}`);
+      if (result.snapshot) set({ data: result.snapshot, open: result.snapshot.open, lamps: result.snapshot.lamps ?? [] });
+      if (result.balance !== undefined) setServerBalance(result.balance);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Roads service is unavailable' });
+    } finally {
+      set({ busy: false });
+    }
+  },
+  async fixAllLamps(city) {
+    set({ busy: true, error: null });
+    try {
+      const res = await api('/api/roads/lamps/all', { method: 'POST', body: JSON.stringify({ city }) });
       const result = (await res.json()) as { snapshot?: RoadsSnapshot; balance?: number; error?: string };
       if (!res.ok) throw new Error(result.error ?? `Roads service returned ${res.status}`);
       if (result.snapshot) set({ data: result.snapshot, open: result.snapshot.open, lamps: result.snapshot.lamps ?? [] });

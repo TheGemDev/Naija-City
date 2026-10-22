@@ -206,42 +206,63 @@ export async function handleRoads(req: Request, db: D1Database, uid: string, pat
     return json({ snapshot: await snapshot(db), balance: await getBalance(db, uid) });
   }
 
-  // A street light, fixed the same way as a pothole: by whoever runs its city, from the city's budget or their pocket.
+  // Every dark street light in a city at once, from its budget: one charge, one gazette line.
+  if (path === '/api/roads/lamps/all' && req.method === 'POST') {
+    const body = (await req.json().catch(() => null)) as { city?: string } | null;
+    const city = CIVIC_CITIES.find((c) => c === body?.city);
+    if (!city) return err(400, 'Unknown city');
+    const office = CITY_HEAD[city];
+    if (!(await runsRoads(db, city, uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
+    const { results: out } = await db.prepare('SELECT site FROM broken_lamps').all<{ site: number }>();
+    const sites = out.map((r) => r.site).filter((site) => lampCity(site) === city);
+    if (!sites.length) return err(409, `Every street light in ${CITY_NAME[city]} is working`);
+    // Claim them first, so a light fixed meanwhile is neither paid for twice nor counted.
+    const { results: claimed } = await db
+      .prepare('DELETE FROM broken_lamps WHERE site IN (SELECT value FROM json_each(?)) RETURNING site, broken_at')
+      .bind(JSON.stringify(sites))
+      .all<{ site: number; broken_at: number }>();
+    if (!claimed.length) return err(409, `Every street light in ${CITY_NAME[city]} is working`);
+    const cost = LAMPS.fixCost * claimed.length;
+    if (!(await spendState(db, city, cost, { allowArrears: true }))) {
+      await db.batch(claimed.map((c) => db.prepare('INSERT OR IGNORE INTO broken_lamps (site, broken_at) VALUES (?, ?)').bind(c.site, c.broken_at)));
+      return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} to fix all ${claimed.length}`);
+    }
+    if (env) {
+      const who = await db.prepare('SELECT username FROM players WHERE uid = ?').bind(uid).first<{ username: string | null }>();
+      const n = claimed.length;
+      await gazette(env, ctx, [{ uid, office, kind: 'project', icon: '💡', text: `${official(office, who?.username)} fixed ${n} street light${n === 1 ? '' : 's'} in ${CITY_NAME[city]} with ${naira(cost)} from the treasury.` }]);
+    }
+    return json({ snapshot: await snapshot(db), balance: await getBalance(db, uid) });
+  }
+
+  // A street light, fixed by whoever runs its city, always from the city's budget (potholes can also come out of pocket).
   if (path === '/api/roads/lamp' && req.method === 'POST') {
-    const body = (await req.json().catch(() => null)) as { site?: number; from?: string } | null;
+    const body = (await req.json().catch(() => null)) as { site?: number } | null;
     const site = body?.site;
     const city = Number.isInteger(site) ? (lampCity(site!) as CivicCity | undefined) : undefined;
     if (!city || !CIVIC_CITIES.includes(city)) return err(400, 'Unknown street light');
-    const from = body?.from === 'pocket' ? 'pocket' : 'treasury';
     const office = CITY_HEAD[city];
     if (!(await runsRoads(db, city, uid))) return err(403, `Only the ${OFFICE_RULES[office].title} can fix street lights in ${CITY_NAME[city]}`);
     const cost = LAMPS.fixCost;
-    if (from === 'pocket' && (await getBalance(db, uid)) < cost) return err(402, `You need ${naira(cost)} to fix it yourself`);
 
     const claimed = await db.prepare('DELETE FROM broken_lamps WHERE site = ? RETURNING broken_at').bind(site).first<{ broken_at: number }>();
     if (!claimed) return err(409, 'That street light is already working');
     const now = Date.now();
-    if (from === 'treasury') {
-      const paid = await spendState(db, city, cost, { allowArrears: true });
-      if (!paid) {
-        await db.prepare('INSERT OR IGNORE INTO broken_lamps (site, broken_at) VALUES (?, ?)').bind(site, claimed.broken_at).run();
-        return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} to fix this one`);
-      }
-    } else {
-      await db.batch(applyStmts(db, uid, `lamp:${site}:${now}`, 'civic', 'lamp', -cost));
+    const paid = await spendState(db, city, cost, { allowArrears: true });
+    if (!paid) {
+      await db.prepare('INSERT OR IGNORE INTO broken_lamps (site, broken_at) VALUES (?, ?)').bind(site, claimed.broken_at).run();
+      return err(402, `${CITY_NAME[city]}’s budget needs ${naira(cost)} to fix this one`);
     }
     if (env) {
       const who = await db.prepare('SELECT username FROM players WHERE uid = ?').bind(uid).first<{ username: string | null }>();
       const road = lampOf(site!)!.road;
-      await gazette(env, ctx, [{ uid, office, kind: 'project', icon: '💡', text: from === 'pocket'
-        ? `${official(office, who?.username)} fixed a street light on ${road} from their own pocket (${naira(cost)}).`
-        : `${official(office, who?.username)} fixed a street light on ${road} with ${naira(cost)} from the treasury.` }]);
+      await gazette(env, ctx, [{ uid, office, kind: 'project', icon: '💡', text: `${official(office, who?.username)} fixed a street light on ${road} with ${naira(cost)} from the treasury.` }]);
     }
     // Now and then VDM notices a light back on, on the same rest as his roadwork posts.
     if (rand() < GOV_RANT.praiseChance) {
       const who = await db.prepare('SELECT username FROM players WHERE uid = ?').bind(uid).first<{ username: string | null }>();
       const vdm = await vdmStatements(db, {
-        topic: 'lampFixed', facts: { who: official(office, who?.username), what: lampOf(site!)!.road, amount: naira(cost), pocket: from === 'pocket' }, uid, city, icon: ROADS_ICON,
+        topic: 'lampFixed', facts: { who: official(office, who?.username), what: lampOf(site!)!.road, amount: naira(cost), pocket: false }, uid, city, icon: ROADS_ICON,
         seed: `lamp:${site}:${now}`, rest: { icons: [ROADS_ICON], ms: ROADWORK.fixPostMs }, now,
       }).catch(() => []);
       if (vdm.length) await db.batch(vdm).catch(() => {});

@@ -1480,6 +1480,7 @@ function RepairList({ city, kind }: { city: CivicCity; kind: 'pothole' | 'lamp' 
   const busy = useRoads((s) => s.busy);
   const error = useRoads((s) => s.error);
   const fix = useRoads((s) => s.fix);
+  const fixAll = useRoads((s) => s.fixAllLamps);
   const money = useGame((s) => s.money);
   const [all, setAll] = useState(false);
   const [from, setFrom] = useState<'treasury' | 'pocket'>('treasury');
@@ -1492,12 +1493,19 @@ function RepairList({ city, kind }: { city: CivicCity; kind: 'pothole' | 'lamp' 
     ? (data.lamps ?? []).filter((site) => lampCity(site) === city)
     : data.open.filter((site) => potholeCity(site) === city).sort((a, b) => (potholeOf(b)?.severity ?? 0) - (potholeOf(a)?.severity ?? 0));
   const nextAt = lamp ? data.cities?.[city]?.lampNextAt : data.cities?.[city]?.nextAt ?? data.nextAt;
-  const have = from === 'treasury' ? budget : money;
+  // Street lights come out of the treasury, always; only potholes can be paid for out of pocket.
+  const pay = lamp ? 'treasury' : from;
+  const have = pay === 'treasury' ? budget : money;
   const shown = all ? sites : sites.slice(0, 5);
   return (
     <div className="fix-list">
       {error && <span className="civic-notice civic-error" role="alert">{error}</span>}
-      {sites.length > 0 && (
+      {lamp && sites.length > 1 && (
+        <button className="btn sm" disabled={busy || budget < sites.length * LAMPS.fixCost} onClick={() => void fixAll(city)}>
+          Fix all {sites.length} · {nairaShort(sites.length * LAMPS.fixCost)}
+        </button>
+      )}
+      {sites.length > 0 && !lamp && (
         <div className="law-options" role="group" aria-label="Pay from">
           <button type="button" className={from === 'treasury' ? 'on' : ''} aria-pressed={from === 'treasury'} onClick={() => setFrom('treasury')}><Emoji char="🏦" size={12} /> Treasury · {nairaShort(budget)}</button>
           <button type="button" className={from === 'pocket' ? 'on' : ''} aria-pressed={from === 'pocket'} onClick={() => setFrom('pocket')}><Emoji char="👛" size={12} /> Pocket · {nairaShort(money)}</button>
@@ -1512,7 +1520,7 @@ function RepairList({ city, kind }: { city: CivicCity; kind: 'pothole' | 'lamp' 
               <b>{lamp ? lampOf(site)?.road ?? 'A side street' : roadOf(site)}</b>
               {severity && <small className={`sev-${severity}`}>{SEVERITY[severity]}</small>}
             </span>
-            <button className="btn sm" disabled={busy || have < cost} onClick={() => void fix(site, from, kind)}>Fix · {nairaShort(cost)}</button>
+            <button className="btn sm" disabled={busy || have < cost} onClick={() => void fix(site, pay, kind)}>Fix · {nairaShort(cost)}</button>
           </div>
         );
       })}
