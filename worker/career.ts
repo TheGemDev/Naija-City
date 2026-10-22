@@ -56,8 +56,9 @@ const addXp = (db: D1Database, uid: string, skill: SkillId, xp: number, trainedA
 
 /** Shifts worked per job, from the ledger. */
 export async function shiftCounts(db: D1Database, uid: string): Promise<Record<string, number>> {
+  // Left to itself SQLite takes (uid, ref) to skip sorting the GROUP BY, and reads the player's whole ledger.
   const { results } = await db
-    .prepare("SELECT ref, COUNT(*) AS n FROM ledger WHERE uid = ? AND kind = 'work' AND amount > 0 GROUP BY ref")
+    .prepare("SELECT ref, COUNT(*) AS n FROM ledger INDEXED BY ledger_uid_kind WHERE uid = ? AND kind = 'work' AND amount > 0 GROUP BY ref")
     .bind(uid)
     .all<{ ref: string | null; n: number }>();
   const out: Record<string, number> = {};
