@@ -1,4 +1,4 @@
-// A warm glow round the foot of everything you can use: faint and slowly breathing all the time, so you can see what's
+// A white glow round the foot of everything you can use: faint and slowly breathing all the time, so you can see what's
 // usable, and brighter while the pointer is on it (with HoverOutline's line round its body). Every device gets it.
 // One flat quad a little bigger than the footprint; its shader works out the distance to the footprint's rounded edge
 // in world units, so the glow hugs the base at the same width for a stool or a bank counter.
@@ -14,7 +14,7 @@ export const DESK_HALO = typeof window !== 'undefined' && !!window.matchMedia?.(
 const SPREAD = 0.55;
 const IDLE = 0.85;
 const HOVER = 1;
-const GLOW = new Color('#ffb627');
+const GLOW = new Color('#ffffff');
 
 const VERT = /* glsl */ `
 varying vec2 vUv;
@@ -35,8 +35,9 @@ float box(vec2 p, vec2 b, float r) {
 }
 void main() {
   float d = box((vUv - 0.5) * uSize, uHalf, 0.12);
-  // Brightest right at the base, fading out past it; a little inside too, where the object doesn't cover the floor.
-  float a = d < 0.0 ? smoothstep(-0.1, 0.0, d) : exp(-d / 0.17);
+  // Brightest at the edge of the footprint, fading out past it, and carried in under the object too: a model a little
+  // smaller than its footprint would otherwise stand in a ring of bare floor.
+  float a = d < 0.0 ? mix(0.55, 1.0, smoothstep(-0.35, 0.0, d)) : exp(-d / 0.17);
   gl_FragColor = vec4(uColor, a * uOpacity);
 }`;
 

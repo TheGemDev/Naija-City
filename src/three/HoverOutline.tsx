@@ -1,4 +1,4 @@
-// On desktop, hovering anything you can click draws a thin gold outline round it. Every clickable thing calls
+// On desktop, hovering anything you can click draws a thin white outline round it. Every clickable thing calls
 // onHover / offHover from its pointer handlers (the same place it sets the pointer cursor); one HoverOutline in the
 // scene draws the outline for whatever is hovered.
 //
@@ -64,9 +64,9 @@ const maskMat = new MeshBasicMaterial({
   colorWrite: false, depthWrite: false, depthTest: false,
   stencilWrite: true, stencilRef: 1, stencilFunc: AlwaysStencilFunc, stencilZPass: ReplaceStencilOp,
 });
-/** The warm hull (the same gold as SelectHalo's glow), kept off the stamped area so only the rim outside the silhouette shows. */
+/** The white hull (the same white as SelectHalo's glow), kept off the stamped area so only the rim outside the silhouette shows. */
 const outlineMat = new MeshBasicMaterial({
-  color: '#ffd166', side: DoubleSide, toneMapped: false, fog: false,
+  color: '#ffffff', side: DoubleSide, toneMapped: false, fog: false,
   stencilWrite: true, stencilRef: 1, stencilFunc: NotEqualStencilFunc, stencilFail: KeepStencilOp, stencilZFail: KeepStencilOp, stencilZPass: KeepStencilOp,
 });
 outlineMat.onBeforeCompile = (shader) => {
