@@ -1,4 +1,4 @@
-import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, INEC_ACCUSED_SHOWN, efccConvicts, efccSource, electionConvicts, voteIllicit, voteTied, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type InecCase, type VoteFlag } from '../src/game/efcc';
+import { EFCC, EFCC_DIRTY_KINDS, EFCC_FRESH_KINDS, EFCC_RECORD_MS, ELECTION_FRAUD, INEC_ACCUSED_SHOWN, efccConvicts, efccSource, electionConvicts, voteIllicit, voteTied, type EfccCase, type EfccIncome, type EfccStatus, type EfccVote, type InecCase, type PublicEfccCase, type VoteFlag } from '../src/game/efcc';
 import { CHAOS, OFFICE_RULES, type PoliticalOffice } from '../src/game/civic';
 import { linkedSql, sharedIpSql, twinSql } from './links';
 import { syncForum } from './groups';
@@ -466,7 +466,72 @@ async function inecCases(db: D1Database, before: string | null) {
   };
 }
 
+type PublicRow = Pick<CaseRow, 'id' | 'target_uid' | 'status' | 'filed_at' | 'resolves_at' | 'audit_json' | 'fine' | 'seized_property_json'> & {
+  resolved_at: number | null; target: string | null;
+};
+
+/** A money case for everyone to read (PublicEfccCase): the audit's totals, never who filed it or what the accused said. */
+function publicMoneyCase(row: PublicRow): PublicEfccCase {
+  const dropped = row.status === 'bribed';
+  const audit = dropped ? [] : JSON.parse(row.audit_json) as EfccIncome[];
+  const dirty = audit.filter((i) => i.illicit);
+  let seized: string | null = null;
+  if (row.status === 'convicted' && row.seized_property_json) {
+    try {
+      seized = DESIGN_BY_ID[(JSON.parse(row.seized_property_json) as Property).design ?? '']?.name ?? 'A house';
+    } catch {
+      seized = 'A house';
+    }
+  }
+  return {
+    id: row.id,
+    targetUid: row.target_uid,
+    target: row.target ?? 'player',
+    status: dropped ? 'dropped' : row.status as Exclude<EfccStatus, 'bribed'>,
+    filedAt: row.filed_at,
+    resolvesAt: row.resolves_at,
+    resolvedAt: row.resolved_at,
+    audited: audit.length,
+    dirty: dirty.length,
+    dirtyAmount: dirty.reduce((n, i) => n + i.amount, 0),
+    fine: row.status === 'convicted' ? row.fine : null,
+    seized,
+  };
+}
+
+/**
+ * The EFCC's public feed: every open dirty-money case on anyone, and the decided ones newest first, a page at a time,
+ * as INEC does for elections (same cursor, same index). Cases whose time is up are settled first.
+ */
+async function publicMoneyCases(db: D1Database, before: string | null) {
+  const now = Date.now();
+  const { results: due } = await db.prepare("SELECT * FROM efcc_cases WHERE kind = 'money' AND status = 'investigating' AND resolves_at <= ? LIMIT 5")
+    .bind(now).all<CaseRow>();
+  for (const row of due) await settle(db, row, now);
+  const cols = `c.id, c.target_uid, c.status, c.filed_at, c.resolves_at, c.resolved_at, c.audit_json, c.fine, c.seized_property_json, p.username AS target
+     FROM efcc_cases c LEFT JOIN players p ON p.uid = c.target_uid`;
+  const [at, id] = (before ?? '').split(':');
+  const cursor = Number(at) > 0;
+  const [open, decided] = await db.batch<PublicRow>([
+    db.prepare(`SELECT ${cols} WHERE c.kind = 'money' AND c.status = 'investigating' ORDER BY c.filed_at DESC LIMIT 50`),
+    db.prepare(
+      `SELECT ${cols} WHERE c.kind = 'money' AND c.status != 'investigating'
+         AND (?1 = 0 OR c.resolved_at < ?2 OR (c.resolved_at = ?2 AND c.id < ?3))
+       ORDER BY c.resolved_at DESC, c.id DESC LIMIT ?4`,
+    ).bind(cursor ? 1 : 0, cursor ? Number(at) : 0, id ?? '', INEC_PAGE + 1),
+  ]);
+  const page = decided.results.slice(0, INEC_PAGE);
+  const last = page[page.length - 1];
+  return {
+    open: open.results.map(publicMoneyCase),
+    decided: page.map(publicMoneyCase),
+    next: decided.results.length > INEC_PAGE && last ? `${last.resolved_at}:${last.id}` : null,
+  };
+}
+
 export async function handleEfcc(req: Request, env: Env, ctx: ExecutionContext, uid: string, path: string): Promise<Response | null> {
+  // The EFCC's own cases, for every player to read, like INEC's.
+  if (path === '/api/efcc/public' && req.method === 'GET') return json(await publicMoneyCases(env.DB, new URL(req.url).searchParams.get('before')));
   // INEC lists election cases to every player; the cases themselves are still the EFCC's (filed and settled below).
   if (path === '/api/inec/cases' && req.method === 'GET') return json(await inecCases(env.DB, new URL(req.url).searchParams.get('before')));
 

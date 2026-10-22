@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EFCC, type EfccCase, type EfccSeizure } from '../game/efcc';
+import { EFCC, type EfccCase, type EfccSeizure, type PublicEfccCase } from '../game/efcc';
 import { STAGES } from '../game/property';
 import { naira, useGame } from '../game/store';
 import { api, serial, useSession } from './session';
@@ -123,3 +123,53 @@ export async function buyBackEfccProperty(id: string) {
 }
 
 export { EFCC };
+
+/* ---------- The public feed: every money case on anyone (worker/efcc.ts publicMoneyCases), like INEC's ---------- */
+
+interface PublicEfccState {
+  /** Every open case, newest first. */
+  open: PublicEfccCase[];
+  /** Decided cases, newest verdict first, as many pages as have been loaded. */
+  decided: PublicEfccCase[];
+  /** Cursor for the next page of decided cases; null when there are no more. */
+  next: string | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export const usePublicEfcc = create<PublicEfccState>(() => ({ open: [], decided: [], next: null, loading: false, error: null }));
+
+type PublicPage = { open: PublicEfccCase[]; decided: PublicEfccCase[]; next: string | null };
+const publicPage = (before?: string) => call<PublicPage>(`/api/efcc/public${before ? `?before=${encodeURIComponent(before)}` : ''}`);
+
+/** The open cases and the first page of history. Pages already loaded below it are kept until they are reloaded. */
+export async function loadPublicEfcc() {
+  usePublicEfcc.setState({ loading: true, error: null });
+  try {
+    const page = await publicPage();
+    usePublicEfcc.setState((s) => {
+      const fresh = new Set(page.decided.map((c) => c.id));
+      const older = s.decided.slice(page.decided.length).filter((c) => !fresh.has(c.id));
+      return { open: page.open, decided: [...page.decided, ...older], next: older.length ? s.next : page.next };
+    });
+  } catch (error) {
+    usePublicEfcc.setState({ error: error instanceof Error ? error.message : 'The EFCC is unavailable' });
+  } finally {
+    usePublicEfcc.setState({ loading: false });
+  }
+}
+
+/** The next page of decided cases. */
+export async function loadMorePublicEfcc() {
+  const { next, loading } = usePublicEfcc.getState();
+  if (!next || loading) return;
+  usePublicEfcc.setState({ loading: true, error: null });
+  try {
+    const page = await publicPage(next);
+    usePublicEfcc.setState((s) => ({ decided: [...s.decided, ...page.decided.filter((c) => !s.decided.some((d) => d.id === c.id))], next: page.next }));
+  } catch (error) {
+    usePublicEfcc.setState({ error: error instanceof Error ? error.message : 'The EFCC is unavailable' });
+  } finally {
+    usePublicEfcc.setState({ loading: false });
+  }
+}

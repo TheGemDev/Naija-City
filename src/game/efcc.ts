@@ -189,6 +189,28 @@ export interface InecCase {
   accused: { uid: string; username: string; flags: VoteFlag[]; struck: boolean }[];
 }
 
+/**
+ * A dirty-money case as the EFCC shows it to everyone (worker/efcc.ts publicMoneyCases): who is accused, how it stands
+ * and what the audit found. Never who filed it, and never the accused's statement. A case the accused bribed their
+ * way out of shows as 'dropped', with nothing about the audit.
+ */
+export interface PublicEfccCase {
+  id: string;
+  targetUid: string;
+  target: string;
+  status: 'investigating' | 'convicted' | 'cleared' | 'dropped';
+  filedAt: number;
+  resolvesAt: number;
+  resolvedAt: number | null;
+  /** Incomes audited, how many of them look dirty, and what those came to. */
+  audited: number;
+  dirty: number;
+  dirtyAmount: number;
+  fine: number | null;
+  /** The house seized on conviction, by design name, if one was. */
+  seized: string | null;
+}
+
 /** How many accused voter accounts INEC lists under one case. */
 export const INEC_ACCUSED_SHOWN = 20;
 

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { EFCC, EFCC_RECORD_MS, ELECTION_FRAUD, VOTE_FLAGS, voteTied, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus } from '../game/efcc';
+import { EFCC, EFCC_RECORD_MS, ELECTION_FRAUD, VOTE_FLAGS, voteTied, efccDirty, efccTimeLeft, type EfccCase, type EfccSeizure, type EfccStatus, type PublicEfccCase } from '../game/efcc';
 import { OFFICE_RULES, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort } from '../game/store';
-import { useEfcc, loadEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
+import { useEfcc, loadEfcc, usePublicEfcc, loadPublicEfcc, loadMorePublicEfcc, fileEfccCase, respondEfccCase, bribeEfccCase, buyBackEfccProperty, revealEfccAccuser } from '../net/efcc';
 import { searchPlayers, type PlayerRef } from '../net/social';
 import { useSession } from '../net/session';
 import { useCivic } from '../net/civic';
@@ -44,7 +44,46 @@ const FILTERS: { id: Filter; icon: string; label: string; match: (s: EfccStatus)
   { id: 'cleared', icon: '✅', label: 'Cleared', match: (s) => s === 'cleared' || s === 'bribed' },
 ];
 
-type Tab = 'cases' | 'seized' | 'report' | 'rules';
+type Tab = 'feed' | 'cases' | 'seized' | 'report' | 'rules';
+
+/** One case on the public feed: who, how it stands and what the audit found. Never who filed it. */
+function PublicCase({ item, now, me }: { item: PublicEfccCase; now: number; me: boolean }) {
+  const status = item.status === 'dropped' ? { icon: '📁', label: 'Dropped' } : STATUS[item.status];
+  const pending = item.status === 'investigating';
+  const open = pending && now < item.resolvesAt;
+  const since = (at: number) => (ago(at, now) === 'now' ? 'just now' : `${ago(at, now)} ago`);
+  return (
+    <article className={`efcc-case ${item.status}`}>
+      <div className="efcc-case-head">
+        <Face uid={item.targetUid} username={item.target} size="lg" />
+        <div>
+          <b>@{item.target}{me && <em>You</em>}</b>
+          <small title={dateLabel(item.filedAt)}>Reported {since(item.filedAt)}{item.resolvedAt ? ` · decided ${since(item.resolvedAt)}` : ''}</small>
+        </div>
+        <span className={`efcc-status ${item.status}`}><i aria-hidden>{status.icon}</i>{status.label}</span>
+      </div>
+      {pending && (
+        <div className="efcc-timer">
+          <div><i style={{ width: `${open ? Math.min(100, ((item.resolvesAt - now) / EFCC.investigationMs) * 100) : 0}%` }} /></div>
+          <b>{open ? `⏱ ${efccTimeLeft(item.resolvesAt - now)}` : '⚖️ Verdict due'}</b>
+        </div>
+      )}
+      {item.status === 'dropped' ? (
+        <div className="efcc-verdict"><span>📁 The EFCC dropped the case</span></div>
+      ) : (
+        <div className="inec-evidence">
+          <span><b>{item.audited}</b><small>incomes</small></span>
+          <span className={item.dirty ? 'bad' : ''}><b>{item.dirty}</b><small>dirty</small></span>
+          <span className={item.dirty ? 'bad' : ''}><b>{nairaShort(item.dirtyAmount)}</b><small>dirty money</small></span>
+        </div>
+      )}
+      {item.status === 'convicted' && (
+        <div className="efcc-verdict bad"><span>⚖️ {naira(item.fine ?? 0)} fine{item.seized ? ` · ${item.seized} seized` : ''}</span></div>
+      )}
+      {item.status === 'cleared' && <div className="efcc-verdict good"><span>✅ The money looks clean</span></div>}
+    </article>
+  );
+}
 
 /** One arrest or raid, written up like an exhibit list: every thing taken, what it was worth, and the total. */
 function SeizureCard({ s }: { s: EfccSeizure }) {
@@ -280,7 +319,12 @@ export function CaseCard({ item, now }: { item: EfccCase; now: number }) {
 
 export function EfccApp() {
   const user = useSession((s) => s.user);
-  const [tab, setTab] = useState<Tab>('cases');
+  // The feed first, unless there is a case on me to answer.
+  const [tab, setTab] = useState<Tab>(() => {
+    const me = useSession.getState().user?.uid;
+    return useEfcc.getState().cases.some((c) => c.kind !== 'election' && c.targetUid === me && c.status === 'investigating') ? 'cases' : 'feed';
+  });
+  const pub = usePublicEfcc();
   const seizedCount = useEfcc((s) => s.seizures.length);
   const { cases: allCases, loading, busy, error } = useEfcc();
   // Election cases are INEC's (ui/Inec.tsx): the EFCC app lists money cases only.
@@ -294,7 +338,11 @@ export function EfccApp() {
 
   useEffect(() => {
     void loadEfcc();
-    const refresh = window.setInterval(() => void loadEfcc(), 10_000);
+    void loadPublicEfcc();
+    const refresh = window.setInterval(() => {
+      void loadEfcc();
+      void loadPublicEfcc();
+    }, 10_000);
     const clock = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => {
       window.clearInterval(refresh);
@@ -336,18 +384,32 @@ export function EfccApp() {
         <span className="efcc-badge" aria-hidden>🕵🏾</span>
         <div className="efcc-hero-title"><b>EFCC</b><small>Economic and Financial Crimes Commission</small></div>
         <div className="efcc-stats">
-          <span><b>⏳ {count('open')}</b><small>open</small></span>
-          <span><b>🔒 {count('convicted')}</b><small>convicted</small></span>
-          <span><b>✅ {count('cleared')}</b><small>cleared</small></span>
+          <span><b>⏳ {pub.open.length}</b><small>open</small></span>
+          <span><b>⚖️ {pub.decided.length}{pub.next ? '+' : ''}</b><small>decided</small></span>
+          <span><b>👤 {cases.length}</b><small>yours</small></span>
         </div>
       </div>
       <div className="tabs">
-        <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}><Emoji char="🗂️" size={14} /> Cases</button>
+        <button className={tab === 'feed' ? 'on' : ''} onClick={() => setTab('feed')}><Emoji char="📰" size={14} /> Feed</button>
+        <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}><Emoji char="👤" size={14} /> Yours{count('open') ? ` · ${count('open')}` : ''}</button>
         <button className={tab === 'seized' ? 'on' : ''} onClick={() => setTab('seized')}><Emoji char="🗄️" size={14} /> Seized{seizedCount ? ` · ${seizedCount}` : ''}</button>
         <button className={tab === 'report' ? 'on' : ''} onClick={() => setTab('report')}><Emoji char="⚖️" size={14} /> Report</button>
         <button className={tab === 'rules' ? 'on' : ''} onClick={() => setTab('rules')}><Emoji char="📜" size={14} /> Rules</button>
       </div>
-      {error && <small className="efcc-error">⚠️ {error}</small>}
+      {(error || pub.error) && <small className="efcc-error">⚠️ {error ?? pub.error}</small>}
+
+      {tab === 'feed' && (
+        <>
+          <h4 className="inec-head">Open cases<b>{pub.open.length}</b></h4>
+          {pub.loading && !pub.open.length && !pub.decided.length && <p className="efcc-note">Loading…</p>}
+          {!pub.loading && !pub.open.length && <small className="efcc-note">Nobody is under investigation right now.</small>}
+          {pub.open.map((item) => <PublicCase key={item.id} item={item} now={now} me={item.targetUid === user.uid} />)}
+          <h4 className="inec-head"><Emoji char="🗂️" size={14} /> History</h4>
+          {!pub.loading && !pub.decided.length && <small className="efcc-note">No case has been decided yet.</small>}
+          {pub.decided.map((item) => <PublicCase key={item.id} item={item} now={now} me={item.targetUid === user.uid} />)}
+          {pub.next && <button className="ghost-btn" disabled={pub.loading} onClick={() => void loadMorePublicEfcc()}>{pub.loading ? 'Loading…' : 'Show more'}</button>}
+        </>
+      )}
 
       {tab === 'cases' && (
         <>
