@@ -24,6 +24,7 @@ import { NEWS_KINDS } from '../src/game/news';
 import { CONTRACTOR_BY_ID, DESIGN_BY_ID, DESIGNS, PLOTS, REGION_BY_ID, REGIONS, STAGES, costOf, landPrice, npcTenantName, stageLabour, stageMaterials, type PlotSize } from '../src/game/property';
 import { lampSites } from '../src/game/roads';
 import { STATE_CUT, type StateAsset } from '../src/game/treasury';
+import { shared } from './cache';
 import { rand } from './crime';
 import { naira } from './feed';
 import { loadStates } from './state';
@@ -872,34 +873,41 @@ export async function headcounts(db: D1Database): Promise<Partial<Record<CivicCi
   return Object.fromEntries(results.map((r) => [r.city, r.n]));
 }
 
-/** The population counter for the Civic app and the state cards: who lives in each state, how they feel, and today's comings and goings. */
+/**
+ * The population counter for the Civic app and the state cards: who lives in each state, how they feel, and today's
+ * comings and goings. It reads every NPC row and every player sees the same numbers, so it is cached for a minute.
+ */
 export async function peopleBoard(db: D1Database, now: number): Promise<Partial<Record<CivicCity, StatePeople>>> {
   try {
-    const w = await loadWorld(db);
-    const [npcs, players, census] = (await db.batch([
-      db.prepare('SELECT city, COUNT(*) AS adults, COALESCE(SUM(kids), 0) AS kids, AVG(mood) AS mood FROM npcs GROUP BY city'),
-      db.prepare(
-        `SELECT w.state AS city, COUNT(*) AS n FROM wallets w JOIN players p ON p.uid = w.uid
-         WHERE p.last_seen >= ? AND w.state IN (${CIVIC_CITIES.map((c) => `'${c}'`).join(', ')}) GROUP BY w.state`,
-      ).bind(now - NPC_POP.activeMs),
-      db.prepare('SELECT * FROM npc_census WHERE day = ?').bind(dayKey(now)),
-    ])) as unknown as [
-      { results: { city: CivicCity; adults: number; kids: number; mood: number | null }[] },
-      { results: { city: CivicCity; n: number }[] },
-      { results: (Record<(typeof CENSUS_COLS)[number], number> & { city: CivicCity })[] },
-    ];
-    return Object.fromEntries(CIVIC_CITIES.map((city) => {
-      const n = npcs.results.find((r) => r.city === city);
-      const c = census.results.find((r) => r.city === city);
-      return [city, {
-        adults: n?.adults ?? 0, kids: n?.kids ?? 0, players: players.results.find((r) => r.city === city)?.n ?? 0,
-        mood: n?.mood === null || n?.mood === undefined ? null : Math.round(n.mood), life: w.life[city],
-        today: { arrived: c?.arrived ?? 0, movedIn: c?.moved_in ?? 0, movedOut: c?.moved_out ?? 0, japa: c?.japa ?? 0, born: c?.born ?? 0, adopted: c?.adopted ?? 0, arrested: c?.arrested ?? 0 },
-        craze: w.crazes[city] ?? null,
-      }];
-    }));
+    return await shared('people-board', 60, () => countPeople(db, now));
   } catch {
     return {};
   }
+}
+
+async function countPeople(db: D1Database, now: number): Promise<Partial<Record<CivicCity, StatePeople>>> {
+  const w = await loadWorld(db);
+  const [npcs, players, census] = (await db.batch([
+    db.prepare('SELECT city, COUNT(*) AS adults, COALESCE(SUM(kids), 0) AS kids, AVG(mood) AS mood FROM npcs GROUP BY city'),
+    db.prepare(
+      `SELECT w.state AS city, COUNT(*) AS n FROM wallets w JOIN players p ON p.uid = w.uid
+       WHERE p.last_seen >= ? AND w.state IN (${CIVIC_CITIES.map((c) => `'${c}'`).join(', ')}) GROUP BY w.state`,
+    ).bind(now - NPC_POP.activeMs),
+    db.prepare('SELECT * FROM npc_census WHERE day = ?').bind(dayKey(now)),
+  ])) as unknown as [
+    { results: { city: CivicCity; adults: number; kids: number; mood: number | null }[] },
+    { results: { city: CivicCity; n: number }[] },
+    { results: (Record<(typeof CENSUS_COLS)[number], number> & { city: CivicCity })[] },
+  ];
+  return Object.fromEntries(CIVIC_CITIES.map((city) => {
+    const n = npcs.results.find((r) => r.city === city);
+    const c = census.results.find((r) => r.city === city);
+    return [city, {
+      adults: n?.adults ?? 0, kids: n?.kids ?? 0, players: players.results.find((r) => r.city === city)?.n ?? 0,
+      mood: n?.mood === null || n?.mood === undefined ? null : Math.round(n.mood), life: w.life[city],
+      today: { arrived: c?.arrived ?? 0, movedIn: c?.moved_in ?? 0, movedOut: c?.moved_out ?? 0, japa: c?.japa ?? 0, born: c?.born ?? 0, adopted: c?.adopted ?? 0, arrested: c?.arrested ?? 0 },
+      craze: w.crazes[city] ?? null,
+    }];
+  }));
 }
 
