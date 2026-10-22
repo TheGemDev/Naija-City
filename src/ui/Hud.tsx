@@ -612,7 +612,9 @@ function ChatButton() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const reactions = useReactions(say);
-  if (!signedIn || !connected) return null; // <ConnectionGate> covers the game while disconnected
+  // In an estate there is nobody nearby to talk to out loud: the phone's chats are there.
+  const inEstate = useGame((s) => s.view === 'estate');
+  if (!signedIn || !connected || inEstate) return null; // <ConnectionGate> covers the game while disconnected
   return (
     <div className="chat-fab">
       {open && reactions.open && <ReactionTray onPick={reactions.pick} />}
@@ -1169,17 +1171,24 @@ function Nav() {
           <span><Emoji char="🛋️" size={24} /></span>Decor
         </button>
       )}
-      <button
-        data-k="map"
-        className={tab === 'map' ? 'on' : ''}
-        onClick={() => {
-          setPanel(null);
-          setPlaceHubOpen(false);
-          openMap();
-        }}
-      >
-        <span><Emoji char="🗺️" size={24} /></span>Map
-      </button>
+      {/* In an estate the way out sits with Home and Estates, in place of the Map button. */}
+      {view === 'estate' ? (
+        <button className="leave" onClick={() => { setPanel(null); setPlaceHubOpen(false); openMap(); }}>
+          <span><Emoji char="🚪" size={24} /></span>Leave
+        </button>
+      ) : (
+        <button
+          data-k="map"
+          className={tab === 'map' ? 'on' : ''}
+          onClick={() => {
+            setPanel(null);
+            setPlaceHubOpen(false);
+            openMap();
+          }}
+        >
+          <span><Emoji char="🗺️" size={24} /></span>Map
+        </button>
+      )}
       <button data-k="phone" className={tab === 'phone' ? 'on' : ''} onClick={() => { setPlaceHubOpen(false); setPanel(panel === 'phone' ? null : 'phone'); }}>
         <span><Emoji char="📱" size={24} /></span>Phone
       </button>
