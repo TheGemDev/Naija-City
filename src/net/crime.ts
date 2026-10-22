@@ -7,7 +7,7 @@ import {
   ACCUSE, CATCH, CATCHERS, DEFAULT_LAWS, POLICE, PROTECTION, unsolved,
   type CrimeKind, type CrimeLaws, type CrimeReport, type Prisoner, type Protection, type ProtectionKind, type WantedPerson,
 } from '../game/crime';
-import { naira, useGame } from '../game/store';
+import { naira, txn, useGame } from '../game/store';
 import { regionHere } from '../game/regions';
 import { startCaughtScene, useCaught } from '../game/caughtScenes';
 import { useVisit } from '../game/visits';
@@ -143,7 +143,7 @@ function takeBack(c: CrimeReport) {
 }
 
 function addTxn(amount: number, label: string) {
-  useGame.setState((s) => ({ txns: [{ at: s.minutes, label, amount }, ...s.txns].slice(0, 40) }));
+  useGame.setState((s) => ({ txns: [txn(s, label, amount), ...s.txns].slice(0, 40) }));
 }
 
 export async function loadPolice() {

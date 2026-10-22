@@ -122,6 +122,13 @@ export const fullRound = (city: CivicCity) => STATE_ASSETS.reduce((n, a) => n + 
 export const GRANT_SIZES = [10_000_000, 50_000_000, 100_000_000, 250_000_000] as const;
 
 /**
+ * Whether `n` is a whole amount within the range of a list of sizes (its smallest to its largest). The lists used to be
+ * the only choices; now the app sets any amount between their ends with a stepper, and the server checks this.
+ */
+export const inRange = (n: unknown, sizes: readonly number[]): n is number =>
+  typeof n === 'number' && Number.isInteger(n) && n >= Math.min(...sizes) && n <= Math.max(...sizes);
+
+/**
  * A state's own taxes and fees, set by its governor (or the president while the seat is empty). Income tax is extra wage
  * tax on people who live in the state. The fees are a percent of the standard fee (src/game/career.ts BIZ): the standard
  * is 100, and what the player pays moves with it.

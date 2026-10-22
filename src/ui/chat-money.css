@@ -87,3 +87,36 @@
 .ask-person i { flex: 0 0 auto; padding: 5px 10px; border-radius: 999px; background: var(--inverse); color: #fff; font-style: normal; font-size: 11px; font-weight: 800; white-space: nowrap; }
 .ask-person.done i { background: var(--bg-dcfce7); color: var(--fg-166534); }
 .ask-person:disabled:not(.done) { opacity: 0.55; }
+
+/* Wallet look (Apple Cash-like): the money bubble is a dark card, and the sheet puts the amount in the middle. */
+.pay-card.cash { --tone: #fff; gap: 4px; padding: 12px 14px 10px; border: 0; background: linear-gradient(135deg, #0b1220, #1f2937 70%, #273449); color: #fff; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18); }
+.pay-card.cash::before { display: none; }
+.pay-card.cash.req { background: linear-gradient(135deg, #1c1917, #3f2d12 75%, #57400f); }
+.pay-card.cash.urgent { background: linear-gradient(135deg, #1f0a0a, #5b1414 75%, #7f1d1d); }
+.pay-card.cash.declined { background: linear-gradient(135deg, #334155, #475569); }
+.pay-card.cash.declined .pay-card-amount { color: rgba(255, 255, 255, 0.6); }
+.cash-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cash-logo { font-size: 11px; font-weight: 800; letter-spacing: 0.3px; opacity: 0.85; }
+.cash-top > small { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; opacity: 0.75; }
+.pay-card.cash .pay-card-amount { font-size: 30px; color: #fff; }
+.pay-card.cash .pay-card-note { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.cash-status { font-size: 11px; font-weight: 700; opacity: 0.7; }
+.pay-card.cash .pay-card-actions .btn { flex: 1; padding: 9px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; }
+.pay-card.cash .cash-pay { background: #fff; color: #0b1220; }
+.pay-card.cash .cash-no { flex: 0 0 auto !important; background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+.cash-sheet .pay-sheet-head { justify-content: space-between; }
+.cash-sheet .pay-sheet-head > small { font-size: 13px; font-weight: 800; color: var(--muted); }
+.cash-amount { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 6px 0 0; }
+.cash-step { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--bg-f1f5f9); color: var(--ink); font-size: 22px; font-weight: 700; line-height: 1; }
+.cash-step:disabled { opacity: 0.35; }
+.cash-amount .pay-amount-row { flex: 0 1 auto; min-width: 0; font-size: 40px; cursor: text; }
+.cash-have { text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; }
+.cash-have.bad { color: var(--fg-dc2626); }
+.cash-actions { display: flex; gap: 8px; }
+.cash-actions .btn { flex: 1; padding: 12px 14px; border-radius: 999px; font-size: 15px; font-weight: 800; }
+.cash-request { background: var(--bg-f1f5f9); color: var(--ink); }
+.cash-send { background: #0b1220; color: #fff; }
+.cash-actions .btn:disabled { opacity: 0.4; }
+:root[data-theme='dark'] .cash-send { background: #fff; color: #0b1220; }
+.cash-sheet .pay-amount-row span { color: var(--ink); }

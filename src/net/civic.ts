@@ -172,9 +172,11 @@ interface CivicState {
   /** The governor sets how much of an asset's bill the state pays. */
   upkeep(asset: StateAsset, level: number, city?: string): Promise<void>;
   /** The governor picks what share of the maximum pay to take. */
-  payShare(step: number): Promise<void>;
+  /** The governor's share of the maximum pay, 0 to 100. */
+  payShare(pct: number): Promise<void>;
   /** The governor sets one of the state's taxes or fees to a share (percent) of the president's maximum. */
-  stateLaw(key: StateLawKey, step: number, city?: string): Promise<void>;
+  /** A state tax or fee, any whole value up to the president's maximum. */
+  stateLaw(key: StateLawKey, value: number, city?: string): Promise<void>;
   /** The governor pays for an emergency repair. */
   repairAsset(asset: StateAsset, city?: string): Promise<void>;
   /** The looter offers the EFCC chair a share of the loot (percent). */
@@ -419,8 +421,8 @@ export const useCivic = create<CivicState>((set) => {
     ghosts: (on) => act({ action: 'scheme', scheme: on ? 'ghost' : 'noGhost' }),
     embezzle: () => act({ action: 'embezzle' }),
     upkeep: (asset, level, city) => act({ action: 'upkeep', asset, level, city }),
-    payShare: (step) => act({ action: 'payShare', pct: step }),
-    stateLaw: (key, step, city) => act({ action: 'stateLaw', key, pct: step, city }),
+    payShare: (pct) => act({ action: 'payShare', pct }),
+    stateLaw: (key, value, city) => act({ action: 'stateLaw', key, value, city }),
     repairAsset: (asset, city) => act({ action: 'repairAsset', asset, city }),
     lootOffer: (caseId, pct) => act({ action: 'lootOffer', caseId, pct }),
     lootDecide: (caseId, accept) => act({ action: 'lootDecide', caseId, accept }),

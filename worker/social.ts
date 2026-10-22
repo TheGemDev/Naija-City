@@ -9,6 +9,7 @@ import type { FirebaseUser } from './auth';
 import { ensureWallet, getBalance } from './wallet';
 import { loadPolicy } from './policy';
 import { transferFeeOf } from '../src/game/treasury';
+import { REQUEST_TTL_MS, requestLapsed } from '../src/game/requests';
 import { ITEMS } from '../src/game/catalog';
 import { MAX_GRID_H, MAX_GRID_W } from '../src/game/grid';
 import { cleanExtensions, cleanExterior, layoutKey } from '../src/game/exterior';
@@ -71,7 +72,8 @@ const toMessage = (r: MessageRow): Message => ({
   kind: r.kind,
   text: r.text,
   amount: r.amount,
-  status: r.status,
+  // A request left open for a real day has lapsed (src/game/requests.ts); the row keeps 'open', the player sees it expired.
+  status: r.kind === 'request' && r.status === 'open' && requestLapsed(r.created_at) ? 'expired' : r.status,
   ref: r.ref,
   at: r.created_at,
   read: r.read_at !== null,
@@ -399,8 +401,8 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
   const decline = path.match(/^\/api\/request\/(\d+)\/decline$/);
   if (decline && req.method === 'POST') {
     const row = await db
-      .prepare(`UPDATE messages SET status = 'declined' WHERE id = ? AND to_uid = ? AND kind = 'request' AND status = 'open' RETURNING *`)
-      .bind(Number(decline[1]), me)
+      .prepare(`UPDATE messages SET status = 'declined' WHERE id = ? AND to_uid = ? AND kind = 'request' AND status = 'open' AND created_at > ? RETURNING *`)
+      .bind(Number(decline[1]), me, Date.now() - REQUEST_TTL_MS)
       .first<MessageRow>();
     if (!row) return err(409, 'Request is no longer open');
     notify(env, ctx, row.from_uid, { t: 'msg-update', message: toMessage(row) });
@@ -421,10 +423,16 @@ export async function handleSocial(req: Request, env: Env, ctx: ExecutionContext
     let request: MessageRow | null = null;
     if (b.ref) {
       request = await db
-        .prepare(`UPDATE messages SET status = 'paid' WHERE id = ?1 AND kind = 'request' AND status = 'open' AND to_uid = ?2 AND from_uid = ?3 AND amount = ?4 RETURNING *`)
-        .bind(b.ref, me, b.to, amount)
+        .prepare(
+          `UPDATE messages SET status = 'paid' WHERE id = ?1 AND kind = 'request' AND status = 'open' AND to_uid = ?2 AND from_uid = ?3 AND amount = ?4 AND created_at > ?5
+           RETURNING *`,
+        )
+        .bind(b.ref, me, b.to, amount, now - REQUEST_TTL_MS)
         .first<MessageRow>();
-      if (!request) return err(409, 'That request is no longer open');
+      if (!request) {
+        const was = await db.prepare(`SELECT status, created_at FROM messages WHERE id = ? AND kind = 'request'`).bind(b.ref).first<{ status: string; created_at: number }>();
+        return err(409, was?.status === 'open' && requestLapsed(was.created_at, now) ? 'That request has expired' : 'That request is no longer open');
+      }
     }
 
     // One transaction: debit sender, credit recipient, record both in the ledger, post the message.

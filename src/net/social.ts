@@ -1,7 +1,7 @@
 // Direct messages and player-to-player money (server side: worker/social.ts).
 
 import { create } from 'zustand';
-import { naira, useGame } from '../game/store';
+import { naira, txn, useGame } from '../game/store';
 import { api, serial, useSession } from './session';
 import { flushWalletNow, setServerBalance, walletBalance } from './wallet';
 import type { HouseVisit } from '../game/visits';
@@ -271,7 +271,7 @@ export function claimPayments() {
 
 /** Bank history entry only; the balance itself comes from the server. */
 function addTxn(amount: number, label: string) {
-  useGame.setState((s) => ({ txns: [{ at: s.minutes, label, amount }, ...s.txns].slice(0, 40) }));
+  useGame.setState((s) => ({ txns: [txn(s, label, amount), ...s.txns].slice(0, 40) }));
 }
 
 /** Live events relayed through the multiplayer socket. */

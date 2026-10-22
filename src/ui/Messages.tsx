@@ -43,6 +43,7 @@ import { REACTIONS } from '../game/reactions';
 import { useNet } from '../net/multiplayer';
 import { PlayerLabel, PlayerName } from './PlayerName';
 import { Face } from './Face';
+import { requestLapsed } from '../game/requests';
 import './chat-money.css';
 
 /** Where an invited house is, for the card: its estate and state. */
@@ -817,52 +818,41 @@ function Bubble({
   const amount = m.amount!;
   // Bail and ransom pleas are ordinary requests; the emoji their note starts with (Police.tsx, Vice.tsx) marks them.
   const plea = pay ? null : m.text.startsWith('🚔') ? 'bail' : m.text.startsWith('🪢') ? 'ransom' : null;
-  const title = pay
-    ? mine ? `You sent @${who}` : `@${who} sent you`
-    : plea
-      ? mine ? `${plea === 'bail' ? 'Bail' : 'Ransom'} ask to @${who}` : `@${who} needs ${plea}`
-      : mine ? `You asked @${who}` : `@${who} asked you`;
+  // What kind of money it is, in a word or two: the card says who by being on their side of the chat.
+  const kindLabel = pay ? (mine ? 'Sent' : 'Received') : plea ? `${plea === 'bail' ? 'Bail' : 'Ransom'} request` : 'Request';
   const noteText = plea ? m.text.replace(/^(🚔|🪢)\s*/u, '') : m.text;
-  const [status, tone] = pay
-    ? m.status === 'claimed'
-      ? ['Received', 'ok']
-      : ['On the way', 'wait']
-    : m.status === 'paid'
-      ? ['Paid', 'ok']
-      : m.status === 'declined'
-        ? ['Declined', 'bad']
-        : [mine ? 'Waiting' : 'Unpaid', 'wait'];
-  const canAnswer = !pay && !mine && m.status === 'open';
+  // Open for a real day, then it lapses (src/game/requests.ts); the server says so too, this catches one that lapses while open on screen.
+  const expired = !pay && (m.status === 'expired' || (m.status === 'open' && requestLapsed(m.at)));
+  const status = pay
+    ? m.status === 'claimed' ? '✓ Delivered' : 'On the way'
+    : m.status === 'paid' ? '✓ Paid' : m.status === 'declined' ? 'Declined' : expired ? 'Expired' : mine ? 'Waiting' : 'Unpaid';
+  const canAnswer = !pay && !mine && m.status === 'open' && !expired;
   const short = canAnswer ? Math.max(0, amount - balance) : 0;
+  const dead = m.status === 'declined' || expired;
   return (
     <div className={`bub-wrap ${mine ? 'mine' : ''}`}>
       <div
-        className={`pay-card ${pay ? 'pay' : 'req'} ${plea && m.status === 'open' ? 'urgent' : ''} ${m.status === 'declined' ? 'declined' : ''} ${selected ? 'selected' : ''}`}
+        className={`pay-card cash ${pay ? 'pay' : 'req'} ${plea && canAnswer ? 'urgent' : ''} ${dead ? 'declined' : ''} ${selected ? 'selected' : ''}`}
         onClick={() => onSelect(m.id)}
         title="Click for options"
       >
         {quoteBox}
-        <div className="pay-card-head">
-          <span className="pay-card-icon" aria-hidden>{pay ? (mine ? '↗' : '↙') : plea === 'bail' ? <Emoji char="🚔" size={16} /> : plea === 'ransom' ? <Emoji char="🪢" size={16} /> : '₦'}</span>
-          <span className="pay-card-title">{title}</span>
-          <span className={`pay-chip ${tone}`}>{status}</span>
+        <div className="cash-top">
+          <span className="cash-logo">₦ Cash</span>
+          <small>{plea && <Emoji char={plea === 'bail' ? '🚔' : '🪢'} size={12} />} {kindLabel}</small>
         </div>
         <strong className="pay-card-amount">{naira(amount)}</strong>
         {noteText && <p className="pay-card-note">{noteText}</p>}
-        {canAnswer && (
+        {canAnswer ? (
           <div className="pay-card-actions">
-            <button className="btn go" disabled={busy || short > 0} onClick={(e) => { e.stopPropagation(); act(() => sendMoney(m.from, amount, m.text, m.id)); }}>
-              {busy ? '…' : `${plea ? 'Send' : 'Pay'} ${naira(amount)}`}
+            <button className="btn cash-pay" disabled={busy || short > 0} onClick={(e) => { e.stopPropagation(); act(() => sendMoney(m.from, amount, m.text, m.id)); }}>
+              {busy ? '…' : short > 0 ? `${naira(short)} short` : plea ? 'Send' : 'Pay'}
             </button>
-            <button className="btn ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); act(() => declineRequest(m.id)); }}>
-              Decline
-            </button>
+            <button className="btn cash-no" disabled={busy} onClick={(e) => { e.stopPropagation(); act(() => declineRequest(m.id)); }}>Decline</button>
           </div>
+        ) : (
+          <small className="cash-status">{status} · {timeAgo(m.at)}</small>
         )}
-        <div className="pay-card-foot">
-          {short > 0 ? <span className="pay-card-hint">You need {naira(short)} more</span> : <span />}
-          <small>{timeAgo(m.at)}</small>
-        </div>
       </div>
       {actionMenu}
     </div>
@@ -924,32 +914,35 @@ function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () 
   };
 
   const shown = n ? n.toLocaleString() : '';
+  const bump = (by: number) => (setAmount(String(Math.max(0, n + by))), setError(null));
   return (
-    <form className={`pay-sheet ${tooMuch ? 'over' : ''}`} onSubmit={(e: FormEvent) => { e.preventDefault(); void go('pay'); }}>
+    <form className={`pay-sheet cash-sheet ${tooMuch ? 'over' : ''}`} onSubmit={(e: FormEvent) => { e.preventDefault(); void go('pay'); }}>
       <div className="pay-sheet-head">
-        <label className="pay-amount">
-          <small>@{who}</small>
-          <div className="pay-amount-row">
-            <span>₦</span>
-            <input
-              autoFocus
-              inputMode="numeric"
-              placeholder="0"
-              size={Math.max(1, shown.length)}
-              value={shown}
-              onChange={(e) => (setAmount(e.target.value), setError(null))}
-            />
-          </div>
-        </label>
-        <button type="button" className="pay-sheet-x" onClick={onDone} aria-label="Cancel">
-          ✕
-        </button>
+        <small>@{who}</small>
+        <button type="button" className="pay-sheet-x" onClick={onDone} aria-label="Cancel">✕</button>
       </div>
-      <input className="note-input" value={note} maxLength={140} placeholder="Note (optional)" onChange={(e) => setNote(e.target.value)} />
-      {(error || (tooMuch && n > 0)) && <p className="auth-msg">{error ?? `You are ${naira(n - money)} short to send this`}</p>}
-      <div className="pay-actions">
-        <button type="button" className="btn go pay-submit" disabled={busy || n < 1 || tooMuch} onClick={() => void go('pay')}>↗ Send</button>
-        <button type="button" className="btn pay-submit request" disabled={busy || n < 1} onClick={() => void go('request')}>↙ Request</button>
+      {/* Like a wallet: the amount in the middle, a thousand less or more either side, or tap it and type. */}
+      <div className="cash-amount">
+        <button type="button" className="cash-step" aria-label="₦1,000 less" disabled={n < 1} onClick={() => bump(-1_000)}>−</button>
+        <label className="pay-amount-row">
+          <span>₦</span>
+          <input
+            autoFocus
+            inputMode="numeric"
+            placeholder="0"
+            aria-label="Amount"
+            size={Math.max(1, shown.length)}
+            value={shown}
+            onChange={(e) => (setAmount(e.target.value), setError(null))}
+          />
+        </label>
+        <button type="button" className="cash-step" aria-label="₦1,000 more" onClick={() => bump(1_000)}>+</button>
+      </div>
+      <small className={`cash-have ${tooMuch && n > 0 ? 'bad' : ''}`}>{error ?? (tooMuch && n > 0 ? `${naira(n - money)} short` : `You have ${naira(money)}`)}</small>
+      <input className="note-input" value={note} maxLength={140} placeholder="Add a note" onChange={(e) => setNote(e.target.value)} />
+      <div className="pay-actions cash-actions">
+        <button type="button" className="btn cash-request" disabled={busy || n < 1} onClick={() => void go('request')}>Request</button>
+        <button type="button" className="btn cash-send" disabled={busy || n < 1 || tooMuch} onClick={() => void go('pay')}>Send</button>
       </div>
     </form>
   );

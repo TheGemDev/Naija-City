@@ -10,7 +10,7 @@ import { planVisit } from '../ui/visitTrip';
 import { avatarCell } from '../game/avatar';
 import { ITEMS } from '../game/catalog';
 import { houseLayout, placementError, type PlacedItem } from '../game/grid';
-import { activeDesignOf, houseKeyOf, inOwnHouse, moneyHooks, naira, useGame, type GameState } from '../game/store';
+import { activeDesignOf, houseKeyOf, inOwnHouse, moneyHooks, naira, txn, useGame, type GameState } from '../game/store';
 import { useVisit, type HouseVisit } from '../game/visits';
 import { serialize, saveLocal } from '../game/save';
 import {
@@ -178,7 +178,7 @@ export function quoteHere(items: { type: string }[], reuseHouse = true) {
 function buyPieces(types: string[], label: string) {
   const total = types.reduce((sum, t) => sum + (ITEMS[t]?.price ?? 0), 0);
   if (!total) return;
-  useGame.setState((s) => ({ money: s.money - total, txns: [{ at: s.minutes, label, amount: -total }, ...s.txns].slice(0, 40) }));
+  useGame.setState((s) => ({ money: s.money - total, txns: [txn(s, label, -total), ...s.txns].slice(0, 40) }));
   for (const t of types) moneyHooks.onChange?.({ amount: -ITEMS[t].price, kind: 'buy', ref: t });
 }
 

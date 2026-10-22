@@ -13,6 +13,7 @@ import { fineItem, recordExhibits } from './exhibits';
 import { MARKET_PRODUCT_BY_ID } from '../src/game/career';
 import { vdmGov } from './news';
 import { spendState } from './state';
+import { inRange } from '../src/game/treasury';
 import { applyStmts, ensureWallet } from './wallet';
 
 type Ctx = ExecutionContext | undefined;
@@ -57,7 +58,7 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
 
   if (scheme === 'front') {
     const f = SCHEMES.front;
-    if (typeof amount !== 'number' || !f.sizes.includes(amount)) return { error: 'Pick the size of the invoice', status: 400 };
+    if (!inRange(amount, f.sizes)) return { error: 'Pick the size of the invoice', status: 400 };
     const biz = await db.prepare('SELECT name FROM businesses WHERE uid = ? ORDER BY id LIMIT 1').bind(s.uid).first<{ name: string }>();
     if (!biz) return { error: 'You need a business to invoice from. Open one in the Business app', status: 409 };
     if (pot < amount) return { error: `${where(s.city)} doesn’t hold ${naira(amount)}`, status: 402 };
@@ -99,7 +100,7 @@ export async function runScheme(env: Env, ctx: Ctx, s: Schemer, scheme: 'front' 
 
   if (scheme === 'bdc') {
     const b = SCHEMES.bdc;
-    if (typeof amount !== 'number' || !b.sizes.includes(amount)) return { error: 'Pick how much to change', status: 400 };
+    if (!inRange(amount, b.sizes)) return { error: 'Pick how much to change', status: 400 };
     if (pot < amount) return { error: `${where(s.city)} doesn’t hold ${naira(amount)}`, status: 402 };
     if (!(await takePot(db, s.city, amount))) return { error: 'The treasury changed. Try again', status: 409 };
     // No EFCC, no record. Mallam keeps his cut, and now and then he keeps the lot.

@@ -9,7 +9,7 @@ import { loadPolice } from './crime';
 import { loadEfcc } from './efcc';
 import { useCivic } from './civic';
 import { OFFICES, type CivicCity } from '../game/civic';
-import { dayOf, lifeHooks, naira, netWorthOf, useGame } from '../game/store';
+import { dayOf, lifeHooks, naira, netWorthOf, txn, useGame } from '../game/store';
 import { liveEvent, FINAL_TEAMS, type FinalPick, type LiveEventId } from '../game/live';
 import { ACHIEVEMENTS, type LegacyInput } from '../game/legacy';
 import { STAGES } from '../game/property';
@@ -335,7 +335,7 @@ export function collectDues(park: string) {
     setServerBalance(r.balance);
     const g = useGame.getState();
     if (r.result === 'collected') {
-      useGame.setState((s) => ({ txns: [{ at: s.minutes, label: 'Motor park dues collected', amount: r.dues ?? 0 }, ...s.txns].slice(0, 40) }));
+      useGame.setState((s) => ({ txns: [txn(s, 'Motor park dues collected', r.dues ?? 0), ...s.txns].slice(0, 40) }));
       g.toast(`💰 The boys brought your dues: ${naira(r.dues ?? 0)}`);
     } else {
       g.toast(`🚔 POLICE RAID! You were arrested counting dues. ${naira(r.fine ?? 0)} fine, and you've lost the park.`);
@@ -375,7 +375,7 @@ export function onFunEvent(e: FunEvent) {
     if (e.payout > 0) {
       g.bump('betsWon');
       g.bump('betWinnings', e.payout);
-      useGame.setState((s) => ({ txns: [{ at: s.minutes, label: 'Cup final bet won', amount: e.payout }, ...s.txns].slice(0, 40) }));
+      useGame.setState((s) => ({ txns: [txn(s, 'Cup final bet won', e.payout), ...s.txns].slice(0, 40) }));
       g.toast(`🏆 FULL TIME: ${line}. You won ${naira(e.payout)}! 🤑`);
     } else g.toast(`😩 FULL TIME: ${line}. Your ${naira(e.stake)} bet is gone.`);
     void refreshBalance();

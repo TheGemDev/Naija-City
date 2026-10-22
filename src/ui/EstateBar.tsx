@@ -93,29 +93,25 @@ export function EstateBar() {
   const stops = [...new Map(properties.filter((p) => p.stage >= STAGES.length).map((p) => [`${p.region}:${sectionOf(p.slot ?? 0)}`, { region: p.region, no: sectionOf(p.slot ?? 0) }])).values()]
     .sort((a, b) => REGIONS.findIndex((r) => r.id === a.region) - REGIONS.findIndex((r) => r.id === b.region) || a.no - b.no);
   const activeStop = stops.findIndex((s) => s.region === region && s.no === no);
+  // An estate goes on for ever, a section at a time: the arrows walk back and forth through this one's sections.
   const go = (direction: -1 | 1) => {
-    if (!stops.length) return;
-    const nextIndex = activeStop < 0
-      ? direction === 1 ? 0 : stops.length - 1
-      : (activeStop + direction + stops.length) % stops.length;
-    const target = stops[nextIndex];
-    if (target.region === region && target.no === no) return;
+    const target = no + direction;
+    if (target < 0) return;
     useEstate.setState({ picked: null });
-    if (target.region === region) useGame.getState().gotoEstate(target.no);
-    else useGame.getState().visitEstate(target.region, target.no);
+    useGame.getState().gotoEstate(target);
   };
   return (
     <>
       <div className="estate-top">
-        <button aria-label="Previous owned estate" disabled={!stops.length || (stops.length === 1 && activeStop === 0)} onClick={() => go(-1)}><Chevron dir="left" size={18} /></button>
+        <button aria-label="Previous section" disabled={no <= 0} onClick={() => go(-1)}><Chevron dir="left" size={18} /></button>
         <div className="estate-title">
           <b><Icon name="plot" size={14} /> {r.name} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({no + 1})</span></b>
           <small>
-            {activeStop >= 0 ? `Your estate ${activeStop + 1} of ${stops.length} · ` : stops.length ? 'Not one of your estates · ' : 'No owned properties · '}
+            {activeStop >= 0 ? 'Your house is here · ' : ''}
             {loading && !neighbours ? 'finding neighbours…' : `${mine} yours · ${neighbours} neighbour${neighbours === 1 ? '' : 's'}`}
           </small>
         </div>
-        <button aria-label="Next owned estate" disabled={!stops.length || (stops.length === 1 && activeStop === 0)} onClick={() => go(1)}><Chevron dir="right" size={18} /></button>
+        <button aria-label="Next section" onClick={() => go(1)}><Chevron dir="right" size={18} /></button>
       </div>
       {(lot || pickedEmpty) && (
         <div className="lotcard">

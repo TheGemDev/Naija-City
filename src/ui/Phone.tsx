@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ITEMS } from '../game/catalog';
-import { CAMPAIGN_EVENTS, dayOf, homeLoad, hourOf, inOwnHouse, INVERTER, inverterCount, isDaylight, isPowered, naira, nairaShort, OFFICE_RULES, solarActive, useGame } from '../game/store';
+import { CAMPAIGN_EVENTS, dayOf, homeLoad, hourOf, inOwnHouse, INVERTER, inverterCount, isDaylight, isPowered, naira, nairaShort, OFFICE_RULES, solarActive, useGame, type MoneyKind, type Txn } from '../game/store';
 import { INVESTMENTS, LIQUIDATION_FACTOR, MAX_TRADE_UNITS, paidFor, priceOf, USD_NGN } from '../game/investments';
 import { useStocks, watchMarket } from '../net/stocks';
 import { useCityStats, watchCityStats } from '../net/cityStats';
@@ -12,12 +12,12 @@ import { cutoutOf, navOf, PHONE_BY_ID, type Cutout, type PhoneDef } from '../gam
 import { useSession } from '../net/session';
 import { useNet } from '../net/multiplayer';
 import { useRoads } from '../net/roads';
-import { fixCostOf, lampCity, lampOf, LAMPS, lampSites, roadOf } from '../game/roads';
+import { fixCostOf, lampCity, lampOf, LAMPS, roadOf } from '../game/roads';
 import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CivicNewsTab } from './Gazette';
 import { LawsTab } from './Laws';
 import { TreasuryHero, TreasuryTab } from './Treasury';
-import { CITY_HEAD, CITY_NAME, CIVIC_CITIES, LOCAL_OFFICES, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
+import { CITY_HEAD, CIVIC_CITIES, LOCAL_OFFICES, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { useSocial } from '../net/social';
 import { badgeLabel, markAppSeen, useBadges, useMessagesBadge, type SeenApp } from '../net/badges';
 import { attemptBankHeist, crewAction, moveSavings, refreshBank, repayDebt, useBank } from '../net/bank';
@@ -303,6 +303,30 @@ function CrewHeist({ knowledge, coolingDown, now }: { knowledge: number; cooling
   );
 }
 
+const TXN_KIND: Record<MoneyKind, string> = {
+  work: 'Wages', gig: 'Hustle', sell: 'Sale', buy: 'Purchase', spend: 'Spending', invest: 'Investment', property: 'Property', debt: 'Debt',
+};
+
+/** One history line, opened: what it was, when (game and real time), and how often the same thing shows in your history. */
+function TxnDetail({ t, all }: { t: Txn; all: Txn[] }) {
+  const same = all.filter((x) => x.label === t.label);
+  const total = same.reduce((n, x) => n + x.amount, 0);
+  const rows: [string, string][] = [
+    ['Type', t.amount >= 0 ? 'Money in' : 'Money out'],
+    ...(t.kind ? [['Category', TXN_KIND[t.kind]] as [string, string]] : []),
+    ['Game time', `Day ${dayOf(t.at)} · ${formatClock(t.at)}`],
+    ...(t.real ? [['Real time', new Date(t.real).toLocaleString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })] as [string, string]] : []),
+    ...(same.length > 1 ? [[`${same.length}× in history`, `${total >= 0 ? '+' : '−'}${naira(Math.abs(total))}`] as [string, string]] : []),
+  ];
+  return (
+    <dl className="txn-detail">
+      {rows.map(([k, v]) => (
+        <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+      ))}
+    </dl>
+  );
+}
+
 function Bank() {
   const money = useGame((s) => s.money);
   const debtOwed = useGame((s) => s.debtOwed);
@@ -317,6 +341,8 @@ function Bank() {
   const busy = useBank((s) => s.busy);
   const error = useBank((s) => s.error);
   const [amount, setAmount] = useState('10000');
+  // The history line that is open, by its place in the list.
+  const [openTxn, setOpenTxn] = useState<number | null>(null);
   const [tab, setTab] = useState<'account' | 'savings' | 'loans'>(() => {
     // History now lives under Account, so an old request for the History tab opens Account.
     const want = useGame.getState().bankTab;
@@ -388,18 +414,21 @@ function Bank() {
       {txns.length === 0 && <p className="muted">No transactions yet.</p>}
       <div className="list-card">
         {txns.map((t, i) => (
-          <div key={i} className="txn">
-            <span className={`txn-dot ${t.amount >= 0 ? 'in' : 'out'}`}>{t.amount >= 0 ? '↓' : '↑'}</span>
-            <span className="txn-label">
-              {t.label}
-              <small>
-                Day {dayOf(t.at)} · {formatClock(t.at)}
-              </small>
-            </span>
-            <b className={t.amount >= 0 ? 'good' : 'bad'}>
-              {t.amount >= 0 ? '+' : '−'}
-              {naira(Math.abs(t.amount))}
-            </b>
+          <div key={i} className={`txn-wrap ${openTxn === i ? 'open' : ''}`}>
+            <button type="button" className="txn" aria-expanded={openTxn === i} onClick={() => setOpenTxn(openTxn === i ? null : i)}>
+              <span className={`txn-dot ${t.amount >= 0 ? 'in' : 'out'}`}>{t.amount >= 0 ? '↓' : '↑'}</span>
+              <span className="txn-label">
+                {t.label}
+                <small>
+                  Day {dayOf(t.at)} · {formatClock(t.at)}
+                </small>
+              </span>
+              <b className={t.amount >= 0 ? 'good' : 'bad'}>
+                {t.amount >= 0 ? '+' : '−'}
+                {naira(Math.abs(t.amount))}
+              </b>
+            </button>
+            {openTxn === i && <TxnDetail t={t} all={txns} />}
           </div>
         ))}
       </div>
@@ -1440,119 +1469,55 @@ function LocalCivic() {
 
 type Office = PoliticalOffice;
 
-/** One city's street lights that are out: whoever runs the city can fix them, the same way as its potholes. */
-function LampsCard({ city, isGovernor, governor }: { city: CivicCity; isGovernor: boolean; governor: string }) {
-  const data = useRoads((s) => s.data);
-  const busy = useRoads((s) => s.busy);
-  const fix = useRoads((s) => s.fix);
-  const money = useGame((s) => s.money);
-  const [showAll, setShowAll] = useState(false);
-  if (!data) return null;
-  const headWord = city === 'abuja' ? 'Minister' : 'Governor';
-  const out = (data.lamps ?? []).filter((site) => lampCity(site) === city);
-  const shown = showAll ? out : out.slice(0, 4);
-  const total = lampSites(city).length;
-  const lampNextAt = data.cities?.[city]?.lampNextAt;
-  const hoursToNext = lampNextAt ? Math.max(0, Math.ceil((lampNextAt - Date.now()) / 3600_000)) : null;
-  const budget = data.cities?.[city]?.budget ?? data.budget ?? data.treasury;
-  const cost = LAMPS.fixCost;
-  return (
-    <div className="roads-card">
-      <div className="roads-head">
-        <span className="roads-icon"><Emoji char="💡" size={22} /></span>
-        <div>
-          <b>Street lights</b>
-          <small>{CITY_NAME[city]} roads · {headWord} {governor}</small>
-        </div>
-      </div>
-      <div className="roads-stats">
-        <span><b>{out.length}</b><small>out of {total}</small></span>
-        <span><b>{hoursToNext === null ? '–' : `~${hoursToNext}h`}</b><small>next one</small></span>
-        <span><b>{naira(cost)}</b><small>each to fix</small></span>
-      </div>
-      {isGovernor &&
-        shown.map((site) => (
-          <div key={site} className="roads-hole">
-            <div className="roads-hole-info">
-              <b>{lampOf(site)?.road ?? 'a side street'}</b>
-              <em>{naira(cost)}</em>
-            </div>
-            <div className="roads-pay">
-              <button className="roads-pocket" disabled={busy || money < cost} onClick={() => void fix(site, 'pocket', 'lamp')}><Emoji char="👛" size={14} /> My pocket</button>
-              <button className="roads-treasury" disabled={busy || budget < cost} onClick={() => void fix(site, 'treasury', 'lamp')}><Emoji char="🏦" size={14} /> Treasury</button>
-            </div>
-          </div>
-        ))}
-      {isGovernor && out.length > 4 && (
-        <button className="ghost-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${out.length}`}</button>
-      )}
-      {!out.length && <small className="roads-foot">Every street light in {CITY_NAME[city]} is working.</small>}
-      {!isGovernor && !!out.length && <small className="roads-foot">Only the {OFFICE_RULES[CITY_HEAD[city]].title} can fix street lights in {CITY_NAME[city]}.</small>}
-    </div>
-  );
-}
+const SEVERITY = { 1: 'Small', 2: 'Bad', 3: 'Crater' } as const;
 
-/** One city's potholes: whoever runs the city (the governor in Kaduna, the FCT Minister in Abuja) can fix them. */
-function RoadsCard({ city, isGovernor, governor }: { city: CivicCity; isGovernor: boolean; governor: string }) {
+/**
+ * A city's potholes or dead street lights, for whoever runs it (the governor in Kaduna, the FCT Minister in Abuja):
+ * pick once where the money comes from, then Fix each one. Worst potholes first.
+ */
+function RepairList({ city, kind }: { city: CivicCity; kind: 'pothole' | 'lamp' }) {
   const data = useRoads((s) => s.data);
   const busy = useRoads((s) => s.busy);
   const error = useRoads((s) => s.error);
   const fix = useRoads((s) => s.fix);
   const money = useGame((s) => s.money);
-  const [showAll, setShowAll] = useState(false);
+  const [all, setAll] = useState(false);
+  const [from, setFrom] = useState<'treasury' | 'pocket'>('treasury');
   useEffect(() => void useRoads.getState().refresh(), []);
   if (!data) return null;
-  const title = OFFICE_RULES[CITY_HEAD[city]].title;
-  const headWord = city === 'abuja' ? 'Minister' : 'Governor';
-  // Worst first, so the governor sees the craters before the dents.
-  const open = data.open.filter((site) => potholeCity(site) === city).sort((a, b) => (potholeOf(b)?.severity ?? 0) - (potholeOf(a)?.severity ?? 0));
-  const shown = showAll ? open : open.slice(0, 4);
-  const hoursToNext = Math.max(0, Math.ceil(((data.cities?.[city]?.nextAt ?? data.nextAt) - Date.now()) / 3600_000));
-  const last = data.recent.find((f) => potholeCity(f.site) === city);
+  const lamp = kind === 'lamp';
   // The city's own treasury is all its government can spend on repairs.
   const budget = data.cities?.[city]?.budget ?? data.budget ?? data.treasury;
+  const sites = lamp
+    ? (data.lamps ?? []).filter((site) => lampCity(site) === city)
+    : data.open.filter((site) => potholeCity(site) === city).sort((a, b) => (potholeOf(b)?.severity ?? 0) - (potholeOf(a)?.severity ?? 0));
+  const nextAt = lamp ? data.cities?.[city]?.lampNextAt : data.cities?.[city]?.nextAt ?? data.nextAt;
+  const have = from === 'treasury' ? budget : money;
+  const shown = all ? sites : sites.slice(0, 5);
   return (
-    <div className="roads-card">
-      <div className="roads-head">
-        <span className="roads-icon"><Emoji char="🕳️" size={22} /></span>
-        <div>
-          <b>Potholes</b>
-          <small>{CITY_NAME[city]} roads · {headWord} {governor}</small>
-        </div>
-      </div>
-      <div className="roads-stats">
-        <span><b>{open.length}</b><small>open</small></span>
-        <span><b>~{hoursToNext}h</b><small>next one</small></span>
-        <span><b>{naira(budget)}</b><small>{CITY_NAME[city]}’s budget</small></span>
-      </div>
+    <div className="fix-list">
       {error && <span className="civic-notice civic-error" role="alert">{error}</span>}
-      {isGovernor &&
-        shown.map((site) => {
-          const cost = fixCostOf(site);
-          const severity = potholeOf(site)?.severity ?? 2;
-          return (
-            <div key={site} className="roads-hole">
-              <div className="roads-hole-info">
-                <b>{roadOf(site)}</b>
-                <span>{Array.from({ length: severity }, (_, i) => <Emoji key={i} char="🕳️" size={13} />)}</span>
-                <em>{naira(cost)}</em>
-              </div>
-              <div className="roads-pay">
-                <button className="roads-pocket" disabled={busy || money < cost} onClick={() => void fix(site, 'pocket')}><Emoji char="👛" size={14} /> My pocket</button>
-                <button className="roads-treasury" disabled={busy || budget < cost} onClick={() => void fix(site, 'treasury')}><Emoji char="🏦" size={14} /> Treasury</button>
-              </div>
-            </div>
-          );
-        })}
-      {isGovernor && open.length > 4 && (
-        <button className="ghost-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${open.length}`}</button>
+      {sites.length > 0 && (
+        <div className="law-options" role="group" aria-label="Pay from">
+          <button type="button" className={from === 'treasury' ? 'on' : ''} aria-pressed={from === 'treasury'} onClick={() => setFrom('treasury')}><Emoji char="🏦" size={12} /> Treasury · {nairaShort(budget)}</button>
+          <button type="button" className={from === 'pocket' ? 'on' : ''} aria-pressed={from === 'pocket'} onClick={() => setFrom('pocket')}><Emoji char="👛" size={12} /> Pocket · {nairaShort(money)}</button>
+        </div>
       )}
-      {!isGovernor && <small className="roads-foot">Only the {title} can fix potholes in {CITY_NAME[city]}.</small>}
-      {last && (
-        <small className="roads-foot">
-          Last fixed: {roadOf(last.site)} by {last.by ? `@${last.by}` : `the ${headWord.toLowerCase()}`} ({last.paidFrom === 'pocket' ? 'own pocket' : 'treasury'})
-        </small>
-      )}
+      {shown.map((site) => {
+        const cost = lamp ? LAMPS.fixCost : fixCostOf(site);
+        const severity = lamp ? null : potholeOf(site)?.severity ?? 2;
+        return (
+          <div key={site} className="fix-row">
+            <span>
+              <b>{lamp ? lampOf(site)?.road ?? 'A side street' : roadOf(site)}</b>
+              {severity && <small className={`sev-${severity}`}>{SEVERITY[severity]}</small>}
+            </span>
+            <button className="btn sm" disabled={busy || have < cost} onClick={() => void fix(site, from, kind)}>Fix · {nairaShort(cost)}</button>
+          </div>
+        );
+      })}
+      {sites.length > 5 && <button className="ghost-btn" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${sites.length}`}</button>}
+      {nextAt ? <small className="muted">Next {lamp ? 'goes out' : 'opens'} in ~{Math.max(0, Math.ceil((nextAt - Date.now()) / 3600_000))}h</small> : null}
     </div>
   );
 }
@@ -1596,10 +1561,6 @@ function SharedCivic() {
 
   const policy = data?.policies;
   const holderOf = (office: Office) => policy?.[office] ?? null;
-  const nameOf = (office: Office) => {
-    const holder = holderOf(office);
-    return holder?.username ? `@${holder.username}` : holder?.name ?? 'Vacant';
-  };
   const holds = (office: Office) => holderOf(office)?.uid === uid;
   // Whoever runs a city repairs its roads from the Treasury tab: its governor, or the president while they are impeached.
   const myCity = cityRunBy(policy, uid) ?? (holds('president') ? CIVIC_CITIES.find((c) => isSuspended(holderOf(CITY_HEAD[c]))) : undefined);
@@ -1617,7 +1578,7 @@ function SharedCivic() {
       {data && (
         <>
           {tab === 'elections' && <ElectionBoard />}
-          {tab === 'treasury' && <TreasuryTab uid={uid} repairs={myCity && <><RoadsCard key={myCity} city={myCity} isGovernor governor={nameOf(CITY_HEAD[myCity])} /><LampsCard key={`lamps-${myCity}`} city={myCity} isGovernor governor={nameOf(CITY_HEAD[myCity])} /></>} />}
+          {tab === 'treasury' && <TreasuryTab uid={uid} potholes={myCity && <RepairList key={myCity} city={myCity} kind="pothole" />} lamps={myCity && <RepairList key={`lamps-${myCity}`} city={myCity} kind="lamp" />} />}
           {tab === 'news' && <CivicNewsTab />}
           {tab === 'laws' && <LawsTab key={lawsOf ?? 'all'} uid={uid} start={lawsOf ?? undefined} />}
           <button className="ghost-btn" disabled={loading || busy} onClick={() => void refresh()}>{loading ? 'Refreshing…' : 'Refresh election board'}</button>

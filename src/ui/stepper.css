@@ -1,0 +1,7 @@
+/* Stepper (src/ui/Stepper.tsx): − value +. */
+.stepper { display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 12px; background: var(--bg-f1f5f9); }
+.stepper > button:not(.stepper-value) { flex: none; width: 36px; height: 32px; border-radius: 9px; background: var(--bg-ffffff); color: var(--ink); font-size: 18px; font-weight: 800; line-height: 1; touch-action: manipulation; user-select: none; }
+.stepper > button:disabled { opacity: 0.4; }
+.stepper-value { flex: 1; min-width: 0; height: 32px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+input.stepper-value { background: var(--bg-ffffff); outline: 2px solid #16a34a; }
+.stepper.danger .stepper-value { color: var(--fg-b91c1c); }

@@ -456,6 +456,13 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .txn-dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
 .txn-dot.in { background: var(--bg-dcfce7); color: var(--fg-16a34a); }
 .txn-dot.out { background: var(--bg-fee2e2); color: var(--fg-dc2626); }
+/* Bank history: a line is a button; tapped open, its details sit under it. */
+button.txn { width: 100%; color: inherit; text-align: left; }
+.txn-wrap.open { background: var(--bg-f1f5f9); }
+.txn-detail { display: grid; gap: 4px; margin: 0; padding: 0 12px 10px 50px; }
+.txn-detail > div { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.txn-detail dt { color: var(--muted); }
+.txn-detail dd { margin: 0; font-weight: 700; text-align: right; }
 .food-price { font-weight: 800; color: var(--fg-ea580c); }
 /* Jumia (ui/Mall.tsx): phones as shop tiles with the button underneath, food as a menu list. */
 .mall-filter button { padding: 5px 11px; font-size: 12px; }
@@ -873,7 +880,8 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .place-label.landmark b { font-weight: 600; color: var(--fg-475569); }
 /* Zoomed out on the map: icons only, so the labels don't pile up. */
 body.map-far .place-label b { display: none; }
-body.map-far .place-label { padding: 3px; }
+body.map-far .place-label { padding: 4px; }
+body.map-far .place-label span { font-size: 18px; }
 body.map-far .place-label.on b, body.map-far .place-label.home b { display: inline; }
 body.map-far .place-label.on, body.map-far .place-label.home { padding: 3px 8px 3px 4px; }
 body.map-far .place-label.home { flex-direction: row !important; }

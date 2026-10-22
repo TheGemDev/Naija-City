@@ -9,7 +9,7 @@ import { jail } from './fun';
 import { searchPhone } from './phoneSearch';
 import { feedStmt, handle, naira, postFeed } from './feed';
 import { refreshPolicy } from './policy';
-import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, lawAt, lawText, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
+import { ASSET_INFO, FEDERAL_CUT, GOV_STEPS, GRANT_SIZES, inRange, lawAt, lawText, REPAIR, repairCost, STATE_ASSETS, STATE_LAWS, STATE_LAW_KEYS, UPKEEP_LEVELS, type StateAsset } from '../src/game/treasury';
 import { TRANSFER_FEE_LIMITS } from '../src/game/treasury';
 import { FARE_SUBSIDY } from '../src/game/transport';
 import { capsOf, houseOpen, lawsOf, loadStates, spendState } from './state';
@@ -779,10 +779,10 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const p = TREASURY.palliative;
     // A game from before the amount could be chosen sends none: it shares what it always did.
     const size = body.amount ?? 5_000;
-    if (!p.sizes.includes(size)) return err(400, 'Choose how much each person gets');
+    if (!inRange(size, p.sizes)) return err(400, 'Choose how much each person gets');
     // The share of it the one sharing keeps for themselves (game/civic.ts SCHEMES.divert): none unless they ask.
     const divert = body.divert ?? 0;
-    if (divert && !SCHEMES.divert.shares.includes(divert)) return err(400, 'Choose how much to divert');
+    if (divert && !inRange(divert, [1, ...SCHEMES.divert.shares])) return err(400, 'Choose how much to divert');
     if (policy.palliative_at && now - policy.palliative_at < p.cooldownHours * 3600_000) return err(429, 'Palliatives were shared recently');
     const { results: people } = await db
       .prepare('SELECT uid FROM players WHERE last_seen > ? AND username IS NOT NULL ORDER BY last_seen DESC LIMIT ?')
@@ -841,7 +841,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const office = actingAs(policy, user.uid, city);
     const c = TREASURY.contract;
     const amount = body.amount;
-    if (typeof amount !== 'number' || !c.sizes.includes(amount)) return err(400, 'Pick a contract size');
+    if (!inRange(amount, c.sizes)) return err(400, 'Pick a contract size');
     if (typeof body.target !== 'string') return err(400, 'Pick a contractor');
     const target = await findPlayer(db, body.target);
     if (!target?.username) return err(404, 'No such player');
@@ -988,7 +988,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const city = cityOf(policy, user.uid);
     if (!city) return err(403, 'Only the governor sets their own pay');
     const share = body.pct;
-    if (typeof share !== 'number' || !(GOV_STEPS as readonly number[]).includes(share)) return err(400, 'Choose a share from the list');
+    if (!inRange(share, [0, 100])) return err(400, 'Choose a share between 0% and 100%');
     const was = await db.prepare('SELECT pay_share FROM state_treasuries WHERE city = ?').bind(city).first<{ pay_share: number }>();
     if (was?.pay_share === share) return err(400, 'Nothing changed');
     await db.prepare('UPDATE state_treasuries SET pay_share = ? WHERE city = ?').bind(share, city).run();
@@ -1008,9 +1008,9 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const law = STATE_LAWS[key];
     // The governor picks a share of the president's maximum; the value stored is what that share comes to, never above the maximum.
     const cap = (await capsOf(db))[key];
-    const allowed = GOV_STEPS.map((step) => lawAt(cap, step));
+    // Any whole value up to the maximum (the app's stepper); an older app sends a share of the maximum instead.
     const next = body.pct !== undefined ? (GOV_STEPS as readonly number[]).includes(body.pct) ? lawAt(cap, body.pct) : undefined : body.value;
-    if (next === undefined || !allowed.includes(next) || next > cap) return err(400, 'Choose a share of the maximum from the list');
+    if (!inRange(next, [0, cap])) return err(400, 'Choose a value up to the maximum');
     const was = (await lawsOf(db, city))[key];
     if (was === next) return err(400, 'Nothing changed');
     await db.prepare(`UPDATE state_treasuries SET ${law.column} = ? WHERE city = ?`).bind(next, city).run();
@@ -1046,7 +1046,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
     const city = cityOf(policy, user.uid);
     if (!city) return err(403, 'Only the governor or the FCT Minister can ask for a grant');
-    if (!(GRANT_SIZES as readonly number[]).includes(body.amount as number)) return err(400, 'Choose how much to ask for');
+    if (!inRange(body.amount, GRANT_SIZES)) return err(400, 'Choose how much to ask for');
     const row = await db.prepare('UPDATE state_treasuries SET ask_amount = ?1, ask_at = ?2 WHERE city = ?3 AND ask_amount IS NULL RETURNING city').bind(body.amount, now, city).first();
     if (!row) return err(409, 'You already have a request waiting for the president');
     const who = (await usernames(db, [user.uid])).get(user.uid);
@@ -1068,7 +1068,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       return json({ snapshot: await snapshot(db, user.uid) });
     }
     const amount = body.amount;
-    if (typeof amount !== 'number' || !(GRANT_SIZES as readonly number[]).includes(amount)) return err(400, 'Choose a grant size');
+    if (!inRange(amount, GRANT_SIZES)) return err(400, 'Choose a grant size');
     const taken = await db.prepare('UPDATE civic_policies SET treasury = treasury - ?1 WHERE id = 1 AND treasury >= ?1 RETURNING treasury').bind(amount).first();
     if (!taken) return err(402, 'The federal treasury cannot cover that grant');
     await db.batch([
@@ -1228,7 +1228,7 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       const value = body[key];
       if (value === undefined) continue;
       if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set a fare subsidy');
-      if (!Number.isInteger(value) || !(rule.options as readonly number[]).includes(value)) return err(400, `Choose a subsidy from the list, up to ${rule.max}%`);
+      if (!inRange(value, rule.options)) return err(400, `Choose a subsidy up to ${rule.max}%`);
       updates.push(`${column} = ?`);
       values.push(value);
     }
@@ -1239,14 +1239,14 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
       const cap = (body as Record<string, unknown>)[law.capField];
       if (cap === undefined) continue;
       if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set the maximum for a state tax');
-      if (typeof cap !== 'number' || !law.capOptions.includes(cap)) return err(400, `Choose a maximum from the list for ${law.title.toLowerCase()}`);
+      if (!inRange(cap, law.capOptions)) return err(400, `Choose a maximum for ${law.title.toLowerCase()} between ${lawText(key, Math.min(...law.capOptions))} and ${lawText(key, Math.max(...law.capOptions))}`);
       updates.push(`${law.capColumn} = ?`);
       values.push(cap);
       if (cap < Number(policy?.[law.capColumn] ?? law.max)) lowered.push({ key, cap });
     }
     if (body.federalCut !== undefined) {
       if (policy?.president_uid !== user.uid) return err(403, 'Only the elected president can set the federal cut');
-      if (!Number.isInteger(body.federalCut) || body.federalCut < 0 || body.federalCut > FEDERAL_CUT.max || body.federalCut % FEDERAL_CUT.step) return err(400, `The federal cut must be a multiple of ${FEDERAL_CUT.step}% up to ${FEDERAL_CUT.max}%`);
+      if (!inRange(body.federalCut, [0, FEDERAL_CUT.max])) return err(400, `The federal cut must be a whole percent up to ${FEDERAL_CUT.max}%`);
       updates.push('federal_cut = ?');
       values.push(body.federalCut);
     }

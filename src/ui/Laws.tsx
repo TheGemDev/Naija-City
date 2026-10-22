@@ -9,6 +9,7 @@ import { ASSET_INFO, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawText, STATE_ASSE
 import { FARE_SUBSIDY } from '../game/transport';
 import { isSuspended, useCivic, type CivicSnapshot, type PolicyChange, type StateInfo } from '../net/civic';
 import { Emoji } from './Icons';
+import { Stepper } from './Stepper';
 import './laws.css';
 
 interface Law {
@@ -22,6 +23,10 @@ interface Law {
   treasury?: boolean;
   /** Names for the values of a law that is a choice, not a number (a ban is on or off). */
   labels?: Record<number, string>;
+  /** How a value reads, when `${value}${unit}` won't do (naira, hours). */
+  format?: (value: number) => string;
+  /** What − and + move it by (1 unless said). */
+  step?: number;
 }
 
 const BAN = { 0: 'Allowed', 1: 'Banned' };
@@ -30,7 +35,9 @@ const okadaBan = (key: 'okadaBanKaduna' | 'okadaBanAbuja' | 'okadaBanLagos' | 'o
   hint: `Ban it and no okada carries passengers in ${city}: everybody pays keke or cab fares, and nobody rents a bike at the motor park.`,
 });
 /** A law's value as the gazette prints it. */
-const show = (law: Law, value: number) => law.labels?.[value] ?? `${value}${law.unit}`;
+const show = (law: Law, value: number) => law.labels?.[value] ?? law.format?.(value) ?? `${value}${law.unit}`;
+/** Minutes as the EFCC's case cooldown reads them: "45 min", "3h", "2h 30m". */
+const minutes = (v: number) => (v < 60 ? `${v} min` : v % 60 ? `${Math.floor(v / 60)}h ${v % 60}m` : `${v / 60}h`);
 
 const steps = ([lo, hi]: readonly [number, number], list: number[]) => list.filter((n) => n >= lo && n <= hi);
 
@@ -44,7 +51,8 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
       title: `Max ${STATE_LAWS[k].title.toLowerCase()}`,
       unit: STATE_LAWS[k].unit,
       options: STATE_LAWS[k].capOptions,
-      labels: STATE_LAWS[k].unit === '₦' ? Object.fromEntries(STATE_LAWS[k].capOptions.map((v) => [v, lawText(k, v)])) : undefined,
+      format: (v) => lawText(k, v),
+      step: STATE_LAWS[k].unit === '₦' ? 1_000 : 1,
       hint: `The most any state may set. Lowering it cuts every state above it down. ${STATE_LAWS[k].hint}`,
     })),
     { key: 'federalCut', title: 'Federal cut', unit: '%', options: [0, 5, 10, 15, 20, 25, 30], hint: 'The share of every state’s revenue sent up to the federal treasury each hour. The states keep the rest.', treasury: true },
@@ -71,8 +79,7 @@ export const LAWS: Record<PoliticalOffice, Law[]> = {
     { key: 'finePct', title: 'Theft fine', unit: '%', options: [0, 25, 50, 100, 200], hint: 'Fine on arrest, on top of paying back what was stolen.', treasury: true },
     { key: 'reportHours', title: 'Reporting deadline', unit: 'h', options: [6, 12, 24, 48, 72], hint: 'How long victims have to report a theft.' },
     {
-      key: 'caseCooldownMin', title: 'Case cooldown', unit: ' min', options: [10, 30, 60, 180, 360, 720],
-      labels: { 10: '10 min', 30: '30 min', 60: '1 hour', 180: '3 hours', 360: '6 hours', 720: '12 hours' },
+      key: 'caseCooldownMin', title: 'Case cooldown', unit: ' min', options: [10, 30, 60, 180, 360, 720], format: minutes, step: 5,
       hint: 'After a case on someone, how long before anybody can file another on them. 12 hours at most, 10 minutes at least.',
     },
   ],
@@ -142,13 +149,21 @@ function Desk({ office, policies, busy, onSet }: { office: PoliticalOffice; poli
         return (
           <div className="law-control" key={law.key}>
             <span><b>{law.title}</b><small>{law.hint}{law.treasury ? ' Goes to the treasury.' : ''}</small></span>
-            <div className="law-options" role="group" aria-label={law.title}>
-              {law.options.map((option) => (
-                <button key={option} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onSet({ [law.key]: option })}>
-                  {law.labels?.[option] ?? `${option}${law.unit.replace(/ \/.*$/, '')}`}
-                </button>
-              ))}
-            </div>
+            {/* A choice (a ban) is a switch; a number is set with − and +, anywhere from its least to its most. */}
+            {law.labels ? (
+              <div className="law-options" role="group" aria-label={law.title}>
+                {law.options.map((option) => (
+                  <button key={option} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onSet({ [law.key]: option })}>
+                    {law.labels?.[option]}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <Stepper
+                label={law.title} value={Number(value)} min={Math.min(...law.options)} max={Math.max(...law.options)} step={law.step ?? 1}
+                format={(v) => law.format?.(v) ?? `${v}${law.unit}`} commitAfter={900} disabled={busy} onChange={(v) => onSet({ [law.key]: v })}
+              />
+            )}
           </div>
         );
       })}

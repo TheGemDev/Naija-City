@@ -1,7 +1,7 @@
 // Player-hosted owambes and spraying real players (worker/owambe.ts moves the money).
 
 import { create } from 'zustand';
-import { naira, useGame } from '../game/store';
+import { naira, txn as txnLine, useGame } from '../game/store';
 import { PARTY, PARTY_KINDS, squareCity, squareName, type Party, type PartyKind } from '../game/owambe';
 import { api, serial, useSession } from './session';
 import { flushWalletNow, refreshBalance, setServerBalance } from './wallet';
@@ -42,7 +42,7 @@ async function act<T>(fn: () => Promise<T>): Promise<T | null> {
 }
 
 const txn = (amount: number, label: string) =>
-  useGame.setState((s) => ({ txns: [{ at: s.minutes, label, amount }, ...s.txns].slice(0, 40) }));
+  useGame.setState((s) => ({ txns: [txnLine(s, label, amount), ...s.txns].slice(0, 40) }));
 
 /** A hosted party that hasn't ended yet. */
 export const liveParty = () => {

@@ -159,7 +159,18 @@ export const flightOf = (s: Pick<GameState, 'task'>) => (s.task?.phase === 'doin
 
 export type TravelMode = 'walk' | 'keke' | 'car' | 'okada' | 'cab' | 'helicopter';
 
-export interface Txn { at: number; label: string; amount: number }
+export interface Txn {
+  /** Game minutes. */
+  at: number;
+  label: string;
+  amount: number;
+  /** Real time (ms), on lines logged since the Bank's history became tappable. */
+  real?: number;
+  /** What sort of money it was, when pay() knows (MoneyKind). */
+  kind?: MoneyKind;
+}
+/** A line for the Bank's history (`txns`), stamped with the game clock and the real one. */
+export const txn = (s: { minutes: number }, label: string, amount: number, kind?: MoneyKind): Txn => ({ at: s.minutes, label, amount, real: Date.now(), ...(kind ? { kind } : {}) });
 export interface Toast { id: number; text: string; chatUid?: string }
 
 export interface Power {
@@ -957,7 +968,7 @@ export const useGame = create<GameState>((set, get) => {
     const tax = (kind === 'work' || kind === 'gig') && amount > 0 ? Math.floor((amount * (get().taxRate + get().stateTax)) / 100) : 0;
     set((s) => ({
       money: s.money + amount - tax,
-      txns: [...(tax ? [{ at: s.minutes, label: `Income tax (${s.taxRate + s.stateTax}%)`, amount: -tax }] : []), { at: s.minutes, label, amount }, ...s.txns].slice(0, 40),
+      txns: [...(tax ? [txn(s, `Income tax (${s.taxRate + s.stateTax}%)`, -tax)] : []), txn(s, label, amount, kind), ...s.txns].slice(0, 40),
     }));
     moneyHooks.onChange?.({ amount, kind, ref, qty });
   };

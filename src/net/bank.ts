@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { naira, useGame } from '../game/store';
+import { naira, txn, useGame } from '../game/store';
 import { placeNameIn, regionHere } from '../game/regions';
 import { api, serial, useSession } from './session';
 import { flushWalletNow, setServerBalance } from './wallet';
@@ -74,7 +74,7 @@ export function moveSavings(action: 'deposit' | 'withdraw', amount: number) {
     setServerBalance(data.balance);
     useBank.setState({ savings: data.savings ?? useBank.getState().savings });
     useGame.setState((s) => ({
-      txns: [{ at: s.minutes, label: action === 'deposit' ? `Saved at ${placeNameIn(s.destinationId, 'bank')}` : 'Withdrew from savings', amount: action === 'deposit' ? -amount : amount }, ...s.txns].slice(0, 40),
+      txns: [txn(s, action === 'deposit' ? `Saved at ${placeNameIn(s.destinationId, 'bank')}` : 'Withdrew from savings', action === 'deposit' ? -amount : amount), ...s.txns].slice(0, 40),
     }));
     game.toast(action === 'deposit' ? `${naira(amount)} moved into your savings` : `${naira(amount)} withdrawn from savings`);
   })
@@ -100,7 +100,7 @@ export function repayDebt(amount: number) {
       useGame.setState((s) => ({
         money: s.money - amount,
         debtOwed: s.debtOwed - amount,
-        txns: [{ at: s.minutes, label: 'Repaid debt', amount: -amount }, ...s.txns].slice(0, 40),
+        txns: [txn(s, 'Repaid debt', -amount), ...s.txns].slice(0, 40),
       }));
     } else {
       await flushWalletNow();
@@ -110,7 +110,7 @@ export function repayDebt(amount: number) {
       });
       setServerBalance(data.balance, data.debt);
       useGame.setState((s) => ({
-        txns: [{ at: s.minutes, label: 'Repaid debt', amount: -amount }, ...s.txns].slice(0, 40),
+        txns: [txn(s, 'Repaid debt', -amount), ...s.txns].slice(0, 40),
       }));
     }
     useGame.getState().toast(`${naira(amount)} debt repayment complete`);
@@ -136,7 +136,7 @@ export function attemptBankHeist() {
     setServerBalance(data.balance);
     useBank.setState({ heistReadyAt: data.readyAt ?? 0 });
     if (data.success) {
-      useGame.setState((s) => ({ txns: [{ at: s.minutes, label: 'Bank robbery loot', amount: data.amount ?? 0 }, ...s.txns].slice(0, 40) }));
+      useGame.setState((s) => ({ txns: [txn(s, 'Bank robbery loot', data.amount ?? 0), ...s.txns].slice(0, 40) }));
       game.toast(`You escaped with ${naira(data.amount ?? 0)}. Keep a low profile.`);
     } else {
       if (data.jailedUntil) game.arrest(data.jailedUntil);
@@ -184,10 +184,10 @@ export function onCrewResult(r: CrewResult) {
   const game = useGame.getState();
   useBank.setState({ crews: [], heistReadyAt: Date.now() + 7 * 24 * 60 * 60_000 });
   if (r.snitchReward) {
-    useGame.setState((s) => ({ txns: [{ at: s.minutes, label: 'Police tip-off reward', amount: r.snitchReward! }, ...s.txns].slice(0, 40), notoriety: s.notoriety + 1 }));
+    useGame.setState((s) => ({ txns: [txn(s, 'Police tip-off reward', r.snitchReward!), ...s.txns].slice(0, 40), notoriety: s.notoriety + 1 }));
     game.toast(`🐀 The police swooped on your crew. ${naira(r.snitchReward)} for your “cooperation”. Don’t let them find out.`);
   } else if (r.success) {
-    useGame.setState((s) => ({ txns: [{ at: s.minutes, label: `Crew heist cut (${r.size} robbers)`, amount: r.share }, ...s.txns].slice(0, 40), notoriety: s.notoriety + 1 }));
+    useGame.setState((s) => ({ txns: [txn(s, `Crew heist cut (${r.size} robbers)`, r.share), ...s.txns].slice(0, 40), notoriety: s.notoriety + 1 }));
     game.toast(`🏦 The crew pulled it off! Your cut: ${naira(r.share)}. Scatter!`);
   } else {
     if (r.jailedUntil) game.arrest(r.jailedUntil);

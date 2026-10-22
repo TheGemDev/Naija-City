@@ -1097,7 +1097,8 @@ function MapEffects() {
     roadMat.color.copy(ROAD).lerp(ROAD_WET, sky.wet * 0.85);
     // Only a soft sheen: shinier tarmac threw the noon sun back as glare.
     roadMat.roughness = 1 - sky.wet * 0.35;
-    const isFar = camera.position.y > 48;
+    // Icons only (styles.css body.map-far) until the camera comes in closer than the city's opening view (about 32 up).
+    const isFar = camera.position.y > 24;
     if (isFar !== far.current) {
       far.current = isFar;
       document.body.classList.toggle('map-far', isFar);

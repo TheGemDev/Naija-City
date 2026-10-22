@@ -99,35 +99,24 @@ function PublicCase({ item, now, me }: { item: InecCase; now: number; me: boolea
   );
 }
 
-/** INEC's rules, printed like the EFCC charge sheet: how a fake-votes report works and what a conviction costs. */
-function RulesReceipt() {
-  const line = (title: string, value: string) => (
-    <div className="law-line" key={title}><span>{title}</span><i /><b>{value}</b></div>
-  );
+/** INEC's rules: one short line each. */
+function Rules() {
+  const rules: [string, string][] = [
+    ['🗳️', `Report a candidate for fake votes: ${naira(EFCC.filingFee)}.`],
+    ['🔍', 'The EFCC audits every vote they have in the race.'],
+    ['⏱️', `Report up to ${ELECTION_FRAUD.reportAfterMs / 3_600_000}h after the result. They get ${EFCC.investigationMs / 1000}s to answer.`],
+    ['🚫', 'Every fake vote is struck off.'],
+    ['📱', 'Traced to them: their phone, voters they paid, new accounts on their network.'],
+    ['⚖️', `${Math.round(ELECTION_FRAUD.flaggedShare * 100)}% (or ${ELECTION_FRAUD.flaggedFloor} votes) traced: out of the race, fined, jailed.`],
+    ['🔁', 'Struck votes change the winner? The seat moves.'],
+    ['🙈', 'Cases are public. Who reported never is.'],
+  ];
   return (
-    <div className="law-receipt" aria-label="INEC rules">
-      <div className="law-receipt-head">
-        <b>INEC ELECTORAL OFFENCES</b>
-        <small>Independent National Electoral Commission</small>
-      </div>
-      <div className="law-section">
-        <div className="law-signer"><span>Fake votes</span><span>Report a candidate</span></div>
-        {line('Filing a report', naira(EFCC.filingFee))}
-        {line('Votes audited', 'every vote they have in the race')}
-        {line('Report until', `${ELECTION_FRAUD.reportAfterMs / 3_600_000}h after the result`)}
-        {line('Investigated by', 'the EFCC')}
-        {line('Time to respond', `${EFCC.investigationMs / 1000}s`)}
-        {line('Every fake vote', 'struck off')}
-        {line('Convicted at', `${Math.round(ELECTION_FRAUD.flaggedShare * 100)}%, or ${ELECTION_FRAUD.flaggedFloor} votes, traced to them`)}
-        {line('Traced to them', 'their phone, voters they paid, new accounts on their network')}
-        {line('Paid voter', 'paid by them in the 12 game hours before voting')}
-        {line('Several accounts on one phone', 'struck, never held against the candidate')}
-        {line('Sentence', 'out of the race or unseated, fined, jailed')}
-        {line('Disqualified', 'that election only, free to run in the next')}
-        {line('Struck votes change the winner', 'the seat moves')}
-      </div>
-      <small className="law-foot">Every case is public: the candidate, the race and the accounts behind the fake votes. Who reported it is not shown here.</small>
-    </div>
+    <ul className="inec-rules" aria-label="INEC rules">
+      {rules.map(([icon, text]) => (
+        <li key={icon}><Emoji char={icon} size={16} /><span>{text}</span></li>
+      ))}
+    </ul>
   );
 }
 
@@ -283,7 +272,7 @@ export function InecApp() {
         </>
       )}
 
-      {tab === 'rules' && <RulesReceipt />}
+      {tab === 'rules' && <Rules />}
     </div>
   );
 }

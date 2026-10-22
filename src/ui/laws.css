@@ -9,7 +9,7 @@
 .law-signer { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
 .law-line { display: flex; align-items: baseline; gap: 6px; }
 .law-line > i { flex: 1; min-width: 12px; border-bottom: 1px dotted var(--bg-cbd5e1); transform: translateY(-3px); }
-.law-line > b { white-space: nowrap; }
+.law-line > b { max-width: 65%; text-align: right; overflow-wrap: anywhere; }
 .law-total { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 800; }
 .law-foot { text-align: center; line-height: 1.4; }
 
@@ -53,3 +53,9 @@
 .roads-pocket { background: var(--bg-fee2e2); color: var(--fg-b91c1c); box-shadow: inset 0 0 0 1.5px var(--bd-fecaca); }
 .roads-treasury { background: #16a34a; color: #fff; }
 .roads-pay > button:disabled { opacity: 0.45; }
+
+/* INEC's rules (src/ui/Inec.tsx): one short line each. */
+.inec-rules { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: 18px; background: var(--bg-ffffff); }
+.inec-rules > li { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.inec-rules > li + li { border-top: 1px solid var(--bg-e2e8f0); }
+.inec-rules > li > :first-child { width: 18px; overflow: hidden; }

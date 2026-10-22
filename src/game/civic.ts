@@ -218,7 +218,7 @@ export type Allocation = Record<Department, number>;
 export const ALLOCATION = {
   departments: ['police', 'efcc', 'welfare'] as Department[],
   /** The president moves a share by this many percent at a time. */
-  step: 5,
+  step: 1,
   defaults: { police: 25, efcc: 15, welfare: 10 } as Allocation,
   info: {
     police: { label: 'Police', icon: '🚔', runBy: 'IGP', blurb: 'Catches more thieves.' },
