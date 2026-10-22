@@ -133,7 +133,7 @@ function Item({ item, powered, running, selected, picked, readOnly }: { item: Pl
       {item.type === 'speaker' && powered && !item.broken && <SpeakerLabel x={cx} z={cz} />}
       {(selected || picked) && <PickMark item={item} group={!!picked} />}
       {DESK_HALO && !readOnly && !selected && !picked && mode === 'live' && !item.broken && !!ITEMS[item.type]?.actions.length && mountOf(item) === 'floor' && (
-        <SelectHalo x={cx} z={cz} w={ITEMS[item.type].w} d={ITEMS[item.type].d} yaw={yaw} target={body} />
+        <SelectHalo x={cx} z={cz} target={body} />
       )}
       {TOUCH && !readOnly && !selected && !picked && mode === 'live' && !item.broken && !!ITEMS[item.type]?.actions.length && mountOf(item) === 'floor' && (
         <InteractHint x={cx} z={cz} r={Math.max(ITEMS[item.type].w, ITEMS[item.type].d) * 0.5 + 0.12} phase={cx * 1.7 + cz} />

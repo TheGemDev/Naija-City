@@ -351,7 +351,7 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
       >
         <PropModel type={prop.type} text={prop.text} />
       </group>
-      {usable && !selected && <SelectHalo x={cx} z={cz} w={w} d={d} yaw={yaw} target={body} />}
+      {usable && !selected && <SelectHalo x={cx} z={cz} target={body} />}
       {selected && (
         <mesh position={[cx, 0.03, cz]} rotation={[-Math.PI / 2, 0, 0]} userData={{ dynamic: true }}>
           <planeGeometry args={[w, d]} />
