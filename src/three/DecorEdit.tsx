@@ -2,7 +2,7 @@
 // move with a finger or the mouse, long-press to pick several, the selection marks, and the wall pieces' fittings.
 // Only the ghost and an active drag do any work; a house you are not editing draws exactly as before.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { useShallow } from 'zustand/react/shallow';
@@ -12,7 +12,7 @@ import { footprint, itemTransform, type HouseLayout, type PlacedItem } from '../
 import { useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { aimAt, beginDrag, endDrag, grabGhost, toHouseRay, toggleSel, useDecor, type Guide, type Ray } from '../game/decor';
-import { WALL_FACE, WALL_SHORT, WALL_TALL, WALL_THICK, centreOf, edgeAt, mountOf, wallEdgesOf, wallSpan, wallYOf, type Pose } from '../game/mount';
+import { WALL_FACE, centreOf, edgeAt, mountOf, wallEdgesOf, wallSpan, wallYOf, type Pose } from '../game/mount';
 import { ItemModel, PaintProvider } from './models';
 import { paintMap } from '../game/paint';
 import { finishToolOn } from '../game/finishUi';
@@ -306,49 +306,6 @@ export function DecorGhost() {
 /** The yellow (one picked) or cyan (group) patch under a placed piece. */
 export function PickMark({ item, group }: { item: PlacedItem; group: boolean }) {
   return <Marks item={item} colour={group ? GROUP : PICK} opacity={group ? 0.45 : 0.35} />;
-}
-
-/**
- * Inside walls are drawn cut down so you can see into the rooms. Where something hangs on one, that stretch of wall
- * stays up behind it, so the TV is on a wall and not floating.
- */
-export function WallBacking({ items, layout, colour }: { items: PlacedItem[]; layout: HouseLayout; colour: string }) {
-  const panels = useMemo(() => {
-    const tops = new Map<string, { dir: 'h' | 'v'; x: number; z: number; top: number }>();
-    for (const it of items) {
-      if (mountOf(it) !== 'wall') continue;
-      const hi = Math.min(WALL_TALL, wallSpan(it)[1] + 0.15);
-      for (const e of wallEdgesOf(it)) {
-        const edge = edgeAt(layout, e);
-        if (!edge || edge.tall || hi <= WALL_SHORT) continue;
-        const k = `${e.dir}:${e.x}:${e.z}`;
-        const cur = tops.get(k);
-        if (!cur || cur.top < hi) tops.set(k, { ...e, top: hi });
-      }
-    }
-    return [...tops.values()];
-  }, [items, layout]);
-  if (!panels.length) return null;
-  return (
-    <group>
-      {panels.map((p) => {
-        const h = p.top - WALL_SHORT;
-        const horiz = p.dir === 'h';
-        return (
-          <group key={`${p.dir}:${p.x}:${p.z}`}>
-            <mesh position={[horiz ? p.x + 0.5 : p.x, WALL_SHORT + h / 2, horiz ? p.z : p.z + 0.5]} castShadow receiveShadow>
-              <boxGeometry args={horiz ? [1, h, WALL_THICK] : [WALL_THICK, h, 1]} />
-              <meshStandardMaterial color={colour} flatShading />
-            </mesh>
-            <mesh position={[horiz ? p.x + 0.5 : p.x, p.top + 0.03, horiz ? p.z : p.z + 0.5]}>
-              <boxGeometry args={horiz ? [1, 0.06, WALL_THICK + 0.04] : [WALL_THICK + 0.04, 0.06, 1]} />
-              <meshStandardMaterial color="#847b6a" flatShading />
-            </mesh>
-          </group>
-        );
-      })}
-    </group>
-  );
 }
 
 /** Groups of wall pieces on each outer side, so they hide with their wall when it drops to let the camera see in. */

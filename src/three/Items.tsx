@@ -19,10 +19,9 @@ import { Spanner } from './Spanner';
 import { TvAd } from './TvAds';
 import { finishToolOn } from '../game/finishUi';
 import { offHover, onHover } from './HoverOutline';
-import { DecorGhost, DecorRig, OuterSide, PickMark, WALL_TV_AD_OFFSET, WallBacking, outerSideOf, pressItem, takeSwallowedClick } from './DecorEdit';
+import { DecorGhost, DecorRig, OuterSide, PickMark, WALL_TV_AD_OFFSET, outerSideOf, pressItem, takeSwallowedClick } from './DecorEdit';
 import { toggleSel, useDecor } from '../game/decor';
 import { mountOf } from '../game/mount';
-import { DEFAULT_INNER_WALL, paintHex } from '../game/paint';
 import { RoomFx, itemFxSources } from './RoomFx';
 
 // Only a piece swapped for a .glb file needs the model loader, so the loader stays out of the first download.
@@ -157,9 +156,7 @@ export function Items({ items: override, readOnly = false }: { items?: PlacedIte
   const visit = useVisit((s) => s.current);
   const design = useGame(activeDesignOf);
   const walls = useGame((s) => s.wallEdits[houseKeyOf(s)]);
-  const innerPaint = useGame((s) => s.housePaint[houseKeyOf(s)]?.inner);
   const layout = readOnly && visit ? houseLayout(visit.save.design, visit.save.walls) : houseLayout(design, walls);
-  const wallColour = paintHex(readOnly && visit ? visit.save.paint?.inner : innerPaint) ?? DEFAULT_INNER_WALL;
   // What is being moved is drawn as the ghost instead: the piece, its group, and what stands on them.
   const hidden = useMemo(() => {
     const ids = new Set<string>(group?.length ? group : moveId ? [moveId] : []);
@@ -186,7 +183,6 @@ export function Items({ items: override, readOnly = false }: { items?: PlacedIte
           {list.map(item)}
         </OuterSide>
       ))}
-      <WallBacking items={shown} layout={layout} colour={wallColour} />
       {/* Steam off the pot, the gen's exhaust, the shower's spray... (three/RoomFx.tsx). */}
       <RoomFx sources={itemFxSources(shown)} gen={running} layout={layout} />
     </group>

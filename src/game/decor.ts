@@ -10,7 +10,7 @@ import { activeDesignOf, decorHooks, houseKeyOf, naira, useGame } from './store'
 import { useVisit } from './visits';
 import { homeTransform } from './origins';
 import {
-  CEILING_Y, WALL_FACE, WALL_SHORT, WALL_TALL, carry, centreOf, degOf, edgeAt, indoor, isSurface, mountOf, poseOf,
+  CEILING_Y, WALL_FACE, WALL_TALL, carry, centreOf, degOf, edgeAt, indoor, isSurface, mountOf, poseOf,
   quarterSize, round3, surfaceTop, tidy, toLocal, toWorld, wallYOf, withDeg, type Pose,
 } from './mount';
 
@@ -76,18 +76,17 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 type Face = { cell: Cell; rot: number; along: number; dir: 'h' | 'v'; t: number };
 
-/** The nearest inside wall face the ray meets. Cut-down walls count up to a little above their top. */
+/** The nearest inside wall face the ray meets. */
 function wallFace(r: Ray, layout: HouseLayout): Face | null {
   let best: Face | null = null;
   for (const e of layout.edges) {
     if (e.kind !== 'wall') continue;
-    const top = e.tall ? WALL_TALL : WALL_SHORT + 0.45;
     if (e.dir === 'h') {
       if (Math.abs(r.dz) < 1e-6) continue;
       const t = (e.z - r.oz) / r.dz;
       if (t <= 0 || (best && t >= best.t)) continue;
       const px = r.ox + r.dx * t, py = r.oy + r.dy * t;
-      if (px < e.x || px > e.x + 1 || py < 0 || py > top) continue;
+      if (px < e.x || px > e.x + 1 || py < 0 || py > WALL_TALL) continue;
       const cell = r.dz > 0 ? { x: e.x, z: e.z - 1 } : { x: e.x, z: e.z };
       if (!indoor(layout, cell)) continue;
       best = { cell, rot: r.dz > 0 ? 2 : 0, along: px, dir: 'h', t };
@@ -96,7 +95,7 @@ function wallFace(r: Ray, layout: HouseLayout): Face | null {
       const t = (e.x - r.ox) / r.dx;
       if (t <= 0 || (best && t >= best.t)) continue;
       const pz = r.oz + r.dz * t, py = r.oy + r.dy * t;
-      if (pz < e.z || pz > e.z + 1 || py < 0 || py > top) continue;
+      if (pz < e.z || pz > e.z + 1 || py < 0 || py > WALL_TALL) continue;
       const cell = r.dx > 0 ? { x: e.x - 1, z: e.z } : { x: e.x, z: e.z };
       if (!indoor(layout, cell)) continue;
       best = { cell, rot: r.dx > 0 ? 1 : 3, along: pz, dir: 'v', t };

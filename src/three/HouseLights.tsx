@@ -13,7 +13,7 @@ import {
   type PointLight,
 } from 'three';
 import type { HouseLayout, PlacedItem } from '../game/grid';
-import { baseY, centreOf, mountOf, wallHeightBehind, yawOf, WALL_TALL } from '../game/mount';
+import { baseY, centreOf, mountOf, yawOf, WALL_TALL } from '../game/mount';
 import { CEILING_BY_ID, LIGHTS, interiorRooms, lampLevel, lampTone, moodOf, roomAt, toneHex, type HouseFinish, type MoodDef } from '../game/finishes';
 import { genHere, hourOf, litHere, useGame, type GameState } from '../game/store';
 import { useVisit } from '../game/visits';
@@ -106,9 +106,8 @@ function emittersOf(items: PlacedItem[], layout: HouseLayout, finish?: HouseFini
     if (spec.wash) {
       // On the wall behind: a wall item's own wall, or the floor lamp's back (only drawn if it is near one).
       const back = toWorld([0, 0, -0.425]);
-      const top = wall ? wallHeightBehind(it, layout) : WALL_TALL;
-      const h = Math.min(spec.wash * 1.2, top);
-      const y = Math.min(Math.max(src.y, h / 2), top - h / 2);
+      const h = Math.min(spec.wash * 1.2, WALL_TALL);
+      const y = Math.min(Math.max(src.y, h / 2), WALL_TALL - h / 2);
       if (wall || it.type === 'floor_lamp') wash = { x: back.x, y, z: back.z, w: spec.wash, h, yaw };
     }
     out.push({

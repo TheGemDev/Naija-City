@@ -54,7 +54,8 @@ function outwardNormal(e: Edge): [number, number] | null {
 }
 
 /** All wall edges on one side of the house. Outer walls drop to half height when they face the
- *  camera; every edge on a side moves together, so each side is merged and animated as one. */
+ *  camera; every edge on a side moves together, so each side is merged and animated as one.
+ *  Inside walls always stand full height. */
 function WallSide({ edges, normal, center, layout, paint, finish }: { edges: Edge[]; normal: [number, number] | null; center: { x: number; z: number }; layout: HouseLayout; paint?: HousePaint; finish?: HouseFinish }) {
   const outerColour = paintHex(paint?.outer) ?? layout.shell.wall;
   const innerColour = paintHex(paint?.inner) ?? DEFAULT_INNER_WALL;
@@ -85,7 +86,7 @@ function WallSide({ edges, normal, center, layout, paint, finish }: { edges: Edg
         <StaticBatch>
           {edges.map((e, i) => {
             const horiz = e.dir === 'h';
-            const base = normal ? 1 : e.kind === 'fence' ? FENCE : SHORT;
+            const base = normal ? 1 : e.kind === 'fence' ? FENCE : TALL;
             // Walls with a window are built round their opening (HouseShell SideScaled).
             if (normal && edgeHasWindow(e, layout)) return null;
             return (
@@ -102,7 +103,7 @@ function WallSide({ edges, normal, center, layout, paint, finish }: { edges: Edg
         <StaticBatch>
           {edges.map((e, i) => {
             const horiz = e.dir === 'h';
-            const base = normal ? 0 : e.kind === 'fence' ? FENCE : SHORT;
+            const base = normal ? 0 : e.kind === 'fence' ? FENCE : TALL;
             return (
               <mesh key={i} position={[horiz ? e.x + 0.5 : e.x, base + 0.03, horiz ? e.z : e.z + 0.5]} castShadow>
                 <boxGeometry args={horiz ? [1 + WALL_T, 0.06, WALL_T + 0.04] : [WALL_T + 0.04, 0.06, 1 + WALL_T]} />
@@ -263,7 +264,7 @@ function WallGuides({ layout, items }: { layout: HouseLayout; items: PlacedItem[
     const exists = layout.edgeSet.has(edgeKey(e));
     const blocked = !exists && !!wallBuildError(layout, e, items, avatarCell());
     const color = exists ? '#ef4444' : blocked ? '#f97316' : '#22c55e';
-    const h = exists ? SHORT + 0.06 : SHORT;
+    const h = exists ? TALL + 0.06 : SHORT;
     const horiz = e.dir === 'h';
     return (
       <mesh position={edgePos(e, h / 2)} renderOrder={2}>

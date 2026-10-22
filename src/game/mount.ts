@@ -18,7 +18,7 @@ import type { Cell, Edge, HouseLayout, PlacedItem } from './grid';
 
 export type Mount = 'floor' | 'wall' | 'surface' | 'ceiling';
 
-/** Wall heights as drawn by three/World.tsx: outer walls full height, inner partitions cut down. */
+/** Wall heights as drawn by three/World.tsx: every wall full height; an outer side drops to WALL_SHORT while it faces the camera. */
 export const WALL_TALL = 2.6;
 export const WALL_SHORT = 0.9;
 export const WALL_THICK = 0.14;
@@ -195,16 +195,6 @@ const OUTDOOR = /yard|compound|carport|balcony|terrace/i;
 export function indoor(layout: HouseLayout, c: Cell) {
   if (c.x >= 0 && c.z >= 0 && c.x < layout.width && c.z < layout.depth) return true;
   return layout.rooms.some((r) => !OUTDOOR.test(r.name) && c.x >= r.x0 && c.x < r.x1 && c.z >= r.z0 && c.z < r.z1);
-}
-
-/** How tall the wall behind a wall item is drawn (the lowest edge it hangs on). */
-export function wallHeightBehind(it: Placed, layout: HouseLayout) {
-  let h = WALL_TALL;
-  for (const e of wallEdgesOf(it)) {
-    const edge = edgeAt(layout, e);
-    if (edge && !edge.tall) h = Math.min(h, WALL_SHORT);
-  }
-  return h;
 }
 
 // ── Surfaces ────────────────────────────────────────────────
