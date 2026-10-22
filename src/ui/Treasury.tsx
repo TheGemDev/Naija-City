@@ -530,16 +530,13 @@ export function TreasuryTab({ uid, potholes: holeList, lamps: lampList }: { uid:
   const openSites = useRoads((s) => s.data?.open);
   const lampsOut = useRoads((s) => s.data?.lamps);
   const now = useNow(30_000);
-  const contract = useCivic((s) => s.contract);
   const pardon = useCivic((s) => s.pardon);
   const [target, setTarget] = useState('');
-  const [contractor, setContractor] = useState('');
   const [prisoner, setPrisoner] = useState('');
   // The one Spend or Danger row that is open, and the amount picked in each.
   const [act, setAct] = useState<string | null>(null);
   const toggle = (id: string) => setAct((a) => (a === id ? null : id));
   const [palSize, setPalSize] = useState<number>(TREASURY.palliative.sizes[1]);
-  const [dealSize, setDealSize] = useState<number>(TREASURY.contract.sizes[0]);
   const [frontSize, setFrontSize] = useState<number>(SCHEMES.front.sizes[0]);
   const [bdcSize, setBdcSize] = useState<number>(SCHEMES.bdc.sizes[0]);
   // The share of a palliative round the one sharing keeps (SCHEMES.divert).
@@ -578,8 +575,7 @@ export function TreasuryTab({ uid, potholes: holeList, lamps: lampList }: { uid:
   const houseShut = !!actCity && (data.states?.[actCity]?.assets.govhouse?.condition ?? 100) < GOVHOUSE_SHUT;
   const palBudget = actCity ? cityBudget : ALLOCATION.budget(treasury, allocation.welfare);
 
-  const { palliative: pal, roadProject: project, embezzle: snake, contract: deal, pardon: mercy } = TREASURY;
-  const dealWait = (data.cooldowns?.contract ?? 0) + deal.cooldownHours * HOUR - now;
+  const { palliative: pal, roadProject: project, embezzle: snake, pardon: mercy } = TREASURY;
   const mercyWait = (data.cooldowns?.pardon ?? 0) + mercy.cooldownHours * HOUR - now;
   const impeachWait = (data.cooldowns?.impeach ?? 0) + IMPEACH.cooldownHours * HOUR - now;
   const palWait = data.palliativeAt ? data.palliativeAt + pal.cooldownHours * HOUR - now : 0;
@@ -686,18 +682,6 @@ export function TreasuryTab({ uid, potholes: holeList, lamps: lampList }: { uid:
               {divert > 0 && <small className="tr-act-risk">{odds(skim.exposed(divert))} chance VDM gets the warehouse video.</small>}
               <button className="btn sm" disabled={busy || palWait > 0 || palBudget < palSize || (locked && !!actCity)} onClick={() => void palliative(palSize, standIn, divert)}>Share {nairaShort(palSize)} each</button>
             </Action>
-            {actCity && (
-              <Action
-                icon="📝" title="Award a contract" open={act === 'deal'} onToggle={() => toggle('deal')}
-                status={locked ? lockWhy : dealWait > 0 ? `in ${left(dealWait)}` : cityBudget < deal.sizes[0] ? 'Treasury too low' : 'Ready'}
-                ready={!locked && cityBudget >= deal.sizes[0] && dealWait <= 0}
-              >
-                <small>Pay a player from the state treasury ({naira(cityBudget)}).</small>
-                <input className="text-input" aria-label="Contractor's username" value={contractor} placeholder={`@contractor in ${CITY_NAME[actCity]}`} onChange={(e) => setContractor(e.target.value)} />
-                <Stepper label="Contract size" value={dealSize} min={deal.sizes[0]} max={deal.sizes[deal.sizes.length - 1]} step={1_000} format={money} onChange={setDealSize} />
-                <button className="btn sm" disabled={busy || locked || dealWait > 0 || cityBudget < dealSize || !contractor.trim()} onClick={() => void contract(contractor.trim(), dealSize, standIn)}>Award {naira(dealSize)}</button>
-              </Action>
-            )}
             <Action
               icon="🕊️" title="Grant a pardon" open={act === 'pardon'} onToggle={() => toggle('pardon')}
               status={actCity && houseShut ? lockWhy : mercyWait > 0 ? `in ${left(mercyWait)}` : 'Ready'}

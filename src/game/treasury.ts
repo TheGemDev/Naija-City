@@ -52,7 +52,7 @@ export const ASSET_INFO: Record<StateAsset, AssetInfo> = {
   markets: { icon: '🏪', label: 'Markets', base: 120_000, earns: 0.6, effect: 'Stall levies pay part of the upkeep. Run-down markets pay less.' },
   hospital: { icon: '🏥', label: 'Hospital', base: 200_000, earns: 0, effect: 'A run-down hospital charges up to double.' },
   stadium: { icon: '🏟️', label: 'Stadium', base: 150_000, earns: 0.5, effect: 'Gate money pays part of the upkeep. A ruined stadium draws nobody.' },
-  govhouse: { icon: '🏛️', label: 'Government House', base: 120_000, earns: 0, effect: 'Below 30, the governor can’t award contracts, pardon or share palliatives.' },
+  govhouse: { icon: '🏛️', label: 'Government House', base: 120_000, earns: 0, effect: 'Below 30, the governor can’t pardon or share palliatives.' },
   police: { icon: '🚔', label: 'Police stations', base: 120_000, earns: 0, effect: 'A ruined station is shut.' },
   transport: { icon: '🚌', label: 'Motor parks and stations', base: 100_000, earns: 0.5, effect: 'Levies pay part of the upkeep. Ruined ones are shut.' },
   schools: { icon: '🎓', label: 'Schools and polytechnic', base: 110_000, earns: 0.3, effect: 'Courses cost up to half as much again when they are run down. Ruined ones are shut.' },
