@@ -67,3 +67,6 @@
 .ev-pot small { color: var(--fg-64748b); font-size: 10.5px; }
 
 .ev-makes { color: var(--fg-475569); font-size: 11.5px; font-weight: 700; }
+/* When the polls open, once for the whole board (PollsPill). */
+.ev-polls { justify-self: center; display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 12px; font-weight: 800; }
+.ev-polls.live { background: #334155; color: #fff; }

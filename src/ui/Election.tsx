@@ -5,11 +5,12 @@
 
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, POLLS_CLOSE_AT, pollsOpen, pollsWhen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
+import { ALLOCATION, banLeft, CAMPAIGN_COOLDOWN_MS, CAMPAIGN_EVENTS, CHAOS, DISQUALIFY_REASON, isElectionDay, OFFICE_ICON as ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, POLLS_CLOSE_AT, pollsCloseAt, pollsOpen, pollsWhen, withdrawalFee, type CampaignEvent, type PoliticalOffice } from '../game/civic';
 import { naira, nairaShort, useGame } from '../game/store';
 import { useVisit } from '../game/visits';
 import { isSuspended, useCivic, type CivicCandidate } from '../net/civic';
 import { useSession } from '../net/session';
+import { useNow } from './Career';
 import { Face } from './Face';
 import { Emoji } from './Icons';
 import { LawsTab } from './Laws';
@@ -121,14 +122,15 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
     : office === 'igp' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.police) }
     : office === 'efcc' ? { label: 'budget', amount: ALLOCATION.budget(data.treasury, budget.efcc) }
     : null;
-  const status = voting ? `Vote · ${left(race.endsAt - Date.now())} left` : race ? `Polls ${pollsWhen(Date.now())}` : 'No race';
+  // When the polls open is said once, at the top of the board; a card only says when it is voting, or has no race.
+  const status = voting ? (race.myVote ? '✓ Voted' : 'Voting') : race ? null : 'No race';
   const blocked = out ? 'Disqualified from this race' : elsewhere ? `Running for ${OFFICE_SHORT[elsewhere]}` : !me && voting ? 'Ballot closed' : null;
   return (
     <section className="ev-card" title={rules.powers}>
       <header className="ev-head">
         <Emoji char={ICON[office]} size={20} />
         <b>{OFFICE_SHORT[office]}</b>
-        <span className={`ev-status ${voting ? 'live' : ''}`}>{status}</span>
+        {status && <span className={`ev-status ${voting ? 'live' : ''}`}>{status}</span>}
       </header>
 
       <div className="ev-holder">
@@ -200,6 +202,18 @@ function OfficeCard({ office }: { office: PoliticalOffice }) {
   );
 }
 
+/** When the polls open, said once for every race: they all vote in the same hour. Counts down while they are open. */
+function PollsPill() {
+  const now = useNow(30_000);
+  const closes = pollsCloseAt(now);
+  const open = pollsOpen(closes, now);
+  return (
+    <span className={`ev-polls ${open ? 'live' : ''}`}>
+      <Emoji char="🗳️" size={13} /> {open ? `Polls open · ${left(closes - now)} left` : `Polls ${pollsWhen(now)} – ${POLLS_CLOSE_AT}`}
+    </span>
+  );
+}
+
 /** Every post, polished. */
 export function ElectionBoard() {
   const loading = useCivic((s) => s.loading);
@@ -209,8 +223,9 @@ export function ElectionBoard() {
     <div className="ev-board">
       {error && <div className="civic-notice civic-error" role="alert">{error}</div>}
       {loading && !data && <p className="muted">Loading the election board…</p>}
+      {data && <PollsPill />}
       {data && OFFICES.map((office) => <OfficeCard key={office} office={office} />)}
-      {data && <small className="ev-foot">Anyone can file. Elections are every 3 days; the next polls open {pollsWhen(Date.now())} and close at {POLLS_CLOSE_AT}.</small>}
+      {data && <small className="ev-foot">Anyone can file. Elections are every 3 days.</small>}
       {data && (
         <button type="button" className="ev-inec" onClick={() => { useElection.setState({ open: false }); useGame.setState({ panel: 'phone', openApp: 'inec' }); }}>
           <Emoji char="🗳️" size={14} /> Seen fake votes? Report them to INEC

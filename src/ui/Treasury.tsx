@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ALLOCATION, CITY_HEAD, CITY_NAME, CIVIC_CITIES, IMPEACH, SCHEMES, NO_SALARIES, OFFICE_ICON, OFFICE_RULES, OFFICE_SHORT, OFFICE_STRIKES, OFFICES, SALARY, TREASURY, governorPay, wageBill, type Allocation, type CivicCity, type Department, type PoliticalOffice, type Salaries } from '../game/civic';
-import { lampCity, LAMPS, ROADWORK } from '../game/roads';
+import { lampCity } from '../game/roads';
 import { naira, nairaShort } from '../game/store';
 import { ASSET_INFO, GOV_STEPS, DEFAULT_STATE_CAPS, DEFAULT_STATE_LAWS, lawChoices, lawText, STATE_LAWS, STATE_LAW_KEYS, GOVHOUSE_SHUT, GRANT_SIZES, repairCost, REPAIR, STATE_ASSETS, UPKEEP_LEVELS, upkeepOf, type StateAsset, type StateLawKey } from '../game/treasury';
 import { cityRunBy, isSuspended, useCivic, type CivicHolder, type StateInfo } from '../net/civic';
@@ -20,29 +20,80 @@ import './treasury.css';
 import './laws.css';
 
 const HOUR = 3_600_000;
-const FIX_COSTS = Object.values(ROADWORK.fixCost);
 
-/** One thing the treasury pays for: what it is, who can order it and whether it can be done right now. */
-function Spend({ icon, title, blurb, who, status, ready, shady, children }: {
+/** A section that folds: a small heading with its headline figure, and the chevron. Open or shut is the browser's to remember. */
+function Fold({ title, aside, tone, open, className = 'tr-sec', children }: {
+  title: string;
+  aside?: ReactNode;
+  tone?: string;
+  open?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className={className} open={open}>
+      <summary>
+        <h5>{title}{aside != null && aside !== '' && <em className={tone}>{aside}</em>}</h5>
+        <i className="tr-chev" aria-hidden />
+      </summary>
+      <div className="tr-fold-in">{children}</div>
+    </details>
+  );
+}
+
+/** One thing an office can do with the treasury: a row with how it stands, tapped open for its controls. */
+function Action({ icon, title, status, ready, shady, open, onToggle, children }: {
   icon: string;
   title: string;
-  blurb: string;
-  who: string;
   status: string;
   ready?: boolean;
   shady?: boolean;
+  open: boolean;
+  onToggle(): void;
   children?: ReactNode;
 }) {
   return (
-    <div className={`tr-spend ${shady ? 'shady' : ''}`}>
-      <span className="tr-spend-icon"><Emoji char={icon} size={22} /></span>
-      <div className="tr-spend-body">
+    <div className={`tr-act ${shady ? 'shady' : ''} ${open ? 'open' : ''}`}>
+      <button type="button" className="tr-act-head" aria-expanded={children ? open : undefined} onClick={onToggle}>
+        <span className="tr-act-icon"><Emoji char={icon} size={18} /></span>
         <b>{title}</b>
-        <small>{blurb}</small>
-        <span className="tr-spend-meta"><em>{who}</em><i className={ready ? 'ready' : ''}>{status}</i></span>
-        {children}
-      </div>
+        <i className={ready ? 'ready' : ''}>{status}</i>
+        {children && <u className="tr-chev" aria-hidden />}
+      </button>
+      {open && children && <div className="tr-act-body">{children}</div>}
     </div>
+  );
+}
+
+/** Pick one amount: a segmented row in place of a button per amount. */
+function Pick<T extends number>({ label, options, value, onChange, danger }: {
+  label: string;
+  options: { value: T; label: string; disabled?: boolean }[];
+  value: T;
+  onChange(v: T): void;
+  danger?: boolean;
+}) {
+  return (
+    <div className={`law-options tr-pick-row ${danger ? 'danger' : ''}`} role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" className={value === o.value ? 'on' : ''} aria-pressed={value === o.value} disabled={o.disabled} onClick={() => onChange(o.value)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** A button that asks once: the first tap arms it, the second does it. */
+function Sure({ label, sure, danger, disabled, onGo }: { label: string; sure: string; danger?: boolean; disabled?: boolean; onGo(): void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button className={`btn sm ${danger ? 'danger' : ''}`} disabled={disabled} onClick={() => (armed ? (setArmed(false), onGo()) : setArmed(true))}>
+      {armed ? sure : label}
+    </button>
   );
 }
 
@@ -281,18 +332,19 @@ function PeopleCard({ people }: { people: StatePeople }) {
     moved && `🚚 ${moved > 0 ? '+' : ''}${moved} moved`, t.japa && `✈️ ${t.japa} japa’d`, t.arrested && `🚔 ${t.arrested} arrested`,
   ].filter(Boolean) as string[];
   return (
-    <div className="tr-sec">
-      <h5>People<em>{feel} · life {people.life}/100</em></h5>
+    <Fold title="People" aside={feel}>
       <div className="tr-state-facts">
         <span><b>{populationOf(people).toLocaleString('en-NG')}</b><small>in total</small></span>
+        {/* Players are grown-ups too: counted with the adults. */}
+        <span><b>{(people.adults + people.players).toLocaleString('en-NG')}</b><small>adults</small></span>
         <span><b>{people.kids.toLocaleString('en-NG')}</b><small>children</small></span>
-        <span><b>{people.players.toLocaleString('en-NG')}</b><small>players</small></span>
       </div>
       {today.length > 0 && <div className="tr-pills">{today.map((x) => <span key={x}>{x}</span>)}</div>}
       {craze && (
         <small className="tr-note tr-warn"><Emoji char={craze.icon} size={12} /> {craze.label} · {left((people.craze?.until ?? 0) - Date.now())} left</small>
       )}
-    </div>
+      <small className="tr-note muted">Life here scores {people.life}/100.</small>
+    </Fold>
   );
 }
 
@@ -341,19 +393,18 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
         const wanted = Math.floor((max * share) / 100);
         const paid = governorPay(max, share, state.balance);
         return (
-          <div className="tr-sec">
-            <h5>Your pay<em>{naira(paid)} a day{max ? ` · max ${nairaShort(max)}` : ''}</em></h5>
+          <Fold title="Your pay" aside={`${nairaShort(paid)} a day`}>
+            <small className="tr-note muted">{share}% of the president’s maximum{max ? ` (${naira(max)})` : ''}.</small>
             {paid < wanted && <small className="tr-note muted">The state can only spare {naira(paid)} a round.</small>}
             <div className="law-options" role="group" aria-label="Your share of the maximum pay">
               {GOV_STEPS.map((step) => (
                 <button key={step} className={share === step ? 'on' : ''} aria-pressed={share === step} disabled={busy || share === step} onClick={() => onPay(step)}>{step}%</button>
               ))}
             </div>
-          </div>
+          </Fold>
         );
       })()}
-      <div className="tr-sec tr-laws">
-        <h5>Taxes and fees</h5>
+      <Fold title="Taxes and fees" className="tr-sec tr-laws" aside={`Income ${lawText('incomeTax', state.laws?.incomeTax ?? DEFAULT_STATE_LAWS.incomeTax)} · Sales ${lawText('salesTax', state.laws?.salesTax ?? DEFAULT_STATE_LAWS.salesTax)}`}>
         {STATE_LAW_KEYS.map((key) => {
           const law = STATE_LAWS[key];
           const value = state.laws?.[key] ?? DEFAULT_STATE_LAWS[key];
@@ -371,10 +422,9 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
             <div className="tr-law-line" key={key}><span>{law.title}</span><b>{lawText(key, value)}<em> / {lawText(key, cap)}</em></b></div>
           );
         })}
-      </div>
+      </Fold>
       {owned.length > 0 && (
-        <div className="tr-sec">
-          <h5>Property<em className={conditionTone(avg)}>{avg}% overall</em></h5>
+        <Fold title="Property" open aside={`${avg}% overall`} tone={conditionTone(avg)}>
           <div className="tr-tiles">
             {owned.map((asset) => (
               <AssetTile key={asset} asset={asset} condition={state.assets[asset]!.condition} open={open === asset} onOpen={() => setOpenAsset(open === asset ? null : asset)} />
@@ -386,11 +436,10 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
               balance={state.balance} onLevel={(level) => onLevel(open, level)} onRepair={() => onRepair(open)}
             />
           )}
-        </div>
+        </Fold>
       )}
       {canEdit && (
-        <div className="tr-sec">
-          <h5>Ask the president for money</h5>
+        <Fold title="Ask the president" aside={state.ask ? `${nairaShort(state.ask.amount)} asked` : undefined}>
           {state.ask ? (
             <small className="muted">Waiting for an answer: {naira(state.ask.amount)}.</small>
           ) : (
@@ -398,7 +447,7 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
               {GRANT_SIZES.map((size) => <button key={size} className="btn sm" disabled={busy} onClick={() => onAsk(size)}>{nairaShort(size)}</button>)}
             </div>
           )}
-        </div>
+        </Fold>
       )}
     </div>
   );
@@ -494,8 +543,13 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const [target, setTarget] = useState('');
   const [contractor, setContractor] = useState('');
   const [prisoner, setPrisoner] = useState('');
-  const [sure, setSure] = useState(false);
-  const [sureBags, setSureBags] = useState(false);
+  // The one Spend or Danger row that is open, and the amount picked in each.
+  const [act, setAct] = useState<string | null>(null);
+  const toggle = (id: string) => setAct((a) => (a === id ? null : id));
+  const [palSize, setPalSize] = useState<number>(TREASURY.palliative.sizes[1]);
+  const [dealSize, setDealSize] = useState<number>(TREASURY.contract.sizes[0]);
+  const [frontSize, setFrontSize] = useState<number>(SCHEMES.front.sizes[0]);
+  const [bdcSize, setBdcSize] = useState<number>(SCHEMES.bdc.sizes[0]);
   // The share of a palliative round the one sharing keeps (SCHEMES.divert).
   const [divert, setDivert] = useState(0);
   const scheme = useCivic((s) => s.scheme);
@@ -531,8 +585,6 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
   const frozen = !!actCity && (data.states?.[actCity]?.arrears ?? 0) > 0;
   const houseShut = !!actCity && (data.states?.[actCity]?.assets.govhouse?.condition ?? 100) < GOVHOUSE_SHUT;
   const palBudget = actCity ? cityBudget : ALLOCATION.budget(treasury, allocation.welfare);
-  /** What whoever runs a city has left to spend, said once per row. Nobody else is shown a figure. */
-  const cityLeft = actCity ? ` Treasury: ${naira(cityBudget)}.` : '';
 
   const { palliative: pal, roadProject: project, embezzle: snake, contract: deal, pardon: mercy } = TREASURY;
   const dealWait = (data.cooldowns?.contract ?? 0) + deal.cooldownHours * HOUR - now;
@@ -595,15 +647,16 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
             </div>
           </div>
           <small className="muted tr-note">{p.federalCut}% of every state’s revenue comes here, plus fees and loans.</small>
-          <b className="tr-sub">Grants</b>
-          <Grants canEdit={isPres} busy={busy} />
-          <b className="tr-sub">Departments</b>
-          <Budget treasury={treasury} saved={allocation} canEdit={isPres} busy={busy} onSave={(next) => void allocate(next)} />
+          <Fold title="Grants" className="tr-block" open={isPres}>
+            <Grants canEdit={isPres} busy={busy} />
+          </Fold>
+          <Fold title="Departments" className="tr-block">
+            <Budget treasury={treasury} saved={allocation} canEdit={isPres} busy={busy} onSave={(next) => void allocate(next)} />
+          </Fold>
           {data.salariesOpen && (
-            <>
-              <b className="tr-sub">Pay</b>
+            <Fold title="Pay" className="tr-block">
               <PayList treasury={treasury} saved={{ ...NO_SALARIES, ...data.salaries }} paidAt={data.salariesPaidAt ?? null} holders={p} uid={uid} canEdit={isPres} busy={busy} onSave={(next) => void setSalaries(next)} />
-            </>
+            </Fold>
           )}
         </div>
       ) : (
@@ -625,208 +678,136 @@ export function TreasuryTab({ uid, repairs }: { uid: string; repairs?: ReactNode
       )}
 
       {isExec && (
-      <section className="tr-block">
-        <h4>Spend</h4>
-          <div className="list-card">
-            <Spend
-              icon="🍚"
-              title="Palliatives"
-              blurb={`Cash for everyone active today. ${isPres || !actCity ? 'Federal' : CITY_NAME[actCity]} budget: ${naira(palBudget)}.`}
-              who="President · Governors"
-              status={palWait > 0 ? `Next in ${left(palWait)}` : locked && actCity ? lockWhy : palLow ? 'Budget too low' : 'Ready'}
+        <details className="tr-block" open>
+          <summary><h4>Spend</h4><i className="tr-chev" aria-hidden /></summary>
+          <div className="tr-acts">
+            <Action
+              icon="🍚" title="Palliatives" open={act === 'pal'} onToggle={() => toggle('pal')}
+              status={palWait > 0 ? `in ${left(palWait)}` : locked && actCity ? lockWhy : palLow ? 'Budget too low' : 'Ready'}
               ready={palWait <= 0 && !palLow && !(locked && !!actCity)}
             >
-              {isExec && (
-                <>
-                  <div className="row-btns" role="group" aria-label="How much each person gets">
-                    {pal.sizes.map((size) => (
-                      <button key={size} className="btn sm" disabled={busy || palWait > 0 || palBudget < size || (locked && !!actCity)} onClick={() => void palliative(size, standIn, divert)}>{nairaShort(size)}</button>
-                    ))}
-                  </div>
-                  {/* Diverting a share is a scheme like any other: VDM may get the warehouse video. */}
-                  <div className="row-btns" role="group" aria-label="Keep a share for yourself">
-                    <small className="muted">Divert to your warehouse:</small>
-                    {[0, ...skim.shares].map((share) => (
-                      <button key={share} className={`btn sm ${share ? 'danger' : ''} ${divert === share ? 'on' : ''}`} aria-pressed={divert === share} disabled={busy} onClick={() => setDivert(share)}>
-                        {share ? `${share}% · ${odds(skim.exposed(share))} exposed` : 'None'}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Spend>
-            <Spend
-              icon="📝"
-              title="Award a contract"
-              blurb={`Pay a player from the state treasury.${cityLeft}`}
-              who="Governors"
-              status={actCity && locked ? lockWhy : actCity && dealWait > 0 ? `Next in ${left(dealWait)}` : actCity && cityBudget < deal.sizes[0] ? 'Treasury too low' : `${nairaShort(deal.sizes[0])} to ${nairaShort(deal.sizes[deal.sizes.length - 1])}`}
-              ready={!!actCity && !locked && cityBudget >= deal.sizes[0] && dealWait <= 0}
+              <small>Cash for everyone active today. {isPres || !actCity ? 'Federal' : CITY_NAME[actCity]} budget: {naira(palBudget)}.</small>
+              <Pick label="Each person gets" value={palSize} onChange={setPalSize} options={pal.sizes.map((size) => ({ value: size, label: nairaShort(size), disabled: palBudget < size }))} />
+              {/* Diverting a share is a scheme like any other: VDM may get the warehouse video. */}
+              <span className="tr-act-label">Keep for yourself</span>
+              <Pick label="Keep a share for yourself" danger={divert > 0} value={divert} onChange={setDivert} options={[0, ...skim.shares].map((share) => ({ value: share, label: share ? `${share}%` : 'None' }))} />
+              {divert > 0 && <small className="tr-act-risk">{odds(skim.exposed(divert))} chance VDM gets the warehouse video.</small>}
+              <button className="btn sm" disabled={busy || palWait > 0 || palBudget < palSize || (locked && !!actCity)} onClick={() => void palliative(palSize, standIn, divert)}>Share {nairaShort(palSize)} each</button>
+            </Action>
+            {actCity && (
+              <Action
+                icon="📝" title="Award a contract" open={act === 'deal'} onToggle={() => toggle('deal')}
+                status={locked ? lockWhy : dealWait > 0 ? `in ${left(dealWait)}` : cityBudget < deal.sizes[0] ? 'Treasury too low' : 'Ready'}
+                ready={!locked && cityBudget >= deal.sizes[0] && dealWait <= 0}
+              >
+                <small>Pay a player from the state treasury ({naira(cityBudget)}).</small>
+                <input className="text-input" aria-label="Contractor's username" value={contractor} placeholder={`@contractor in ${CITY_NAME[actCity]}`} onChange={(e) => setContractor(e.target.value)} />
+                <Pick label="Contract size" value={dealSize} onChange={setDealSize} options={deal.sizes.map((size) => ({ value: size, label: nairaShort(size), disabled: cityBudget < size }))} />
+                <button className="btn sm" disabled={busy || locked || dealWait > 0 || cityBudget < dealSize || !contractor.trim()} onClick={() => void contract(contractor.trim(), dealSize, standIn)}>Award {naira(dealSize)}</button>
+              </Action>
+            )}
+            <Action
+              icon="🕊️" title="Grant a pardon" open={act === 'pardon'} onToggle={() => toggle('pardon')}
+              status={actCity && houseShut ? lockWhy : mercyWait > 0 ? `in ${left(mercyWait)}` : 'Ready'}
+              ready={mercyWait <= 0 && !(actCity && houseShut)}
             >
-              {actCity && (
-                <>
-                  <input className="text-input" aria-label="Contractor's username" value={contractor} placeholder={`@contractor in ${CITY_NAME[actCity]}`} onChange={(e) => setContractor(e.target.value)} />
-                  <div className="row-btns">
-                    {deal.sizes.map((size) => (
-                      <button key={size} className="btn sm" disabled={busy || locked || dealWait > 0 || cityBudget < size || !contractor.trim()} onClick={() => void contract(contractor.trim(), size, standIn)}>{naira(size)}</button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Spend>
-            <Spend
-              icon="🕊️"
-              title="Grant a pardon"
-              blurb="Free somebody from their cell. Everybody is told."
-              who="President · Governors"
-              status={actCity && houseShut ? lockWhy : isExec && mercyWait > 0 ? `Next in ${left(mercyWait)}` : 'Ready'}
-              ready={!(isExec && mercyWait > 0) && !(actCity && houseShut)}
-            >
-              {isExec && (
-                <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (prisoner.trim()) void pardon(prisoner.trim()); }}>
-                  <input className="text-input" aria-label="Prisoner's username" value={prisoner} placeholder="@prisoner's username" onChange={(e) => setPrisoner(e.target.value)} />
-                  <button className="btn sm" disabled={busy || mercyWait > 0 || !prisoner.trim() || (!!actCity && houseShut)}>Pardon</button>
-                </form>
-              )}
-            </Spend>
+              <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (prisoner.trim()) void pardon(prisoner.trim()); }}>
+                <input className="text-input" aria-label="Prisoner's username" value={prisoner} placeholder="@prisoner" onChange={(e) => setPrisoner(e.target.value)} />
+                <button className="btn sm" disabled={busy || mercyWait > 0 || !prisoner.trim() || (!!actCity && houseShut)}>Pardon</button>
+              </form>
+            </Action>
+            {!!actCity && (
+              <>
+                <Action
+                  icon="🕳️" title="Potholes" open={false} onToggle={toRepairs}
+                  status={potholes === undefined ? 'Counting…' : potholes ? `${potholes} open ↓` : 'Smooth'} ready={potholes === 0}
+                />
+                <Action
+                  icon="💡" title="Street lights" open={false} onToggle={toRepairs}
+                  status={darkLamps === undefined ? 'Counting…' : darkLamps ? `${darkLamps} out ↓` : 'All working'} ready={darkLamps === 0}
+                />
+              </>
+            )}
           </div>
-          {!!actCity && (
-            <div className="list-card">
-              <Spend
-                icon="🕳️"
-                title="Potholes"
-                blurb={`${nairaShort(Math.min(...FIX_COSTS))} to ${nairaShort(Math.max(...FIX_COSTS))} each.${cityLeft}`}
-                who="Governors"
-                status={potholes === undefined ? 'Counting…' : potholes ? `${potholes} open` : 'Smooth'}
-                ready={potholes === 0}
-              >
-                {!!potholes && <button className="btn sm" onClick={toRepairs}>Fix potholes ↓</button>}
-              </Spend>
-              <Spend
-                icon="💡"
-                title="Street lights"
-                blurb={`${nairaShort(LAMPS.fixCost)} each.${cityLeft}`}
-                who="Governors"
-                status={darkLamps === undefined ? 'Counting…' : darkLamps ? `${darkLamps} out` : 'All working'}
-                ready={darkLamps === 0}
-              >
-                {!!darkLamps && <button className="btn sm" onClick={toRepairs}>Fix lights ↓</button>}
-              </Spend>
-            </div>
-          )}
           {repairs && <div ref={repairsAt} className="tr-repairs">{repairs}</div>}
-      </section>
+        </details>
       )}
 
       {(!!office || !!actCity) && (
-      <section className="tr-block danger">
-        <h4>Danger</h4>
-          <small className="tr-note tr-warn">Everybody hears about it. The EFCC is watching.</small>
-          <div className="list-card tr-danger">
-            <Spend
-              shady
-              icon="🚧"
-              title="Road project"
-              blurb={`Dig up a rival’s street: slow travel and double fares for ${project.hours} hours.`}
-              who="Governors"
-              status={projectLow ? (locked ? lockWhy : 'Treasury too low') : `${naira(project.cost)} a street`}
-            >
-              {actCity && (
+        <details className="tr-block danger">
+          <summary><h4>Danger</h4><em>The EFCC is watching</em><i className="tr-chev" aria-hidden /></summary>
+          <div className="tr-acts">
+            {actCity && (
+              <Action
+                shady icon="🚧" title="Road project" open={act === 'road'} onToggle={() => toggle('road')}
+                status={projectLow ? (locked ? lockWhy : 'Treasury too low') : naira(project.cost)}
+              >
+                <small>Dig up a rival’s street: slow travel and double fares for {project.hours} hours.</small>
                 <form className="road-form" onSubmit={(e) => { e.preventDefault(); if (target.trim()) void roadProject(target.trim(), standIn); }}>
-                  <input className="text-input" aria-label="Rival's username" value={target} placeholder="@rival's username" onChange={(e) => setTarget(e.target.value)} />
-                  <button className="btn sm" disabled={busy || projectLow || !target.trim()}>Dig · {naira(project.cost)}</button>
+                  <input className="text-input" aria-label="Rival's username" value={target} placeholder="@rival" onChange={(e) => setTarget(e.target.value)} />
+                  <button className="btn sm danger" disabled={busy || projectLow || !target.trim()}>Dig</button>
                 </form>
-              )}
-            </Spend>
+              </Action>
+            )}
             {/* Only an office holder is shown the way to steal from it. */}
             {office && (
-              <Spend
-                shady
-                icon="🐍"
-                title="Let a snake swallow some money"
-                blurb={`Take ${naira(snakeTake)} from ${myCity ? 'your state’s' : 'the federal'} treasury. The EFCC chair decides: refuse and you get a ${naira(snake.fine)} fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office, and in jail.`}
-                who="Office holders only"
-                status={snakeWait > 0 ? `Lie low for ${left(snakeWait)}` : snakeTake < 1_000 ? 'Nothing to take' : 'Nobody is looking'}
+              <Action
+                shady icon="🐍" title="Snake swallowed it" open={act === 'snake'} onToggle={() => toggle('snake')}
+                status={snakeWait > 0 ? `Lie low ${left(snakeWait)}` : snakeTake < 1_000 ? 'Nothing to take' : nairaShort(snakeTake)}
               >
-                {sure ? (
-                  <div className="row-btns">
-                    <button className="btn sm danger" disabled={busy} onClick={() => { setSure(false); void embezzle(); }}>Yes, “borrow” it</button>
-                    <button className="btn sm" onClick={() => setSure(false)}>No, I’m honest</button>
-                  </div>
-                ) : (
-                  <button className="btn sm danger" disabled={busy || snakeWait > 0 || snakeTake < 1_000} onClick={() => setSure(true)}>Take {naira(snakeTake)}</button>
-                )}
-              </Spend>
+                <small>The EFCC chair decides. Refused: a {naira(snake.fine)} fine and a strike. {OFFICE_STRIKES} strikes and you’re out, and in jail.</small>
+                <Sure danger label={`Take ${naira(snakeTake)}`} sure="Sure? Tap again" disabled={busy || snakeWait > 0 || snakeTake < 1_000} onGo={() => void embezzle()} />
+              </Action>
             )}
             {office && (
-              <Spend
-                shady
-                icon="📦"
-                title="Front company"
-                blurb={`${potName[0].toUpperCase()}${potName.slice(1)} pays one of your businesses for “supplies” that never come. The bigger the invoice, the likelier an EFCC raid: the money back, a ${naira(front.fine)} fine, and every shelf you own emptied.`}
-                who="Office holders with a business"
-                status={frontWait > 0 ? `Lie low for ${left(frontWait)}` : `Raid odds ${odds(front.raid(front.sizes[0]))} to ${odds(front.raid(front.sizes[front.sizes.length - 1]))}`}
+              <Action
+                shady icon="📦" title="Front company" open={act === 'front'} onToggle={() => toggle('front')}
+                status={frontWait > 0 ? `Lie low ${left(frontWait)}` : 'Needs a business'}
               >
-                <div className="row-btns">
-                  {front.sizes.map((size) => (
-                    <button key={size} className="btn sm danger" disabled={busy || frontWait > 0 || snakePot < size} onClick={() => void scheme('front', size)}>{nairaShort(size)} · {odds(front.raid(size))}</button>
-                  ))}
-                </div>
-              </Spend>
+                <small>{potName[0].toUpperCase()}{potName.slice(1)} pays one of your businesses for “supplies”. Raided: money back, a {naira(front.fine)} fine, shelves emptied.</small>
+                <Pick label="Invoice" danger value={frontSize} onChange={setFrontSize} options={front.sizes.map((size) => ({ value: size, label: nairaShort(size), disabled: snakePot < size }))} />
+                <small className="tr-act-risk">{odds(front.raid(frontSize))} raid odds</small>
+                <button className="btn sm danger" disabled={busy || frontWait > 0 || snakePot < frontSize} onClick={() => void scheme('front', frontSize)}>Invoice {nairaShort(frontSize)}</button>
+              </Action>
             )}
             {office && (
-              <Spend
-                shady
-                icon="💱"
-                title="Mallam’s BDC"
-                blurb={`Change money from ${potName} into dollars. No EFCC and no record, but Mallam keeps ${odds(bdc.fee)}, and ${odds(bdc.vanish)} of the time he vanishes with the lot.`}
-                who="Office holders only"
-                status={bdcWait > 0 ? `Lie low for ${left(bdcWait)}` : `You keep ${odds(1 - bdc.fee)}`}
+              <Action
+                shady icon="💱" title="Mallam’s BDC" open={act === 'bdc'} onToggle={() => toggle('bdc')}
+                status={bdcWait > 0 ? `Lie low ${left(bdcWait)}` : `Keep ${odds(1 - bdc.fee)}`}
               >
-                <div className="row-btns">
-                  {bdc.sizes.map((size) => (
-                    <button key={size} className="btn sm danger" disabled={busy || bdcWait > 0 || snakePot < size} onClick={() => void scheme('bdc', size)}>{nairaShort(size)} → {nairaShort(Math.floor(size * (1 - bdc.fee)))}</button>
-                  ))}
-                </div>
-              </Spend>
+                <small>No EFCC, no record. Mallam keeps {odds(bdc.fee)}, and {odds(bdc.vanish)} of the time he vanishes with the lot.</small>
+                <Pick label="Amount" danger value={bdcSize} onChange={setBdcSize} options={bdc.sizes.map((size) => ({ value: size, label: nairaShort(size), disabled: snakePot < size }))} />
+                <button className="btn sm danger" disabled={busy || bdcWait > 0 || snakePot < bdcSize} onClick={() => void scheme('bdc', bdcSize)}>Change {nairaShort(bdcSize)} → {nairaShort(Math.floor(bdcSize * (1 - bdc.fee)))}</button>
+              </Action>
             )}
             {office && isExec && (
-              <Spend
-                shady
-                icon="🧳"
-                title="Ghana Must Go"
-                blurb={`Fly ${naira(bagsTake)} of ${potName} out in bags on the state jet. ${odds(bags.search)} of the time customs search the plane: the bags go back, and you get a fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office.`}
-                who="President · Governors"
-                status={bagsWait > 0 ? `Lie low for ${left(bagsWait)}` : bagsTake < 1_000 ? 'Nothing to pack' : `${odds(bags.search)} search odds`}
+              <Action
+                shady icon="🧳" title="Ghana Must Go" open={act === 'bags'} onToggle={() => toggle('bags')}
+                status={bagsWait > 0 ? `Lie low ${left(bagsWait)}` : bagsTake < 1_000 ? 'Nothing to pack' : nairaShort(bagsTake)}
               >
-                {sureBags ? (
-                  <div className="row-btns">
-                    <button className="btn sm danger" disabled={busy} onClick={() => { setSureBags(false); void scheme('bags'); }}>Yes, load the jet</button>
-                    <button className="btn sm" onClick={() => setSureBags(false)}>No</button>
-                  </div>
-                ) : (
-                  <button className="btn sm danger" disabled={busy || bagsWait > 0 || bagsTake < 1_000} onClick={() => setSureBags(true)}>Pack {naira(bagsTake)}</button>
-                )}
-              </Spend>
+                <small>Bags out on the state jet. {odds(bags.search)} of the time customs search it: bags back, a fine and a strike.</small>
+                <Sure danger label={`Pack ${naira(bagsTake)}`} sure="Sure? Tap again" disabled={busy || bagsWait > 0 || bagsTake < 1_000} onGo={() => void scheme('bags')} />
+              </Action>
             )}
             {myCity && (
-              <Spend
-                shady
-                icon="👻"
-                title="Ghost workers"
-                blurb={`Put workers nobody has met on ${CITY_NAME[myCity]}’s payroll. Every hour they pay you ${odds(ghost.share)} of the state’s money, up to ${nairaShort(ghost.cap)}. Every hour the audit odds rise: caught, it all goes back and you get a fine and a strike. ${OFFICE_STRIKES} strikes and you are out of office.`}
-                who="Governors"
-                status={mine ? `${mine.rounds} round${mine.rounds === 1 ? '' : 's'} · ${naira(mine.taken)} · next audit ${odds(ghost.audit(mine.rounds))}` : `First audit ${odds(ghost.audit(0))}`}
+              <Action
+                shady icon="👻" title="Ghost workers" open={act === 'ghost'} onToggle={() => toggle('ghost')}
+                status={mine ? `${naira(mine.taken)} so far` : 'Off'}
               >
+                <small>
+                  {mine
+                    ? `${mine.rounds} round${mine.rounds === 1 ? '' : 's'} on the payroll. Next audit: ${odds(ghost.audit(mine.rounds))}.`
+                    : `${odds(ghost.share)} of the state’s money an hour, up to ${nairaShort(ghost.cap)}. Audit odds rise every hour, starting at ${odds(ghost.audit(0))}.`}
+                </small>
                 {mine ? (
                   <button className="btn sm" disabled={busy} onClick={() => void ghosts(false)}>Take them off the payroll</button>
                 ) : (
                   <button className="btn sm danger" disabled={busy} onClick={() => void ghosts(true)}>Add ghost workers</button>
                 )}
-              </Spend>
+              </Action>
             )}
           </div>
-      </section>
+        </details>
       )}
     </>
   );

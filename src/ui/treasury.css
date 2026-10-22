@@ -1,20 +1,5 @@
 /* Civic app, Treasury tab (src/ui/Treasury.tsx): the vault, what fills it and what it is spent on. */
 
-.tr-spend { display: flex; align-items: flex-start; gap: 10px; padding: 12px; }
-.tr-spend.shady { background: var(--bg-fef2f2); }
-.tr-spend-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(22, 101, 52, 0.12); }
-.tr-spend.shady .tr-spend-icon { background: rgba(185, 28, 28, 0.14); }
-.tr-spend-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.tr-spend-body > b { font-size: 13.5px; }
-.tr-spend-body > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
-.tr-spend-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-.tr-spend-meta > * { padding: 2px 8px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 10.5px; font-style: normal; font-weight: 800; }
-.tr-spend-meta > .ready { background: var(--bg-f0fdf4); color: var(--fg-166534); }
-.tr-spend-body > .btn, .tr-spend-body > .road-form, .tr-spend-body > .row-btns, .tr-spend-body > .text-input { margin-top: 4px; }
-.tr-spend-body > .btn { align-self: flex-start; }
-.tr-spend-body > .road-form, .tr-spend-body > .row-btns { flex-wrap: wrap; }
-.tr-spend-body > .road-form .text-input { flex: 1 1 130px; min-width: 0; width: auto; }
-
 /* The president's budget: one stacked bar, then a row per department. */
 .tr-budget { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: var(--bg-ffffff); }
 .tr-bar { display: flex; height: 10px; overflow: hidden; border-radius: 99px; background: var(--bg-f1f5f9); }
@@ -82,7 +67,6 @@
 .tr-state-facts > span { display: flex; flex-direction: column; gap: 1px; padding: 8px; border-radius: 12px; background: var(--bg-f1f5f9); }
 .tr-state-facts b { font-size: 13px; font-variant-numeric: tabular-nums; }
 .tr-state-facts small { color: var(--muted); font-size: 10px; }
-.tr-sub { margin: 4px 2px 0; font-size: 12.5px; }
 
 .tr-cond { display: block; height: 5px; overflow: hidden; border-radius: 99px; background: var(--bg-e2e8f0); }
 .tr-cond > u { display: block; height: 100%; border-radius: 99px; text-decoration: none; transition: width 0.3s; }
@@ -91,12 +75,49 @@
 .tr-cond.bad > u { background: #ef4444; }
 
 /* A section of a state's books: a small heading with its headline figure on the right. */
-.tr-sec { display: flex; flex-direction: column; gap: 7px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
-.tr-sec > h5 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
-.tr-sec > h5 > em { color: var(--ink); font-size: 12px; font-style: normal; font-weight: 800; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-.tr-sec > h5 > em.good { color: #15803d; }
-.tr-sec > h5 > em.fair { color: #b45309; }
-.tr-sec > h5 > em.bad { color: #b91c1c; }
+.tr-sec { padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-sec h5 { flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+.tr-sec h5 > em { color: var(--ink); font-size: 12px; font-style: normal; font-weight: 800; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.tr-sec h5 > em.good { color: #15803d; }
+.tr-sec h5 > em.fair { color: #b45309; }
+.tr-sec h5 > em.bad { color: #b91c1c; }
+
+/* Folding sections (Fold) and the Spend and Danger blocks: tap the heading to open or shut. */
+.tr-sec > summary, .tr-block > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; }
+.tr-sec > summary::-webkit-details-marker, .tr-block > summary::-webkit-details-marker { display: none; }
+.tr-sec[open] > summary { margin-bottom: 8px; }
+.tr-block[open] > summary { margin-bottom: 8px; }
+.tr-chev { flex: none; width: 7px; height: 7px; margin: 0 3px 3px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.2s; }
+details[open] > summary > .tr-chev, .tr-act.open .tr-chev { margin: 3px 3px 0; transform: rotate(-135deg); }
+.tr-fold-in { display: flex; flex-direction: column; gap: 7px; }
+.tr-block > summary { padding: 4px 2px 0; }
+.tr-block > summary > h4, .tr-block > summary > h5 { flex: 1; margin: 0; color: var(--muted); font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+.tr-block > summary > em { color: var(--muted); font-size: 11px; font-style: normal; font-weight: 700; }
+.tr-block.danger > summary > h4, .tr-block.danger > summary > em { color: var(--fg-b91c1c); }
+.tr-block > .tr-fold-in { gap: 10px; }
+.tr-repairs { margin-top: 10px; }
+
+/* Spend and Danger: one row per power, tapped open for its controls. */
+.tr-acts { display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; background: var(--bg-ffffff); }
+.tr-block.danger .tr-acts { box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
+.tr-act + .tr-act { border-top: 1px solid var(--bg-e2e8f0); }
+.tr-act.shady.open { background: var(--bg-fef2f2); }
+.tr-act-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; color: var(--ink); text-align: left; }
+.tr-act-icon { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: rgba(22, 101, 52, 0.12); }
+.tr-act.shady .tr-act-icon { background: rgba(185, 28, 28, 0.14); }
+.tr-act-head > b { flex: 1; min-width: 0; font-size: 13.5px; }
+.tr-act-head > i { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--bg-f1f5f9); color: var(--fg-475569); font-size: 10.5px; font-style: normal; font-weight: 800; }
+.tr-act-head > i.ready { background: var(--bg-f0fdf4); color: var(--fg-166534); }
+.tr-act-body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.tr-act-body > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.tr-act-body > small.tr-act-risk { color: var(--fg-b91c1c); font-weight: 700; }
+.tr-act-body > .btn { align-self: flex-start; }
+.tr-act-body > .road-form { display: flex; gap: 6px; }
+.tr-act-body > .road-form .text-input { flex: 1 1 130px; min-width: 0; width: auto; }
+.tr-act-label { color: var(--muted); font-size: 11px; font-weight: 700; }
+.tr-pick-row.danger > button.on { background: #dc2626; box-shadow: 0 1px 3px rgba(220, 38, 38, 0.35); }
+.tr-act.shady .law-options { background: var(--bg-ffffff); }
+
 .tr-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .tr-pills > span { padding: 3px 8px; border-radius: 99px; background: var(--bg-f1f5f9); font-size: 11px; font-weight: 700; }
 .tr-max { margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--bg-e2e8f0); color: var(--muted); font-size: 10px; font-style: normal; font-weight: 800; }
@@ -129,20 +150,6 @@
 .loot-case .row-btns { flex-wrap: wrap; }
 .loot-case.closed { flex-direction: row; align-items: center; gap: 8px; background: var(--bg-f1f5f9); box-shadow: none; }
 
-/* The Treasury tab is one page of collapsible sections (src/ui/Treasury.tsx Fold). */
-.tr-fold { border-radius: 18px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px var(--bg-e2e8f0); }
-.tr-fold.danger { box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3); }
-.tr-fold > summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px; list-style: none; cursor: pointer; font-size: 13.5px; }
-.tr-fold > summary::-webkit-details-marker { display: none; }
-.tr-fold > summary > em { margin-left: auto; font-size: 13px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
-.tr-fold > summary > .tr-fold-chev { flex: none; width: 8px; height: 8px; margin: 0 2px 3px 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.2s; }
-.tr-fold:not(:has(summary > em)) > summary > .tr-fold-chev { margin-left: auto; }
-.tr-fold[open] > summary > .tr-fold-chev { transform: rotate(-135deg); margin-bottom: -3px; }
-.tr-fold.danger > summary { color: var(--fg-b91c1c); }
-.tr-fold-body { display: flex; flex-direction: column; gap: 10px; padding: 0 10px 12px; }
-.tr-fold-body > .list-card, .tr-fold-body > .tr-state, .tr-fold-body > .tr-budget { box-shadow: none; padding-left: 4px; padding-right: 4px; }
-.tr-pick { width: 100%; }
-
 /* A state's taxes and fees. */
 .tr-law-line { display: flex; justify-content: space-between; font-size: 12px; }
 .tr-law-line > span { color: var(--muted); }
@@ -159,9 +166,6 @@
 .tr-strip > button.on small { color: rgba(255, 255, 255, 0.8); }
 .tr-strip-dot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
 .tr-panel { display: flex; flex-direction: column; gap: 10px; }
-.tr-block { display: flex; flex-direction: column; gap: 8px; }
-.tr-block > h4 { margin: 4px 2px 0; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
-.tr-block.danger > h4 { color: var(--fg-b91c1c); }
 
 .tr-state-money { display: flex; flex-direction: column; gap: 2px; }
 .tr-state-money > small { color: var(--muted); font-size: 11.5px; font-weight: 700; }
