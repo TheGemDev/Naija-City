@@ -84,23 +84,39 @@
 .tr-state-facts small { color: var(--muted); font-size: 10px; }
 .tr-sub { margin: 4px 2px 0; font-size: 12.5px; }
 
-.tr-asset { display: flex; align-items: flex-start; gap: 10px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
-.tr-asset-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--bg-f1f5f9); }
-.tr-asset-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.tr-asset-body > b { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-.tr-asset-body > b > em { font-size: 12px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
-.tr-asset-body > b > em.good { color: #15803d; }
-.tr-asset-body > b > em.fair { color: #b45309; }
-.tr-asset-body > b > em.bad { color: #b91c1c; }
-.tr-asset-body > small { color: var(--muted); font-size: 11px; line-height: 1.35; }
-.tr-cond { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: var(--bg-f1f5f9); }
+.tr-cond { display: block; height: 5px; overflow: hidden; border-radius: 99px; background: var(--bg-e2e8f0); }
 .tr-cond > u { display: block; height: 100%; border-radius: 99px; text-decoration: none; transition: width 0.3s; }
 .tr-cond.good > u { background: #22c55e; }
 .tr-cond.fair > u { background: #f59e0b; }
 .tr-cond.bad > u { background: #ef4444; }
-.tr-asset-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
-.tr-ask { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
-.tr-ask > b { font-size: 12.5px; }
+
+/* A section of a state's books: a small heading with its headline figure on the right. */
+.tr-sec { display: flex; flex-direction: column; gap: 7px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-sec > h5 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+.tr-sec > h5 > em { color: var(--ink); font-size: 12px; font-style: normal; font-weight: 800; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.tr-sec > h5 > em.good { color: #15803d; }
+.tr-sec > h5 > em.fair { color: #b45309; }
+.tr-sec > h5 > em.bad { color: #b91c1c; }
+.tr-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.tr-pills > span { padding: 3px 8px; border-radius: 99px; background: var(--bg-f1f5f9); font-size: 11px; font-weight: 700; }
+.tr-max { margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--bg-e2e8f0); color: var(--muted); font-size: 10px; font-style: normal; font-weight: 800; }
+
+/* Property: a tile per asset, tap one for what it does and its controls. */
+.tr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.tr-tile { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 6px; padding: 7px 8px; border-radius: 12px; background: var(--bg-f1f5f9); color: var(--ink); text-align: left; }
+.tr-tile > span { overflow: hidden; color: var(--ink); font-size: 11.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.tr-tile > em { font-size: 11.5px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tr-tile.good > em { color: #15803d; }
+.tr-tile.fair > em { color: #b45309; }
+.tr-tile.bad > em { color: #b91c1c; }
+.tr-tile.bad { background: var(--bg-fef2f2); }
+.tr-tile > .tr-cond { grid-column: 1 / -1; }
+.tr-tile.on { box-shadow: 0 0 0 2px #15803d; }
+.tr-asset { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: var(--bg-f1f5f9); }
+.tr-asset > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.tr-asset > small > b { color: var(--ink); }
+.tr-asset-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.tr-asset .tr-step > button { background: var(--bg-ffffff); }
 .tr-grant { display: flex; flex-direction: column; gap: 6px; }
 .tr-grant + .tr-grant { padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
 .tr-grant .row-btns { flex-wrap: wrap; }
@@ -128,11 +144,11 @@
 .tr-pick { width: 100%; }
 
 /* A state's taxes and fees. */
-.tr-laws { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
-.tr-laws > b { font-size: 12.5px; }
 .tr-law-line { display: flex; justify-content: space-between; font-size: 12px; }
 .tr-law-line > span { color: var(--muted); }
-.tr-laws .law-control { background: var(--bg-f1f5f9); }
+.tr-laws .law-control { gap: 5px; padding: 8px; background: var(--bg-f1f5f9); }
+.tr-laws .law-control .law-options { background: var(--bg-ffffff); }
+.tr-laws .law-options > button { padding: 5px 2px; }
 
 /* The money strip: the federal treasury and each state's, as tiles. Tap one to see it below. No dropdowns. */
 .tr-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
@@ -151,7 +167,5 @@
 .tr-state-money > small { color: var(--muted); font-size: 11.5px; font-weight: 700; }
 .tr-state-money > b { font-size: 24px; font-variant-numeric: tabular-nums; }
 .tr-hero .tr-hero-own { font-weight: 800; opacity: 1; }
-
-/* Who lives in the state (PeopleCard): the NPC citizens and the players. */
-.tr-people { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
-.tr-people > b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.tr-ask { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
+.tr-ask > b { font-size: 12.5px; }

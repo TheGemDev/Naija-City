@@ -144,7 +144,7 @@ export function targetPopulation(city: CivicCity, life: number, players: number)
 /** One act's mood: it drifts towards how the state treats them, with whatever just happened to them on top. */
 export const nextMood = (mood: number, life: number, bump = 0) => Math.round(Math.max(0, Math.min(100, mood + (life - mood) * 0.3 + bump)));
 
-export const MOOD_BUMPS = { robbed: -12, jailed: -20, plot: 8, house: 18, adopted: 15, baby: 15, gave: 4, unpaidTax: 0 };
+export const MOOD_BUMPS = { robbed: -12, jailed: -20, plot: 8, house: 18, rented: 6, adopted: 15, baby: 15, gave: 4, unpaidTax: 0 };
 
 export const NPC_LEAVE = {
   /** Japa per round: very unhappy, unhappy, and anyone (people leave for school, for love, for no reason). */
@@ -301,6 +301,11 @@ export const NPC_LINES = {
   house: [
     'Landlord mode activated 🔑 My {design} in {region} is finished. Housewarming this weekend!',
     'From renting one room to my own {design} in {region}. God did 🙌🏾',
+  ],
+  rented: [
+    'No more government quarters 🙌🏾 Just rented a {design} in {region} from {owner}. Small small, we go reach 🔑',
+    'Moved into my own rented {design} in {region} today. Thank you {owner}, abeg no increase rent o 😂🔑',
+    'Packed out of the government house. {region} is home now, {design} and all. Landlord {owner} na correct person 🏠',
   ],
   adopted: [
     'Our family just got bigger. Welcome home, little one ❤️ {city} Social Welfare, thank you.',

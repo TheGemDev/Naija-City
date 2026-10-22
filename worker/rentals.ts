@@ -5,6 +5,8 @@
 // When no player takes a listing, an NPC household may (settleNpcTenants, from the cron): they pay the owner each week
 // out of nowhere, like wages, and move out again in time. They sit in tenant_uid as 'npc:<uuid>', so a house they live
 // in is taken like any other, but nothing that reaches a tenant (wallet, push, visits) may be pointed at them.
+// An NPC citizen (worker/npcs.ts) who has no finished house of their own comes first: they rent in their own state,
+// under their own npcs.id, and pay out of their own balance; broke, or moved away, they go.
 
 import type { FirebaseUser } from './auth';
 import { handle, naira } from './feed';
@@ -17,8 +19,9 @@ import {
   npcMoveInChance, npcStaysAfterRaise, npcTenantName, remainingStageMaterials, stageLabour, weeklyRentOf, type RentalListing,
 } from '../src/game/property';
 import { propertyBooks } from './progress';
-import { headcounts } from './npcs';
-import { crowdFactor } from '../src/game/npcs';
+import { citizenPost, headcounts } from './npcs';
+import { crowdFactor, MOOD_BUMPS, npcLine } from '../src/game/npcs';
+import type { CivicCity } from '../src/game/civic';
 import { followHost, notifyPlayer, roomOf } from './shards';
 
 
@@ -32,7 +35,12 @@ interface RentalRow {
   tenant_uid: string | null; rented_at: number | null; paid_through: number | null;
   /** NPC tenants only (migrations/0097_npc_tenants.sql): their name, and when they mean to move out. */
   npc_name?: string | null; npc_until?: number | null;
+  /** The tenant is an NPC citizen (migrations/0121_npc_citizen_tenants.sql): tenant_uid is their npcs.id. */
+  npc_citizen?: number;
 }
+
+/** An NPC citizen as the rental market sees them. */
+interface Citizen { id: string; name: string; username: string | null; city: string; region: string | null; stage: number; balance: number }
 
 type SaveProperty = { id?: string; region?: string; design?: string | null; stage?: number; rented?: boolean };
 
@@ -164,11 +172,23 @@ async function npcLeaves(db: D1Database, r: RentalRow, drop = false) {
   const res = drop
     ? await db.prepare('DELETE FROM rentals WHERE property_id = ? AND tenant_uid = ?').bind(r.property_id, r.tenant_uid).run()
     : await db
-      .prepare('UPDATE rentals SET tenant_uid = NULL, rented_at = NULL, paid_through = NULL, npc_name = NULL, npc_until = NULL WHERE property_id = ? AND tenant_uid = ?')
+      .prepare(
+        `UPDATE rentals SET tenant_uid = NULL, rented_at = NULL, paid_through = NULL, npc_name = NULL, npc_until = NULL${r.npc_citizen ? ', npc_citizen = 0' : ''}
+         WHERE property_id = ? AND tenant_uid = ?`,
+      )
       .bind(r.property_id, r.tenant_uid)
       .run();
   return res.meta.changes > 0;
 }
+
+/** A week of rent out of an NPC citizen's own savings (and the mood of moving in, the first time). False if they can't pay it. */
+async function chargeCitizen(db: D1Database, id: string, weekly: number, mood = 0) {
+  const res = await db.prepare('UPDATE npcs SET balance = balance - ?2, mood = MIN(100, mood + ?3) WHERE id = ?1 AND balance >= ?2').bind(id, weekly, mood).run();
+  return res.meta.changes > 0;
+}
+
+/** Whether a citizen still lives on as this house's tenant: still in its state, and not yet in a finished house of their own. */
+const citizenStays = (c: Citizen | undefined, r: RentalRow) => !!c && c.city === REGION_BY_ID[r.region]?.city && !(c.region && c.stage >= STAGES.length);
 
 /**
  * The NPC side of the market, once per cron tick (NPC_TENANTS in src/game/property.ts). Households already in a house
@@ -191,9 +211,19 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
   const note = (owner: string) => news.get(owner) ?? news.set(owner, { left: [], came: [], rent: 0 }).get(owner)!;
   const where = (r: RentalRow) => `${DESIGN_BY_ID[r.design]?.name ?? 'house'} in ${REGION_BY_ID[r.region]?.name ?? 'Kaduna'}`;
 
+  const citizenIds = living.results.filter((r) => r.npc_citizen).map((r) => r.tenant_uid!);
+  const citizens = new Map(
+    (citizenIds.length
+      ? (await db.prepare('SELECT * FROM npcs WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(citizenIds)).all<Citizen>()).results
+      : []
+    ).map((c) => [c.id, c]),
+  );
+
   for (const r of living.results) {
     const npc = r.tenant_uid!;
-    let leave = rand() < npcLeaveChance(r.design, r.region, r.weekly);
+    // A citizen who japa'd, moved state or finished a house of their own moves out.
+    let leave = (!!r.npc_citizen && !citizenStays(citizens.get(npc), r)) || rand() < npcLeaveChance(r.design, r.region, r.weekly);
+    let broke = false;
     let gone = false;
     let paidThrough = r.paid_through ?? now;
     while (!leave && paidThrough <= now) {
@@ -213,12 +243,17 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
         .bind(r.property_id, paidThrough, paidThrough + PLAYER_RENT.weekMs, npc)
         .run();
       if (!claimed.meta.changes) break;
+      if (r.npc_citizen && !(await chargeCitizen(db, npc, r.weekly))) {
+        leave = broke = true;
+        break;
+      }
       await db.batch(npcRentStmts(db, r.owner_uid, npc, r.weekly, paidThrough));
       paidThrough += PLAYER_RENT.weekMs;
     }
     if (!leave || !(await npcLeaves(db, r, gone))) continue;
     emptied.add(r.property_id);
-    if (!gone) note(r.owner_uid).left.push(`${r.npc_name ?? 'Your NPC tenant'} moved out of your ${where(r)}`);
+    const who = r.npc_name ?? 'Your NPC tenant';
+    if (!gone) note(r.owner_uid).left.push(broke ? `${who} couldn't pay the rent and moved out of your ${where(r)}` : `${who} moved out of your ${where(r)}`);
   }
 
   const { results: open } = await db
@@ -226,36 +261,71 @@ export async function settleNpcTenants(env: Env, ctx: ExecutionContext) {
     .all<RentalRow>();
   // Houses fill faster in a state with more NPC citizens looking for a room (worker/npcs.ts).
   const heads = open.length ? await headcounts(db) : {};
+  // Citizens of each state with no finished house of their own and no lease yet, read the first time a house there needs one.
+  const pools = new Map<string, Citizen[]>();
+  const poolOf = async (city: string) => {
+    if (!pools.has(city)) {
+      const { results } = await db
+        .prepare(
+          `SELECT * FROM npcs WHERE city = ?1 AND (region IS NULL OR stage < ?2) AND jailed_until <= ?3
+             AND id NOT IN (SELECT tenant_uid FROM rentals WHERE tenant_uid LIKE '${NPC_TENANT_PREFIX}%') ORDER BY RANDOM() LIMIT 60`,
+        )
+        .bind(city, STAGES.length, now)
+        .all<Citizen>()
+        .catch(() => ({ results: [] as Citizen[] }));
+      pools.set(city, results);
+    }
+    return pools.get(city)!;
+  };
+  let posted = false;
   for (const r of open) {
-    if (emptied.has(r.property_id) || rand() >= npcMoveInChance(r.design, r.region, r.weekly) * crowdFactor(heads, REGION_BY_ID[r.region]?.city)) continue;
+    const city = REGION_BY_ID[r.region]?.city;
+    if (emptied.has(r.property_id) || rand() >= npcMoveInChance(r.design, r.region, r.weekly) * crowdFactor(heads, city)) continue;
     if (typeof (await ownedHouse(db, r.owner_uid, r.property_id, true)) === 'string') {
       await db.prepare('DELETE FROM rentals WHERE property_id = ? AND tenant_uid IS NULL').bind(r.property_id).run();
       continue;
     }
-    const npc = `${NPC_TENANT_PREFIX}${crypto.randomUUID()}`;
-    const name = npcTenantName(rand);
+    // A citizen of the state whose savings cover a few weeks of it, before a made-up household.
+    const pool = city ? await poolOf(city) : [];
+    const at = pool.findIndex((c) => c.balance >= r.weekly * NPC_TENANTS.citizenWeeks);
+    const citizen = at >= 0 ? pool.splice(at, 1)[0] : null;
+    const npc = citizen?.id ?? `${NPC_TENANT_PREFIX}${crypto.randomUUID()}`;
+    const name = citizen?.name ?? npcTenantName(rand);
     const weeks = NPC_TENANTS.minWeeks + Math.floor(rand() * (NPC_TENANTS.maxWeeks - NPC_TENANTS.minWeeks + 1));
     // Only at the price they saw: an owner who changed it meanwhile has a different listing.
     const taken = await db
       .prepare(
-        `UPDATE rentals SET tenant_uid = ?2, rented_at = ?3, paid_through = ?4, npc_name = ?5, npc_until = ?6
+        `UPDATE rentals SET tenant_uid = ?2, rented_at = ?3, paid_through = ?4, npc_name = ?5, npc_until = ?6${citizen ? ', npc_citizen = 1' : ''}
          WHERE property_id = ?1 AND tenant_uid IS NULL AND weekly = ?7`,
       )
       .bind(r.property_id, npc, now, now + PLAYER_RENT.weekMs, name, now + weeks * PLAYER_RENT.weekMs, r.weekly)
       .run()
       .catch(() => null);
     if (!taken?.meta.changes) continue;
+    const lease = { ...r, tenant_uid: npc, npc_citizen: citizen ? 1 : 0 };
     // The first week up front, like a player tenant. If that fails they never moved in.
+    if (citizen && !(await chargeCitizen(db, npc, r.weekly, MOOD_BUMPS.rented))) {
+      await npcLeaves(db, lease);
+      continue;
+    }
     try {
       await db.batch(npcRentStmts(db, r.owner_uid, npc, r.weekly, now));
     } catch (error) {
       console.error('NPC tenant could not pay', error);
-      await npcLeaves(db, { ...r, tenant_uid: npc });
+      if (citizen) await db.prepare('UPDATE npcs SET balance = balance + ? WHERE id = ?').bind(r.weekly, npc).run();
+      await npcLeaves(db, lease);
       continue;
     }
     const n = note(r.owner_uid);
     n.came.push(`${name} rented your ${where(r)}`);
     n.rent += r.weekly;
+    // Now and then they tell Twitter, and name their landlord.
+    if (citizen && !posted && rand() < 0.3) {
+      posted = true;
+      const owner = (await usernames(db, [r.owner_uid])).get(r.owner_uid);
+      const line = npcLine('rented', { design: DESIGN_BY_ID[r.design]?.name ?? 'house', region: REGION_BY_ID[r.region]?.name ?? '', owner: owner ? handle(owner) : 'my landlord' }, rand);
+      await citizenPost(db, citizen.username ?? citizen.name, city as CivicCity, '🔑', line, now).run().catch(() => {});
+    }
   }
 
   for (const [owner, { left, came, rent }] of news) {

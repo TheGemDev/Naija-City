@@ -220,8 +220,25 @@ export function TreasuryHero() {
 
 const conditionTone = (n: number) => (n >= 60 ? 'good' : n >= 30 ? 'fair' : 'bad');
 
-/** One thing a state owns: how it is holding up, and for the governor what it costs and the buttons to change that. */
-function AssetRow({ city, asset, condition, level, canEdit, busy, balance, onLevel, onRepair }: {
+/** Names short enough for a property tile. */
+const TILE_NAME: Partial<Record<StateAsset, string>> = { govhouse: 'Gov. House', police: 'Police', transport: 'Motor parks', schools: 'Schools', culture: 'Museum', parks: 'Parks' };
+
+/** One thing a state owns, as a tile: how it is holding up. Tap it for what it does (and, for the governor, its controls). */
+function AssetTile({ asset, condition, open, onOpen }: { asset: StateAsset; condition: number; open: boolean; onOpen(): void }) {
+  const info = ASSET_INFO[asset];
+  const tone = conditionTone(condition);
+  return (
+    <button type="button" className={`tr-tile ${tone} ${open ? 'on' : ''}`} aria-expanded={open} onClick={onOpen}>
+      <Emoji char={info.icon} size={16} />
+      <span>{TILE_NAME[asset] ?? info.label}</span>
+      <em>{condition}%</em>
+      <i className={`tr-cond ${tone}`}><u style={{ width: `${condition}%` }} /></i>
+    </button>
+  );
+}
+
+/** The tile that is open: what it does, and for the governor what it costs and the buttons to change that. */
+function AssetDetail({ city, asset, condition, level, canEdit, busy, balance, onLevel, onRepair }: {
   city: CivicCity;
   asset: StateAsset;
   condition: number;
@@ -237,29 +254,23 @@ function AssetRow({ city, asset, condition, level, canEdit, busy, balance, onLev
   const cost = repairCost(asset, city);
   return (
     <div className="tr-asset">
-      <span className="tr-asset-icon"><Emoji char={info.icon} size={20} /></span>
-      <div className="tr-asset-body">
-        <b>{info.label}<em className={conditionTone(condition)}>{condition}%</em></b>
-        <i className={`tr-cond ${conditionTone(condition)}`}><u style={{ width: `${condition}%` }} /></i>
-        <small>{info.effect}</small>
-        {canEdit && (
-          <div className="tr-asset-controls">
-            <div className="tr-step" role="group" aria-label={`${info.label} upkeep`}>
-              <button type="button" aria-label={`Spend less on ${info.label}`} disabled={busy || at <= 0} onClick={() => onLevel(UPKEEP_LEVELS[at - 1])}>−</button>
-              <span><b>{nairaShort(upkeepOf(asset, city, level))}</b><small>an hour</small></span>
-              <button type="button" aria-label={`Spend more on ${info.label}`} disabled={busy || at >= UPKEEP_LEVELS.length - 1} onClick={() => onLevel(UPKEEP_LEVELS[at + 1])}>+</button>
-            </div>
-            <button className="btn sm" disabled={busy || condition >= 100 || balance < cost} onClick={onRepair}>Repair +{REPAIR.condition} · {nairaShort(cost)}</button>
+      <small><b>{info.label}</b> · {info.effect}</small>
+      {canEdit && (
+        <div className="tr-asset-controls">
+          <div className="tr-step" role="group" aria-label={`${info.label} upkeep`}>
+            <button type="button" aria-label={`Spend less on ${info.label}`} disabled={busy || at <= 0} onClick={() => onLevel(UPKEEP_LEVELS[at - 1])}>−</button>
+            <span><b>{nairaShort(upkeepOf(asset, city, level))}</b><small>an hour</small></span>
+            <button type="button" aria-label={`Spend more on ${info.label}`} disabled={busy || at >= UPKEEP_LEVELS.length - 1} onClick={() => onLevel(UPKEEP_LEVELS[at + 1])}>+</button>
           </div>
-        )}
-      </div>
+          <button className="btn sm" disabled={busy || condition >= 100 || balance < cost} onClick={onRepair}>Repair +{REPAIR.condition} · {nairaShort(cost)}</button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** A state's money and property. The governor of the state gets the controls. */
 /** Who lives in the state, how they feel about it, and who came, went and japa'd today (src/game/npcs.ts). */
-function PeopleCard({ city, people }: { city: CivicCity; people: StatePeople }) {
+function PeopleCard({ people }: { people: StatePeople }) {
   const t = people.today;
   const moved = t.movedIn - t.movedOut;
   const mood = people.mood ?? people.life;
@@ -268,19 +279,18 @@ function PeopleCard({ city, people }: { city: CivicCity; people: StatePeople }) 
   const today = [
     t.arrived && `🧳 ${t.arrived} arrived`, t.born && `🍼 ${t.born} born`, t.adopted && `👶🏾 ${t.adopted} adopted`,
     moved && `🚚 ${moved > 0 ? '+' : ''}${moved} moved`, t.japa && `✈️ ${t.japa} japa’d`, t.arrested && `🚔 ${t.arrested} arrested`,
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
   return (
-    <div className="tr-people">
-      <b><Emoji char="👥" size={14} /> {populationOf(people).toLocaleString('en-NG')} people in {CITY_NAME[city]}</b>
+    <div className="tr-sec">
+      <h5>People<em>{feel} · life {people.life}/100</em></h5>
       <div className="tr-state-facts">
-        <span><b>{people.adults.toLocaleString('en-NG')}</b><small>adults</small></span>
+        <span><b>{populationOf(people).toLocaleString('en-NG')}</b><small>in total</small></span>
         <span><b>{people.kids.toLocaleString('en-NG')}</b><small>children</small></span>
         <span><b>{people.players.toLocaleString('en-NG')}</b><small>players</small></span>
       </div>
-      <small className="tr-note">{feel} · life here scores <b>{people.life}/100</b>. Good roads, hospitals and police bring people in; high taxes and unpaid bills drive them away, or abroad.</small>
-      <small className="tr-note">Today: {today.length ? today.join(' · ') : 'nobody came or went yet.'}</small>
+      {today.length > 0 && <div className="tr-pills">{today.map((x) => <span key={x}>{x}</span>)}</div>}
       {craze && (
-        <small className="tr-note tr-warn"><Emoji char={craze.icon} size={12} /> {craze.label} in {CITY_NAME[city]} right now, for about {left((people.craze?.until ?? 0) - Date.now())}.</small>
+        <small className="tr-note tr-warn"><Emoji char={craze.icon} size={12} /> {craze.label} · {left((people.craze?.until ?? 0) - Date.now())} left</small>
       )}
     </div>
   );
@@ -300,10 +310,15 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
   onPay(step: number): void;
 }) {
   const data = useCivic((s) => s.data);
+  // The property tile that is open, if any.
+  const [openAsset, setOpenAsset] = useState<StateAsset | null>(null);
   const caps = data?.caps ?? DEFAULT_STATE_CAPS;
   const cut = data?.policies.federalCut ?? 0;
   if (!state) return <small className="muted tr-note">No state books yet.</small>;
   const bill = STATE_ASSETS.reduce((n, a) => n + upkeepOf(a, city, state.assets[a]?.level ?? 50), 0);
+  const owned = STATE_ASSETS.filter((a) => state.assets[a]);
+  const avg = owned.length ? Math.round(owned.reduce((n, a) => n + state.assets[a]!.condition, 0) / owned.length) : 0;
+  const open = openAsset && state.assets[openAsset] ? openAsset : null;
   return (
     <div className="tr-state">
       <div className="tr-state-money">
@@ -311,14 +326,14 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
         <b>{naira(state.balance)}</b>
       </div>
       {state.arrears > 0 && (
-        <small className="tr-note tr-warn"><Emoji char="📉" size={12} /> {naira(state.arrears)} in arrears. {canEdit ? 'Spending is frozen until it is paid.' : 'The governor can’t spend.'}</small>
+        <small className="tr-note tr-warn"><Emoji char="📉" size={12} /> {naira(state.arrears)} in arrears · spending frozen</small>
       )}
       <div className="tr-state-facts">
-        <span><b>{nairaShort(bill)}</b><small>bills an hour</small></span>
-        <span><b>{nairaShort(state.incoming)}</b><small>came in this hour</small></span>
-        <span><b>{cut}%</b><small>goes federal</small></span>
+        <span><b>{nairaShort(bill)}</b><small>bills / hour</small></span>
+        <span><b>{nairaShort(state.incoming)}</b><small>in this hour</small></span>
+        <span><b>{cut}%</b><small>to federal</small></span>
       </div>
-      {state.people && <PeopleCard city={city} people={state.people} />}
+      {state.people && <PeopleCard people={state.people} />}
       {isHead && (() => {
         // What the governor is paid: their share of the president's maximum, held to a slice of the state's money.
         const max = data?.salaries?.[CITY_HEAD[city]] ?? 0;
@@ -326,28 +341,26 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
         const wanted = Math.floor((max * share) / 100);
         const paid = governorPay(max, share, state.balance);
         return (
-          <div className="tr-laws">
-            <b>Your pay</b>
-            <div className="law-control">
-              <span><b>{naira(paid)} a day</b><small>{max ? `The president’s maximum is ${naira(max)}.` : 'The president has set no pay.'}{paid < wanted ? ` The state can only spare ${naira(paid)} a round.` : ''}</small></span>
-              <div className="law-options" role="group" aria-label="Your share of the maximum pay">
-                {GOV_STEPS.map((step) => (
-                  <button key={step} className={share === step ? 'on' : ''} aria-pressed={share === step} disabled={busy || share === step} onClick={() => onPay(step)}>{step}%</button>
-                ))}
-              </div>
+          <div className="tr-sec">
+            <h5>Your pay<em>{naira(paid)} a day{max ? ` · max ${nairaShort(max)}` : ''}</em></h5>
+            {paid < wanted && <small className="tr-note muted">The state can only spare {naira(paid)} a round.</small>}
+            <div className="law-options" role="group" aria-label="Your share of the maximum pay">
+              {GOV_STEPS.map((step) => (
+                <button key={step} className={share === step ? 'on' : ''} aria-pressed={share === step} disabled={busy || share === step} onClick={() => onPay(step)}>{step}%</button>
+              ))}
             </div>
           </div>
         );
       })()}
-      <div className="tr-laws">
-        <b>Taxes and fees</b>
+      <div className="tr-sec tr-laws">
+        <h5>Taxes and fees</h5>
         {STATE_LAW_KEYS.map((key) => {
           const law = STATE_LAWS[key];
           const value = state.laws?.[key] ?? DEFAULT_STATE_LAWS[key];
           const cap = caps[key];
           return canEdit ? (
             <div className="law-control" key={key}>
-              <span><b>{law.title}</b><small>{law.hint} The president’s maximum is {lawText(key, cap)}.</small></span>
+              <span><b>{law.title}<em className="tr-max">max {lawText(key, cap)}</em></b></span>
               <div className="law-options" role="group" aria-label={law.title}>
                 {lawChoices(cap).map(({ step, value: option }) => (
                   <button key={step} className={value === option ? 'on' : ''} aria-pressed={value === option} disabled={busy || value === option} onClick={() => onLaw(key, step)}>{lawText(key, option)}</button>
@@ -355,19 +368,29 @@ function StateCard({ city, state, canEdit, isHead, busy, onLevel, onRepair, onAs
               </div>
             </div>
           ) : (
-            <div className="tr-law-line" key={key}><span>{law.title}</span><b>{lawText(key, value)}<em> / max {lawText(key, cap)}</em></b></div>
+            <div className="tr-law-line" key={key}><span>{law.title}</span><b>{lawText(key, value)}<em> / {lawText(key, cap)}</em></b></div>
           );
         })}
       </div>
-      {STATE_ASSETS.map((asset) => {
-        const row = state.assets[asset];
-        return row ? (
-          <AssetRow key={asset} city={city} asset={asset} condition={row.condition} level={row.level} canEdit={canEdit} busy={busy} balance={state.balance} onLevel={(level) => onLevel(asset, level)} onRepair={() => onRepair(asset)} />
-        ) : null;
-      })}
+      {owned.length > 0 && (
+        <div className="tr-sec">
+          <h5>Property<em className={conditionTone(avg)}>{avg}% overall</em></h5>
+          <div className="tr-tiles">
+            {owned.map((asset) => (
+              <AssetTile key={asset} asset={asset} condition={state.assets[asset]!.condition} open={open === asset} onOpen={() => setOpenAsset(open === asset ? null : asset)} />
+            ))}
+          </div>
+          {open && (
+            <AssetDetail
+              city={city} asset={open} condition={state.assets[open]!.condition} level={state.assets[open]!.level} canEdit={canEdit} busy={busy}
+              balance={state.balance} onLevel={(level) => onLevel(open, level)} onRepair={() => onRepair(open)}
+            />
+          )}
+        </div>
+      )}
       {canEdit && (
-        <div className="tr-ask">
-          <b>Ask the president for money</b>
+        <div className="tr-sec">
+          <h5>Ask the president for money</h5>
           {state.ask ? (
             <small className="muted">Waiting for an answer: {naira(state.ask.amount)}.</small>
           ) : (

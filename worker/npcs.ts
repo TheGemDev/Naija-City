@@ -126,7 +126,7 @@ async function uniqueUsernames(db: D1Database, people: { id: string; name: strin
 /* ---------- Writing ---------- */
 
 /** A post on Naija Twitter by an NPC: the News tab carries them (src/game/news.ts NEWS_KINDS). */
-const citizenPost = (db: D1Database, author: string, city: CivicCity, icon: string, text: string, now: number) =>
+export const citizenPost = (db: D1Database, author: string, city: CivicCity, icon: string, text: string, now: number) =>
   db.prepare("INSERT INTO feed (uid, kind, icon, text, created_at, city, author) VALUES (NULL, 'citizen', ?, ?, ?, ?, ?)").bind(icon, text.slice(0, 280), now, city, author.slice(0, 40));
 
 type Census = Partial<Record<'arrived' | 'moved_in' | 'moved_out' | 'japa' | 'born' | 'adopted' | 'arrested', number>>;

@@ -377,6 +377,11 @@ export const NPC_TENANTS = {
   leaveChance: 0.002,
   /** However dear the rent, never worse than this per tick. */
   maxLeaveChance: 0.05,
+  /**
+   * NPC citizens (src/game/npcs.ts) without a finished house of their own take a listing in their state before a made-up
+   * household does, if their savings cover this many weeks of its rent. They pay it out of their own balance.
+   */
+  citizenWeeks: 3,
 };
 
 /** NPC tenants live in the rentals table under a made-up uid with this prefix, never a real player's. */
