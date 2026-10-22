@@ -1,47 +1,77 @@
-// Desktop: a soft white glow on the floor round the foot of everything you can use, faint all the time so you can see
-// what's selectable, and brighter while the pointer is on it (with HoverOutline's white line). Touch screens get the
-// pulsing ring in Items.tsx instead. One shared texture; each halo is a single small transparent quad.
-import { useMemo, useRef, type RefObject } from 'react';
+// A warm glow round the foot of everything you can use: faint and slowly breathing all the time, so you can see what's
+// usable, and brighter while the pointer is on it (with HoverOutline's line round its body). Every device gets it.
+// One flat quad a little bigger than the footprint; its shader works out the distance to the footprint's rounded edge
+// in world units, so the glow hugs the base at the same width for a stool or a bank counter.
+import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { CanvasTexture, type MeshBasicMaterial, type Object3D } from 'three';
+import { Color, ShaderMaterial, type Object3D } from 'three';
 import { hoverTarget } from './HoverOutline';
 
 /** A real mouse or trackpad. */
 export const DESK_HALO = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
-let glow: CanvasTexture | null = null;
-/** White in the middle fading to nothing at the rim, so the halo has no hard edge. */
-function glowTexture() {
-  if (glow) return glow;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const g = c.getContext('2d')!;
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
-  grad.addColorStop(0.55, 'rgba(255,255,255,0.45)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 64);
-  return (glow = new CanvasTexture(c));
+/** How far past the footprint the glow reaches, in world units. */
+const SPREAD = 0.55;
+const IDLE = 0.85;
+const HOVER = 1;
+const GLOW = new Color('#ffb627');
+
+const VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const FRAG = /* glsl */ `
+varying vec2 vUv;
+uniform vec2 uSize;
+uniform vec2 uHalf;
+uniform vec3 uColor;
+uniform float uOpacity;
+float box(vec2 p, vec2 b, float r) {
+  vec2 q = abs(p) - b + r;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
+void main() {
+  float d = box((vUv - 0.5) * uSize, uHalf, 0.12);
+  // Brightest right at the base, fading out past it; a little inside too, where the object doesn't cover the floor.
+  float a = d < 0.0 ? smoothstep(-0.1, 0.0, d) : exp(-d / 0.17);
+  gl_FragColor = vec4(uColor, a * uOpacity);
+}`;
 
-const IDLE = 0.26;
-const HOVER = 0.55;
-
-/** `w` × `d`: the footprint it glows round (it spreads a little past it); `target`: the object whose hover lights it up. */
+/** `w` × `d`: the footprint it glows round; `target`: the object whose hover lights it up. */
 export function SelectHalo({ x, z, w, d, yaw, target }: { x: number; z: number; w: number; d: number; yaw: number; target: RefObject<Object3D | null> }) {
-  const tex = useMemo(glowTexture, []);
-  const mat = useRef<MeshBasicMaterial>(null!);
-  useFrame((_, dt) => {
-    const want = target.current && hoverTarget() === target.current ? HOVER : IDLE;
-    mat.current.opacity += (want - mat.current.opacity) * Math.min(1, dt * 10);
+  const mat = useMemo(
+    () => new ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms: {
+        uSize: { value: [w + SPREAD * 2, d + SPREAD * 2] },
+        uHalf: { value: [w / 2, d / 2] },
+        uColor: { value: GLOW },
+        uOpacity: { value: IDLE },
+      },
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    [w, d],
+  );
+  useEffect(() => () => mat.dispose(), [mat]);
+  const shown = useRef(IDLE);
+  // A different start for each, so a room full of them doesn't breathe in step.
+  const phase = useMemo(() => x * 1.7 + z * 0.9, [x, z]);
+  useFrame(({ clock }, dt) => {
+    const want = target.current && hoverTarget() === target.current ? HOVER : IDLE * (0.8 + 0.2 * Math.sin(clock.elapsedTime * 2 + phase));
+    shown.current += (want - shown.current) * Math.min(1, dt * 10);
+    mat.uniforms.uOpacity.value = shown.current;
   });
   return (
     // dynamic: it brightens and dims, so the map and place batching (StaticBatch) must leave it alone.
     <group userData={{ dynamic: true }}>
-      <mesh position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, yaw]} renderOrder={2} raycast={() => null}>
-        <planeGeometry args={[w + 0.7, d + 0.7]} />
-        <meshBasicMaterial ref={mat} map={tex} transparent opacity={IDLE} depthWrite={false} toneMapped={false} />
+      <mesh position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, yaw]} renderOrder={2} raycast={() => null} material={mat}>
+        <planeGeometry args={[w + SPREAD * 2, d + SPREAD * 2]} />
       </mesh>
     </group>
   );

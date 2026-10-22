@@ -18,7 +18,7 @@ import { RefineryYard } from './RefineryYard';
 import { Person, type Clip } from './Person';
 import { Slab } from './Slab';
 import { StaticBatch } from './StaticBatch';
-import { DESK_HALO, SelectHalo } from './SelectHalo';
+import { SelectHalo } from './SelectHalo';
 import { Emoji } from '../ui/Icons';
 import { offHover, onHover } from './HoverOutline';
 import { JailMates } from './JailMates';
@@ -351,7 +351,7 @@ function PropMesh({ prop, selected }: { prop: Prop; selected: boolean }) {
       >
         <PropModel type={prop.type} text={prop.text} />
       </group>
-      {DESK_HALO && usable && !selected && <SelectHalo x={cx} z={cz} w={w} d={d} yaw={yaw} target={body} />}
+      {usable && !selected && <SelectHalo x={cx} z={cz} w={w} d={d} yaw={yaw} target={body} />}
       {selected && (
         <mesh position={[cx, 0.03, cz]} rotation={[-Math.PI / 2, 0, 0]} userData={{ dynamic: true }}>
           <planeGeometry args={[w, d]} />
