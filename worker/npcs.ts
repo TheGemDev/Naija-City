@@ -645,6 +645,19 @@ async function castVotes(db: D1Database, w: World, now: number) {
 
 /* ---------- Chatter: replies, beef and likes ---------- */
 
+/**
+ * `n` NPCs (in `city`, if given) from a random point in the table onwards. A seek on the rowid or the city index reads
+ * about `n` rows; ORDER BY RANDOM() read and sorted every NPC to keep one.
+ */
+async function randomNpcs<T>(db: D1Database, cols: string, n: number, city: CivicCity | null): Promise<T[]> {
+  const from = async (start: string) =>
+    (await db.prepare(`SELECT ${cols} FROM npcs WHERE rowid >= ${start}${city ? ' AND city = ?2' : ''} ORDER BY rowid LIMIT ?1`)
+      .bind(n, ...(city ? [city] : [])).all<T>()).results;
+  const rows = await from('abs(random()) % ((SELECT max(rowid) FROM npcs) + 1)');
+  // Started too near the end: wrap round to the first NPCs.
+  return rows.length >= n ? rows : from('0');
+}
+
 interface Recent { id: number; kind: string; city: CivicCity | null; author: string | null; npcReplies: number; lastNpc: string | null }
 
 /**
@@ -671,10 +684,8 @@ async function chatter(db: D1Database, now: number) {
     const target = rand() < NPC_REPLIES.playerShare && players.length ? pick(players) : others.length ? pick(others) : null;
     if (target) {
       const city = isCity(target.city) ? target.city : null;
-      const who = await db
-        .prepare('SELECT name, username, city FROM npcs WHERE (?1 IS NULL OR city = ?1) AND (?2 IS NULL OR COALESCE(username, name) != ?2) ORDER BY RANDOM() LIMIT 1')
-        .bind(city, target.author)
-        .first<{ name: string; username: string | null; city: CivicCity }>();
+      const who = (await randomNpcs<{ name: string; username: string | null; city: CivicCity }>(db, 'name, username, city', 3, city))
+        .find((n) => nick(n) !== target.author);
       // Under an NPC's post that someone else already answered, the author may fire back at them instead.
       const clap = target.kind === 'citizen' && target.author && target.lastNpc && target.lastNpc !== target.author && rand() < NPC_REPLIES.clapback;
       const author = clap ? target.author! : who && nick(who);
@@ -696,7 +707,7 @@ async function chatter(db: D1Database, now: number) {
   }
 
   // Likes: a handful of NPCs, each on a recent post of their own choosing.
-  const { results: fans } = await db.prepare('SELECT id FROM npcs ORDER BY RANDOM() LIMIT ?').bind(Math.round(between(...NPC_REPLIES.likes))).all<{ id: string }>();
+  const fans = await randomNpcs<{ id: string }>(db, 'id', Math.round(between(...NPC_REPLIES.likes)), null);
   for (const fan of fans) stmts.push(db.prepare('INSERT OR IGNORE INTO feed_likes (post_id, uid, created_at) VALUES (?, ?, ?)').bind(pick(recent).id, fan.id, now));
   if (stmts.length) await db.batch(stmts);
 }
