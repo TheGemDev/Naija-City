@@ -1112,12 +1112,6 @@ export function placeAction(placeId: string, actionId: string): ActionDef | unde
 export const SMELLY_OK = new Set(['home', 'prison', 'camp', 'hospital', 'mosque', 'stadium']);
 export const turnedAwayForSmell = (p: Place) => !p.ground && !SMELLY_OK.has(p.id);
 
-/** Every place is open round the clock: nothing on the map is locked by the hour. */
-export function isOpen(_p: Place, _hour: number) {
-  return true;
-}
-
-export const hoursLabel = (_p: Place) => 'Open 24 hours';
 
 /** Rotation that turns a model (front = local +z) to face its door. */
 export function placeYaw(p: Place) {

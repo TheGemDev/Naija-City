@@ -2,9 +2,8 @@
 // the airport you land at, shown as one route with one price.
 
 import { useEffect, useState } from 'react';
-import { hourOf, naira, ticketOf, useGame, type TravelMode } from '../game/store';
+import { naira, ticketOf, useGame, type TravelMode } from '../game/store';
 import { avatarCell } from '../game/avatar';
-import { hoursLabel, isOpen } from '../game/city';
 import type { Cell } from '../game/grid';
 import { kmBetween } from '../game/fares';
 import { regionOf, regionPlace } from '../game/regions';
@@ -91,7 +90,6 @@ export function TripSheet() {
   const view = useGame((s) => s.view);
   const fromId = useGame((s) => s.destinationId);
   const money = useGame((s) => s.money);
-  const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
   const [mode, setMode] = useState<TravelMode>('keke');
   const [via, setVia] = useState<Via>('air');
   useGame((s) => s.fares);
@@ -107,11 +105,8 @@ export function TripSheet() {
   const legs = tripLegs(fromId, offer.city, mode, avatarCell(), kmBetween(arrivalDoor(offer.city, via), place.door), via)
     ?? tripLegs(fromId, offer.city, mode, avatarCell(), kmBetween(arrivalDoor(offer.city, 'air'), place.door));
   if (!legs) return null;
-  const { airport, total } = legs;
+  const { total } = legs;
   const to = regionOf(offer.city);
-  // The flight takes minutes of the world's clock: shut now is shut when you land.
-  const open = isOpen(place, hour);
-  const flying = isOpen(airport, hour);
   const close = () => useTrip.setState({ offer: null });
   return (
     <div className="sheet place-sheet travel-sheet" role="dialog" aria-label="Trip to another city">
@@ -120,15 +115,15 @@ export function TripSheet() {
       </div>
       <div className="travel-body">
         <p className="muted place-meta">
-          <Emoji char="📍" size="1em" /> {place.area} · {to.name} · <span className={open ? 'good' : 'bad'}>{open ? 'Open' : 'Closed'} · {hoursLabel(place)}</span>
+          <Emoji char="📍" size="1em" /> {place.area} · {to.name}
         </p>
         <WorkNote city={offer.city} placeId={place.id} />
         <TripRoute fromId={fromId} toId={offer.city} end={`to ${place.name}`} legs={legs} mode={mode} setMode={setMode} setVia={setVia} />
       </div>
       <div className="travel-actions">
         <button type="button" className="travel-cancel" onClick={close}>Cancel</button>
-        <button type="button" className="btn go travel-go" disabled={!open || !flying || money < total} onClick={() => startTrip(mode, legs.via)}>
-          {!open ? <><Emoji char="🔒" size="1em" /> Closed now</> : !flying ? <><Emoji char="🔒" size="1em" /> {legs.via === 'rail' ? 'Station closed' : 'Airport closed'}</> : money < total ? `You need ${naira(total)}` : <>Go there · {naira(total)}</>}
+        <button type="button" className="btn go travel-go" disabled={money < total} onClick={() => startTrip(mode, legs.via)}>
+          {money < total ? `You need ${naira(total)}` : <>Go there · {naira(total)}</>}
         </button>
       </div>
     </div>

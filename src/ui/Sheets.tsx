@@ -2,8 +2,8 @@ import { brokenAsset } from '../net/roads';
 import { useEffect, useState } from 'react';
 import { ItemThumb } from '../three/thumbnails';
 import { CATEGORIES, ITEMS, ITEM_LIST, JOBS, type ActionDef, type Category } from '../game/catalog';
-import { findAction, hourOf, houseKeyOf, isPowered, naira, taskDurationSeconds, ticketOf, useGame, type TravelMode, activeDesignOf } from '../game/store';
-import { cityMap, hoursLabel, isOpen, PLACE_BY_ID } from '../game/city';
+import { findAction, houseKeyOf, isPowered, naira, taskDurationSeconds, ticketOf, useGame, type TravelMode, activeDesignOf } from '../game/store';
+import { cityMap, PLACE_BY_ID } from '../game/city';
 import { cityNameHere, regionPlaces } from '../game/regions';
 import { employment } from '../game/jobs';
 import { INTERIORS } from '../game/interiors';
@@ -412,6 +412,9 @@ export function StreetStorySheet() {
   );
 }
 
+/** Closer than this to a door (about 100 m), the card just offers to walk in. */
+const NEAR_KM = 0.1;
+
 /** Town map: tap a building → this card. */
 export function PlaceSheet() {
   const placeId = useGame((s) => s.placeId);
@@ -420,7 +423,6 @@ export function PlaceSheet() {
   const money = useGame((s) => s.money);
   const ownedCars = useGame((s) => s.ownedCars);
   const carFuel = useGame((s) => s.carFuel);
-  const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
   const go = useGame((s) => s.startPlace);
   const close = useGame((s) => s.selectPlace);
   const [travelMode, setTravelMode] = useState<TravelMode>('walk');
@@ -462,11 +464,13 @@ export function PlaceSheet() {
       </div>
     );
   }
-  const open = place.id === 'home' || isOpen(place, hour);
   // Shut because the state let it fall apart.
   const broken = brokenAsset(destinationId, place.id);
   const km = kmBetween(avatarCell(), place.door);
-  const travelFare = fareOf(travelMode, km);
+  // Standing right outside: no rides to pick, you just walk in.
+  const near = km < NEAR_KM;
+  const mode = near ? 'walk' : travelMode;
+  const travelFare = fareOf(mode, km);
   const canAfford = money >= travelFare;
   return (
     <TravelSheet
@@ -490,7 +494,7 @@ export function PlaceSheet() {
       top={
         <>
           <p className="muted place-meta">
-            <Emoji char="📍" size="1em" /> {place.area} · {place.id === 'home' ? 'Your compound' : <span className={open ? 'good' : 'bad'}>{open ? 'Open' : 'Closed'} · {hoursLabel(place)}</span>}
+            <Emoji char="📍" size="1em" /> {place.area}{place.id === 'home' ? ' · Your compound' : ''}
           </p>
           {broken && <p className="place-broken"><Emoji char="🔧" size="1em" /> Closed: fallen apart. The governor has to repair it.</p>}
           {place.blurb && <p className="place-blurb">{place.blurb}</p>}
@@ -499,14 +503,15 @@ export function PlaceSheet() {
           <PlaceShopsLine placeId={place.id} onOpen={() => setShops(true)} />
         </>
       }
+      route={near ? <p className="muted small travel-near"><Emoji char="🚶🏾" size="1em" /> You’re right outside.</p> : undefined}
       allowWalk
-      mode={travelMode}
+      mode={mode}
       setMode={setTravelMode}
       carId={selectedCarId}
       setCarId={setSelectedCarId}
-      goLabel={broken ? <><Emoji char="🔧" size="1em" /> Closed for repairs</> : open ? <>Go · {tripCost(travelMode, selectedCarId, km)}</> : <><Emoji char="🔒" size="1em" /> Closed now</>}
-      goDisabled={!!broken || !open || !canAfford || carDry(travelMode, selectedCarId, carFuel, km) || (travelMode === 'car' && (!selectedCarId || !ownedCars.includes(selectedCarId)))}
-      onGo={() => go(place.id, travelMode, travelMode === 'car' ? selectedCarId ?? undefined : undefined)}
+      goLabel={broken ? <><Emoji char="🔧" size="1em" /> Closed for repairs</> : near ? 'Go in' : <>Go · {tripCost(mode, selectedCarId, km)}</>}
+      goDisabled={!!broken || !canAfford || carDry(mode, selectedCarId, carFuel, km) || (mode === 'car' && (!selectedCarId || !ownedCars.includes(selectedCarId)))}
+      onGo={() => go(place.id, mode, mode === 'car' ? selectedCarId ?? undefined : undefined)}
       onCancel={() => close(null)}
     />
   );

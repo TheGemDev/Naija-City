@@ -4,10 +4,10 @@
 
 import { create } from 'zustand';
 import { avatar } from './avatar';
-import { activeMap, cityMap, cellIsBridge, cellIsRoad, cityWalkable, isOpen, placeHere, potholeOf, potholeSites, type Place } from './city';
+import { activeMap, cityMap, cellIsBridge, cellIsRoad, cityWalkable, placeHere, potholeOf, potholeSites, type Place } from './city';
 import { cityNameHere, regionPlaces } from './regions';
 import { CAR_BY_ID } from './cars';
-import { hourOf, naira, useGame } from './store';
+import { naira, useGame } from './store';
 import { driveHooks, driveState, type Vehicle } from './driveState';
 import { activeEvent, roadMods } from './live';
 import { fareTax } from './fares';
@@ -284,9 +284,8 @@ function spawnPassenger(gig: Gig) {
   const g = useGame.getState();
   const pickup = randomRoadCell({ x: avatar.x, z: avatar.z }, 5, 16);
   if (!pickup) return;
-  const hour = hourOf(g.minutes);
   const options = regionPlaces(g.destinationId).filter(
-    (p: Place) => p.id !== 'home' && p.id !== 'prison' && p.id !== 'camp' && isOpen(p, hour) && Math.hypot(p.door.x - pickup.x, p.door.z - pickup.z) > 9,
+    (p: Place) => p.id !== 'home' && p.id !== 'prison' && p.id !== 'camp' && Math.hypot(p.door.x - pickup.x, p.door.z - pickup.z) > 9,
   );
   if (!options.length) return;
   const to = pick(options);
@@ -318,8 +317,7 @@ const sellsFood = (p: Place) => /market|mall|buka|suya|canteen|restaurant|eatery
 
 function spawnOrder() {
   const g = useGame.getState();
-  const hour = hourOf(g.minutes);
-  const open = regionPlaces(g.destinationId).filter((p: Place) => p.id !== 'home' && p.id !== 'prison' && p.id !== 'camp' && isOpen(p, hour));
+  const open = regionPlaces(g.destinationId).filter((p: Place) => p.id !== 'home' && p.id !== 'prison' && p.id !== 'camp');
   const shops = open.filter(sellsFood);
   const from = pick(shops.length ? shops : open);
   if (!from) return;

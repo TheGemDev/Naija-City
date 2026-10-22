@@ -18,7 +18,7 @@ import { LIGHTS, applyFinish, cleanLamp, finishCost, finishLabel, validValue, ty
 import { WALL_BUILD_COST, WALL_KNOCK_COST, arrivalCell, edgeKey, fitItemsToLayout, houseLayout, inGrid, isEditableEdge, wallBuildError, type WallEdge, itemTransform, pathToCell, pathToItem, placementError, type Cell, type HouseLayout, type PlacedItem } from './grid';
 import { DEFAULT_ITEMS } from './defaults';
 import { childrenOf, tidy, type Pose } from './mount';
-import { activeMap, cityMap, cityPathToCell, cityPathToPlace, cityStraightPath, HOME_PLACE, hoursLabel, isOpen, mapGroundY, PLACE_BY_ID, placeAction, placeHere, setActiveMap, turnedAwayForSmell } from './city';
+import { activeMap, cityMap, cityPathToCell, cityPathToPlace, cityStraightPath, HOME_PLACE, mapGroundY, PLACE_BY_ID, placeAction, placeHere, setActiveMap, turnedAwayForSmell } from './city';
 import { exitCell, frontCell, interiorPathToCell, interiorPathToProp, INTERIORS, propDef, propTransform } from './interiors';
 import { CHECKOUT_WARNING, HOTEL_ID, isHotelRoom, MAX_NIGHTS, NIGHT, nightlyIn, nightsFree, ROOM_BY_ID, roomNumber, roomPlaceId, stayActive, stayCountdown, stayIn, type HotelStay, type HotelStays, type RoomTypeId } from './hotel';
 import { isPrivateRoom, isVillaSuite, roomParent, SUITE_ID, VILLA_ID } from './villa';
@@ -2350,7 +2350,6 @@ export const useGame = create<GameState>((set, get) => {
       if (!place && PLACE_BY_ID[placeId] && st.view === 'city') awayFromHome();
       if (!place || !def || st.view !== 'city') return;
       if (s.task?.actionId === 'work' && s.task.phase === 'doing') return toast('You are at work');
-      if (place.id !== 'home' && !isOpen(place, hourOf(s.minutes))) return toast(`${place.name} is closed now · ${hoursLabel(place)}`);
       // Nobody turns away a guest with a key: the hotel you hold a room in, and the villa for the President, whose suite is inside.
       const hasRoom = place.id === HOTEL_ID ? stayActive(stayIn(s.hotelStays, st.destinationId), s.minutes) : place.id === VILLA_ID && heldOffice() === 'president';
       if (Math.round(s.needs.hygiene) <= 0 && turnedAwayForSmell(place) && !hasRoom) return toast(`🤢 Security at ${place.name}: "Oga, the smell! Go and bath first, then come back." The hospital shower is free.`);

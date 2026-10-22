@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { create } from 'zustand';
-import { estateKm, homeTripKm, hourOf, naira, ownHouseOf, useGame, type TravelMode } from '../game/store';
+import { estateKm, homeTripKm, naira, ownHouseOf, useGame, type TravelMode } from '../game/store';
 import { cityEstates, DESIGN_BY_ID, estateCity, houseTitle, REGION_BY_ID, isComplete } from '../game/property';
 import { regionAirportDoor, regionOf, regionPlace, regionStartDoor } from '../game/regions';
 import { CAP, sectionOf } from '../game/estate';
 import { useRentals } from '../net/rentals';
 import { cityState, OtherThumb, PropertyThumb } from './homesKit';
 import { avatarCell } from '../game/avatar';
-import { isOpen } from '../game/city';
 import { kmBetween } from '../game/fares';
 import { startHomeTrip, tripFlight, type Via } from '../game/trip';
 import { roomParent } from '../game/villa';
@@ -75,7 +74,6 @@ export function TravelPicker() {
   const [tripMode, setTripMode] = useState<TravelMode>('keke');
   // And how it crosses between the cities: a flight, or the train where a line runs.
   const [via, setVia] = useState<Via>('air');
-  const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
   const [carId, setCarId] = useState<string | null>(null);
   // Which estate the arrows have landed on (null = the one the sheet opened with).
   const [picked, setPicked] = useState<string | null>(null);
@@ -145,7 +143,6 @@ export function TravelPicker() {
       return tripLegs(city, home.city, tripMode, from, home.km, via) ?? tripLegs(city, home.city, tripMode, from, home.km);
     })()
     : null;
-  const flying = !!legs && isOpen(legs.airport, hour);
 
   const go = () => {
     const st = useGame.getState();
@@ -176,9 +173,9 @@ export function TravelPicker() {
       carId={carId}
       setCarId={setCarId}
       goLabel={legs
-        ? !flying ? <><Emoji char="🔒" size="1em" /> {legs.via === 'rail' ? 'Station closed' : 'Airport closed'}</> : money < legs.total ? `You need ${naira(legs.total)}` : <>Go home · {naira(legs.total)}</>
+        ? money < legs.total ? `You need ${naira(legs.total)}` : <>Go home · {naira(legs.total)}</>
         : here ? 'Already here' : <>Go · {tripCost(current, carId, km)}</>}
-      goDisabled={legs ? !flying || money < legs.total : !ready}
+      goDisabled={legs ? money < legs.total : !ready}
       onGo={go}
       onCancel={close}
     />

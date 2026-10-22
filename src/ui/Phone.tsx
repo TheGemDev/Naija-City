@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ITEMS } from '../game/catalog';
-import { CAMPAIGN_EVENTS, dayOf, homeLoad, hourOf, inOwnHouse, INVERTER, inverterCount, isDaylight, isPowered, naira, nairaShort, OFFICE_RULES, solarActive, useGame, type MoneyKind, type Txn } from '../game/store';
+import { CAMPAIGN_EVENTS, dayOf, homeLoad, inOwnHouse, INVERTER, inverterCount, isDaylight, isPowered, naira, nairaShort, OFFICE_RULES, solarActive, useGame, type MoneyKind, type Txn } from '../game/store';
 import { INVESTMENTS, LIQUIDATION_FACTOR, MAX_TRADE_UNITS, paidFor, priceOf, USD_NGN } from '../game/investments';
 import { useStocks, watchMarket } from '../net/stocks';
 import { useCityStats, watchCityStats } from '../net/cityStats';
@@ -33,7 +33,7 @@ import { sfx } from '../game/sfx';
 import { PoliceApp } from './Police';
 import { EfccApp } from './Efcc';
 import { InecApp } from './Inec';
-import { cityMap, isOpen, jetFare, potholeCity, potholeOf, type Place } from '../game/city';
+import { cityMap, jetFare, potholeCity, potholeOf, type Place } from '../game/city';
 import { placeNameIn, regionPlaces, regionOf } from '../game/regions';
 import { employment, JOB_CITIES, jobsIn, shiftClock, shiftHours, workplaceOf } from '../game/jobs';
 import { goToWork, workKey } from '../game/work';
@@ -1618,7 +1618,6 @@ function RideApp() {
   const destinationId = useGame((s) => s.destinationId);
   const origin = useGame((s) => s.origin);
   const properties = useGame((s) => s.properties);
-  const hour = useGame((s) => Math.floor(hourOf(s.minutes)));
   const view = useGame((s) => s.view);
   const insideId = useGame((s) => s.insideId);
   const activeTask = useGame((s) => s.task);
@@ -1716,16 +1715,14 @@ function RideApp() {
       <h4>{selectedArea === 'all' ? 'All Destinations' : `${selectedArea} Destinations`} ({filteredPlaces.length})</h4>
       <div className="ride-list">
         {filteredPlaces.map((p) => {
-          const isOpenNow = p.id === 'home' || isOpen(p, hour);
           const distStr = getDistanceStr(p);
           return (
-            <button key={p.id} type="button" className={`ride-item ${isOpenNow ? '' : 'closed'}`} onClick={() => pick(p)}>
+            <button key={p.id} type="button" className="ride-item" onClick={() => pick(p)}>
               <span className="ride-item-icon"><Emoji char={p.icon} size={24} /></span>
               <span className="ride-item-body">
                 <b>{p.name}</b>
                 <small>{p.area}{distStr ? ` · ${distStr}` : ''}</small>
               </span>
-              <span className={`pill-tag ${isOpenNow ? 'on' : ''}`}>{isOpenNow ? 'Open' : 'Closed'}</span>
               <span className="ride-item-chev" aria-hidden="true">›</span>
             </button>
           );

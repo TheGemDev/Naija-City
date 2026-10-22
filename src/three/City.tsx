@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, Object3D, Shape, ShapeGeometry, type Group, type InstancedMesh, type Mesh } from 'three';
 import {
-  BRIDGE_RAMP, BRIDGE_Y, cityMap, isOpen, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
+  BRIDGE_RAMP, BRIDGE_Y, cityMap, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
 } from '../game/city';
 import { hourOf, nairaShort, useGame } from '../game/store';
 import { PRODUCES } from '../game/trade';
@@ -942,7 +942,6 @@ function PlayerRide() {
 }
 
 function PlaceLabel({ place }: { place: Place }) {
-  const open = useGame((s) => isOpen(place, hourOf(s.minutes)));
   const selected = useGame((s) => s.placeId === place.id);
   const target = useGame((s) => s.task?.actionId === 'enter' && s.task.placeId === place.id);
   const posY = place.ground ? 1.2 : 3.2;
@@ -988,7 +987,7 @@ function PlaceLabel({ place }: { place: Place }) {
       <Html center zIndexRange={[8, 1]} style={{ pointerEvents: 'auto' }}>
         <button
           type="button"
-          className={`place-label ${selected || target ? 'on' : ''} ${open ? '' : 'closed'} ${place.id === 'home' ? 'home' : ''}`}
+          className={`place-label ${selected || target ? 'on' : ''} ${place.id === 'home' ? 'home' : ''}`}
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
