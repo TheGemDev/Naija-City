@@ -7,7 +7,7 @@ import { dayOf, naira, useGame } from '../game/store';
 import { HOTEL_ID, MAX_NIGHTS, ROOM_BY_ID, ROOM_TYPES, isHotelRoom, nightlyIn, nightsFree, stayActive, stayCountdown, stayIn, type HotelStay, type RoomTypeId } from '../game/hotel';
 import { regionPlace } from '../game/regions';
 import { DAY_REAL_MINUTES } from '../game/timeRates';
-import { Emoji } from './Icons';
+import { Emoji, Sign } from './Icons';
 import { formatClock } from './Hud';
 import './hotel.css';
 
@@ -154,9 +154,9 @@ export function HotelDesk() {
                   ) : (
                     <div className="hotel-book">
                       <div className="hotel-nights" role="group" aria-label="Nights">
-                        <button type="button" aria-label="One night less" disabled={n <= 1} onClick={() => setNights(n - 1)}>−</button>
+                        <button type="button" aria-label="One night less" disabled={n <= 1} onClick={() => setNights(n - 1)}><Sign minus /></button>
                         <b>{n} night{n > 1 ? 's' : ''}</b>
-                        <button type="button" aria-label="One night more" disabled={n >= most} onClick={() => setNights(n + 1)}>+</button>
+                        <button type="button" aria-label="One night more" disabled={n >= most} onClick={() => setNights(n + 1)}><Sign /></button>
                       </div>
                       <button type="button" className="btn go" disabled={money < cost} onClick={() => g.bookRoom(t.id, n)}>
                         {mine ? 'Add' : stay ? 'Move here' : 'Book'} · {naira(cost)}

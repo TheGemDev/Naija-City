@@ -13,6 +13,7 @@ import { followDeepLink, shareLink, shopLink } from '../net/deeplink';
 import { useSession } from '../net/session';
 import './business.css';
 import { buyMarketListing, browseMarket, loadPlaceShops, useCityHere, usePlaceShops, useSharedShop, type MarketListing } from '../net/market';
+import { Sign } from './Icons';
 
 /** Places that rent stalls, in map-list order. */
 /** The places in a city that rent stalls, by the names they go by there. */
@@ -63,9 +64,9 @@ function Product({ item, own, here, onBought }: { item: MarketListing; own: bool
       ) : (
         <>
           <div className="shop-qty" role="group" aria-label={`Quantity of ${item.name}`}>
-            <button type="button" aria-label="One less" disabled={busy || quantity <= 1} onClick={() => step(-1)}>−</button>
+            <button type="button" aria-label="One less" disabled={busy || quantity <= 1} onClick={() => step(-1)}><Sign minus /></button>
             <span aria-live="polite">{quantity}</span>
-            <button type="button" aria-label="One more" disabled={busy || quantity >= max} onClick={() => step(1)}>+</button>
+            <button type="button" aria-label="One more" disabled={busy || quantity >= max} onClick={() => step(1)}><Sign /></button>
           </div>
           <button className="btn sm go" disabled={busy || !item.open || max < 1} onClick={() => void buy()}>
             {busy ? 'Buying…' : max < 1 ? 'Sold out' : `${here ? 'Buy' : 'Deliver'} · ${naira(total + fee)}`}

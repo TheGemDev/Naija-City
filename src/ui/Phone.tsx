@@ -26,7 +26,7 @@ import { Messages } from './Messages';
 import { House, useHouseNav } from './Gida';
 import { formatClock, TaskTimeLeft } from './Hud';
 import { Hand } from './Hand';
-import { Emoji, type IconName } from './Icons';
+import { Emoji, type IconName, Sign } from './Icons';
 import { audio, LIVE_STATIONS, type LiveStation } from '../game/audio';
 import { radioOff, tuneRadio } from '../game/radio';
 import { sfx } from '../game/sfx';
@@ -610,7 +610,7 @@ function Invest() {
             {closed && <small className="muted" style={{ padding: '0 4px' }}>Trading is paused until a fresh price comes in.</small>}
 
             <div className="inv-qty" role="group" aria-label={`Units of ${inv.title}`}>
-              <button type="button" aria-label="One less" disabled={n <= 1} onClick={() => setN(n - 1)}>−</button>
+              <button type="button" aria-label="One less" disabled={n <= 1} onClick={() => setN(n - 1)}><Sign minus /></button>
               <input
                 inputMode="numeric"
                 aria-label="Units"
@@ -619,7 +619,7 @@ function Invest() {
                 onChange={(e) => setQty((q) => ({ ...q, [inv.id]: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
                 onBlur={() => setN(n)}
               />
-              <button type="button" aria-label="One more" disabled={n >= MAX_TRADE_UNITS} onClick={() => setN(n + 1)}>+</button>
+              <button type="button" aria-label="One more" disabled={n >= MAX_TRADE_UNITS} onClick={() => setN(n + 1)}><Sign /></button>
             </div>
 
             <div className="inv-trade">

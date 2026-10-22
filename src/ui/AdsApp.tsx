@@ -13,6 +13,7 @@ import { layout, NO_ADS, openFixtures } from '../game/interiorAds';
 import { useSession } from '../net/session';
 import { closeAdsSheet, loadAds, payForAd, placeAd, removeAd, uploadAdImage, useAds } from '../net/ads';
 import { useGame } from '../game/store';
+import { Sign } from './Icons';
 
 const price = (n: number) => `₦${n.toLocaleString('en-NG')}`;
 const STEPS = ['Spot', 'Plan', 'Write', 'Picture', 'Pay'] as const;
@@ -279,15 +280,15 @@ function AdMapPicker({ region, board, onChange, held, reserved, takenSea, childr
           <div className="sea-size-controls">
             <div className="size-control">
               <span>W</span>
-              <button type="button" disabled={seaW <= 1} onClick={() => setSeaW(w => w - 1)}>−</button>
+              <button type="button" disabled={seaW <= 1} onClick={() => setSeaW(w => w - 1)}><Sign minus /></button>
               <b>{seaW}</b>
-              <button type="button" disabled={seaW >= SEA_MAX_W} onClick={() => setSeaW(w => w + 1)}>+</button>
+              <button type="button" disabled={seaW >= SEA_MAX_W} onClick={() => setSeaW(w => w + 1)}><Sign /></button>
             </div>
             <div className="size-control">
               <span>D</span>
-              <button type="button" disabled={seaD <= 1} onClick={() => setSeaD(d => d - 1)}>−</button>
+              <button type="button" disabled={seaD <= 1} onClick={() => setSeaD(d => d - 1)}><Sign minus /></button>
               <b>{seaD}</b>
-              <button type="button" disabled={seaD >= SEA_MAX_D} onClick={() => setSeaD(d => d + 1)}>+</button>
+              <button type="button" disabled={seaD >= SEA_MAX_D} onClick={() => setSeaD(d => d + 1)}><Sign /></button>
             </div>
           </div>
         )}

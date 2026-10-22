@@ -37,7 +37,7 @@ import { loadCareer, useCareer, type BizInfo } from '../net/career';
 import type { SharedShop } from '../net/market';
 import { FriendsTab } from './Community';
 import { LootCases } from './LootCases';
-import { Emoji } from './Icons';
+import { Emoji, Sign } from './Icons';
 import { ReactionOr, ReactionToggle, ReactionTray, useReactions } from './Reactions';
 import { REACTIONS } from '../game/reactions';
 import { useNet } from '../net/multiplayer';
@@ -923,7 +923,7 @@ function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () 
       </div>
       {/* Like a wallet: the amount in the middle, a thousand less or more either side, or tap it and type. */}
       <div className="cash-amount">
-        <button type="button" className="cash-step" aria-label="₦1,000 less" disabled={n < 1} onClick={() => bump(-1_000)}>−</button>
+        <button type="button" className="cash-step" aria-label="₦1,000 less" disabled={n < 1} onClick={() => bump(-1_000)}><Sign minus size={18} /></button>
         <label className="pay-amount-row">
           <span>₦</span>
           <input
@@ -936,7 +936,7 @@ function MoneyForm({ uid, who, onDone }: { uid: string; who: string; onDone: () 
             onChange={(e) => (setAmount(e.target.value), setError(null))}
           />
         </label>
-        <button type="button" className="cash-step" aria-label="₦1,000 more" onClick={() => bump(1_000)}>+</button>
+        <button type="button" className="cash-step" aria-label="₦1,000 more" onClick={() => bump(1_000)}><Sign size={18} /></button>
       </div>
       <small className={`cash-have ${tooMuch && n > 0 ? 'bad' : ''}`}>{error ?? (tooMuch && n > 0 ? `${naira(n - money)} short` : `You have ${naira(money)}`)}</small>
       <input className="note-input" value={note} maxLength={140} placeholder="Add a note" onChange={(e) => setNote(e.target.value)} />

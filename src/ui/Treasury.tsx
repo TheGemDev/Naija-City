@@ -13,7 +13,7 @@ import { useOfficeBudget } from '../net/office';
 import { useRoads } from '../net/roads';
 import { potholeCity } from '../game/city';
 import { left, useNow } from './Career';
-import { Emoji } from './Icons';
+import { Emoji, Sign } from './Icons';
 import { LootCases } from './LootCases';
 import { Stepper } from './Stepper';
 import { crazeOf, populationOf, type StatePeople } from '../game/npcs';
@@ -116,9 +116,9 @@ function Budget({ treasury, saved, canEdit, busy, onSave }: { treasury: number; 
             </div>
             {canEdit ? (
               <div className="tr-step" role="group" aria-label={`${info.label} share`}>
-                <button type="button" aria-label={`Less for ${info.label}`} disabled={busy || draft[d] <= 0} onClick={() => move(d, -ALLOCATION.step)}>−</button>
+                <button type="button" aria-label={`Less for ${info.label}`} disabled={busy || draft[d] <= 0} onClick={() => move(d, -ALLOCATION.step)}><Sign minus /></button>
                 <span><b>{draft[d]}%</b><small>{naira(ALLOCATION.budget(treasury, draft[d]))}</small></span>
-                <button type="button" aria-label={`More for ${info.label}`} disabled={busy || free <= 0} onClick={() => move(d, ALLOCATION.step)}>+</button>
+                <button type="button" aria-label={`More for ${info.label}`} disabled={busy || free <= 0} onClick={() => move(d, ALLOCATION.step)}><Sign /></button>
               </div>
             ) : (
               <span className="tr-share"><b>{saved[d]}%</b><small>{naira(ALLOCATION.budget(treasury, saved[d]))}</small></span>
@@ -180,9 +180,9 @@ function PayList({ treasury, saved, paidAt, holders, uid, canEdit, busy, onSave 
             </div>
             {canEdit ? (
               <div className="tr-step" role="group" aria-label={`${name} pay`}>
-                <button type="button" aria-label={`Less for the ${name}`} disabled={busy || draft[o] <= options[0]} onClick={() => step(o, -1)}>−</button>
+                <button type="button" aria-label={`Less for the ${name}`} disabled={busy || draft[o] <= options[0]} onClick={() => step(o, -1)}><Sign minus /></button>
                 <span><b>{naira(draft[o])}</b><small>{isGov(o) ? 'max a day' : 'a day'}</small></span>
-                <button type="button" aria-label={`More for the ${name}`} disabled={busy || draft[o] >= options[options.length - 1]} onClick={() => step(o, 1)}>+</button>
+                <button type="button" aria-label={`More for the ${name}`} disabled={busy || draft[o] >= options[options.length - 1]} onClick={() => step(o, 1)}><Sign /></button>
               </div>
             ) : (
               <span className="tr-share"><b>{naira(saved[o])}</b><small>{isGov(o) ? 'max a day' : 'a day'}</small></span>
@@ -297,9 +297,9 @@ function AssetDetail({ city, asset, condition, level, canEdit, busy, balance, on
       {canEdit && (
         <div className="tr-asset-controls">
           <div className="tr-step" role="group" aria-label={`${info.label} upkeep`}>
-            <button type="button" aria-label={`Spend less on ${info.label}`} disabled={busy || at <= 0} onClick={() => onLevel(UPKEEP_LEVELS[at - 1])}>−</button>
+            <button type="button" aria-label={`Spend less on ${info.label}`} disabled={busy || at <= 0} onClick={() => onLevel(UPKEEP_LEVELS[at - 1])}><Sign minus /></button>
             <span><b>{nairaShort(upkeepOf(asset, city, level))}</b><small>an hour</small></span>
-            <button type="button" aria-label={`Spend more on ${info.label}`} disabled={busy || at >= UPKEEP_LEVELS.length - 1} onClick={() => onLevel(UPKEEP_LEVELS[at + 1])}>+</button>
+            <button type="button" aria-label={`Spend more on ${info.label}`} disabled={busy || at >= UPKEEP_LEVELS.length - 1} onClick={() => onLevel(UPKEEP_LEVELS[at + 1])}><Sign /></button>
           </div>
           <button className="btn sm" disabled={busy || condition >= 100 || balance < cost} onClick={onRepair}>Repair +{REPAIR.condition} · {nairaShort(cost)}</button>
         </div>

@@ -3,6 +3,7 @@
 // sat still that long (laws, pay); without it the parent reads the value when its own button is pressed.
 
 import { useEffect, useRef, useState } from 'react';
+import { Sign } from './Icons';
 import './stepper.css';
 
 export function Stepper({ value, min, max, step = 1, format, label, disabled, commitAfter, onChange, tone }: {
@@ -53,7 +54,7 @@ export function Stepper({ value, min, max, step = 1, format, label, disabled, co
     }, 90);
   };
   const release = () => clearInterval(repeat.current);
-  const pad = (by: number, sign: string, name: string) => (
+  const pad = (by: number, name: string) => (
     <button
       type="button"
       aria-label={`${name} ${label}`}
@@ -64,7 +65,7 @@ export function Stepper({ value, min, max, step = 1, format, label, disabled, co
       onPointerCancel={release}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && set(latest.current + by)}
     >
-      {sign}
+      <Sign minus={by < 0} size={15} />
     </button>
   );
 
@@ -74,7 +75,7 @@ export function Stepper({ value, min, max, step = 1, format, label, disabled, co
   };
   return (
     <div className={`stepper ${tone ?? ''}`} role="group" aria-label={label}>
-      {pad(-step, '−', 'Less')}
+      {pad(-step, 'Less')}
       {typing === null ? (
         <button type="button" className="stepper-value" disabled={disabled} onClick={() => setTyping(String(shown))} aria-label={`${label}: ${format(shown)}. Tap to type`}>
           {format(shown)}
@@ -94,7 +95,7 @@ export function Stepper({ value, min, max, step = 1, format, label, disabled, co
           }}
         />
       )}
-      {pad(step, '+', 'More')}
+      {pad(step, 'More')}
     </div>
   );
 }

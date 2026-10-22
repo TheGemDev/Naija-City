@@ -379,6 +379,15 @@ const CHEVRON_PATHS = {
   right: 'M5.5 3.5 10 8l-4.5 4.5',
 };
 
+/** − and + drawn as SVG, for steppers: the text glyphs sit off-centre, differently in every font. */
+export function Sign({ minus, size = 14 }: { minus?: boolean; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true" style={{ display: 'block', margin: 'auto' }}>
+      <path d={minus ? 'M3 8h10' : 'M3 8h10M8 3v10'} />
+    </svg>
+  );
+}
+
 export function Chevron({ dir, size = 16 }: { dir: 'up' | 'down' | 'left' | 'right'; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'block' }}>
