@@ -867,10 +867,16 @@ export async function runNpcs(env: Env, now: number) {
 
 /* ---------- For the rest of the game ---------- */
 
-/** NPC adults per state (empty before the migration has run). */
+/** NPC adults per state (empty before the migration has run). It reads every NPC row, so it is cached for ten minutes. */
 export async function headcounts(db: D1Database): Promise<Partial<Record<CivicCity, number>>> {
-  const { results } = await db.prepare('SELECT city, COUNT(*) AS n FROM npcs GROUP BY city').all<{ city: CivicCity; n: number }>().catch(() => ({ results: [] as { city: CivicCity; n: number }[] }));
-  return Object.fromEntries(results.map((r) => [r.city, r.n]));
+  try {
+    return await shared('npc-headcounts', 600, async () => {
+      const { results } = await db.prepare('SELECT city, COUNT(*) AS n FROM npcs GROUP BY city').all<{ city: CivicCity; n: number }>();
+      return Object.fromEntries(results.map((r) => [r.city, r.n]));
+    });
+  } catch {
+    return {};
+  }
 }
 
 /**
