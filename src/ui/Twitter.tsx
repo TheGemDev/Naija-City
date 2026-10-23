@@ -159,7 +159,7 @@ const BIO: Record<Exclude<Who['kind'], 'player'>, string> = {
   police: 'Arrests, mugshots and bail across the federation. Report crime from the Police app.',
   city: 'Achievements, legacies, the season and the cup final. The whole of Naija City in one place.',
   alerts: 'Floods, fires and storms as they happen. Stay safe.',
-  gazette: 'What the people in office did, as the law requires it to be published. Read it all in the Civic app.',
+  gazette: 'What the people in office did, as the law requires it to be published. Read it all in the Politics app.',
   blog: 'Naija news blog. Politics, roads, elections and gist from every state.',
   citizen: 'Just a regular Naija person. Working, paying tax, and saying what everybody is thinking.',
 };
@@ -413,7 +413,7 @@ const GazettePost = memo(function GazettePost({ n }: { n: CivicNews }) {
         <div className="tw-body">
           <AuthorLine a={a} at={n.at} />
           <div className="tw-gazette"><Emoji char={n.icon} size={18} /><p>{n.text}</p></div>
-          <div className="tw-actions"><span className="tw-act">{I.link(15)}<span className="tw-count">Read in Civic</span></span></div>
+          <div className="tw-actions"><span className="tw-act">{I.link(15)}<span className="tw-count">Read in Politics</span></span></div>
         </div>
       </div>
     </article>

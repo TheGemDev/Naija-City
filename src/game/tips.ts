@@ -123,14 +123,14 @@ export const TIPS: Tip[] = [
   ...group('politics', [
     '🏛️ Vote in elections for president, Kaduna governor, FCT Minister, Lagos governor, Kano governor, IGP and EFCC chair. Your vote shapes the server.',
     '🗳️ Elections come every 3 days. Voting stays open for 1 hour and the winner holds office for 3 days. Don\'t miss it.',
-    '📝 Want a post? File to run in the Civic app on your phone.',
+    '📝 Want a post? File to run in the Politics app on your phone.',
     '🪧 Running for office? Campaign with rallies, posters and crowds.',
     '🚨 Buying votes works until the EFCC catches you. Then you are disqualified, fined and jailed.',
     '📢 The president sets the tax rate and shares the treasury between Kaduna, Abuja, Lagos, Kano, police, EFCC and palliatives. Each city’s government spends its own share.',
     '🐍 Office holders can \'let a snake swallow\' treasury money. It pays well but you might get caught.',
     '🚁 In office you ride free: the helicopter, the convoy and the jet are on the treasury.',
     '🛵 A governor can ban okada in their city. Check who is in office before you plan your hustle.',
-    '📰 The Civic app\'s News tab keeps the week\'s government notices.',
+    '📰 The Politics app\'s News tab keeps the week\'s government notices.',
   ]),
 
   ...group('crime', [

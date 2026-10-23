@@ -112,7 +112,7 @@ const APPS: Record<AppId, AppDef> = {
   settings: { id: 'settings', label: 'Settings', icon: '⚙️', vectorIcon: 'settings', bg: ['#cbd5e1', '#475569'], tint: '#334155' },
   closet: { id: 'closet', label: 'Closet', icon: '👗', bg: ['#f9a8d4', '#be185d'], tint: '#be185d' },
   camera: { id: 'camera', label: 'Camera', icon: '📷', bg: ['#e2e8f0', '#64748b'], tint: '#334155' },
-  civic: { id: 'civic', label: 'Civic', icon: '🏛️', vectorIcon: 'civic', bg: ['#93c5fd', '#1d4ed8'], tint: '#1d4ed8' },
+  civic: { id: 'civic', label: 'Politics', icon: '🗳️', vectorIcon: 'civic', bg: ['#93c5fd', '#1d4ed8'], tint: '#1d4ed8' },
   police: { id: 'police', label: 'Police', icon: '🚔', bg: ['#60a5fa', '#1e3a8a'], tint: '#1e3a8a' },
   efcc: { id: 'efcc', label: 'EFCC', icon: '🕵🏾', bg: ['#f87171', '#7f1d1d'], tint: '#991b1b' },
   inec: { id: 'inec', label: 'INEC', icon: '🗳️', bg: ['#4ade80', '#065f46'], tint: '#065f46' },
