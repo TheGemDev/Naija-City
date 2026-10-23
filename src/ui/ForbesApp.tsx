@@ -19,7 +19,7 @@ import './forbes.css';
 
 interface RichPlayer { uid: string; username: string; name: string | null; balance: number; assets?: ForbesAssets }
 interface WeekPlayer { uid: string; username: string; name: string | null; earned: number }
-interface Week { endsAt: number; players: WeekPlayer[]; last: WeekPlayer[] }
+interface Week { players: WeekPlayer[]; last: WeekPlayer[] }
 
 interface Entry {
   uid?: string;
@@ -58,12 +58,6 @@ const tierOf = (worth: number) => TIERS.find((t) => worth >= t.from)!;
 
 const CAN_SHARE_FILES = typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([], 'card.png', { type: 'image/png' })] });
 
-/** "3d 4h" or "5h" until `at`. */
-function timeLeft(at: number, now: number): string {
-  const hours = Math.max(1, Math.ceil((at - now) / 3_600_000));
-  return hours >= 24 ? `${Math.floor(hours / 24)}d ${hours % 24}h` : `${hours}h`;
-}
-
 /** The server's rich list with you slotted in at your live net worth (`me` is null when you aren't on this list). */
 function rankRich(players: RichPlayer[], me: Entry | null, myUsername?: string | null): Ranked[] {
   const entries: Entry[] = players
@@ -101,7 +95,6 @@ export function ForbesApp() {
   const [showCard, setShowCard] = useState(false);
   /** Whose receipt is out, by handle. */
   const [receipt, setReceipt] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now);
   const asked = useRef(new Set<Tab>());
 
   useEffect(() => {
@@ -110,21 +103,14 @@ export function ForbesApp() {
     if (tab === 'week') {
       fetch('/api/hustlers/week')
         .then((r) => (r.ok ? r.json() : null))
-        .then((data) => setWeek({ endsAt: Number(data?.endsAt) || 0, players: Array.isArray(data?.players) ? data.players : [], last: Array.isArray(data?.last) ? data.last : [] }))
-        .catch(() => setWeek({ endsAt: 0, players: [], last: [] }));
+        .then((data) => setWeek({ players: Array.isArray(data?.players) ? data.players : [], last: Array.isArray(data?.last) ? data.last : [] }))
+        .catch(() => setWeek({ players: [], last: [] }));
       return;
     }
     fetch('/api/forbes')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => setRich(Array.isArray(data?.players) ? data.players : []))
       .catch(() => setRich([]));
-  }, [tab]);
-
-  // The weekly countdown only needs to move once a minute.
-  useEffect(() => {
-    if (tab !== 'week') return;
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
   }, [tab]);
 
   const myEntry: Entry = {
@@ -195,8 +181,7 @@ export function ForbesApp() {
       <div className={`fb-stage ${isWeek ? 'week' : ''}`}>
         <div className="fb-mast">
           <b>{isWeek ? 'Money Makers' : 'Rich List'}</b>
-          {isWeek && week && week.endsAt > now ? <small>Resets in {timeLeft(week.endsAt, now)}</small>
-            : <span>{isWeek ? 'This week' : 'Naija’s richest'}</span>}
+          <span>{isWeek ? 'This week' : 'Naija’s richest'}</span>
         </div>
         <i className="fb-flag" aria-hidden />
         {!loaded ? <small className="fb-note">Updating…</small>

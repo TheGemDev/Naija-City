@@ -1,7 +1,7 @@
 // Naija City API. Static game files are served by Workers Assets; only /api/* reaches this code.
 
 import { FORBES_ASSETS_TOP, FORBES_MIN_WORTH, HUSTLERS_WEEK_TOP } from '../src/game/forbes';
-import { WEEK_MS, weekKey } from '../src/game/community';
+import { weekKey } from '../src/game/community';
 import { withSentry } from '@sentry/cloudflare';
 import { readLiveStats } from './cfTraffic';
 import { verifyIdToken, type FirebaseUser } from './auth';
@@ -230,7 +230,7 @@ const handler = {
         LIMIT ?2
       `).bind(w, n).all<{ uid: string; username: string; name: string | null; earned: number }>();
       const [now, last] = await Promise.all([top(week, HUSTLERS_WEEK_TOP), top(week - 1, 3)]);
-      return json({ endsAt: (week + 1) * WEEK_MS, players: now.results, last: last.results });
+      return json({ players: now.results, last: last.results });
     });
 
     const media = path.match(/^\/api\/media\/(.+)$/);

@@ -11,7 +11,7 @@
 .fb-mast { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fb-mast b { white-space: nowrap; font-family: Georgia, 'Times New Roman', serif; font-size: 24px; font-weight: 700; font-style: italic; letter-spacing: -0.6px; line-height: 1; }
 .fb-mast span { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #facc15; white-space: nowrap; }
-.fb-mast small { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; color: #052e16; background: #4ade80; }
+.fb-stage.week .fb-mast span { color: #4ade80; }
 /* Green, white, green. */
 .fb-flag { display: block; height: 3px; margin-top: -2px; border-radius: 3px; background: linear-gradient(90deg, #008751 33.3%, #fff 0 66.6%, #008751 0); opacity: 0.8; }
 
