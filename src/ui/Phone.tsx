@@ -2181,7 +2181,7 @@ export function Phone() {
             <Wallpaper device={device} />
             {duo ? <DuoRail current={current} onHome={() => setApp(null)} open={openFromHome} /> : <StatusBar dark={!!current} cutout={cutoutOf(device)} />}
             {current && Screen ? (
-              <div className="app" key={current.id} style={{ ['--app' as string]: current.tint, ['--app-a' as string]: current.bg[0], ['--app-b' as string]: current.bg[1] }}>
+              <div className="app" key={current.id} data-app={current.id} style={{ ['--app' as string]: current.tint, ['--app-a' as string]: current.bg[0], ['--app-b' as string]: current.bg[1] }}>
                 <div className="app-head" style={{ ['--tint' as string]: current.bg[0], ['--tint-2' as string]: current.bg[1] }}>
                   <button className="app-back" onClick={() => setApp(null)} aria-label="Back">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

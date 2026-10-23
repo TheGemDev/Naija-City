@@ -117,3 +117,7 @@
 
 /* Choice pills inside an app light up in the app's colour. */
 .phone .app-body .pills button.on { border-color: var(--app); background: color-mix(in srgb, var(--app) 10%, var(--surface)); }
+
+/* Politics keeps its picks and progress in slate, like its Join the race button; green there means good news only. */
+.phone .app[data-app='civic'] .app-body .bar i { background: #64748b; }
+.phone .app[data-app='civic'] .app-body .pills button.on { border-color: #334155; background: color-mix(in srgb, #334155 10%, var(--surface)); }

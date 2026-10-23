@@ -38,7 +38,7 @@
 .tr-hero-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .tr-hero .tr-hero-row b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .tr-hero .tr-hero-row small { font-size: 10.5px; opacity: 0.85; }
-.tr-hero-row b > i { padding: 1px 7px; border-radius: 99px; background: #fff; color: #065f46; font-size: 9.5px; font-style: normal; font-weight: 800; }
+.tr-hero-row b > i { padding: 1px 7px; border-radius: 99px; background: #fff; color: #334155; font-size: 9.5px; font-style: normal; font-weight: 800; }
 .tr-hero-row b > i.low { background: #fee2e2; color: #b91c1c; }
 .tr-hero-row > em { flex: none; font-size: 13px; font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
 
@@ -46,7 +46,7 @@
 .tr-chips { display: flex; gap: 4px; overflow-x: auto; padding: 1px 1px 2px; scrollbar-width: none; }
 .tr-chips::-webkit-scrollbar { display: none; }
 .tr-chip { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; border-radius: 99px; background: var(--bg-ffffff); box-shadow: 0 0 0 1px var(--bg-e2e8f0); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.tr-chip.on { background: #15803d; box-shadow: none; color: #fff; }
+.tr-chip.on { background: #334155; box-shadow: none; color: #fff; }
 .tr-chip.danger { background: var(--bg-fef2f2); box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35); color: var(--fg-b91c1c); }
 .tr-chip.danger.on { background: #dc2626; box-shadow: none; color: #fff; }
 .tr-chip > i { min-width: 17px; padding: 1px 5px; border-radius: 99px; background: #f59e0b; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; text-align: center; }
@@ -130,7 +130,7 @@ details[open] > summary > .tr-chev, .tr-act.open .tr-chev { margin: 3px 3px 0; t
 .tr-tile.bad > em { color: #b91c1c; }
 .tr-tile.bad { background: var(--bg-fef2f2); }
 .tr-tile > .tr-cond { grid-column: 1 / -1; }
-.tr-tile.on { box-shadow: 0 0 0 2px #15803d; }
+.tr-tile.on { box-shadow: 0 0 0 2px #334155; }
 .tr-asset { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: var(--bg-f1f5f9); }
 .tr-asset > small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
 .tr-asset > small > b { color: var(--ink); }
