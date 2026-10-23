@@ -337,10 +337,11 @@ export function Icon({ name, size = 20, color = 'currentColor', fallback, classN
       );
 
     case 'civic':
-      // The Politics app: a ballot going into the box.
+      // The Politics app: a campaign microphone (INEC has the ballot box).
       return (
         <svg {...baseSvgProps}>
-          <path d="M4 12h16v9H4zM8 12V4h8v8M10.5 8l1.2 1.2L14 7M8 16.5h8" />
+          <rect x="9" y="2" width="6" height="12" rx="3" />
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
         </svg>
       );
 

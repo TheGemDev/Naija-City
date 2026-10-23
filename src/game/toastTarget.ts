@@ -26,7 +26,7 @@ const RULES: Array<[RegExp, ToastApp]> = [
   [/VDM|📢/i, { id: 'gist', label: 'Twitter' }],
   [/💸|you received|🧾|asking for|loan|🏦/i, { id: 'bank', label: 'Bank' }],
   [/🚪|invited you home|visit your house|✉️/i, { id: 'messages', label: 'Messages' }],
-  [/🏛️|🗳️|vote|palliative|🧧|🪧|🚧|🍚/i, { id: 'civic', label: 'Politics' }],
+  [/🏛️|🎤|vote|palliative|🧧|🪧|🚧|🍚/i, { id: 'civic', label: 'Politics' }],
   [/mechanic|KD Autos|🔧|is spoilt/i, { id: 'cars', label: 'Autos' }],
 ];
 
