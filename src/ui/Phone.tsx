@@ -88,48 +88,48 @@ interface AppDef {
 }
 
 const APPS: Record<AppId, AppDef> = {
-  messages: { id: 'messages', label: 'Messages', icon: '💬', vectorIcon: 'messages', bg: ['#38bdf8', '#1d4ed8'], tint: '#1d4ed8' },
-  ride: { id: 'ride', label: 'Bolt', icon: '🚕', vectorIcon: 'cars', bg: ['#fef08a', '#eab308'], tint: '#ca8a04' },
-  bank: { id: 'bank', label: 'Bank', icon: '🏦', vectorIcon: 'bank', bg: ['#a78bfa', '#5b21b6'], tint: '#5b21b6' },
-  invest: { id: 'invest', label: 'Invest', icon: '📈', vectorIcon: 'invest', bg: ['#34d399', '#059669'], tint: '#047857' },
-  forbes: { id: 'forbes', label: 'Hustlers', icon: '👑', vectorIcon: 'forbes', bg: ['#fbbf24', '#b45309'], tint: '#b45309' },
-  cribs: { id: 'cribs', label: 'Cribs', icon: '🏡', bg: ['#f0abfc', '#7c3aed'], tint: '#6d28d9' },
-  cars: { id: 'cars', label: 'Autos', icon: '🚗', vectorIcon: 'cars', bg: ['#38bdf8', '#0284c7'], tint: '#0284c7' },
-  gida: { id: 'gida', label: 'House', icon: '🏠', vectorIcon: 'home', bg: ['#fcd34d', '#b45309'], tint: '#92400e' },
-  jobs: { id: 'jobs', label: 'Jobs', icon: '💼', vectorIcon: 'jobs', bg: ['#34d399', '#047857'], tint: '#047857' },
-  mall: { id: 'mall', label: 'Jumia', icon: '🛍️', bg: ['#6ee7b7', '#047857'], tint: '#047857' },
-  gist: { id: 'gist', label: 'Twitter', icon: '🐦', vectorIcon: 'gist', bg: ['#f0abfc', '#9333ea'], tint: '#9333ea' },
-  hustle: { id: 'hustle', label: 'Hustle', icon: '🛺', bg: ['#fde68a', '#d97706'], tint: '#b45309' },
-  yahoo: { id: 'yahoo', label: 'Yahoo', icon: '💻', bg: ['#a3e635', '#3f6212'], tint: '#3f6212' },
-  blackmarket: { id: 'blackmarket', label: 'Black Market', icon: '🕶️', bg: ['#44403c', '#0c0a09'], tint: '#1c1917' },
-  plug: { id: 'plug', label: 'Plug', icon: '🌿', bg: ['#4ade80', '#14532d'], tint: '#14532d' },
-  fixer: { id: 'fixer', label: 'Fixer', icon: '🕴🏾', bg: ['#a8a29e', '#1c1917'], tint: '#1c1917' },
-  grind: { id: 'grind', label: 'Dirty Work', icon: '🛠️', bg: ['#fb923c', '#7c2d12'], tint: '#7c2d12' },
-  area: { id: 'area', label: 'Area', icon: '🕴🏾', bg: ['#64748b', '#0f172a'], tint: '#0f172a' },
-  legacy: { id: 'legacy', label: 'Legacy', icon: '🏆', bg: ['#fde047', '#a16207'], tint: '#a16207' },
-  light: { id: 'light', label: 'NEPA', icon: '💡', vectorIcon: 'light', bg: ['#fde047', '#ca8a04'], tint: '#a16207' },
-  radio: { id: 'radio', label: 'Radio', icon: '📻', vectorIcon: 'radio', bg: ['#fcd34d', '#b45309'], tint: '#92400e' },
-  settings: { id: 'settings', label: 'Settings', icon: '⚙️', vectorIcon: 'settings', bg: ['#cbd5e1', '#475569'], tint: '#334155' },
-  closet: { id: 'closet', label: 'Closet', icon: '👗', bg: ['#f9a8d4', '#be185d'], tint: '#be185d' },
-  camera: { id: 'camera', label: 'Camera', icon: '📷', bg: ['#e2e8f0', '#64748b'], tint: '#334155' },
-  civic: { id: 'civic', label: 'Politics', icon: '⚖️', vectorIcon: 'civic', bg: ['#93c5fd', '#1d4ed8'], tint: '#1d4ed8' },
+  messages: { id: 'messages', label: 'Messages', icon: '💬', vectorIcon: 'messages', bg: ['#4ade80', '#15803d'], tint: '#15803d' },
+  ride: { id: 'ride', label: 'Bolt', icon: '🚕', vectorIcon: 'cars', bg: ['#34d399', '#047857'], tint: '#047857' },
+  bank: { id: 'bank', label: 'Bank', icon: '🏦', vectorIcon: 'bank', bg: ['#6366f1', '#1e1b4b'], tint: '#4338ca' },
+  invest: { id: 'invest', label: 'Invest', icon: '📈', vectorIcon: 'invest', bg: ['#2dd4bf', '#0f766e'], tint: '#0f766e' },
+  forbes: { id: 'forbes', label: 'Hustlers', icon: '👑', vectorIcon: 'forbes', bg: ['#a855f7', '#3b0764'], tint: '#7e22ce' },
+  cribs: { id: 'cribs', label: 'Cribs', icon: '🏡', bg: ['#fda4af', '#be123c'], tint: '#be123c' },
+  cars: { id: 'cars', label: 'Autos', icon: '🚗', vectorIcon: 'cars', bg: ['#7dd3fc', '#0369a1'], tint: '#0369a1' },
+  gida: { id: 'gida', label: 'House', icon: '🏠', vectorIcon: 'home', bg: ['#5eead4', '#0f766e'], tint: '#0f766e' },
+  jobs: { id: 'jobs', label: 'Jobs', icon: '💼', vectorIcon: 'jobs', bg: ['#818cf8', '#3730a3'], tint: '#4338ca' },
+  mall: { id: 'mall', label: 'Jumia', icon: '🛍️', bg: ['#fdba74', '#ea580c'], tint: '#c2410c' },
+  gist: { id: 'gist', label: 'Twitter', icon: '🐦', vectorIcon: 'gist', bg: ['#ffffff', '#dbeafe'], tint: '#1d9bf0' },
+  hustle: { id: 'hustle', label: 'Hustle', icon: '🛺', bg: ['#a78bfa', '#5b21b6'], tint: '#6d28d9' },
+  yahoo: { id: 'yahoo', label: 'Yahoo', icon: '💻', bg: ['#c084fc', '#6b21a8'], tint: '#7e22ce' },
+  blackmarket: { id: 'blackmarket', label: 'Black Market', icon: '🕶️', bg: ['#f87171', '#7f1d1d'], tint: '#991b1b' },
+  plug: { id: 'plug', label: 'Plug', icon: '🌿', bg: ['#3f3f46', '#09090b'], tint: '#3f3f46' },
+  fixer: { id: 'fixer', label: 'Fixer', icon: '🕴🏾', bg: ['#fcd34d', '#b45309'], tint: '#b45309' },
+  grind: { id: 'grind', label: 'Dirty Work', icon: '🛠️', bg: ['#fb923c', '#9a3412'], tint: '#9a3412' },
+  area: { id: 'area', label: 'Area', icon: '🕴🏾', bg: ['#bef264', '#4d7c0f'], tint: '#4d7c0f' },
+  legacy: { id: 'legacy', label: 'Legacy', icon: '🏆', bg: ['#60a5fa', '#1e3a8a'], tint: '#1d4ed8' },
+  light: { id: 'light', label: 'NEPA', icon: '💡', vectorIcon: 'light', bg: ['#334155', '#020617'], tint: '#334155' },
+  radio: { id: 'radio', label: 'Radio', icon: '📻', vectorIcon: 'radio', bg: ['#4ade80', '#166534'], tint: '#166534' },
+  settings: { id: 'settings', label: 'Settings', icon: '⚙️', vectorIcon: 'settings', bg: ['#475569', '#0f172a'], tint: '#334155' },
+  closet: { id: 'closet', label: 'Closet', icon: '👗', bg: ['#fde68a', '#d97706'], tint: '#b45309' },
+  camera: { id: 'camera', label: 'Camera', icon: '📷', bg: ['#f1f5f9', '#94a3b8'], tint: '#334155' },
+  civic: { id: 'civic', label: 'Politics', icon: '⚖️', vectorIcon: 'civic', bg: ['#fcd34d', '#b45309'], tint: '#b45309' },
   police: { id: 'police', label: 'Police', icon: '🚔', bg: ['#60a5fa', '#1e3a8a'], tint: '#1e3a8a' },
   efcc: { id: 'efcc', label: 'EFCC', icon: '🕵🏾', bg: ['#f87171', '#7f1d1d'], tint: '#991b1b' },
-  inec: { id: 'inec', label: 'INEC', icon: '🗳️', bg: ['#4ade80', '#065f46'], tint: '#065f46' },
-  family: { id: 'family', label: 'Family', icon: '💞', bg: ['#fb7185', '#be123c'], tint: '#be123c' },
-  adopt: { id: 'adopt', label: 'Adopt', icon: '👶🏾', bg: ['#86efac', '#15803d'], tint: '#15803d' },
-  career: { id: 'career', label: 'Career', icon: '🎓', bg: ['#38bdf8', '#1d4ed8'], tint: '#1d4ed8' },
-  business: { id: 'business', label: 'Business', icon: '🏪', bg: ['#fdba74', '#c2410c'], tint: '#c2410c' },
-  help: { id: 'help', label: 'Help', icon: '💡', bg: ['#fde68a', '#f59e0b'], tint: '#b45309' },
-  ads: { id: 'ads', label: 'Ads', icon: '📣', bg: ['#fb923c', '#c2410c'], tint: '#c2410c' },
+  inec: { id: 'inec', label: 'INEC', icon: '🗳️', bg: ['#86efac', '#15803d'], tint: '#15803d' },
+  family: { id: 'family', label: 'Family', icon: '💞', bg: ['#c4b5fd', '#6d28d9'], tint: '#6d28d9' },
+  adopt: { id: 'adopt', label: 'Adopt', icon: '👶🏾', bg: ['#fbcfe8', '#db2777'], tint: '#be185d' },
+  career: { id: 'career', label: 'Career', icon: '🎓', bg: ['#67e8f9', '#0e7490'], tint: '#0e7490' },
+  business: { id: 'business', label: 'Business', icon: '🏪', bg: ['#60a5fa', '#1d4ed8'], tint: '#1d4ed8' },
+  help: { id: 'help', label: 'Help', icon: '❓', bg: ['#60a5fa', '#1d4ed8'], tint: '#1d4ed8' },
+  ads: { id: 'ads', label: 'Ads', icon: '📣', bg: ['#60a5fa', '#1e40af'], tint: '#1e40af' },
   topup: { id: 'topup', label: 'Top-up', icon: '💳', bg: ['#34d399', '#047857'], tint: '#047857' },
-  goals: { id: 'goals', label: 'Goals', icon: '🎯', bg: ['#a3e635', '#15803d'], tint: '#15803d' },
+  goals: { id: 'goals', label: 'Goals', icon: '🎯', bg: ['#93c5fd', '#1d4ed8'], tint: '#1d4ed8' },
   store: { id: 'store', label: 'App Store', icon: '🛍️', bg: ['#60a5fa', '#4338ca'], tint: '#4338ca' },
-  babalawo: { id: 'babalawo', label: 'Baba Online', icon: '🔮', bg: ['#c084fc', '#4c1d95'], tint: '#4c1d95' },
+  babalawo: { id: 'babalawo', label: 'Baba Online', icon: '🔮', bg: ['#334155', '#020617'], tint: '#6d28d9' },
   flex: { id: 'flex', label: 'Snap', icon: '👻', bg: ['#fffc00', '#facc15'], tint: '#a16207' },
-  pidgin: { id: 'pidgin', label: 'Pidgin AI', icon: '🗣️', bg: ['#4ade80', '#14532d'], tint: '#166534' },
-  hire: { id: 'hire', label: 'Hire', icon: '🤝', bg: ['#0f766e', '#134e4a'], tint: '#0f766e' },
-  games: { id: 'games', label: 'Games', icon: '🎲', bg: ['#fb7185', '#7c3aed'], tint: '#7c3aed' },
+  pidgin: { id: 'pidgin', label: 'Pidgin AI', icon: '🗣️', bg: ['#fde68a', '#d97706'], tint: '#b45309' },
+  hire: { id: 'hire', label: 'Hire', icon: '🤝', bg: ['#2dd4bf', '#115e59'], tint: '#0f766e' },
+  games: { id: 'games', label: 'Games', icon: '🎲', bg: ['#f472b6', '#7c3aed'], tint: '#7c3aed' },
 };
 /** Downloaded apps (src/game/apps.ts) only show once installed from the store. */
 const HOME_APPS: AppId[] = ['flex', 'messages', 'bank', 'ride', 'camera', 'gida', 'jobs', 'cars', 'mall', 'business', 'hustle', 'invest', 'light', 'gist', 'games', 'goals', 'career', 'family', 'adopt', 'hire', 'forbes', 'cribs', 'closet', 'radio', 'civic', 'police', 'efcc', 'inec', ...(ADS_ON_SALE ? ['ads' as const] : [])];
@@ -1843,8 +1843,9 @@ function Wallpaper({ device }: { device: PhoneDef }) {
         </svg>
       </div>
     );
+  // A mesh of the phone's own three colours over a deep base (wall-mesh in phone-ui.css), its artwork faint on top.
   return (
-    <div className="wall wall-art wall-night" style={{ background: 'linear-gradient(160deg, #111827, #020617 75%)' }}>
+    <div className={`wall wall-mesh mesh-${kind}`} style={{ ['--wa' as string]: a, ['--wb' as string]: b, ['--wc' as string]: c }}>
       <svg viewBox="0 0 340 680" preserveAspectRatio="xMidYMid slice">
         {kind === 'waves' && (
           <>
@@ -1932,7 +1933,10 @@ function Home({ open, duo }: { open: (id: AppId) => void; duo?: boolean }) {
     <>
       {frequent.length >= 2 && !q && (
         <div className="app-frequent">
-          <small>Frequent</small>
+          <small>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+            Frequent
+          </small>
           <div className="app-grid">
             {frequent.map((id) => <AppIcon key={id} app={APPS[id]} onClick={() => go(id)} />)}
           </div>

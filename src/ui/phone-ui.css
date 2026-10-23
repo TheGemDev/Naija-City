@@ -34,7 +34,7 @@
 .phone .app-head b { flex: 1; font-size: 20px; min-width: 0; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .phone .app-head .app-back { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: var(--ink); background: rgba(var(--ink-rgb), 0.07); transition: transform 0.15s, background 0.15s; }
 .phone .app-head .app-back:active { transform: scale(0.9); background: rgba(var(--ink-rgb), 0.14); }
-.phone .app-head-icon { width: 34px; height: 34px; border-radius: 11px; box-shadow: 0 4px 10px color-mix(in srgb, var(--tint-2) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+.phone .app-head-icon { width: 34px; height: 34px; border-radius: 26%; box-shadow: 0 4px 10px color-mix(in srgb, var(--tint-2) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
 .phone .app-body { padding: 14px 14px 40px; gap: 10px; }
 .phone .app-body h4 { margin: 10px 4px 0; font-size: 12px; letter-spacing: 0.9px; }
 .phone .home-bar.dark { background: rgba(var(--ink-rgb), 0.5); }
@@ -75,10 +75,37 @@
 .inv-actions .btn { flex: 1; }
 
 /* Home screen: your most used apps lately in a frosted row on top, and a search box over the (fixed-order) grid. */
-.phone .app-frequent { margin-top: 14px; padding: 8px 10px 12px; border-radius: 22px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(10px); }
-.phone .app-frequent > small { display: block; margin: 0 0 2px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
-.phone .app-frequent .app-grid { margin-top: 8px; }
+.phone .app-frequent { margin-top: 16px; padding: 10px 6px 12px; border-radius: 28px; background: linear-gradient(150deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06) 70%); border: 1px solid rgba(255, 255, 255, 0.22); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.28); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6); }
+.phone .app-frequent > small { display: flex; align-items: center; gap: 5px; margin: 0 0 0 10px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.01em; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.phone .app-frequent > small svg { opacity: 0.85; }
+.phone .app-frequent .app-grid { margin-top: 10px; }
 .phone .app-search { width: 100%; margin-top: 12px; padding: 8px 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 99px; background: rgba(255, 255, 255, 0.14); color: #fff; font: inherit; font-size: 13px; outline: none; backdrop-filter: blur(8px); }
 .phone .app-search::placeholder { color: rgba(255, 255, 255, 0.7); }
 .phone .app-search:focus { border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.2); }
 .phone .app-none { grid-column: 1 / -1; margin: 8px 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, 0.8); }
+
+/* Squircle app icons on every phone: a true superellipse where the browser can draw one (corner-shape), and a
+   rounded square (border-radius 26%) everywhere else. */
+@supports (corner-shape: squircle) {
+  .app-icon span, .app-head-icon, .phone .app-head-icon { border-radius: 40%; corner-shape: squircle; }
+}
+
+/* Wallpaper: soft glows of the phone's own colours (--wa deep, --wb mid, --wc light) over a deep base, darker at
+   the top and bottom so the clock and the dock stay readable. Hills (itel) and dunes (iPhone Duo) keep their own. */
+.wall-mesh {
+  background:
+    radial-gradient(70% 50% at 10% 6%, color-mix(in srgb, var(--wc) 55%, transparent), transparent 70%),
+    radial-gradient(80% 55% at 100% 46%, color-mix(in srgb, var(--wb) 90%, transparent), transparent 72%),
+    radial-gradient(90% 55% at 0% 96%, color-mix(in srgb, var(--wb) 75%, transparent), transparent 70%),
+    radial-gradient(55% 35% at 85% 100%, color-mix(in srgb, var(--wc) 45%, transparent), transparent 70%),
+    linear-gradient(170deg, var(--wa), color-mix(in srgb, var(--wa) 35%, #000) 90%);
+}
+.wall-mesh.mesh-bloom, .wall-mesh.mesh-rings {
+  background:
+    radial-gradient(65% 40% at 50% 42%, color-mix(in srgb, var(--wc) 60%, transparent), transparent 70%),
+    radial-gradient(95% 60% at 50% 50%, color-mix(in srgb, var(--wb) 85%, transparent), transparent 75%),
+    radial-gradient(70% 45% at 0% 100%, color-mix(in srgb, var(--wb) 55%, transparent), transparent 70%),
+    linear-gradient(175deg, var(--wa), color-mix(in srgb, var(--wa) 30%, #000) 92%);
+}
+.wall-mesh::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 26%, transparent 66%, rgba(0, 0, 0, 0.34)); }
+.wall-mesh svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.14; }

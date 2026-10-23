@@ -29,7 +29,7 @@
 .duo-status.charging .ring { stroke: #22c55e; }
 .duo-dock { display: flex; flex-direction: column; gap: 9px; margin: auto 0; padding: 8px 6px; border-radius: 25px; background: rgba(255, 255, 255, 0.24); border: 1px solid rgba(255, 255, 255, 0.3); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
 .duo-dock .app-icon { width: auto; }
-.duo-dock .app-icon span { width: 38px; height: 38px; aspect-ratio: auto; border-radius: 11px; }
+.duo-dock .app-icon span { width: 38px; height: 38px; aspect-ratio: auto; }
 .duo-dock .app-icon span > * { transform: scale(0.7); }
 .duo-dock .app-icon em { display: none; }
 .duo-dock .app-badge { right: -4px; top: -4px; }
@@ -78,7 +78,7 @@
   /* The inner screen's camera is under the display. */
   .duo-cam { visibility: hidden; height: 4px; }
   .duo-rail { padding: 20px 0; }
-  .duo-dock .app-icon span { width: 42px; height: 42px; border-radius: 12px; }
+  .duo-dock .app-icon span { width: 42px; height: 42px; }
   .duo-btn { width: 40px; height: 40px; }
   /* Today View: the left half. */
   .duo-today { display: flex; flex: 1 1 0; min-width: 0; padding: 26px 10px 26px 26px; }

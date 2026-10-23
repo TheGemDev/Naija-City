@@ -393,7 +393,7 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 .app-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 6px; margin-top: 18px; }
 .app-icon { display: flex; width: 100%; min-width: 0; padding: 0; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); transition: transform 0.15s; }
 .app-icon:active { transform: scale(0.9); }
-.app-icon span { position: relative; width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; text-shadow: none; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.45); overflow: hidden; }
+.app-icon span { position: relative; width: 58px; height: 58px; border-radius: 26%; display: grid; place-items: center; font-size: 28px; text-shadow: none; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.45); overflow: hidden; }
 .app-icon span::after { content: ''; position: absolute; inset: 0 0 50%; background: linear-gradient(rgba(255, 255, 255, 0.28), transparent); }
 .home-bar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 128px; height: 5px; border-radius: 99px; background: rgba(var(--surface-rgb), 0.85); padding: 0; z-index: 3; }
 .home-bar::before { content: ''; position: absolute; inset: -12px -10px; }
@@ -404,7 +404,7 @@ button.x, button.pay-sheet-x, button.ask-x, button.shift-x { padding: 0; font-si
 @keyframes open { from { transform: scale(0.88); opacity: 0; border-radius: 30px; } }
 .app-head { display: flex; align-items: center; gap: 9px; padding: 6px 14px 10px; background: var(--bg-ffffff); font-size: 17px; flex-shrink: 0; }
 .app-head button { color: var(--tint); font-size: 30px; line-height: 0.8; font-weight: 500; padding: 0 4px 2px 0; }
-.app-head-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 15px; }
+.app-head-icon { width: 28px; height: 28px; border-radius: 26%; display: grid; place-items: center; font-size: 15px; }
 .app-body { padding: 12px 12px 34px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; scrollbar-width: none; }
 .app-body::-webkit-scrollbar { display: none; }
 .app-body > * { flex-shrink: 0; }
@@ -572,7 +572,7 @@ button.txn { width: 100%; color: inherit; text-align: left; }
   .phone-status { padding-top: 12px; }
   .home { padding-bottom: 28px; }
   .app-grid { gap: 20px 6px; }
-  .app-icon span { width: min(62px, 100%); height: auto; aspect-ratio: 1; border-radius: 18px; }
+  .app-icon span { width: min(62px, 100%); height: auto; aspect-ratio: 1; }
   .app-body { padding-bottom: 40px; }
 }
 .phone-x { display: none; position: absolute; top: -40px; right: 4px; height: 34px; padding: 0 14px; border-radius: 999px; align-items: center; gap: 6px; background: rgba(var(--surface-rgb), 0.92); color: var(--ink); font-size: 13px; font-weight: 800; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
@@ -1078,10 +1078,7 @@ body.map-far .river-name { opacity: 0.9; }
 .shade-dusk { background: linear-gradient(180deg, rgba(30, 27, 75, 0.35), rgba(219, 39, 119, 0.15)); }
 .shade-night { background: rgba(2, 6, 23, 0.45); }
 
-/* Each brand's home screen feels different: icon shape and clock. */
-.brand-samsung .app-icon span { border-radius: 22px; }
-.brand-google .app-icon span { border-radius: 50%; }
-.brand-xiaomi .app-icon span, .brand-tecno .app-icon span, .brand-infinix .app-icon span, .brand-itel .app-icon span { border-radius: 12px; }
+/* Each brand's home screen feels different: the clock. Icons are squircles on every phone (phone-ui.css). */
 .os-ios .phone-clock b { font-weight: 300; letter-spacing: -1px; }
 .os-android .phone-clock { text-align: left; padding-left: 8px; }
 .brand-samsung .phone-clock b { font-weight: 200; font-size: 72px; }

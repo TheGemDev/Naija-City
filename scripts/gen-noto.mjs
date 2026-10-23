@@ -25,7 +25,8 @@ const map = {
 const feed = `📰 📢 ✔️ 🔴 😩 🏆 🤑 🚨 🕶️ 🗳️ 🧧 🏃🏾 📣 🚧 🍚 🐍 🥷🏾 🤏 😂 🕊️ 🕴🏾 ⚔️ 🩹 💸 🕳️ 🚑 🔓 🛺 🛣️ 💵 ⚖️
   🕺🏾 🐎 📖 🍀 🛂 🎬 🤡 💻 🎟️ 🛢️ ✊🏾 😇 🦹🏾 🏘️ 🎓 📅 🫥 🤝🏾 🎩 🌟 ⚽ 💃🏾 🍢 🦵🏾 🎲 🥜 🃏 🎯 ♟️ ⚫ 🎱 🪨 🔠 💂🏾 📹
   🛸 🐐 🥊 🏇 🐏 🚦 🌧️ 👮🏾 🌫️ 🔧 🧵 🧺 🏪 🍹 🥤 🥩 🍉 🚕 🥥 🍾 🧢 🥻 🎧
-  🚫 🏢 🎤 🚌 🪧 ⏱️`.split(/\s+/);
+  🚫 🏢 🎤 🚌 🪧 ⏱️
+  ❓ 🌿 🛠️ 💳 🔮`.split(/\s+/);
 // Every place and landmark on the three city maps (the map labels, the travel sheet, the ride app), plus the
 // rides, house designs and chrome of the "how do you want to get there?" sheet. A new place just needs its emoji here.
 const places = `✈️ 🚌 🏢 🎖️ ⛪ 🏟️ 👮🏾 💻 🚆 🕌 🏛️ 🏨 📜 🐎 🛒 🎪 🌳 🗿 🎬 👗 🎣 🎓 🧶 🍲 🏦 🏠 🍢 🏫 🪩 🏥 ⚽ 🛢️ 🛣️ ⛳ 🎡 ⛰️
