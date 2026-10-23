@@ -1,7 +1,8 @@
-// Forbes app: the rich list by age group with number one on the magazine cover, and your own card to share.
+// Hustlers app: the rich list (everyone, or under 30) and the week's money makers. The top three stand on a podium,
+// the rest follow, and your own place rides the bottom of the screen with how far it is to the next one up.
 import { useEffect, useRef, useState } from 'react';
 import { nairaShort, netWorthOf, useGame } from '../game/store';
-import { FORBES_MIN_WORTH, forbesItems, type ForbesAssets, type ForbesItem, type ForbesKind } from '../game/forbes';
+import { FORBES_MIN_WORTH, HUSTLERS_WEEK_TOP, forbesItems, type ForbesAssets, type ForbesItem, type ForbesKind } from '../game/forbes';
 import { DESIGN_BY_ID, isComplete, saleValue } from '../game/property';
 import { CAR_BY_ID, JET_BY_ID, jetResale } from '../game/cars';
 import { conditionOf, valueOf } from '../game/carCare';
@@ -16,28 +17,29 @@ import { drawRichCard, type RichCard } from './forbesCard';
 import { saveImage } from './saveImage';
 import './forbes.css';
 
-interface CloudPlayer { uid: string; username: string; name: string | null; balance: number; assets?: ForbesAssets }
+interface RichPlayer { uid: string; username: string; name: string | null; balance: number; assets?: ForbesAssets }
+interface WeekPlayer { uid: string; username: string; name: string | null; earned: number }
+interface Week { endsAt: number; players: WeekPlayer[]; last: WeekPlayer[] }
 
-interface ForbesEntry {
+interface Entry {
   uid?: string;
   name: string;
   handle: string;
-  worth: number;
-  /** Only the top of the list comes with these. */
+  /** Net worth on the rich lists, money made on the weekly board. */
+  amount: number;
+  /** Only the top of the rich list comes with these. */
   assets?: ForbesAssets;
   isMe?: boolean;
 }
-type Ranked = ForbesEntry & { rank: number };
+type Ranked = Entry & { rank: number };
 
-type AgeTab = 'all' | 'u20' | 'u30';
-const AGE_TABS: { id: AgeTab; label: string; under?: number }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'u20', label: 'Under 20s', under: 20 },
-  { id: 'u30', label: 'Under 30s', under: 30 },
+type Tab = 'all' | 'u30' | 'week';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'all', label: 'Richest' },
+  { id: 'u30', label: 'Under 30' },
+  { id: 'week', label: 'This week' },
 ];
-
-/** What the card calls the main list. */
-const ALL_AGES = 'All ages';
+const UNDER = 30;
 
 const ASSET_KINDS: { key: ForbesKind; emoji: string; one: string; many: string }[] = [
   { key: 'businesses', emoji: '🏢', one: 'Business', many: 'Businesses' },
@@ -46,25 +48,35 @@ const ASSET_KINDS: { key: ForbesKind; emoji: string; one: string; many: string }
   { key: 'jets', emoji: '✈️', one: 'Jet', many: 'Jets' },
 ];
 
+const TIERS: { from: number; emoji: string; name: string }[] = [
+  { from: 500_000_000, emoji: '💎', name: 'Billionaire Mogul' },
+  { from: 100_000_000, emoji: '👑', name: 'Naija Tycoon' },
+  { from: 20_000_000, emoji: '💰', name: 'Multi-Millionaire' },
+  { from: 5_000_000, emoji: '🛍️', name: 'Big Spender' },
+  { from: 1_000_000, emoji: '😎', name: 'Comfortable' },
+  { from: 0, emoji: '💪', name: 'On the come-up' },
+];
+const tierOf = (worth: number) => TIERS.find((t) => worth >= t.from)!;
+
 const CAN_SHARE_FILES = typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([], 'card.png', { type: 'image/png' })] });
 
-function wealthTier(worth: number): string {
-  if (worth >= 500_000_000) return 'Billionaire Mogul';
-  if (worth >= 100_000_000) return 'Naija Tycoon';
-  if (worth >= 20_000_000) return 'Multi-Millionaire';
-  if (worth >= 5_000_000) return 'Big Spender';
-  if (worth >= 1_000_000) return 'Comfortable';
-  return 'Naija Hustler';
+/** "3d 4h" or "5h" until `at`. */
+function timeLeft(at: number, now: number): string {
+  const hours = Math.max(1, Math.ceil((at - now) / 3_600_000));
+  return hours >= 24 ? `${Math.floor(hours / 24)}d ${hours % 24}h` : `${hours}h`;
 }
 
-/** The server's list with you slotted in at your live net worth (`me` is null when the list isn't for your age). */
-function rankList(players: CloudPlayer[], me: ForbesEntry | null, myUsername?: string | null): Ranked[] {
-  const entries: ForbesEntry[] = players
+/** The server's rich list with you slotted in at your live net worth (`me` is null when you aren't on this list). */
+function rankRich(players: RichPlayer[], me: Entry | null, myUsername?: string | null): Ranked[] {
+  const entries: Entry[] = players
     .filter((p) => p.username !== myUsername && p.balance >= FORBES_MIN_WORTH)
-    .map((p) => ({ uid: p.uid, name: p.name || p.username, handle: `@${p.username}`, worth: p.balance, assets: p.assets }));
+    .map((p) => ({ uid: p.uid, name: p.name || p.username, handle: `@${p.username}`, amount: p.balance, assets: p.assets }));
   if (me) entries.push(me);
-  return entries.sort((a, b) => b.worth - a.worth).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+  return entries.sort((a, b) => b.amount - a.amount).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
 }
+
+const rankWeek = (players: WeekPlayer[], myUsername?: string | null): Ranked[] =>
+  players.map((p, idx) => ({ uid: p.uid, name: p.name || p.username, handle: `@${p.username}`, amount: p.earned, isMe: p.username === myUsername, rank: idx + 1 }));
 
 export function ForbesApp() {
   const money = useGame((s) => s.money);
@@ -86,27 +98,42 @@ export function ForbesApp() {
   const businesses = useCareer((s) => s.businesses);
   const business = businesses.map((b) => BUSINESS_BY_ID[b.type]).sort((a, b) => b.cost - a.cost)[0];
   const myNetWorth = netWorthOf({ money, debtOwed, bankLoanOwed, investments, ownedCars, ownedJets, carCondition, ownedPhones, freePhone, properties });
-  const title = job?.title ?? (business ? `${business.name} Owner` : wealthTier(myNetWorth));
-  const [tab, setTab] = useState<AgeTab>('all');
-  const [lists, setLists] = useState<Partial<Record<AgeTab, CloudPlayer[]>>>({});
+  const [tab, setTab] = useState<Tab>('all');
+  const [rich, setRich] = useState<Partial<Record<'all' | 'u30', RichPlayer[]>>>({});
+  const [week, setWeek] = useState<Week | null>(null);
   const [showCard, setShowCard] = useState(false);
   /** Whose receipt is out, by handle. */
   const [receipt, setReceipt] = useState<string | null>(null);
-  const asked = useRef(new Set<AgeTab>());
+  const [now, setNow] = useState(Date.now);
+  const asked = useRef(new Set<Tab>());
 
   useEffect(() => {
     if (asked.current.has(tab)) return;
     asked.current.add(tab);
+    if (tab === 'week') {
+      fetch('/api/hustlers/week')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setWeek({ endsAt: Number(data?.endsAt) || 0, players: Array.isArray(data?.players) ? data.players : [], last: Array.isArray(data?.last) ? data.last : [] }))
+        .catch(() => setWeek({ endsAt: 0, players: [], last: [] }));
+      return;
+    }
     fetch(tab === 'all' ? '/api/forbes' : `/api/forbes?age=${tab}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setLists((l) => ({ ...l, [tab]: Array.isArray(data?.players) ? data.players : [] })))
-      .catch(() => setLists((l) => ({ ...l, [tab]: [] })));
+      .then((data) => setRich((l) => ({ ...l, [tab]: Array.isArray(data?.players) ? data.players : [] })))
+      .catch(() => setRich((l) => ({ ...l, [tab]: [] })));
   }, [tab]);
 
-  const myEntry: ForbesEntry = {
+  // The weekly countdown only needs to move once a minute.
+  useEffect(() => {
+    if (tab !== 'week') return;
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  const myEntry: Entry = {
     name: myName || 'You',
     handle: myUsername ? `@${myUsername}` : '@you',
-    worth: myNetWorth,
+    amount: myNetWorth,
     assets: {
       businesses: businesses.length, houses: properties.filter(isComplete).length, cars: ownedCars.length, jets: ownedJets.length,
       items: forbesItems([
@@ -119,106 +146,148 @@ export function ForbesApp() {
     isMe: true,
   };
 
-  const { label, under } = AGE_TABS.find((t) => t.id === tab)!;
-  const players = lists[tab];
-  // Your age comes with your session; until it does, being on the server's list is proof enough.
-  const eligible = !under || (myAge != null ? myAge < under : !!players?.some((p) => p.username === myUsername));
-  // The list starts at FORBES_MIN_WORTH: below it you are not ranked.
+  const isWeek = tab === 'week';
+  // The rich list starts at FORBES_MIN_WORTH: below it you are not ranked.
   const listed = myNetWorth >= FORBES_MIN_WORTH;
-  const ranked = rankList(players ?? [], eligible && listed ? myEntry : null, myUsername);
+  const richPlayers = isWeek ? undefined : rich[tab];
+  // Your age comes with your session; until it does, being on the server's list is proof enough.
+  const eligible = tab !== 'u30' || (myAge != null ? myAge < UNDER : !!richPlayers?.some((p) => p.username === myUsername));
+  const loaded = isWeek ? !!week : !!richPlayers;
+  const ranked = isWeek ? rankWeek(week?.players ?? [], myUsername) : rankRich(richPlayers ?? [], eligible && listed ? myEntry : null, myUsername);
   const mine = ranked.find((e) => e.isMe) ?? null;
-  const king = ranked[0];
-  const runnersUp = ranked.slice(1, 3);
-  const rest = ranked.slice(3, 10);
-  if (mine && mine.rank > 10) rest.push(mine);
-  const toggleReceipt = (entry: Ranked) => setReceipt((open) => (open === entry.handle ? null : entry.handle));
-  const starReceipt = runnersUp.find((e) => e.assets && e.handle === receipt);
+  const ahead = mine && mine.rank > 1 ? ranked[mine.rank - 2] : null;
+  const podium = ranked.slice(0, 3);
+  const rest = ranked.slice(3);
+  const open = podium.find((e) => e.assets && e.handle === receipt);
+  const title = job?.title ?? (business ? `${business.name} Owner` : tierOf(myNetWorth).name);
 
   if (showCard) {
     // A list you are too old for has no rank for you: the card falls back to the main list.
-    const from = mine ?? rankList(lists.all ?? [], myEntry, myUsername).find((e) => e.isMe)!;
-    const card: RichCard = { rank: from.rank, name: myEntry.name, handle: myEntry.handle, worth: nairaShort(myNetWorth), title, list: mine && under ? label : ALL_AGES, look: myLook };
+    const from = isWeek ? mine! : mine ?? rankRich(rich.all ?? [], myEntry, myUsername).find((e) => e.isMe)!;
+    const card: RichCard = {
+      rank: from.rank, name: myEntry.name, handle: myEntry.handle, title, look: myLook,
+      board: isWeek ? 'week' : 'rich',
+      amount: nairaShort(isWeek ? from.amount : myNetWorth),
+      list: isWeek ? 'This week' : mine && tab === 'u30' ? `Under ${UNDER}` : 'All ages',
+    };
     return <MyCard card={card} username={myUsername} onClose={() => setShowCard(false)} />;
   }
+
+  // What the bar at the bottom says about you on this list.
+  let chase: string;
+  let progress: number | null = null;
+  if (mine && !ahead) chase = isWeek ? 'Top earner this week. Keep the money coming!' : 'The richest in Naija. Hold am tight!';
+  else if (mine && ahead) {
+    chase = `${nairaShort(Math.max(1, ahead.amount - mine.amount))} to pass ${ahead.name}`;
+    progress = mine.amount / ahead.amount;
+  } else if (isWeek) {
+    const full = ranked.length >= HUSTLERS_WEEK_TOP;
+    chase = full ? `Make over ${nairaShort(ranked[ranked.length - 1].amount)} this week to get on` : 'Work a shift, run a gig or sell from your shop to get on';
+  } else if (!eligible) chase = `This list is for players under ${UNDER}`;
+  else {
+    chase = `${nairaShort(FORBES_MIN_WORTH - myNetWorth)} more to make the list`;
+    progress = myNetWorth / FORBES_MIN_WORTH;
+  }
+  const canShare = isWeek ? !!mine : !!rich.all && listed;
 
   return (
     <div className="fb">
       <div className="tabs">
-        {AGE_TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => { setTab(t.id); setReceipt(null); }}>
+            {t.id === 'week' && <Emoji char="🔥" size={13} />} {t.label}
+          </button>
         ))}
       </div>
 
-      {/* The cover belongs to whoever is number one. */}
-      <div className="fb-cover">
+      <div className={`fb-stage ${isWeek ? 'week' : ''}`}>
         <div className="fb-mast">
-          <b>Forbes</b>
-          <span>{under ? `Richest under ${under}` : 'Naija Rich List'}</span>
+          <b>{isWeek ? 'Money Makers' : tab === 'u30' ? `Under ${UNDER}` : 'Rich List'}</b>
+          {isWeek && week && week.endsAt > now ? <small>Resets in {timeLeft(week.endsAt, now)}</small>
+            : <span>{isWeek ? 'This week' : tab === 'u30' ? 'Richest young' : 'Naija’s richest'}</span>}
         </div>
-        {!players ? <small className="fb-note">Updating…</small>
-          : !king ? <small className="fb-note">Nobody under {under} has made the list yet.</small>
+        <i className="fb-flag" aria-hidden />
+        {!loaded ? <small className="fb-note">Updating…</small>
+          : ranked.length === 0 ? <small className="fb-note">{isWeek ? 'Nobody has made money this week yet. Be the first.' : `Nobody under ${UNDER} has made the list yet.`}</small>
           : (
             <>
-              <div className="fb-king">
-                <span className="fb-king-face">
-                  <Face uid={king.uid} username={king.isMe ? king.name : king.handle.slice(1)} look={king.isMe ? myLook : null} size="fill" />
-                  <i><Emoji char="👑" size={22} /></i>
-                </span>
-                <span className="fb-king-who">
-                  <b>{king.name}{king.isMe && <em>You</em>}</b>
-                  <small>{king.handle}</small>
-                </span>
-                <b className="fb-king-rank">#1</b>
+              <div className="fb-podium">
+                {/* Two, one, three: number one stands in the middle, highest. */}
+                {[1, 0, 2].map((i) => {
+                  const e = podium[i];
+                  const place = i + 1;
+                  if (!e) return <div key={place} className={`fb-step p${place} empty`}><span className="fb-step-face" /><small>Open spot</small><span className="fb-pillar">{place}</span></div>;
+                  return (
+                    <button key={place} className={`fb-step p${place} ${e.isMe ? 'me' : ''} ${receipt === e.handle ? 'open' : ''}`} aria-expanded={e.assets ? receipt === e.handle : undefined}
+                      onClick={() => e.assets && setReceipt((r) => (r === e.handle ? null : e.handle))}>
+                      <span className="fb-step-face">
+                        <Face uid={e.uid} username={e.isMe ? e.name : e.handle.slice(1)} look={e.isMe ? myLook : null} size="fill" />
+                        {place === 1 && <i><Emoji char="👑" size={24} /></i>}
+                      </span>
+                      <b>{e.isMe ? 'You' : e.name}</b>
+                      <strong>{isWeek && '+'}{nairaShort(e.amount)}</strong>
+                      <span className="fb-pillar">{place}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="fb-king-worth">
-                <span><small>Net worth</small><b>{nairaShort(king.worth)}</b></span>
-                <em>{wealthTier(king.worth)}</em>
-              </div>
-              {king.assets && <button className="fb-more" aria-expanded={receipt === king.handle} onClick={() => toggleReceipt(king)}>{receipt === king.handle ? 'See less' : 'See more'}</button>}
-              {king.assets && receipt === king.handle && <Receipt entry={king} assets={king.assets} />}
+              {open?.assets ? <Receipt entry={open} assets={open.assets} />
+                : podium.some((e) => e.assets) && <small className="fb-hint">Tap the top three to see what they own</small>}
             </>
           )}
       </div>
 
-      {players && runnersUp.length > 0 && (
-        <div className="fb-top">
-          {runnersUp.map((entry) => (
-            <div key={entry.handle} className={`fb-star r${entry.rank} ${entry.isMe ? 'me' : ''}`}>
-              <span className="fb-star-rank">#{entry.rank}</span>
-              <Face uid={entry.uid} username={entry.isMe ? entry.name : entry.handle.slice(1)} look={entry.isMe ? myLook : null} className="fb-star-face" />
-              <span className="fb-star-who">
-                <b>{entry.name}{entry.isMe && <em>You</em>}</b>
-                <small>{entry.handle}</small>
-                <strong>{nairaShort(entry.worth)}</strong>
-                <i>{wealthTier(entry.worth)}</i>
-              </span>
-              {entry.assets && <button className="fb-more" aria-expanded={receipt === entry.handle} onClick={() => toggleReceipt(entry)}>{receipt === entry.handle ? 'See less' : 'See more'}</button>}
-            </div>
-          ))}
-          {/* Too wide for a medal card: the receipt runs under both. */}
-          {starReceipt?.assets && <Receipt entry={starReceipt} assets={starReceipt.assets} />}
+      {loaded && rest.length > 0 && (
+        <div className="fb-list">
+          {rest.map((e) => {
+            const tier = tierOf(e.amount);
+            return (
+              <div key={e.handle} className={`fb-row ${e.isMe ? 'me' : ''}`}>
+                <span className="fb-rank">{e.rank}</span>
+                <Face uid={e.uid} username={e.isMe ? e.name : e.handle.slice(1)} look={e.isMe ? myLook : null} className="fb-face" />
+                <span className="fb-who">
+                  <b>{e.name}{e.isMe && <em>You</em>}</b>
+                  {isWeek ? <small>{e.handle}</small> : <small><Emoji char={tier.emoji} size={11} /> {tier.name}</small>}
+                </span>
+                <b className={`fb-amount ${isWeek ? 'up' : ''}`}>{isWeek && '+'}{nairaShort(e.amount)}</b>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {players && rest.length > 0 && (
-        <div className="fb-list">
-          {rest.map((entry) => (
-            <div key={entry.handle} className={`fb-row ${entry.isMe ? 'me' : ''} ${entry.rank > 10 ? 'far' : ''}`}>
-              <span className="fb-rank">{entry.rank}</span>
-              <Face uid={entry.uid} username={entry.isMe ? entry.name : entry.handle.slice(1)} look={entry.isMe ? myLook : null} className="fb-face" />
-              <span className="fb-who">
-                <b>{entry.name}{entry.isMe && <em>You</em>}</b>
-                <small>{entry.handle} · {wealthTier(entry.worth)}</small>
-              </span>
-              <b className="fb-worth">{nairaShort(entry.worth)}</b>
+      {isWeek && week && (
+        <>
+          {week.last.length > 0 && (
+            <div className="fb-last">
+              <h5>Last week’s champions</h5>
+              {week.last.map((p, i) => (
+                <div key={p.uid} className="fb-last-row">
+                  <Emoji char={['🥇', '🥈', '🥉'][i]} size={16} />
+                  <Face uid={p.uid} username={p.username} className="fb-face sm" />
+                  <span>{p.name || p.username}</span>
+                  <b>{nairaShort(p.earned)}</b>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+          <small className="fb-foot">What counts: wages, gigs, business takings, shop sales and rent. Gifts, loans, office pay, winnings and crime don’t.</small>
+        </>
       )}
 
       <div className="fb-dock">
-        {!listed && <small className="muted small" style={{ display: 'block', textAlign: 'center', marginBottom: 8 }}>The list starts at {nairaShort(FORBES_MIN_WORTH)}. You are worth {nairaShort(myNetWorth)}: {nairaShort(FORBES_MIN_WORTH - myNetWorth)} to go.</small>}
-        <button disabled={!players || !lists.all || !listed} onClick={() => setShowCard(true)}>See your card</button>
+        <div className="fb-me">
+          <Face look={myLook} username={myEntry.name} className="fb-me-face" />
+          <span className="fb-me-text">
+            <b>
+              {mine ? `#${mine.rank}` : 'Not ranked'}
+              <em>{isWeek ? (mine ? `+${nairaShort(mine.amount)}` : 'this week') : nairaShort(myNetWorth)}</em>
+            </b>
+            <small>{chase}</small>
+            {progress != null && <span className="fb-bar"><i style={{ width: `${Math.max(4, Math.min(100, progress * 100))}%` }} /></span>}
+          </span>
+          <button className="fb-share" disabled={!canShare} onClick={() => setShowCard(true)}>Share</button>
+        </div>
       </div>
     </div>
   );
@@ -233,7 +302,7 @@ function Receipt({ entry, assets }: { entry: Ranked; assets: ForbesAssets }) {
   return (
     <div className="fb-receipt" aria-label={`What ${entry.name} owns`}>
       <div className="fb-receipt-head">
-        <b>FORBES</b>
+        <b>HUSTLERS</b>
         <small>Rich list · No. {entry.rank}</small>
         <small>{entry.name} · {entry.handle}</small>
       </div>
@@ -247,36 +316,37 @@ function Receipt({ entry, assets }: { entry: Ranked; assets: ForbesAssets }) {
         </div>
       ))}
       {total != null && sections.length > 0 && <div className="fb-line"><span>Assets</span><i /><b>{nairaShort(total)}</b></div>}
-      <div className="fb-line fb-receipt-total"><span>Net worth</span><i /><b>{nairaShort(entry.worth)}</b></div>
+      <div className="fb-line fb-receipt-total"><span>Net worth</span><i /><b>{nairaShort(entry.amount)}</b></div>
       <small className="fb-receipt-foot">Cash, shares and debts make up the rest.</small>
     </div>
   );
 }
 
-/** Your own rich-list card, full screen, with ways to send it out. */
+/** Your own card, full screen, with ways to send it out. */
 function MyCard({ card, username, onClose }: { card: RichCard; username?: string | null; onClose: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const { rank, name, handle, worth, title, list, look } = card;
+  const { rank, name, handle, amount, title, list, look, board } = card;
   useEffect(() => {
-    if (canvas.current) void drawRichCard(canvas.current, { rank, name, handle, worth, title, list, look });
-  }, [rank, name, handle, worth, title, list, look]);
+    if (canvas.current) void drawRichCard(canvas.current, { rank, name, handle, amount, title, list, look, board });
+  }, [rank, name, handle, amount, title, list, look, board]);
 
+  const what = board === 'week' ? 'the Naija City money makers this week' : `the Naija Rich List${list === 'All ages' ? '' : ` (${list})`}`;
+  const line = `I’m #${rank} on ${what} with ${amount}${board === 'week' ? ' made' : ''}. Come and catch me.`;
   const blob = () => new Promise<Blob | null>((done) => (canvas.current ? canvas.current.toBlob(done, 'image/png') : done(null)));
   const save = async () => {
     const png = await blob();
-    if (png) await saveImage(new File([png], 'naija-rich-list.png', { type: 'image/png' }));
+    if (png) await saveImage(new File([png], 'naija-hustlers.png', { type: 'image/png' }));
   };
   const share = async () => {
-    const line = `I’m #${rank} on the Naija Rich List${list === ALL_AGES ? '' : ` (${list})`} with ${worth}. Come and catch me.`;
     const png = CAN_SHARE_FILES ? await blob() : null;
     if (!png) return void shareLink(username ? userLink(username) : 'https://naija.city', line);
-    const file = new File([png], 'naija-rich-list.png', { type: 'image/png' });
-    void navigator.share({ files: [file], title: 'Naija Rich List', text: `${line}\nPlay here 👉 ${username ? inviteLink(username) : 'https://naija.city'}` }).catch(() => { /* closed the share sheet */ });
+    const file = new File([png], 'naija-hustlers.png', { type: 'image/png' });
+    void navigator.share({ files: [file], title: 'Naija City Hustlers', text: `${line}\nPlay here 👉 ${username ? inviteLink(username) : 'https://naija.city'}` }).catch(() => { /* closed the share sheet */ });
   };
 
   return (
     <div className="fb fb-mycard">
-      <canvas ref={canvas} className="fb-card" role="img" aria-label={`${name}, number ${rank} on the Naija Rich List, net worth ${worth}`} />
+      <canvas ref={canvas} className="fb-card" role="img" aria-label={`${name}, number ${rank} on ${what}, ${amount}`} />
       <div className="fb-card-actions">
         <button onClick={onClose}>Back</button>
         <button onClick={() => void save()}>Save</button>

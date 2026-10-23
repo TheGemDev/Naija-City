@@ -29,7 +29,7 @@ export async function ownedCounts(db: D1Database, uid: string): Promise<Map<stri
 /** Cars the player owns in their current life (bought − sold). */
 export const ownsCar = (owned: Map<string, number>, id: string) => !!CAR_BY_ID[id] && (owned.get(id) ?? 0) > 0;
 
-/** What the Forbes list shows a player owns (GET /api/forbes): businesses, finished houses, cars and jets, counted and by name. */
+/** What the Hustlers rich list shows a player owns (GET /api/forbes): businesses, finished houses, cars and jets, counted and by name. */
 export async function forbesAssets(db: D1Database, uid: string): Promise<ForbesAssets> {
   const [owned, biz, plots, books, houses] = await Promise.all([
     ownedCounts(db, uid),

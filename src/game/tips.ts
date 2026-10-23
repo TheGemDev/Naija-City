@@ -59,7 +59,7 @@ export const TIPS: Tip[] = [
     '🏦 Need capital? The Bank lends against what you own: cash, savings, houses, cars and jets. Interest is added every day and a loan falls due after 7 days. Miss it by a day and the bank takes your things.',
     '🧾 Income tax goes to the treasury and the president sets the rate. When tax goes up, every fare goes up with it.',
     '👛 Keep a little cash on hand for rides and food. Don\'t invest everything.',
-    '👑 Made it big? The Forbes app ranks the richest players by age group.',
+    '👑 Made it big? The Hustlers app ranks the richest players, and who made the most money this week.',
   ]),
 
   ...group('home', [

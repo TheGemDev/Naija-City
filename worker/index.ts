@@ -1,6 +1,7 @@
 // Naija City API. Static game files are served by Workers Assets; only /api/* reaches this code.
 
-import { FORBES_ASSETS_TOP, FORBES_MIN_WORTH } from '../src/game/forbes';
+import { FORBES_ASSETS_TOP, FORBES_MIN_WORTH, HUSTLERS_WEEK_TOP } from '../src/game/forbes';
+import { WEEK_MS, weekKey } from '../src/game/community';
 import { withSentry } from '@sentry/cloudflare';
 import { readLiveStats } from './cfTraffic';
 import { verifyIdToken, type FirebaseUser } from './auth';
@@ -204,9 +205,9 @@ const handler = {
       return edgeCached(req, ctx, 150, async () => json(await readMarket(replica(env))));
     }
 
-    // Only players worth FORBES_MIN_WORTH or more are listed, and the top FORBES_ASSETS_TOP come with a count of what they own. ?age=u20 or ?age=u30 narrows the list to players under that age. Only the list is public, never a birthdate.
+    // The Hustlers app's rich list. Only players worth FORBES_MIN_WORTH or more are listed, and the top FORBES_ASSETS_TOP come with a count of what they own. ?age=u30 narrows the list to players under 30. Only the list is public, never a birthdate.
     if (path === '/api/forbes' && req.method === 'GET') return edgeCached(req, ctx, 30, async () => {
-      const under = ({ u20: 20, u30: 30 } as Record<string, number>)[url.searchParams.get('age') ?? ''];
+      const under = ({ u30: 30 } as Record<string, number>)[url.searchParams.get('age') ?? ''];
       // Birthdates are YYYY-MM-DD, so "born after this day" is a plain text comparison.
       const today = new Date();
       const bornAfter = under ? `${today.getUTCFullYear() - under}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}` : null;
@@ -220,6 +221,20 @@ const handler = {
       `).bind(bornAfter, FORBES_MIN_WORTH).all<{ uid: string; username: string; name: string | null; balance: number; last_seen: number }>();
       const assets = await Promise.all(rows.results.slice(0, FORBES_ASSETS_TOP).map((p) => forbesAssets(replica(env), p.uid)));
       return json({ players: rows.results.map((p, i) => (assets[i] ? { ...p, assets: assets[i] } : p)) });
+    });
+
+    // The Hustlers app's weekly board: who made the most money working this week (migrations/0123_hustle_weeks.sql), and last week's top three.
+    if (path === '/api/hustlers/week' && req.method === 'GET') return edgeCached(req, ctx, 30, async () => {
+      const week = weekKey(Date.now());
+      const top = (w: number, n: number) => replica(env).prepare(`
+        SELECT h.uid, p.username, p.name, h.earned
+        FROM hustle_weeks h JOIN players p ON p.uid = h.uid
+        WHERE h.week = ?1 AND p.username IS NOT NULL
+        ORDER BY h.earned DESC
+        LIMIT ?2
+      `).bind(w, n).all<{ uid: string; username: string; name: string | null; earned: number }>();
+      const [now, last] = await Promise.all([top(week, HUSTLERS_WEEK_TOP), top(week - 1, 3)]);
+      return json({ endsAt: (week + 1) * WEEK_MS, players: now.results, last: last.results });
     });
 
     const media = path.match(/^\/api\/media\/(.+)$/);

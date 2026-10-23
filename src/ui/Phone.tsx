@@ -92,7 +92,7 @@ const APPS: Record<AppId, AppDef> = {
   ride: { id: 'ride', label: 'Bolt', icon: '🚕', vectorIcon: 'cars', bg: ['#fef08a', '#eab308'], tint: '#ca8a04' },
   bank: { id: 'bank', label: 'Bank', icon: '🏦', vectorIcon: 'bank', bg: ['#a78bfa', '#5b21b6'], tint: '#5b21b6' },
   invest: { id: 'invest', label: 'Invest', icon: '📈', vectorIcon: 'invest', bg: ['#34d399', '#059669'], tint: '#047857' },
-  forbes: { id: 'forbes', label: 'Forbes', icon: '👑', vectorIcon: 'forbes', bg: ['#fbbf24', '#b45309'], tint: '#b45309' },
+  forbes: { id: 'forbes', label: 'Hustlers', icon: '👑', vectorIcon: 'forbes', bg: ['#fbbf24', '#b45309'], tint: '#b45309' },
   cribs: { id: 'cribs', label: 'Cribs', icon: '🏡', bg: ['#f0abfc', '#7c3aed'], tint: '#6d28d9' },
   cars: { id: 'cars', label: 'Autos', icon: '🚗', vectorIcon: 'cars', bg: ['#38bdf8', '#0284c7'], tint: '#0284c7' },
   gida: { id: 'gida', label: 'House', icon: '🏠', vectorIcon: 'home', bg: ['#fcd34d', '#b45309'], tint: '#92400e' },

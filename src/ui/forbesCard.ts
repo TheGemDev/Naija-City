@@ -1,16 +1,18 @@
-// The rich-list card a player shares from the Forbes app: drawn on a canvas so the picture on screen
-// is the exact picture that gets saved or sent.
+// The card a player shares from the Hustlers app, for the rich list or the week's money makers: drawn on a canvas
+// so the picture on screen is the exact picture that gets saved or sent.
 import { avatarSvg } from '../game/face';
 
 export interface RichCard {
   rank: number;
   name: string;
   handle: string;
-  /** Already formatted, e.g. ₦4.3mn. */
-  worth: string;
+  /** Which board the rank is on. */
+  board: 'rich' | 'week';
+  /** Net worth, or money made this week. Already formatted, e.g. ₦4.3mn. */
+  amount: string;
   /** Their job, or their wealth tier when they have none. */
   title: string;
-  /** Which list the rank is from, e.g. "Under 30s". */
+  /** Which list the rank is from, e.g. "Under 30". */
   list: string;
   look: string | null;
 }
@@ -57,14 +59,15 @@ export async function drawRichCard(canvas: HTMLCanvasElement, card: RichCard) {
   gold.addColorStop(0.55, '#eab308');
   gold.addColorStop(1, '#b45309');
 
-  // Cover: black with a gold glow, like the app's own cover.
+  // Black with a gold glow (green for the weekly board), like the app's own stage.
   const bg = ctx.createLinearGradient(0, 0, W * 0.4, H);
   bg.addColorStop(0, '#1c1917');
   bg.addColorStop(1, '#0c0a09');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
   const glow = ctx.createRadialGradient(W, 0, 0, W, 0, W * 1.1);
-  glow.addColorStop(0, 'rgba(250, 204, 21, 0.34)');
+  const week = card.board === 'week';
+  glow.addColorStop(0, week ? 'rgba(74, 222, 128, 0.3)' : 'rgba(250, 204, 21, 0.34)');
   glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
@@ -76,19 +79,24 @@ export async function drawRichCard(canvas: HTMLCanvasElement, card: RichCard) {
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff';
-  ctx.font = `700 128px ${SERIF}`;
-  ctx.fillText('Forbes', 84, 200);
+  ctx.font = `italic 700 112px ${SERIF}`;
+  ctx.fillText('Hustlers', 84, 196);
   ctx.textAlign = 'right';
   spaced(ctx, 5);
-  ctx.fillStyle = '#facc15';
+  ctx.fillStyle = week ? '#4ade80' : '#facc15';
   ctx.font = `800 30px ${SANS}`;
-  ctx.fillText('NAIJA RICH LIST', W - 84, 150);
+  ctx.fillText(week ? 'MONEY MAKERS' : 'NAIJA RICH LIST', W - 84, 150);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
   ctx.font = `700 28px ${SANS}`;
   ctx.fillText(card.list.toUpperCase(), W - 84, 198);
   spaced(ctx, 0);
-  ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
-  ctx.fillRect(84, 240, W - 168, 3);
+  // Green, white, green under the masthead.
+  const third = (W - 168) / 3;
+  ctx.fillStyle = '#008751';
+  ctx.fillRect(84, 238, third, 6);
+  ctx.fillRect(84 + third * 2, 238, third, 6);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(84 + third, 238, third, 6);
 
   // Face in a gold ring, the rank sitting on its lower edge.
   const cx = W / 2, cy = 500, r = 180;
@@ -124,15 +132,16 @@ export async function drawRichCard(canvas: HTMLCanvasElement, card: RichCard) {
   ctx.font = `600 36px ${SANS}`;
   ctx.fillText(card.handle, cx, 908);
 
-  // Net worth
+  // Net worth, or what they made this week
   spaced(ctx, 5);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
   ctx.font = `800 26px ${SANS}`;
-  ctx.fillText('NET WORTH', cx, 996);
+  ctx.fillText(week ? 'MADE THIS WEEK' : 'NET WORTH', cx, 996);
   spaced(ctx, 0);
   ctx.fillStyle = gold;
-  fit(ctx, card.worth, 800, 124, SANS, W - 200);
-  ctx.fillText(card.worth, cx, 1118);
+  const amount = week ? `+${card.amount}` : card.amount;
+  fit(ctx, amount, 800, 124, SANS, W - 200);
+  ctx.fillText(amount, cx, 1118);
   ctx.font = `800 32px ${SANS}`;
   ctx.fillStyle = 'rgba(250, 204, 21, 0.16)';
   pill(ctx, cx, 1186, ctx.measureText(card.title).width + 64, 64);
@@ -141,5 +150,5 @@ export async function drawRichCard(canvas: HTMLCanvasElement, card: RichCard) {
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.font = `700 28px ${SANS}`;
-  ctx.fillText('Play Naija City · https://naija.city', cx, 1282);
+  ctx.fillText('Catch me on Naija City · naija.city', cx, 1282);
 }

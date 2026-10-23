@@ -1,10 +1,14 @@
-// The Forbes rich list (src/ui/ForbesApp.tsx, GET /api/forbes in worker/index.ts).
+// The Hustlers app (src/ui/ForbesApp.tsx): the rich list (GET /api/forbes in worker/index.ts) and the weekly
+// board of who made the most money working (GET /api/hustlers/week).
 
-/** Nobody worth less than this makes the list. */
+/** Nobody worth less than this makes the rich list. */
 export const FORBES_MIN_WORTH = 1_000_000;
 
 /** How many from the top of the list have what they own counted. */
 export const FORBES_ASSETS_TOP = 3;
+
+/** How many the weekly board shows. */
+export const HUSTLERS_WEEK_TOP = 50;
 
 export type ForbesKind = 'businesses' | 'houses' | 'cars' | 'jets';
 

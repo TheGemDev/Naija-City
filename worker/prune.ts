@@ -8,7 +8,7 @@
 // black-market rows (together they say which loot is still in hand), scams and paid marketplace orders
 // (lifetime counts on profiles and shops), paid orders and ads (real-money records), and anything a player owns.
 
-import { DAY_MS, seasonKey } from '../src/game/community';
+import { DAY_MS, seasonKey, weekKey } from '../src/game/community';
 import { EFCC_RECORD_MS } from '../src/game/efcc';
 
 /** Newest messages kept per conversation (DMs) and per group chat. */
@@ -101,6 +101,8 @@ export async function pruneOldData(db: D1Database, now: number) {
     db.prepare('DELETE FROM quest_claims WHERE claimed_at < ?').bind(record),
     // The season before this one may still be settling; anything older has had its prizes written.
     db.prepare('DELETE FROM season_points WHERE season < ?').bind(seasonKey(now) - 2),
+    // The Hustlers app only shows this week and last week's winners.
+    db.prepare('DELETE FROM hustle_weeks WHERE week < ?').bind(weekKey(now) - 1),
     db.prepare('DELETE FROM room_assign WHERE at < ?').bind(record),
     db.prepare('DELETE FROM pothole_fixes WHERE id NOT IN (SELECT id FROM pothole_fixes ORDER BY id DESC LIMIT ?)').bind(POTHOLE_FIXES_KEEP),
   ]);
