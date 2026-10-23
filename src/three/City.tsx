@@ -7,9 +7,7 @@ import { BufferGeometry, Color, Float32BufferAttribute, MeshStandardMaterial, Ob
 import {
   BRIDGE_RAMP, BRIDGE_Y, cityMap, placeYaw, mapGroundY, potholeCity, potholeOf, type CityMap, type Landmark, type Place, type Pothole,
 } from '../game/city';
-import { hourOf, nairaShort, useGame } from '../game/store';
-import { PRODUCES } from '../game/trade';
-import { crazeOf, populationOf } from '../game/npcs';
+import { hourOf, useGame } from '../game/store';
 import { STAGES } from '../game/property';
 import { photoHour } from '../game/photo';
 import { LIGHTS_ON, sceneHour } from '../game/theme';
@@ -36,10 +34,9 @@ import { CityBillboards, SeaAds } from './Billboard';
 import { SEA_MARGIN, seaBoard, seaWater } from '../game/boards';
 import { openAdsSheet } from '../net/ads';
 import { cityRunBy, isSuspended, useCivic } from '../net/civic';
-import { CITY_HEAD, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
+import { CITY_HEAD, type CivicCity } from '../game/civic';
 import { Emoji } from '../ui/Icons';
-import { WeatherChip } from '../ui/WeatherChip';
-import { copyLink, stateLink } from '../net/deeplink';
+import { RegionCard } from '../ui/RegionCard';
 import { offHover, onHover } from './HoverOutline';
 import { EstateSignLabels, EstateSigns } from './EstateSigns';
 
@@ -1107,91 +1104,6 @@ function MapEffects() {
   return null;
 }
 
-/** Who is in charge here: the president, and under them whoever runs this city. Nothing until the civic snapshot is in. */
-function Leaders({ city }: { city: keyof typeof CITY_HEAD }) {
-  const policies = useCivic((s) => s.data?.policies);
-  if (!policies) return null;
-  const head = CITY_HEAD[city];
-  const chip = (office: PoliticalOffice, title: string) => {
-    const holder = policies[office];
-    const who = holder?.username ? `@${holder.username}` : holder?.name;
-    return (
-      <span className="region-leader">
-        <small>{title}</small>
-        <b className={who ? '' : 'vacant'}><Emoji char={OFFICE_ICON[office]} size={12} /> {who ?? 'Vacant'}</b>
-      </span>
-    );
-  };
-  return <div className="region-leaders">{chip('president', 'President')}{chip(head, head === 'minister' ? 'FCT Minister' : 'Governor')}</div>;
-}
-
-/** What this state makes, as icons, how many people live there and how much its treasury holds (once the civic snapshot is in). */
-function StateFacts({ city }: { city: keyof typeof CITY_HEAD }) {
-  const balance = useCivic((s) => s.data?.states?.[city]?.balance);
-  const people = useCivic((s) => s.data?.states?.[city]?.people);
-  const craze = crazeOf(people?.craze?.id);
-  return (
-    <div className="region-facts">
-      <span className="region-goods" title={`Makes ${PRODUCES[city].map((p) => p.label).join(', ')}`}>
-        {PRODUCES[city].map((p) => <Emoji key={p.label} char={p.icon} size={14} />)}
-      </span>
-      {craze && <span className="region-fact" title={`${craze.label} in this state right now`}><Emoji char={craze.icon} size={12} /> {craze.label}</span>}
-      {people && <span className="region-fact" title={`Population: ${people.adults.toLocaleString('en-NG')} adults, ${people.kids.toLocaleString('en-NG')} children, ${people.players} players`}><Emoji char="👥" size={12} /> {populationOf(people).toLocaleString('en-NG')}</span>}
-      {balance !== undefined && <span className="region-fact" title="State treasury"><Emoji char="💰" size={12} /> {nairaShort(balance)}</span>}
-    </div>
-  );
-}
-
-/**
- * The state's card over the map: its name, who runs it, what it makes and what it has in the bank. In the game it
- * carries two ways into the Civic app: the election board, where anyone can file to run, and this state's laws.
- * On the title screen, where there is no phone yet, it is only a sign. The weather sits just under it, and in the game
- * a pill beside it copies this state's invite link: whoever signs up from it is born here.
- */
-function RegionBadge({ region }: { region: ReturnType<typeof regionOf> }) {
-  const started = useGame((s) => s.started);
-  const username = useSession((s) => s.user?.username);
-  const [nickname, state] = region.tagline.split(' · ');
-  const open = (want: Partial<{ wantLaws: PoliticalOffice }>) => {
-    useCivic.setState({ wantOpen: true, ...want });
-    useGame.getState().setPanel('phone');
-  };
-  // Like the place labels: a tap on the card is for the card, not a drag of the map under it.
-  const keep = { onPointerDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onMouseDown: (e: { stopPropagation(): void }) => e.stopPropagation(), onTouchStart: (e: { stopPropagation(): void }) => e.stopPropagation() };
-  return (
-    <div className="region-map-stack">
-      <div className="region-map-badge" title={nickname} {...(started ? keep : {})}>
-        <div className="region-head">
-          <b>{region.name}</b>
-          {state && <span className="region-state">{state}</span>}
-        </div>
-        <Leaders city={region.id} />
-        <StateFacts city={region.id} />
-        {started && (
-          <div className="region-actions">
-            <button type="button" onClick={() => open({})}><Emoji char="🗳️" size={13} /> Run for a post</button>
-            <button type="button" onClick={() => open({ wantLaws: CITY_HEAD[region.id] })}><Emoji char="⚖️" size={13} /> State laws</button>
-          </div>
-        )}
-      </div>
-      <div className="region-pills">
-        <WeatherChip city={region.id} />
-        {started && (
-          <button
-            type="button"
-            className="region-invite"
-            title={`Copy a link that has whoever joins with it born in ${region.name}`}
-            {...keep}
-            onClick={() => void copyLink(stateLink(region.id, username), `Be born in ${region.name} on Naija City`, `🔗 Copied. Whoever joins with it is born in ${region.name}`)}
-          >
-            <Emoji char="🔗" size={12} /> Invite to {region.name}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function City() {
   const destinationId = useGame((s) => s.destinationId);
   // Your house stands only in the state you were born in.
@@ -1243,7 +1155,7 @@ export function City() {
       {/* A light touch of shade round the foot of each building: thicker looked smudged, and it costs a little. */}
       {!low && <GroundShade key={`shade|${destinationId}|${hasHome}`} source={buildings} strength={0.25} fade={0.45} />}
       <Html position={[CITY_W / 2, 27, 2]} center zIndexRange={[9, 0]} style={{ pointerEvents: 'auto' }}>
-        <RegionBadge region={region} />
+        <RegionCard region={region} />
       </Html>
       <CityBillboards region={map.id} />
       <SeaAds region={map.id} x={CITY_W / 2} z={CITY_H / 2} />

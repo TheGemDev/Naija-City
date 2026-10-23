@@ -9,8 +9,9 @@ import { Emoji } from './Icons';
 const partOf = (h: number) => (h < 5 ? 'Night' : h < 12 ? 'Morning' : h < 16 ? 'Afternoon' : h < 19 ? 'Evening' : 'Night');
 
 /**
- * The weather in this city right now, under the map's state card: what the sky is doing, how hot it is and the time
- * of day. It shows the weather the scene is drawing (game/weather.ts), so the card and the sky always agree.
+ * The weather in this city right now, in the corner of the map's state card: the sky's icon and how hot it is, with
+ * the sky and the time of day on hover. It shows the weather the scene is drawing (game/weather.ts), so the card and
+ * the sky always agree.
  */
 export function WeatherChip({ city }: { city: string }) {
   // The weather runs on real time, so look again every few seconds; the game clock moves the temperature and the part of the day.
@@ -24,12 +25,11 @@ export function WeatherChip({ city }: { city: string }) {
   const kind = sceneWeather(city);
   const w = WEATHER[kind];
   const dark = h < 6 || h >= 18.5;
+  const temp = temperatureAt(city, h, kind);
   return (
-    <div className="region-weather" aria-live="polite">
-      <Emoji char={dark ? w.night : w.icon} size={15} />
-      <b>{w.label}</b>
-      <span>· {temperatureAt(city, h, kind)}°C</span>
-      <small>· {partOf(h)}</small>
-    </div>
+    <span className="region-weather" aria-live="polite" title={`${w.label} · ${temp}°C · ${partOf(h)}`} aria-label={`${w.label}, ${temp} degrees, ${partOf(h)}`}>
+      <Emoji char={dark ? w.night : w.icon} size={18} />
+      <b>{temp}°</b>
+    </span>
   );
 }
