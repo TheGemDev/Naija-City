@@ -19,7 +19,7 @@ export function HireApp() {
 
   return (
     <>
-      <div className="hero" style={{ background: 'linear-gradient(135deg, #0f766e, #134e4a)' }}>
+      <div className="hero">
         <small>Personal staff</small>
         <b>{personalStaff.length} hired</b>
         <small>

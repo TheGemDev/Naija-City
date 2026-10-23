@@ -719,7 +719,7 @@ button.txn { width: 100%; color: inherit; text-align: left; }
 .ride-area-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .ride-area-pills::-webkit-scrollbar { display: none; }
 .ride-pill { flex-shrink: 0; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--bg-f8fafc); font-size: 12.5px; font-weight: 700; color: var(--fg-475569); cursor: pointer; transition: all 0.15s ease; }
-.ride-pill.on { background: #ca8a04; color: #fff; border-color: #ca8a04; box-shadow: 0 2px 6px rgba(202,138,4,0.3); }
+.ride-pill.on { background: var(--app, #ca8a04); color: #fff; border-color: var(--app, #ca8a04); box-shadow: 0 2px 6px color-mix(in srgb, var(--app, #ca8a04) 30%, transparent); }
 .ride-app h4 { margin: 2px 0 -4px; }
 .ride-list { display: flex; flex-direction: column; gap: 8px; }
 .ride-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; padding: 11px 12px; background: var(--bg-ffffff); border: 1.5px solid var(--line); border-radius: 16px; color: var(--ink); text-align: left; cursor: pointer; transition: border-color 0.15s ease, transform 0.12s ease; }
@@ -819,7 +819,7 @@ button.txn { width: 100%; color: inherit; text-align: left; }
 
 .bub { max-width: 78%; background: var(--bg-ffffff); padding: 7px 11px; border-radius: 16px 16px 16px 4px; font-size: 14px; line-height: 1.35; word-wrap: break-word; cursor: pointer; user-select: text; transition: transform 0.12s, box-shadow 0.15s; }
 .bub:active { transform: scale(0.98); }
-.bub.mine { background: #0369a1; color: #fff; border-radius: 16px 16px 4px 16px; }
+.bub.mine { background: var(--app, #0369a1); color: #fff; border-radius: 16px 16px 4px 16px; }
 .bub.selected, .money-card.selected { box-shadow: 0 0 0 2px #38bdf8, 0 4px 12px rgba(15, 23, 42, 0.15); }
 .bub small { display: block; font-size: 10px; opacity: 0.6; margin-top: 2px; text-align: right; }
 
@@ -1268,7 +1268,7 @@ body.map-far .river-name { opacity: 0.9; }
 .group-msg.mine { align-items: flex-end; }
 .group-msg small { color: var(--muted); font-size: 10px; font-weight: 700; padding: 0 6px; }
 .group-msg span { max-width: 78%; background: var(--bg-ffffff); padding: 7px 11px; border-radius: 16px 16px 16px 4px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; user-select: text; }
-.group-msg.mine span { background: #0369a1; color: #fff; border-radius: 16px 16px 4px 16px; }
+.group-msg.mine span { background: var(--app, #0369a1); color: #fff; border-radius: 16px 16px 4px 16px; }
 .group-time { color: var(--muted); font-size: 10px; padding: 0 6px; }
 .group-note { align-self: center; margin: 2px 0; padding: 0 12px; color: var(--muted); font-size: 11px; text-align: center; }
 .group-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }

@@ -695,7 +695,7 @@ export function House() {
 
   return (
     <>
-      <div className="hero" style={{ background: 'linear-gradient(135deg, #d97706, #78350f)' }}>
+      <div className="hero">
         <small>Property portfolio</small>
         <b>{naira(worth)}</b>
         <small>

@@ -48,6 +48,11 @@
 .phone .app-body .tile { padding: 11px; gap: 11px; }
 .phone .app-body .tile-icon { border-radius: 14px; }
 .phone .app-body .hero { border-radius: 22px; padding: 18px; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16); }
+/* An app's hero card wears its icon's colours (--app-a light, --app-b deep, set on .app), starting partway in so
+   white text reads on pale icons. Dark heroes stay dark with a glow of the app colour; .hero-keep means the
+   colour itself says something (a losing portfolio, the light being on) and is left alone. */
+.phone .app-body .hero:not(.hero-dark, .hero-keep) { background: linear-gradient(135deg, color-mix(in srgb, var(--app-a) 55%, var(--app-b)), var(--app-b)); }
+.phone .app-body .hero.hero-dark:not(.hero-keep) { background: radial-gradient(120% 110% at 100% 0%, color-mix(in srgb, var(--app-a) 40%, transparent), transparent 62%), linear-gradient(135deg, #1e293b, #020617); }
 .phone .app-body .btn { transition: transform 0.12s, filter 0.12s; }
 .phone .app-body .btn:not(:disabled):active { transform: scale(0.95); filter: brightness(1.1); }
 .phone .app-body :is(.tabs, .store-tabs) { padding: 4px; border-radius: 14px; background: rgba(var(--ink-rgb), 0.07); }
@@ -109,3 +114,6 @@
 }
 .wall-mesh::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 26%, transparent 66%, rgba(0, 0, 0, 0.34)); }
 .wall-mesh svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.14; }
+
+/* Choice pills inside an app light up in the app's colour. */
+.phone .app-body .pills button.on { border-color: var(--app); background: color-mix(in srgb, var(--app) 10%, var(--surface)); }

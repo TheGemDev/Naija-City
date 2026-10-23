@@ -1,5 +1,5 @@
-/* Phone → Adopt (src/ui/Adopt.tsx): the state's child adoption desk, in agency green and white with rubber stamps. */
-.adopt-hero { position: relative; border-radius: 20px; overflow: hidden; color: #fff; background: linear-gradient(140deg, #16a34a, #065f46); padding: 14px 14px 14px; }
+/* Phone → Adopt (src/ui/Adopt.tsx): the state's child adoption desk, in the app's colours with a green-white flag and rubber stamps. */
+.adopt-hero { position: relative; border-radius: 20px; overflow: hidden; color: #fff; background: linear-gradient(140deg, color-mix(in srgb, var(--app-a, #16a34a) 55%, var(--app-b, #065f46)), var(--app-b, #065f46)); padding: 14px 14px 14px; }
 .adopt-flag { position: absolute; inset: 0 auto 0 0; display: flex; flex-direction: column; width: 8px; }
 .adopt-flag i { flex: 1; background: #16a34a; }
 .adopt-flag i:nth-child(2) { background: #fff; }

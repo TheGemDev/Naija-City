@@ -526,7 +526,7 @@ function Invest() {
   return (
     <>
       {/* Losing money turns the whole card red, with the loss shown as a minus. */}
-      <div className={`hero ${gain < 0 ? 'hero-rose' : 'hero-green'}`}>
+      <div className={`hero ${gain < 0 ? 'hero-rose hero-keep' : 'hero-green'}`}>
         <small>Portfolio value</small>
         <b>{naira(value)}</b>
         {paid > 0 && <small>{gain < 0 ? '−' : '+'}{naira(Math.abs(gain))} ({gain < 0 ? '−' : '+'}{Math.abs((gain / paid) * 100).toFixed(1)}%)</small>}
@@ -674,7 +674,7 @@ function Cars() {
 
   return (
     <>
-      <div className="hero" style={{ background: 'linear-gradient(135deg, #0284c7, #075985)' }}>
+      <div className="hero">
         <small>Garage</small>
         <b>{active ? `🚗 ${active.name}` : 'No car yet'}</b>
         {active && (
@@ -965,7 +965,7 @@ function Light() {
   const source = grid ? 'NEPA' : solar ? (daylight ? 'Solar' : 'Inverter') : powered ? 'Generator' : 'None';
   return (
     <>
-      <div className={`hero ${powered && atHome ? 'hero-yellow' : 'hero-dark'}`}>
+      <div className={`hero hero-keep ${powered && atHome ? 'hero-yellow' : 'hero-dark'}`}>
         <small>Power source</small>
         <b>
           {!atHome ? '🔌 Off' : `${powered ? '💡' : '🕯️'} ${source}`}
@@ -2181,7 +2181,7 @@ export function Phone() {
             <Wallpaper device={device} />
             {duo ? <DuoRail current={current} onHome={() => setApp(null)} open={openFromHome} /> : <StatusBar dark={!!current} cutout={cutoutOf(device)} />}
             {current && Screen ? (
-              <div className="app" key={current.id}>
+              <div className="app" key={current.id} style={{ ['--app' as string]: current.tint, ['--app-a' as string]: current.bg[0], ['--app-b' as string]: current.bg[1] }}>
                 <div className="app-head" style={{ ['--tint' as string]: current.bg[0], ['--tint-2' as string]: current.bg[1] }}>
                   <button className="app-back" onClick={() => setApp(null)} aria-label="Back">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
