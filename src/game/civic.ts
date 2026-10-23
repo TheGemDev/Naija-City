@@ -179,7 +179,7 @@ export type Salaries = Record<PoliticalOffice, number>;
  */
 export const SALARY = {
   /** Naira a game day. Nobody is paid until a President says so. */
-  options: [0, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000],
+  options: [0, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000],
   /** A pay round goes out this often: a game day is an hour of real time. */
   everyMs: HOUR_MS,
   /** From this much a day, a salary is fat. */
