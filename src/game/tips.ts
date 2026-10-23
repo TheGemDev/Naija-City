@@ -122,7 +122,7 @@ export const TIPS: Tip[] = [
 
   ...group('politics', [
     '🏛️ Vote in elections for president, Kaduna governor, FCT Minister, Lagos governor, Kano governor, IGP and EFCC chair. Your vote shapes the server.',
-    '🗳️ Elections come every 3 days. Voting stays open for 1 hour and the winner holds office for 3 days. Don\'t miss it.',
+    '🗳️ Elections come every evening. Voting stays open for 1 hour and the winner holds office for a day. Don\'t miss it.',
     '📝 Want a post? File to run in the Politics app on your phone.',
     '🪧 Running for office? Campaign with rallies, posters and crowds.',
     '🚨 Buying votes works until the EFCC catches you. Then you are disqualified, fined and jailed.',

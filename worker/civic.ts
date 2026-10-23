@@ -61,7 +61,7 @@ const listOf = (items: string[]) => items.length < 2 ? items.join('') : `${items
 export async function settleElections(env: Env, now: number, ctx?: ExecutionContext) {
   const db = env.DB;
   // Every race not being voted on yet closes on the polls a candidate filing now would stand in. Races opened under an
-  // older calendar (weekly, then daily) didn't: this brings them onto the three-day one, earlier or later.
+  // older calendar (weekly, daily, then every three days) didn't: this brings them onto the daily one, earlier or later.
   await db
     .prepare("UPDATE civic_elections SET ends_at = ?1 WHERE status = 'open' AND ends_at != ?1 AND ends_at - ?2 > ?3")
     .bind(nextElectionEnds(now), ELECTION_DURATION_MS, now)
@@ -152,7 +152,7 @@ export async function settleElections(env: Env, now: number, ctx?: ExecutionCont
  */
 async function vacateSeats(db: D1Database, now: number): Promise<number> {
   const close = pollsCloseAt(now);
-  // Terms won under the old daily calendar end on the next close of the three-day one, not on a day with no polls.
+  // Terms won under an older calendar end on the next close of today's, not on a day with no polls.
   await db.batch(OFFICE_LIST.map((office) =>
     db.prepare(`UPDATE civic_policies SET ${office}_term_ends = ?1 WHERE id = 1 AND ${office}_term_ends > ?2 AND ${office}_term_ends != ?1`).bind(close, now)));
   const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();

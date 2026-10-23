@@ -6,17 +6,17 @@ export type CampaignEvent = 'rally' | 'townHall' | 'crowd' | 'posters' | 'buyVot
 /** The offices a local (guest) campaign can go for. Shared elections cover every office. */
 export const LOCAL_OFFICES: PoliticalOffice[] = ['governor', 'president'];
 
-// Politics runs on a real three-day clock, the same for every office. Anyone can file to run at any time; nobody can
-// vote until the polls open, for one hour in the evening in Nigeria every third day. Whoever wins is in office until the
-// polls next close: 71 hours in office, and the 72nd at the polls.
+// Politics runs on a real daily clock, the same for every office. Anyone can file to run at any time; nobody can vote
+// until the polls open, for one hour every evening in Nigeria. Whoever wins is in office until the polls next close:
+// 23 hours in office, and the 24th at the polls.
 const HOUR_MS = 3600_000;
 const DAY_MS = 24 * HOUR_MS;
 /** Nigeria is an hour ahead of UTC all year, so its days start an hour before UTC's. */
 const NIGERIA_MS = HOUR_MS;
 /** The hour the polls open on election day, on a Nigerian clock: 8 in the evening, when the most players are on. */
 const POLLS_HOUR = 20;
-/** How long a winner holds any office (real time): three days, from one election to the next. */
-export const TERM_MS = 3 * DAY_MS;
+/** How long a winner holds any office (real time): a day, from one election to the next. */
+export const TERM_MS = DAY_MS;
 /** How long the polls stay open. */
 export const ELECTION_DURATION_MS = HOUR_MS;
 /** One election day the cycle counts from: the polls of Wednesday 21 October 2026, 8 pm in Nigeria. Every one after is TERM_MS later. */
@@ -77,13 +77,13 @@ export const OFFICE_RULES: Record<PoliticalOffice, {
   termMs: number;
   powers: string;
 }> = {
-  governor: { title: 'Governor of Kaduna', city: 'kaduna', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kaduna: roads and potholes, contracts, okada bans, pardons.' },
-  minister: { title: 'FCT Minister', city: 'abuja', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Abuja: contracts, okada bans, road projects, pardons.' },
-  lagosgov: { title: 'Governor of Lagos', city: 'lagos', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Lagos: roads and potholes, contracts, okada bans, pardons.' },
-  kanogov: { title: 'Governor of Kano', city: 'kano', filingFee: 400_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kano: roads and potholes, contracts, okada bans, pardons.' },
-  president: { title: 'President', filingFee: 1_000_000, targetSupport: 75, termMs: TERM_MS, powers: 'Sets taxes, shares the treasury between departments, grants pardons, can impeach a governor for a few hours and run their state.' },
-  igp: { title: 'IGP (Inspector-General of Police)', filingFee: 150_000, targetSupport: 50, termMs: TERM_MS, powers: 'Sets jail terms and street patrols.' },
-  efcc: { title: 'EFCC Chair', filingFee: 300_000, targetSupport: 60, termMs: TERM_MS, powers: 'Sets fines on thieves and the deadline to report a theft.' },
+  governor: { title: 'Governor of Kaduna', city: 'kaduna', filingFee: 50_000_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kaduna: roads and potholes, contracts, okada bans, pardons.' },
+  minister: { title: 'FCT Minister', city: 'abuja', filingFee: 50_000_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Abuja: contracts, okada bans, road projects, pardons.' },
+  lagosgov: { title: 'Governor of Lagos', city: 'lagos', filingFee: 50_000_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Lagos: roads and potholes, contracts, okada bans, pardons.' },
+  kanogov: { title: 'Governor of Kano', city: 'kano', filingFee: 50_000_000, targetSupport: 55, termMs: TERM_MS, powers: 'Runs Kano: roads and potholes, contracts, okada bans, pardons.' },
+  president: { title: 'President', filingFee: 100_000_000, targetSupport: 75, termMs: TERM_MS, powers: 'Sets taxes, shares the treasury between departments, grants pardons, can impeach a governor for a few hours and run their state.' },
+  igp: { title: 'IGP (Inspector-General of Police)', filingFee: 15_000_000, targetSupport: 50, termMs: TERM_MS, powers: 'Sets jail terms and street patrols.' },
+  efcc: { title: 'EFCC Chair', filingFee: 15_000_000, targetSupport: 60, termMs: TERM_MS, powers: 'Sets fines on thieves and the deadline to report a theft.' },
 };
 
 /** Who runs each city: the governor in Kaduna, the FCT Minister in Abuja, the Governor of Lagos in Lagos, the Governor of Kano in Kano. */

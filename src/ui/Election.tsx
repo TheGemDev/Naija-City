@@ -1,6 +1,6 @@
 // The secretariat's election desk (the State Secretariat in Kaduna, the Federal Secretariat in Abuja): a sheet listing every post, who holds it, who is running, and
 // a button to run (or vote). Opens from the floating button or the building's activity list. The same board is in the phone's
-// Civic app, and you can file to run from either. While the polls are open (one evening hour every third day:
+// Civic app, and you can file to run from either. While the polls are open (one hour every evening:
 // game/civic.ts) it is also the polling unit, and opens from the Vote pill in the top bar wherever you are.
 
 import { useEffect, useState } from 'react';
@@ -225,7 +225,7 @@ export function ElectionBoard() {
       {loading && !data && <p className="muted">Loading the election board…</p>}
       {data && <PollsPill />}
       {data && OFFICES.map((office) => <OfficeCard key={office} office={office} />)}
-      {data && <small className="ev-foot">Anyone can file. Elections are every 3 days.</small>}
+      {data && <small className="ev-foot">Anyone can file. Elections are every evening.</small>}
       {data && (
         <button type="button" className="ev-inec" onClick={() => { useElection.setState({ open: false }); useGame.setState({ panel: 'phone', openApp: 'inec' }); }}>
           <Emoji char="🗳️" size={14} /> Seen fake votes? Report them to INEC
