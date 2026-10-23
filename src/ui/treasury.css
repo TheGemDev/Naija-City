@@ -172,7 +172,8 @@ details[open] > summary > .tr-chev, .tr-act.open .tr-chev { margin: 3px 3px 0; t
 .tr-state-money { display: flex; flex-direction: column; gap: 2px; }
 .tr-state-money > small { color: var(--muted); font-size: 11.5px; font-weight: 700; }
 .tr-state-money > b { font-size: 24px; font-variant-numeric: tabular-nums; }
-.tr-hero .tr-hero-own { font-weight: 800; opacity: 1; }
+/* The country's total, every treasury together: a faint line under the federal balance. */
+.tr-hero .tr-hero-own { font-size: 12px; font-weight: 600; opacity: 0.6; }
 .tr-ask { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--bg-e2e8f0); }
 .tr-ask > b { font-size: 12.5px; }
 

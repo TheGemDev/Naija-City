@@ -231,8 +231,7 @@ export function TreasuryHero() {
         <small>Federal treasury</small>
         <b>{naira(data.treasury)}</b>
         {/* The whole country's public money: the federal treasury and every state's together. */}
-        <small className="tr-hero-own">Nigeria total · {naira(data.treasury + CIVIC_CITIES.reduce((sum, city) => sum + (data.states?.[city]?.balance ?? 0), 0))}</small>
-        <small>{open ? 'Each state keeps its own money.' : 'Tap to see the states.'}</small>
+        <small className="tr-hero-own">{naira(data.treasury + CIVIC_CITIES.reduce((sum, city) => sum + (data.states?.[city]?.balance ?? 0), 0))}</small>
         <i className="tr-hero-chev" aria-hidden />
       </button>
       {open && (
@@ -628,12 +627,7 @@ export function TreasuryTab({ uid, potholes: holeList, lamps: lampList }: { uid:
 
       {selected === 'federal' ? (
         <div className="tr-panel">
-          <div className="tr-state">
-            <div className="tr-state-money">
-              <small>Federal treasury</small>
-              <b>{naira(treasury)}</b>
-            </div>
-          </div>
+          {/* The federal treasury's balance is the Civic app's header card. */}
           <small className="muted tr-note">{p.federalCut}% of every state’s revenue comes here, plus fees and loans.</small>
           <Fold title="Grants" className="tr-block" open={isPres}>
             <Grants canEdit={isPres} busy={busy} />
