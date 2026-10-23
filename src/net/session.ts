@@ -401,10 +401,19 @@ export async function claimUsername(username: string): Promise<string | null> {
   }
 }
 
+/** Players this device has loaded before: their wallet is asked for alongside the save (see syncOnSignIn). */
+const KNOWN_KEY = 'kl-known';
+const isKnown = (uid: string) => { try { return localStorage.getItem(KNOWN_KEY) === uid; } catch { return false; } };
+const markKnown = (uid: string) => { try { localStorage.setItem(KNOWN_KEY, uid); } catch { /* the next start asks one after the other */ } };
+
 /** After sign-in: the cloud save wins; if there is none, this device's progress is uploaded. */
 async function syncOnSignIn(u: User) {
   useSession.setState({ status: 'syncing', user: { uid: u.uid, email: u.email, name: u.displayName, username: null, guest: u.isAnonymous }, cloud: 'saving', offline: false });
   try {
+    // A player's first wallet is seeded from their save, so a new account asks for it only after its save is up.
+    // Someone who has played on this device before has both already: ask for all three at once, a round trip saved.
+    const early = isKnown(u.uid) ? api('/api/wallet') : undefined;
+    early?.catch(() => { /* failed or not: initWallet below reads it, or asks again */ });
     const [res, meRes] = await Promise.all([api('/api/save'), api('/api/me')]);
     if (!meRes.ok) throw new Error(`${meRes.status}`);
     // The player row exists now (GET /api/save makes it), so the server can tell a new account from an old one.
@@ -423,8 +432,10 @@ async function syncOnSignIn(u: User) {
       useSession.setState({ status: next, user, cloud: 'off' });
       await pushSave();
     } else throw new Error(`${res.status}`);
-    // Money comes from the server wallet (seeded from the save on first sign-in).
-    await initWallet();
+    // Money comes from the server wallet (seeded from the save on first sign-in). An early answer from before a save
+    // existed is not used: its wallet was not seeded from this device's progress.
+    await initWallet(res.ok ? early : undefined);
+    markKnown(u.uid);
   } catch {
     // Online-only: stay on the loading screen and retry until the server answers.
     useSession.setState({ status: 'syncing', cloud: 'error', offline: true });

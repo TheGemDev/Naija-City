@@ -486,11 +486,15 @@ export function Scene() {
   // Drops the resolution when frames start taking too long, and brings it back when they recover.
   const low = useLowPerf();
   const [dpr, setDpr] = useState(MAX_DPR);
+  // While the loading screen covers the world (signing in, loading the save), it is drawn when it changes instead of
+  // every frame, so the phone spends that time starting the game. The first draw still gets the shaders compiled.
+  const covered = useSession((s) => s.status === 'loading' || s.status === 'syncing');
   // Low mode: no shadows or antialiasing, and a smaller render resolution. Those are fixed when the
   // canvas is created, so switching modes remounts it.
   return (
     <Canvas
       key={low ? 'low' : 'high'}
+      frameloop={covered ? 'demand' : 'always'}
       shadows={low ? false : { type: PCFSoftShadowMap }}
       dpr={low ? Math.min(dpr, LOW_DPR) : dpr}
       // stencil: the desktop hover outline masks out the hovered object so only its silhouette is lined (HoverOutline.tsx).

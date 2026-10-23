@@ -107,7 +107,8 @@ export default function App() {
   useEffect(() => startCareer(), []);
   useEffect(() => startMarket(), []);
   useEffect(() => { startShop(); }, []);
-  useEffect(() => watchMarket(120_000), []);
+  // Prices only matter once there is a player: the front page doesn't wait on them.
+  useEffect(() => (ready ? watchMarket(120_000) : undefined), [ready]);
   useEffect(() => startParty(), []);
   useEffect(() => startVice(), []);
   useEffect(() => startSfx(), []);

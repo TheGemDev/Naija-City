@@ -1,0 +1,7 @@
+# Workers Assets response headers (https://developers.cloudflare.com/workers/static-assets/headers/).
+# The game's script and style files are named after their contents, so a file at a given name never changes: phones
+# keep them for a year and start without asking the server first. Every update ships new names.
+/assets/*.js
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*.css
+  Cache-Control: public, max-age=31536000, immutable

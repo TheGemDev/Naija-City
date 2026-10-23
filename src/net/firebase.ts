@@ -9,6 +9,7 @@ import {
   browserSessionPersistence,
   createUserWithEmailAndPassword,
   getAuth,
+  getRedirectResult,
   indexedDBLocalPersistence,
   initializeAuth,
   linkWithCredential,
@@ -40,17 +41,28 @@ const app = initializeApp(config);
 
 // Dev: sign-in is per tab, so two tabs can be two different players. Shared persistence would
 // switch every tab to whoever signed in last, and the room would then kick the duplicate.
+// No popupRedirectResolver here: given one, Firebase on phones and Safari loads its sign-in iframe and Google's gapi
+// script (two more sites, ~130 KB) before it says who is signed in, holding up every start. Only Google sign-in needs
+// it, so those calls pass it themselves.
 function makeAuth() {
   try {
     return initializeAuth(app, {
       persistence: import.meta.env.DEV ? browserSessionPersistence : [indexedDBLocalPersistence, browserLocalPersistence],
-      popupRedirectResolver: browserPopupRedirectResolver,
     });
   } catch {
     return getAuth(app); // hot reload: already initialised
   }
 }
 export const auth = makeAuth();
+
+/** Set while a Google sign-in has gone off to Google's page and back, so the result is collected on return. */
+const REDIRECT_KEY = 'kl-google-redirect';
+try {
+  if (sessionStorage.getItem(REDIRECT_KEY)) {
+    sessionStorage.removeItem(REDIRECT_KEY);
+    getRedirectResult(auth, browserPopupRedirectResolver).catch((error) => console.error('Google sign-in did not finish', error));
+  }
+} catch { /* storage blocked: there was no redirect to finish */ }
 
 /** Latest ID token, kept fresh so pagehide saves can send it synchronously. */
 export let cachedToken: string | null = null;
@@ -78,11 +90,12 @@ export async function signInGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   try {
-    await signInWithPopup(auth, provider);
+    await signInWithPopup(auth, provider, browserPopupRedirectResolver);
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
-      await signInWithRedirect(auth, provider);
+      try { sessionStorage.setItem(REDIRECT_KEY, '1'); } catch { /* the result is then lost; the player signs in again */ }
+      await signInWithRedirect(auth, provider, browserPopupRedirectResolver);
     } else throw e;
   }
 }

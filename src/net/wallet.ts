@@ -130,8 +130,9 @@ function schedule(ms = 1500) {
 }
 
 /** Load the real balance after sign-in, plus any events left over from last time. */
-export async function initWallet() {
-  const res = await api('/api/wallet');
+/** `early` is a GET /api/wallet already on its way (sent alongside the save on sign-in, see net/session.ts). */
+export async function initWallet(early?: Promise<Response>) {
+  const res = await (early ?? api('/api/wallet'));
   if (!res.ok) throw new Error(`${res.status}`);
   const { balance, debt, origin, state, starter } = (await res.json()) as { balance: number; debt?: number; origin: string | null; state?: string | null; starter?: { paid: number; left: number } | null };
   serverOrigin = origin === null ? null : normalizeOrigin(origin);
