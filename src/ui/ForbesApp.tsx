@@ -34,6 +34,8 @@ interface Entry {
 type Ranked = Entry & { rank: number };
 
 type Tab = 'all' | 'week';
+/** How many the rich list shows. */
+const RICH_SHOWN = 10;
 const TABS: { id: Tab; label: string }[] = [
   { id: 'all', label: 'Richest' },
   { id: 'week', label: 'This week' },
@@ -137,7 +139,8 @@ export function ForbesApp() {
   const mine = ranked.find((e) => e.isMe) ?? null;
   const ahead = mine && mine.rank > 1 ? ranked[mine.rank - 2] : null;
   const podium = ranked.slice(0, 3);
-  const rest = ranked.slice(3);
+  // The rich list shows its top ten; the server sends more so your own rank below that is still right.
+  const rest = ranked.slice(3, isWeek ? undefined : RICH_SHOWN);
   const open = podium.find((e) => e.assets && e.handle === receipt);
   const title = job?.title ?? (business ? `${business.name} Owner` : tierOf(myNetWorth).name);
 
