@@ -112,7 +112,7 @@ const APPS: Record<AppId, AppDef> = {
   settings: { id: 'settings', label: 'Settings', icon: '⚙️', vectorIcon: 'settings', bg: ['#475569', '#0f172a'], tint: '#334155' },
   closet: { id: 'closet', label: 'Closet', icon: '👗', bg: ['#fde68a', '#d97706'], tint: '#b45309' },
   camera: { id: 'camera', label: 'Camera', icon: '📷', bg: ['#f1f5f9', '#94a3b8'], tint: '#334155' },
-  civic: { id: 'civic', label: 'Politics', icon: '⚖️', vectorIcon: 'civic', bg: ['#fcd34d', '#b45309'], tint: '#b45309' },
+  civic: { id: 'civic', label: 'Politics', icon: '⚖️', vectorIcon: 'civic', bg: ['#e11d48', '#4c0519'], tint: '#9f1239' },
   police: { id: 'police', label: 'Police', icon: '🚔', bg: ['#60a5fa', '#1e3a8a'], tint: '#1e3a8a' },
   efcc: { id: 'efcc', label: 'EFCC', icon: '🕵🏾', bg: ['#f87171', '#7f1d1d'], tint: '#991b1b' },
   inec: { id: 'inec', label: 'INEC', icon: '🗳️', bg: ['#86efac', '#15803d'], tint: '#15803d' },
