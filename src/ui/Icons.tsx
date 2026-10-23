@@ -357,11 +357,18 @@ export function Icon({ name, size = 20, color = 'currentColor', fallback, classN
 
 // The colour Noto emoji are a third of the game's download, so they come in their own file once the game is on
 // screen (notoSet.tsx). Until it lands, the phone's own emoji shows.
+// App.tsx calls loadEmoji once the player is in (or on the front page), so on a slow line the file doesn't hold up
+// signing in and loading the save.
 const useNoto = create<{ set: typeof import('./notoSet') | null }>(() => ({ set: null }));
-void import('./notoSet').then(
-  (set) => useNoto.setState({ set }),
-  () => {},
-);
+let notoAsked = false;
+export function loadEmoji() {
+  if (notoAsked) return;
+  notoAsked = true;
+  void import('./notoSet').then(
+    (set) => useNoto.setState({ set }),
+    () => { notoAsked = false; },
+  );
+}
 
 /** Colour Noto emoji (offline). Falls back to the plain emoji if unmapped. */
 export function Emoji({ char, size = 20, style }: { char: string; size?: number | string; style?: React.CSSProperties }) {

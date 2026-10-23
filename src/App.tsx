@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useMarquee } from './ui/useMarquee';
+import { loadEmoji } from './ui/Icons';
 import { Scene } from './three/Scene';
 import { Hud } from './ui/Hud';
 import { ActionSheet, BuyPanel, OwnedSheet, PlaceBar, PlaceSheet, StreetStorySheet } from './ui/Sheets';
@@ -95,6 +96,11 @@ export default function App() {
     // Loaded ahead of its first use. A page from before the last update asks for a file that is gone: get today's page.
     if (ready) loadPhone().catch((error) => void (isMissingFile(error) && freshPage()));
   }, [ready]);
+  // The colour emoji wait until there is something on screen to draw them in: the game, or the front page.
+  const settled = useSession((s) => s.status !== 'loading' && s.status !== 'syncing');
+  useEffect(() => {
+    if (settled) loadEmoji();
+  }, [settled]);
   useEffect(() => startAutosave(), []);
   useEffect(() => startSession(), []);
   useEffect(() => startMultiplayer(), []);
