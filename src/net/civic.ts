@@ -133,6 +133,14 @@ export interface CivicSnapshot {
   voteFrom?: number;
   /** What the government did lately, newest first (worker/gazette.ts). */
   news?: CivicNews[];
+  /** The matter on my desk, if I run a state, and how the last one went (worker/desk.ts). */
+  desk?: DeskView | null;
+}
+
+/** The governor's desk (src/game/desk.ts): the open matter and its clock, and the last one settled. */
+export interface DeskView {
+  open: { id: number; dilemma: string; due: number } | null;
+  last: { id: number; dilemma: string; choice: string; at: number; twistPending: boolean } | null;
 }
 
 interface CivicState {
@@ -190,6 +198,8 @@ interface CivicState {
   declineGrant(city: string): Promise<void>;
   /** The president suspends whoever runs a state for a few hours (game/civic.ts IMPEACH), or lets them back early. */
   impeach(city: string, hours: number): Promise<void>;
+  /** Answer the matter on my desk. */
+  decideDesk(id: number, choice: string): Promise<void>;
   reinstate(city: string): Promise<void>;
 }
 
@@ -242,6 +252,14 @@ export type ImpeachedEvent = { t: 'impeached'; city: string; until: number; by: 
 export function onImpeachedEvent(e: ImpeachedEvent) {
   const hours = Math.max(1, Math.round((e.until - Date.now()) / 3_600_000));
   useGame.getState().toast(`⚖️ ${e.by ? `President @${e.by}` : 'The president'} has impeached you for ${hours} hour${hours === 1 ? '' : 's'}. No powers and no pay until then: the president runs your state.`);
+  void useCivic.getState().refresh();
+}
+
+/** Something landed on my desk, or a choice I made has come back to bite (worker/desk.ts). */
+export type DeskEvent = { t: 'desk'; city: string; title: string; twist?: boolean };
+
+export function onDeskEvent(e: DeskEvent) {
+  useGame.getState().toast(e.twist ? `🎲 Your choice on “${e.title}” has a twist. Check the news.` : `🏛️ On your desk: ${e.title}. Open Civic to decide before the clock runs out.`);
   void useCivic.getState().refresh();
 }
 
@@ -430,6 +448,7 @@ export const useCivic = create<CivicState>((set) => {
     grant: (city, amount) => act({ action: 'grant', city, amount }),
     declineGrant: (city) => act({ action: 'declineGrant', city }),
     impeach: (city, hours) => act({ action: 'impeach', city, hours }),
+    decideDesk: (id, choice) => act({ action: 'desk', id, choice }),
     reinstate: (city) => act({ action: 'reinstate', city }),
   };
 });

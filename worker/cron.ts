@@ -30,6 +30,7 @@ import { runShops } from './shops';
 import { rollupCfTraffic } from './cfTraffic';
 import { settleContracts, settleRackets } from './vice';
 import { runDisasters } from './disasters';
+import { runDesk } from './desk';
 import { runNpcs } from './npcs';
 import { sweepLoans } from './loans';
 
@@ -52,6 +53,8 @@ export async function runCron(env: Env, ctx: ExecutionContext): Promise<void> {
       await env.DB.batch(notices.map((n) => feedStmt(env.DB, null, 'politics', n.icon, n.text, n.city)));
       await gazette(env, ctx, notices.map((n) => ({ uid: null, office: null, kind: 'project' as const, icon: n.icon, text: n.text })));
     }],
+    // The governors' desks: crazy matters land, run out of time, and their twists come out.
+    ['desk', () => runDesk(env, ctx, now)],
     // Looting cases the EFCC chair left alone are settled by the old odds.
     ['loot', () => settleLoot(env, ctx, now)],
     // Ghost workers on a state payroll are paid, or audited, once an hour.

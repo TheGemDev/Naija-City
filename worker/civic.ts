@@ -21,6 +21,7 @@ import { syncForum } from './groups';
 import { peopleBoard } from './npcs';
 import { blogStmt, lawNews, okadaNews, reportTrip, vdmGov } from './news';
 import { GOV_RANT } from '../src/game/news';
+import { decideDesk, deskOf } from './desk';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -434,6 +435,8 @@ async function snapshot(db: D1Database, uid: string) {
     cooldowns: Object.fromEntries(used.results.map((r) => [r.action, r.at])),
     /** The one post I'm running for right now. */
     runningFor: running?.office ?? null,
+    /** The matter on my desk, if I run a state (worker/desk.ts). */
+    desk: await deskOf(db, uid, cityOf(policies, uid), Date.now()),
     /** A new account may vote from then on. */
     voteFrom: (me?.created_at ?? 0) + VOTER_MIN_AGE_MS,
     news: await recentNews(db),
@@ -507,6 +510,9 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     federalCut?: number;
     caseId?: number;
     pct?: number;
+    /** The governor's desk: which matter, and the option chosen (worker/desk.ts). */
+    id?: number;
+    choice?: string;
     accept?: boolean;
     city?: string;
     key?: string;
@@ -969,6 +975,17 @@ async function handleCivicOnce(req: Request, env: Env, user: { uid: string; emai
     const result = await lootAction(env, ctx, user.uid, body as unknown as LootAction, now);
     if ('error' in result) return err(result.status, result.error);
     return json({ outcome: result.done, strikes: 'strikes' in result ? result.strikes : undefined, snapshot: await snapshot(db, user.uid), balance: await getBalance(db, user.uid) });
+  }
+
+  // The governor answers the matter on their desk (worker/desk.ts).
+  if (body.action === 'desk') {
+    const policy = await db.prepare('SELECT * FROM civic_policies WHERE id = 1').first<PolicyRow>();
+    const city = cityOf(policy, user.uid);
+    if (!city) return err(403, 'Only a governor has a desk');
+    if (typeof body.id !== 'number' || typeof body.choice !== 'string') return err(400, 'Pick one of the options');
+    const out = await decideDesk(env, ctx, user.uid, city, body.id, body.choice, now);
+    if ('error' in out) return err(out.status, out.error);
+    return json({ snapshot: await snapshot(db, user.uid) });
   }
 
   // The governor sets how much of an asset's full bill the state pays to keep it up.

@@ -11,7 +11,7 @@ import type { CrimeReport } from '../game/crime';
 import { onCrimeEvent } from './crime';
 import { onShotEvent } from './guns';
 import type { ShotEvent } from '../game/guns';
-import { onElectionEvent, onGazetteEvent, onImpeachedEvent, type ElectionEvent, type GazetteEvent, type ImpeachedEvent } from './civic';
+import { onDeskEvent, onElectionEvent, onGazetteEvent, onImpeachedEvent, type DeskEvent, type ElectionEvent, type GazetteEvent, type ImpeachedEvent } from './civic';
 import { loadRentals, onRentalEvent } from './rentals';
 import { shoutoutHooks, useShoutouts, type LobbyActionKind } from '../game/shoutout';
 import { onFunEvent, type FunEvent } from './live';
@@ -119,6 +119,7 @@ type ServerMsg =
   | ElectionEvent
   | GazetteEvent
   | ImpeachedEvent
+  | DeskEvent
   | ShotEvent
   | { t: 'intruder'; thief: string; username: string; until: number }
   | { t: 'beaten'; by: string; until: number; amount: number; items: string[] }
@@ -213,6 +214,8 @@ function onMessage(m: ServerMsg) {
     onGazetteEvent(m);
   } else if (m.t === 'impeached') {
     onImpeachedEvent(m);
+  } else if (m.t === 'desk') {
+    onDeskEvent(m);
   } else if (m.t === 'shot') {
     onShotEvent(m);
   } else if (m.t === 'meter-report') {

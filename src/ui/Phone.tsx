@@ -17,6 +17,7 @@ import { cityRunBy, isSuspended, useCivic } from '../net/civic';
 import { CivicNewsTab } from './Gazette';
 import { LawsTab } from './Laws';
 import { TreasuryHero, TreasuryTab } from './Treasury';
+import { GovDesk } from './GovDesk';
 import { CITY_HEAD, CIVIC_CITIES, LOCAL_OFFICES, OFFICE_ICON, type CivicCity, type PoliticalOffice } from '../game/civic';
 import { useSocial } from '../net/social';
 import { badgeLabel, markAppSeen, useBadges, useMessagesBadge, type SeenApp } from '../net/badges';
@@ -1572,9 +1573,12 @@ function SharedCivic() {
   const holds = (office: Office) => holderOf(office)?.uid === uid;
   // Whoever runs a city repairs its roads from the Treasury tab: its governor, or the president while they are impeached.
   const myCity = cityRunBy(policy, uid) ?? (holds('president') ? CIVIC_CITIES.find((c) => isSuspended(holderOf(CITY_HEAD[c]))) : undefined);
+  // The state I govern myself (not one the president stands in for): its matters land on my desk.
+  const deskCity = cityRunBy(policy, uid);
   return (
     <>
       <TreasuryHero />
+      {deskCity && <GovDesk city={deskCity} />}
       <div className="tabs">
         <button className={tab === 'elections' ? 'on' : ''} onClick={() => setTab('elections')}><Emoji char="🗳️" size={14} /> Elections</button>
         <button className={tab === 'laws' ? 'on' : ''} onClick={() => setTab('laws')}><Emoji char="⚖️" size={14} /> Laws</button>
