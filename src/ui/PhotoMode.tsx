@@ -49,17 +49,6 @@ function goSnap() {
   useGame.getState().setPanel('phone');
 }
 
-/** The HUD button that opens the camera: the same pill as the low power switch it sits beside. */
-export function PhotoButton() {
-  const allowed = usePhotoAllowed();
-  if (!allowed) return null;
-  return (
-    <button className="stack-collapse" type="button" title="Camera" aria-label="Camera" onClick={() => openCamera()}>
-      <Emoji char="📷" size={16} />
-    </button>
-  );
-}
-
 type Tab = 'shot' | 'pose' | 'light' | 'format' | 'lens';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'shot', label: 'Angle' },

@@ -4,7 +4,7 @@ import { radioOff, skipRadio, usePlaceRadio } from '../game/radio';
 import { Icon } from './Icons';
 import './radio-pill.css';
 
-/** HUD sound pill. No radio on → the background music switch. A radio on (house speakers, the club) → a "now playing" capsule (level bars, frequency, station) with a skip button. */
+/** HUD sound pill. No radio on → the background music switch, just its icon. A radio on (house speakers, the club) → a "now playing" capsule (level bars, frequency, station) with a skip button. */
 export function RadioPill() {
   usePlaceRadio();
   // Follows the audio manager itself, so it's right however the radio was started or stopped.
@@ -17,7 +17,6 @@ export function RadioPill() {
     return (
       <button className="stack-collapse radio-pill-off" type="button" title={on ? 'Mute music' : 'Play music'} aria-label="Music" aria-pressed={on} onClick={() => audio.toggleMusic()}>
         <Icon name={on ? 'music' : 'music-off'} size={16} />
-        <span>Music</span>
       </button>
     );
   }

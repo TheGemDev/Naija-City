@@ -1,9 +1,8 @@
 /* HUD radio pill (src/ui/RadioPill.tsx). Sits in .stack-tools next to the other 28px pills. */
 
-/* Off: same pill as its neighbours, labelled so it reads as a radio */
-.stack-collapse.radio-pill-off { gap: 5px; padding: 0 10px 0 8px; color: var(--muted, #64748b); }
+/* Off: same pill as its neighbours, just the music note */
+.stack-collapse.radio-pill-off { color: var(--muted, #64748b); }
 .stack-collapse.radio-pill-off svg { opacity: .8; }
-.stack-collapse.radio-pill-off span { font-size: 10.5px; font-weight: 700; }
 
 /* On: a "now playing" capsule on the shared HUD surface, so it follows the light / dark theme */
 .radio-pill { display: flex; height: 28px; align-items: stretch; overflow: hidden; border: 1px solid rgba(15, 107, 58, .16); border-radius: 999px; background: var(--hud-bg); color: var(--ink); box-shadow: var(--shadow); }

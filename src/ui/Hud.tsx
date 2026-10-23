@@ -21,7 +21,7 @@ import { badgeLabel, usePhoneBadge } from '../net/badges';
 import { loadLoans, useLoans } from '../net/loans';
 import { ReactionToggle, ReactionTray, useReactions } from './Reactions';
 import { Chevron, Emoji } from './Icons';
-import { PhotoButton, openCamera } from './PhotoMode';
+import { openCamera } from './PhotoMode';
 import { openAdsSheet } from '../net/ads';
 import { ADS_ON_SALE } from '../game/ads';
 import { Person, type Clip } from '../three/Person';
@@ -117,7 +117,7 @@ function TopBar() {
             Day {dayOf(minutes)}
           </small>
         </div>
-        {/* The music switch (or the radio playing) hangs under the clock, on the right. */}
+        {/* The music switch and Low power hang under the clock, on the right: side by side, or stacked while a radio plays. */}
         {CORNER_HUD && <div className="time-radio"><RadioPill /><PowerSaveButton label /></div>}
       </div>
       {/* Buying money is switched off for now: the balance is display only. */}
@@ -1327,7 +1327,6 @@ export function Hud() {
           )}
           {!CORNER_HUD && <PowerSaveButton />}
           <ThemeButton />
-          <PhotoButton />
         </div>
       </div>
       <LobbyShoutout />
