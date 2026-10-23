@@ -205,20 +205,16 @@ const handler = {
       return edgeCached(req, ctx, 150, async () => json(await readMarket(replica(env))));
     }
 
-    // The Hustlers app's rich list. Only players worth FORBES_MIN_WORTH or more are listed, and the top FORBES_ASSETS_TOP come with a count of what they own. ?age=u30 narrows the list to players under 30. Only the list is public, never a birthdate.
+    // The Hustlers app's rich list. Only players worth FORBES_MIN_WORTH or more are listed, and the top FORBES_ASSETS_TOP come with a count of what they own.
     if (path === '/api/forbes' && req.method === 'GET') return edgeCached(req, ctx, 30, async () => {
-      const under = ({ u30: 30 } as Record<string, number>)[url.searchParams.get('age') ?? ''];
-      // Birthdates are YYYY-MM-DD, so "born after this day" is a plain text comparison.
-      const today = new Date();
-      const bornAfter = under ? `${today.getUTCFullYear() - under}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}` : null;
       const rows = await replica(env).prepare(`
         SELECT p.uid, p.username, p.name, COALESCE(w.balance, 0) AS balance, p.last_seen
         FROM players p
         LEFT JOIN wallets w ON w.uid = p.uid
-        WHERE p.username IS NOT NULL AND (?1 IS NULL OR p.birthdate > ?1) AND COALESCE(w.balance, 0) >= ?2
+        WHERE p.username IS NOT NULL AND COALESCE(w.balance, 0) >= ?1
         ORDER BY balance DESC
         LIMIT 50
-      `).bind(bornAfter, FORBES_MIN_WORTH).all<{ uid: string; username: string; name: string | null; balance: number; last_seen: number }>();
+      `).bind(FORBES_MIN_WORTH).all<{ uid: string; username: string; name: string | null; balance: number; last_seen: number }>();
       const assets = await Promise.all(rows.results.slice(0, FORBES_ASSETS_TOP).map((p) => forbesAssets(replica(env), p.uid)));
       return json({ players: rows.results.map((p, i) => (assets[i] ? { ...p, assets: assets[i] } : p)) });
     });

@@ -12,7 +12,7 @@ export interface RichCard {
   amount: string;
   /** Their job, or their wealth tier when they have none. */
   title: string;
-  /** Which list the rank is from, e.g. "Under 30". */
+  /** The line under the board's name, e.g. "This week". */
   list: string;
   look: string | null;
 }

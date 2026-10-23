@@ -1,4 +1,4 @@
-// Hustlers app: the rich list (everyone, or under 30) and the week's money makers. The top three stand on a podium,
+// Hustlers app: the rich list and the week's money makers. The top three stand on a podium,
 // the rest follow, and your own place rides the bottom of the screen with how far it is to the next one up.
 import { useEffect, useRef, useState } from 'react';
 import { nairaShort, netWorthOf, useGame } from '../game/store';
@@ -33,13 +33,11 @@ interface Entry {
 }
 type Ranked = Entry & { rank: number };
 
-type Tab = 'all' | 'u30' | 'week';
+type Tab = 'all' | 'week';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'all', label: 'Richest' },
-  { id: 'u30', label: 'Under 30' },
   { id: 'week', label: 'This week' },
 ];
-const UNDER = 30;
 
 const ASSET_KINDS: { key: ForbesKind; emoji: string; one: string; many: string }[] = [
   { key: 'businesses', emoji: '🏢', one: 'Business', many: 'Businesses' },
@@ -87,7 +85,6 @@ export function ForbesApp() {
   const carCondition = useGame((s) => s.carCondition);
   const myName = useGame((s) => s.name);
   const myUsername = useSession((s) => s.user?.username);
-  const myAge = useSession((s) => s.user?.age);
   const myLook = useGame((s) => s.look);
   const properties = useGame((s) => s.properties);
   const ownedPhones = useGame((s) => s.ownedPhones);
@@ -99,7 +96,7 @@ export function ForbesApp() {
   const business = businesses.map((b) => BUSINESS_BY_ID[b.type]).sort((a, b) => b.cost - a.cost)[0];
   const myNetWorth = netWorthOf({ money, debtOwed, bankLoanOwed, investments, ownedCars, ownedJets, carCondition, ownedPhones, freePhone, properties });
   const [tab, setTab] = useState<Tab>('all');
-  const [rich, setRich] = useState<Partial<Record<'all' | 'u30', RichPlayer[]>>>({});
+  const [rich, setRich] = useState<RichPlayer[] | null>(null);
   const [week, setWeek] = useState<Week | null>(null);
   const [showCard, setShowCard] = useState(false);
   /** Whose receipt is out, by handle. */
@@ -117,10 +114,10 @@ export function ForbesApp() {
         .catch(() => setWeek({ endsAt: 0, players: [], last: [] }));
       return;
     }
-    fetch(tab === 'all' ? '/api/forbes' : `/api/forbes?age=${tab}`)
+    fetch('/api/forbes')
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setRich((l) => ({ ...l, [tab]: Array.isArray(data?.players) ? data.players : [] })))
-      .catch(() => setRich((l) => ({ ...l, [tab]: [] })));
+      .then((data) => setRich(Array.isArray(data?.players) ? data.players : []))
+      .catch(() => setRich([]));
   }, [tab]);
 
   // The weekly countdown only needs to move once a minute.
@@ -149,11 +146,8 @@ export function ForbesApp() {
   const isWeek = tab === 'week';
   // The rich list starts at FORBES_MIN_WORTH: below it you are not ranked.
   const listed = myNetWorth >= FORBES_MIN_WORTH;
-  const richPlayers = isWeek ? undefined : rich[tab];
-  // Your age comes with your session; until it does, being on the server's list is proof enough.
-  const eligible = tab !== 'u30' || (myAge != null ? myAge < UNDER : !!richPlayers?.some((p) => p.username === myUsername));
-  const loaded = isWeek ? !!week : !!richPlayers;
-  const ranked = isWeek ? rankWeek(week?.players ?? [], myUsername) : rankRich(richPlayers ?? [], eligible && listed ? myEntry : null, myUsername);
+  const loaded = isWeek ? !!week : !!rich;
+  const ranked = isWeek ? rankWeek(week?.players ?? [], myUsername) : rankRich(rich ?? [], listed ? myEntry : null, myUsername);
   const mine = ranked.find((e) => e.isMe) ?? null;
   const ahead = mine && mine.rank > 1 ? ranked[mine.rank - 2] : null;
   const podium = ranked.slice(0, 3);
@@ -162,13 +156,12 @@ export function ForbesApp() {
   const title = job?.title ?? (business ? `${business.name} Owner` : tierOf(myNetWorth).name);
 
   if (showCard) {
-    // A list you are too old for has no rank for you: the card falls back to the main list.
-    const from = isWeek ? mine! : mine ?? rankRich(rich.all ?? [], myEntry, myUsername).find((e) => e.isMe)!;
+    const from = mine!;
     const card: RichCard = {
       rank: from.rank, name: myEntry.name, handle: myEntry.handle, title, look: myLook,
       board: isWeek ? 'week' : 'rich',
       amount: nairaShort(isWeek ? from.amount : myNetWorth),
-      list: isWeek ? 'This week' : mine && tab === 'u30' ? `Under ${UNDER}` : 'All ages',
+      list: isWeek ? 'This week' : 'Naija City',
     };
     return <MyCard card={card} username={myUsername} onClose={() => setShowCard(false)} />;
   }
@@ -183,12 +176,11 @@ export function ForbesApp() {
   } else if (isWeek) {
     const full = ranked.length >= HUSTLERS_WEEK_TOP;
     chase = full ? `Make over ${nairaShort(ranked[ranked.length - 1].amount)} this week to get on` : 'Work a shift, run a gig or sell from your shop to get on';
-  } else if (!eligible) chase = `This list is for players under ${UNDER}`;
-  else {
+  } else {
     chase = `${nairaShort(FORBES_MIN_WORTH - myNetWorth)} more to make the list`;
     progress = myNetWorth / FORBES_MIN_WORTH;
   }
-  const canShare = isWeek ? !!mine : !!rich.all && listed;
+  const canShare = !!mine;
 
   return (
     <div className="fb">
@@ -202,13 +194,13 @@ export function ForbesApp() {
 
       <div className={`fb-stage ${isWeek ? 'week' : ''}`}>
         <div className="fb-mast">
-          <b>{isWeek ? 'Money Makers' : tab === 'u30' ? `Under ${UNDER}` : 'Rich List'}</b>
+          <b>{isWeek ? 'Money Makers' : 'Rich List'}</b>
           {isWeek && week && week.endsAt > now ? <small>Resets in {timeLeft(week.endsAt, now)}</small>
-            : <span>{isWeek ? 'This week' : tab === 'u30' ? 'Richest young' : 'Naija’s richest'}</span>}
+            : <span>{isWeek ? 'This week' : 'Naija’s richest'}</span>}
         </div>
         <i className="fb-flag" aria-hidden />
         {!loaded ? <small className="fb-note">Updating…</small>
-          : ranked.length === 0 ? <small className="fb-note">{isWeek ? 'Nobody has made money this week yet. Be the first.' : `Nobody under ${UNDER} has made the list yet.`}</small>
+          : ranked.length === 0 ? <small className="fb-note">{isWeek ? 'Nobody has made money this week yet. Be the first.' : 'Nobody has made the list yet.'}</small>
           : (
             <>
               <div className="fb-podium">
@@ -330,7 +322,7 @@ function MyCard({ card, username, onClose }: { card: RichCard; username?: string
     if (canvas.current) void drawRichCard(canvas.current, { rank, name, handle, amount, title, list, look, board });
   }, [rank, name, handle, amount, title, list, look, board]);
 
-  const what = board === 'week' ? 'the Naija City money makers this week' : `the Naija Rich List${list === 'All ages' ? '' : ` (${list})`}`;
+  const what = board === 'week' ? 'the Naija City money makers this week' : 'the Naija Rich List';
   const line = `I’m #${rank} on ${what} with ${amount}${board === 'week' ? ' made' : ''}. Come and catch me.`;
   const blob = () => new Promise<Blob | null>((done) => (canvas.current ? canvas.current.toBlob(done, 'image/png') : done(null)));
   const save = async () => {
