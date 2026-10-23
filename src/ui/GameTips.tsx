@@ -8,13 +8,18 @@ export function GameTips() {
   const minutes = useGame((s) => Math.floor(s.minutes));
   const tipsOn = useHelp((s) => s.tipsOn);
   const shownRef = useRef<Set<number>>(new Set());
-  const lastTipAt = useRef(0);
+  // Counts from when you open the game, so you are not greeted by a tip: the first one comes a couple of game-hours in.
+  const lastTipAt = useRef<number | null>(null);
 
   useEffect(() => {
     if (!started || !tipsOn) return;
     const day = dayOf(minutes);
     // Wait until at least mid-Day 1 before the first tip
     if (day < 1 || (day === 1 && minutes % 1440 < 300)) return;
+    if (lastTipAt.current === null) {
+      lastTipAt.current = minutes;
+      return;
+    }
     // Show a tip roughly every 2 game-hours (120 game-minutes)
     if (minutes - lastTipAt.current < 120) return;
     // Don't show tips when the player is busy with a task
