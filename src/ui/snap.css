@@ -22,109 +22,84 @@
   --sn-line: #2a2d33;
 }
 
-/* ---------- The app on the phone: the phone's own header, one feed, and a camera button like the other apps' + ---------- */
+/* ---------- The app on the phone: the phone's own header, the tabs, stories, and a feed of cards ---------- */
 .app-body:has(> .snap-app) { padding: 0; overflow: hidden; gap: 0; }
 .app-body > .snap-app { flex: 1 1 auto; }
 .snap-app { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--sn-bg); color: var(--sn-ink); }
 .snap-app button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
 .snap-icon-btn { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: var(--sn-soft); color: var(--sn-ink); cursor: pointer; transition: transform 0.12s ease; }
 .snap-icon-btn:active { transform: scale(0.9); }
+.snap-icon-btn.ghost { width: 34px; height: 34px; background: none; color: var(--sn-sub); }
 
-.snap-top { display: flex; align-items: center; gap: 8px; padding: 46px 12px 8px; }
-.phone.duo .snap-top { padding-top: 16px; }
-.snap-top h2 { flex: 1; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; text-align: center; }
-.snap-me { flex-shrink: 0; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--sn-yellow); cursor: pointer; }
-.snap-me .convo-avatar, .snap-ring .convo-avatar, .snap-profile-face .convo-avatar { width: 100%; height: 100%; }
-
-.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 0 24px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
+.snap-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 0 96px; scrollbar-width: none; animation: snap-fade 0.22s ease-out; }
 .snap-scroll::-webkit-scrollbar { display: none; }
-.snap-h { margin: 14px 2px 8px; font-size: 15px; font-weight: 800; }
 
-.snap-nav { display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; padding: 6px 6px 22px; border-top: 1px solid var(--sn-line); background: var(--sn-bg); }
-.snap-nav-btn { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; padding: 4px 2px; border: 0; background: none; color: var(--sn-sub); cursor: pointer; }
-.snap-nav-btn small { font-size: 10px; font-weight: 700; }
-.snap-nav-btn.on { color: var(--sn-ink); }
-.snap-nav-btn.on svg { stroke-width: 2.8; }
-.snap-nav-btn em { position: absolute; top: 0; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--sn-red, #f23c57); color: #fff; font-size: 10px; font-style: normal; font-weight: 800; line-height: 16px; text-align: center; box-sizing: border-box; }
-.snap-nav-btn em.dot { min-width: 9px; width: 9px; height: 9px; padding: 0; top: 2px; right: 14px; background: var(--sn-blue, #0fadff); }
-/* The camera in the middle, like Snapchat's shutter. */
-.snap-nav-cam { display: grid; place-items: center; width: 54px; height: 54px; margin-top: -18px; padding: 0; border: 0; border-radius: 50%; background: var(--sn-yellow); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22); cursor: pointer; transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
-.snap-nav-cam i { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 3.5px #111; }
-.snap-nav-cam:active { transform: scale(0.88); }
+/* For you, Friends, Top: flush tabs along the top, like the other apps', with Snap's yellow underline. */
+.snap-tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--sn-line); background: var(--sn-bg); }
+.snap-tabs button { flex: 1; height: 46px; display: flex; justify-content: center; align-items: center; border: 0; background: none; color: var(--sn-sub); font-size: 14px; font-weight: 600; cursor: pointer; transition: color 0.15s; }
+.snap-tabs button span { position: relative; display: inline-flex; align-items: center; height: 100%; }
+.snap-tabs button.on { color: var(--sn-ink); font-weight: 800; }
+.snap-tabs button.on span::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: 0; height: 4px; border-radius: 4px; background: var(--sn-yellow); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
+
+/* Stories: a row of rings, me first. */
+.snap-stories { display: flex; gap: 12px; padding: 12px 12px 10px; overflow-x: auto; border-bottom: 1px solid var(--sn-line); scrollbar-width: none; }
+.snap-stories::-webkit-scrollbar { display: none; }
+.snap-story { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 66px; }
+.snap-story small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sn-sub); font-size: 11px; font-weight: 700; }
+.snap-story small.new { color: var(--sn-ink); }
+.snap-story-ring { position: relative; width: 64px; height: 64px; padding: 3px; border: 0; border-radius: 50%; background: var(--sn-line); cursor: pointer; transition: transform 0.15s ease; }
+.snap-story-ring:active { transform: scale(0.92); }
+.snap-story-ring .convo-avatar { width: 100%; height: 100%; box-shadow: 0 0 0 2.5px var(--sn-bg); }
+.snap-story-ring.unseen { background: var(--sn-ring); }
+.snap-story-ring.mine { background: var(--sn-yellow); }
+.snap-story-ring em { position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--sn-blue); box-shadow: 0 0 0 2.5px var(--sn-bg); color: #fff; font-size: 17px; font-style: normal; font-weight: 800; line-height: 1; }
+.snap-stories-hint { align-self: center; margin: 0; max-width: 200px; color: var(--sn-sub); font-size: 12px; font-weight: 600; line-height: 1.35; }
+
+/* One card per snap: who, the picture, then like / comment / share. */
+.snap-cards { display: flex; flex-direction: column; }
+.snap-card { padding: 10px 0 12px; border-bottom: 1px solid var(--sn-line); animation: snap-pop 0.3s ease-out both; }
+.snap-card-head { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; }
+.snap-card-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.snap-card-who .convo-avatar { width: 36px; height: 36px; flex-shrink: 0; box-shadow: 0 0 0 2px var(--sn-yellow); }
+.snap-card-who > span { min-width: 0; display: flex; flex-direction: column; }
+.snap-card-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 800; }
+.snap-card-who small { color: var(--sn-sub); font-size: 12px; font-weight: 600; }
+/* Snaps don't last: how long this one has. */
+.snap-left { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 4px 9px; border-radius: 999px; background: var(--sn-soft); color: var(--sn-sub); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.snap-card-pic { position: relative; display: block; width: calc(100% - 20px); margin: 0 10px; aspect-ratio: 4 / 5; padding: 0; overflow: hidden; border: 0; border-radius: 18px; background: #111; cursor: pointer; }
+.snap-card-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Snapchat's caption: a bar of smoked glass across the picture. */
+.snap-card-cap { position: absolute; left: 0; right: 0; top: 66%; padding: 8px 14px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 14px; font-weight: 600; line-height: 1.35; text-align: center; overflow-wrap: anywhere; }
+.snap-rank { position: absolute; top: 10px; left: 10px; padding: 4px 11px; border-radius: 999px; background: var(--sn-yellow); color: #111; font-size: 14px; font-weight: 900; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.snap-rank.r2 { background: #e5e7eb; }
+.snap-rank.r3 { background: #f5b971; }
+.snap-card-heart { position: absolute; left: 50%; top: 50%; color: #fff; pointer-events: none; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.45)); animation: snap-heart 0.9s ease-out forwards; }
+.snap-card-heart svg { fill: currentColor; stroke: none; }
+.snap-card-acts { display: flex; align-items: center; gap: 4px; padding: 8px 8px 0; }
+.snap-card-acts > button { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 0 8px; border: 0; border-radius: 999px; background: none; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer; transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.snap-card-acts > button:active { transform: scale(0.88); }
+.snap-card-acts > button.liked { color: var(--sn-red); }
+.snap-card-acts > button.liked svg { fill: currentColor; animation: snap-like 0.35s ease-out; }
+.snap-card-views { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 0 8px; color: var(--sn-sub); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.snap-card-acts > .snap-card-views.tap { margin-left: auto; min-height: 32px; padding: 0 11px; background: var(--sn-soft); color: var(--sn-ink); font-size: 12px; }
+.snap-card-more { display: block; margin: 0 16px; padding: 2px 0; border: 0; background: none; color: var(--sn-sub); font-size: 13px; font-weight: 600; cursor: pointer; }
+.snap-sentinel { height: 1px; }
+.snap-end { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 0; color: var(--sn-sub); font-size: 13px; font-weight: 700; }
+/* While the first page loads: grey cards where the snaps will be. */
+.snap-card.skeleton i { display: block; width: calc(100% - 20px); margin: 34px 10px 0; aspect-ratio: 4 / 5; border-radius: 18px; background: var(--sn-soft); animation: snap-shimmer 1.2s ease-in-out infinite alternate; }
+.snap-card.skeleton b { display: block; width: 40%; height: 12px; margin: 12px 14px 0; border-radius: 6px; background: var(--sn-soft); }
+
+/* The camera button, where Twitter has its + button: Snap yellow, always dark on yellow. */
+.snap-app .snap-fab { position: absolute; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 6; display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%; background: var(--sn-yellow) !important; color: #111 !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--sn-bg); cursor: pointer; transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.snap-app .snap-fab:active { transform: scale(0.9); }
 
 .snap-empty { margin: 8px 2px; color: var(--sn-sub); font-size: 13px; }
-.snap-empty.big { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 12px; padding: 28px 18px; border-radius: 22px; background: var(--sn-soft); text-align: center; }
+.snap-empty.big { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 16px 12px; padding: 28px 18px; border-radius: 22px; background: var(--sn-soft); text-align: center; }
 .snap-empty.big b { color: var(--sn-ink); font-size: 16px; }
 .snap-empty.big span { line-height: 1.4; }
+.snap-app .snap-empty-cta { margin-top: 8px; min-height: 42px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--sn-yellow) !important; color: #111 !important; font-weight: 800; cursor: pointer; }
 .snap-muted { color: var(--sn-sub); }
-
-/* ---------- Chat ---------- */
-.snap-chats { list-style: none; margin: 0; padding: 0; }
-.snap-chat { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--sn-line); }
-.snap-chat-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 2px; border: 0; background: none; text-align: left; cursor: pointer; }
-.snap-chat-main .convo-avatar { width: 44px; height: 44px; }
-.snap-chat-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.snap-chat-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
-.snap-chat-text small { display: flex; align-items: center; gap: 5px; color: var(--sn-sub); font-size: 12px; font-weight: 600; }
-.snap-chat.new .snap-chat-text small { color: var(--sn-red, #f23c57); font-weight: 800; }
-.snap-chat .snap-icon-btn { background: none; color: var(--sn-sub); }
-.snap-status { flex-shrink: 0; }
 .snap-streak { display: inline-flex; align-items: center; gap: 1px; flex-shrink: 0; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--sn-ink); }
-
-/* ---------- Stories ---------- */
-.snap-rings { display: flex; gap: 12px; margin: 0 -12px; padding: 6px 12px 4px; overflow-x: auto; scrollbar-width: none; }
-.snap-rings::-webkit-scrollbar { display: none; }
-.snap-ring-item { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; width: 66px; }
-.snap-ring-item small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }
-.snap-ring { position: relative; width: 64px; height: 64px; padding: 4px; border: 0; border-radius: 50%; background: var(--sn-line); cursor: pointer; transition: transform 0.15s ease; }
-.snap-ring:active { transform: scale(0.92); }
-.snap-ring .convo-avatar { box-shadow: 0 0 0 2.5px var(--sn-bg); }
-.snap-ring.unseen { background: var(--sn-ring); }
-.snap-ring.mine { background: var(--sn-yellow); }
-.snap-ring.add { background: var(--sn-line); }
-.snap-ring em { position: absolute; right: -1px; bottom: -1px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--sn-blue, #0fadff); box-shadow: 0 0 0 2.5px var(--sn-bg); color: #fff; font-size: 17px; font-style: normal; font-weight: 800; line-height: 1; }
-
-.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-.snap-app .snap-tile { color: #fff; }
-.snap-tile { position: relative; overflow: hidden; aspect-ratio: 9 / 15; padding: 0; border: 0; border-radius: 0; background: #111; color: #fff; text-align: left; cursor: pointer; animation: snap-pop 0.3s ease-out both; transition: transform 0.15s ease; }
-.snap-tile:active { transform: scale(0.97); }
-.snap-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.snap-tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 45%); pointer-events: none; }
-.snap-tile.is-story.unseen { box-shadow: inset 0 0 0 3px var(--sn-purple); }
-.snap-tile-who { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; display: flex; align-items: center; gap: 6px; }
-.snap-tile-who b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.snap-tile-who small { font-size: 11px; opacity: 0.85; }
-.snap-tile-cap { position: absolute; left: 8px; right: 8px; bottom: 30px; z-index: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; font-weight: 700; line-height: 1.3; }
-.snap-tile-stats { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; }
-.snap-tile-stats span { display: inline-flex; align-items: center; gap: 3px; }
-.snap-tile-stats svg[stroke-width='0'] { fill: currentColor; }
-.snap-tile-stats .liked svg { fill: var(--sn-red, #f23c57); stroke: var(--sn-red, #f23c57); }
-
-.snap-seg { display: flex; gap: 4px; margin: 2px 0 10px; padding: 4px; border-radius: 999px; background: var(--sn-soft); }
-.snap-seg button { flex: 1; min-height: 34px; border: 0; border-radius: 999px; background: none; color: var(--sn-sub); font-size: 13px; font-weight: 800; cursor: pointer; transition: background 0.15s, color 0.15s; }
-.snap-seg button.on { background: var(--sn-ink); color: var(--sn-bg); }
-.snap-more { display: block; width: 100%; min-height: 42px; margin-top: 10px; border: 0; border-radius: 999px; background: var(--sn-soft); font-weight: 800; cursor: pointer; }
-
-/* ---------- Me ---------- */
-.snap-profile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 16px; border-radius: 24px; background: var(--sn-yellow); color: #111; }
-.snap-profile-face { width: 78px; height: 78px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 4px #fff; }
-.snap-profile > b { font-size: 18px; }
-.snap-profile-stats { display: flex; gap: 22px; }
-.snap-profile-stats span { display: flex; flex-direction: column; align-items: center; }
-.snap-profile-stats b { font-size: 17px; }
-.snap-profile-stats small { font-size: 11px; font-weight: 700; opacity: 0.7; }
-.snap-add-story { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border: 2px dashed var(--sn-line); border-radius: 18px; background: none; text-align: left; cursor: pointer; }
-.snap-add-story i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--sn-blue, #0fadff); color: #fff; font-size: 26px; font-style: normal; font-weight: 800; }
-.snap-add-story span { display: flex; flex-direction: column; }
-.snap-add-story small { color: var(--sn-sub); }
-.snap-mine { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.snap-mine li { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 16px; background: var(--sn-soft); }
-.snap-mine-pic { flex-shrink: 0; width: 46px; height: 70px; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: #111; cursor: pointer; }
-.snap-mine-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.snap-mine-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.snap-mine-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.snap-mine-text small { display: flex; align-items: center; gap: 3px; color: var(--sn-sub); font-size: 12px; font-weight: 600; }
-.snap-mine .snap-icon-btn { background: none; color: var(--sn-sub); }
 
 /* ---------- The full-screen player (over the whole phone screen) ---------- */
 .snap-player { position: absolute; inset: 0; z-index: 60; overflow: hidden; background: #000; color: #fff; animation: snap-open 0.26s cubic-bezier(0.2, 0.9, 0.3, 1); transition: transform 0.12s ease-out; -webkit-user-select: none; user-select: none; }
@@ -148,12 +123,14 @@
 /* Snapchat's caption: a bar of smoked glass across the picture. */
 .snap-player-cap { position: absolute; left: 0; right: 0; top: 62%; margin: 0; padding: 8px 14px; background: rgba(0, 0, 0, 0.55); font-size: 15px; font-weight: 600; line-height: 1.35; text-align: center; overflow-wrap: anywhere; pointer-events: none; }
 /* The right-hand rail: one column of equal slots, every icon the same size (RAIL_ICON in SnapApp.tsx), every count the same type. */
-.snap-player-rail { position: absolute; right: 6px; bottom: 132px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.snap-player-rail { position: absolute; right: 6px; bottom: 140px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .snap-player-rail > button, .snap-player-rail > .snap-player-views { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 48px; padding: 0; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)); transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1); }
 .snap-player-rail > button:active { transform: scale(0.85); }
 .snap-player-rail svg { display: block; flex-shrink: 0; }
 .snap-player-rail small { font-size: 12px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .snap-player-rail .liked svg { fill: var(--sn-red, #f23c57); stroke: #f23c57; animation: snap-like 0.35s ease-out; }
+/* Spotlight has only the comment box along the bottom, so the rail sits lower. */
+.snap-player.mode-spotlight .snap-player-rail { bottom: 96px; }
 /* Views can't be tapped: the same slot, a touch quieter. */
 .snap-player-views { opacity: 0.85; }
 .snap-player-foot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 8px; padding: 30px 10px 28px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); }
@@ -174,6 +151,8 @@
 
 /* Comments and viewers slide up over the player. */
 .snap-sheet-wrap { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.35); animation: snap-fade 0.2s ease-out; }
+/* Opened from a card in the feed: over the whole phone screen. */
+.snap-sheet-wrap.on-screen { z-index: 61; }
 .snap-sheet { --sn-bg: #fff; --sn-ink: #16191f; --sn-sub: #6b7280; --sn-soft: #f2f3f5; --sn-line: #e8e9ec; display: flex; flex-direction: column; width: 100%; max-height: 72%; padding: 6px 12px 26px; border-radius: 22px 22px 0 0; background: var(--sn-bg); color: var(--sn-ink); animation: snap-up 0.26s cubic-bezier(0.2, 0.9, 0.3, 1); }
 :root[data-theme='dark'] .snap-sheet { --sn-bg: #16181c; --sn-ink: #f5f6f7; --sn-sub: #9aa1ac; --sn-soft: #24272d; --sn-line: #2a2d33; }
 .snap-sheet .snap-icon-btn { background: var(--sn-soft); color: var(--sn-ink); }
@@ -258,8 +237,10 @@
 @keyframes snap-like { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
 @keyframes snap-burst { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); } 25% { opacity: 1; transform: translate(-50%, -60%) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -160%) scale(1); } }
 @keyframes snap-spin { to { transform: rotate(360deg); } }
+@keyframes snap-heart { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 35% { transform: translate(-50%, -50%) scale(0.95); } 70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); } }
+@keyframes snap-shimmer { from { opacity: 1; } to { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) {
-  .snap-scroll, .snap-tile, .snap-player, .snap-sheet, .snap-sheet-wrap, .snap-send, .snap-lens-name, .snap-player-stage img { animation: none; }
+  .snap-scroll, .snap-card, .snap-card-heart, .snap-player, .snap-sheet, .snap-sheet-wrap, .snap-send, .snap-lens-name, .snap-player-stage img { animation: none; }
 }
 
 /* ---------- Shared with Twitter (ui/LiveApps.tsx) ---------- */
@@ -274,24 +255,3 @@
 .gist-meta b:empty { display: none; }
 /* The snap or tweet a share link opened, pinned above the timeline. */
 .shared-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
-
-/* The camera button, where Twitter has its + button. */
-/* Take a snap: the yellow pill at the top that opens the camera. */
-.snap-take-row { display: flex; justify-content: center; flex-shrink: 0; padding: 10px 12px 8px; background: var(--sn-bg); }
-.snap-take { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: var(--sn-yellow); color: #111; font: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14); cursor: pointer; transition: transform 0.15s; }
-.snap-take:active { transform: scale(0.95); }
-
-/* Friends and Global: flush tabs along the top, like the other apps'. */
-.snap-tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--sn-line); background: var(--sn-bg); }
-.snap-tabs button { flex: 1; height: 46px; display: flex; justify-content: center; align-items: center; border: 0; background: none; color: var(--sn-sub); font-size: 14px; font-weight: 600; cursor: pointer; transition: color 0.15s; }
-.snap-tabs button span { position: relative; display: inline-flex; align-items: center; height: 100%; }
-.snap-tabs button.on { color: var(--sn-ink); font-weight: 800; }
-.snap-tabs button.on span::after { content: ''; position: absolute; left: -2px; right: -2px; bottom: 0; height: 4px; border-radius: 4px; background: var(--sn-yellow); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
-.snap-more { width: calc(100% - 24px); margin: 12px; }
-/* "Take a snap": a full-width block (rounded corners, not a pill) with dark text in every theme (dark mode's button
-   styles were turning the words white on yellow, which you could hardly read). */
-.snap-app .snap-take, :root[data-theme='dark'] .snap-app .snap-take { width: 100%; height: 56px; justify-content: center; border-radius: 12px; padding: 0 16px; gap: 10px; font-size: 16px; color: #111 !important; background: var(--sn-yellow) !important; }
-.snap-app .snap-take svg, .snap-app .snap-take span { color: #111 !important; }
-.snap-app .snap-take .snap-take-cam { flex: none; }
-/* At the bottom of the app now: a little room under it for the phone's home bar. */
-.snap-app > .snap-take-row { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--sn-line, rgba(0, 0, 0, 0.08)); }

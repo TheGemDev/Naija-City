@@ -295,7 +295,9 @@ function Actions({ p, reply, big }: { p: FeedPost; reply?: { parent: FeedPost };
   return (
     <div className={`tw-actions ${big ? 'big' : ''}`} onClick={stop}>
       <button type="button" className="tw-act reply" aria-label={`Reply${p.replies ? `, ${p.replies} replies` : ''}`}
-        onClick={() => (reply ? nav.compose({ id: reply.parent.id, to: reply.parent.username ?? 'someone', prefill: p.username ? `@${p.username} ` : '' }) : nav.compose({ id: p.id, to: authorOf(p, {}).handle }))}>
+        // In the feed, a post that already has replies opens its thread so you see them (with the reply box at the top);
+        // with none yet, or in the thread itself, it goes straight to writing one.
+        onClick={() => (reply ? nav.compose({ id: reply.parent.id, to: reply.parent.username ?? 'someone', prefill: p.username ? `@${p.username} ` : '' }) : !big && p.replies ? nav.open({ t: 'thread', id: p.id }) : nav.compose({ id: p.id, to: authorOf(p, {}).handle }))}>
         {I.reply(size)}{!big && !reply && <Count n={p.replies} />}
       </button>
       <button type="button" className={`tw-act like ${liked ? 'on' : ''} ${pop ? 'pop' : ''}`} aria-pressed={liked} aria-label={`Like${p.likes ? `, ${p.likes}` : ''}`}
